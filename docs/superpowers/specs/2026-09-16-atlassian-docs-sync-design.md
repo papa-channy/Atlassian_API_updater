@@ -22,6 +22,8 @@ v1.1은 "stable discovery URL → HTML 안의 `<a href="...">OpenAPI</a>` anchor
 
 이 관찰을 반영해 resolver를 폐기하고 embedded-JSON extractor로 교체했으며, 그 과정에서 실패 시맨틱(`last_checked`)과 crash recovery(cache/metadata 불일치 처리) 규칙도 함께 명문화했다. v1.1 대비 변경/신설된 절은 본문에 표시했다.
 
+**최종 검토(같은 날 추가 반영)에서 잡은 것들:** `sha256`이 "canonical JSON 직렬화 결과의 해시"인지 "cache 파일 bytes의 해시"인지가 §21(추출 시점)과 §22(복구 시점) 사이에서 모호하게 읽힐 수 있었다 — **canonical JSON 기준으로 통일**했고 atomic write 순서(cache 먼저, metadata 나중)도 명시했다(§22). CLI가 실패를 exit code로 어떻게 알릴지 정의가 없었다 — 0/1/2 3단계로 신설했다(§26). `api_version` 추출 정규식을 URL path로 한정했다(§15). `window.__DATA__` 할당이 페이지에 2개 이상이거나 0개면 fail closed로 처리하도록 명시했다(§8). 동시 실행/file locking은 v1.2 범위 밖으로 명시했다(§4).
+
 ---
 
 ## 1. 개요
@@ -79,7 +81,7 @@ Atlassian Stable Discovery URL
 
 ## 4. 비목표
 
-v1에서는 다음을 구현하지 않는다: 전체 문서 크롤링, 자체 documentation website, Elasticsearch/Vector DB/RAG, semantic diff, 변경사항 자동 요약, Slack/Email 알림, GitHub Actions 기반 정기 실행, Postman/SDK 동기화, endpoint별 Markdown 자동 생성, 과거 버전 snapshot 관리, 자체 API 서버, deprecated API 자동 migration, HTML 전체 archive. 실제 필요성이 확인된 이후 단계적으로 추가한다.
+v1에서는 다음을 구현하지 않는다: 전체 문서 크롤링, 자체 documentation website, Elasticsearch/Vector DB/RAG, semantic diff, 변경사항 자동 요약, Slack/Email 알림, GitHub Actions 기반 정기 실행, Postman/SDK 동기화, endpoint별 Markdown 자동 생성, 과거 버전 snapshot 관리, 자체 API 서버, deprecated API 자동 migration, HTML 전체 archive, **여러 프로세스의 동시 실행 조율/file locking** (v1.2 신설 — atomic replace가 파일 손상은 막아 주므로, 실제 동시 실행 문제가 확인된 이후에 다룬다). 실제 필요성이 확인된 이후 단계적으로 추가한다.
 
 ## 5. 관리 대상 API
 
@@ -131,7 +133,7 @@ def extract_openapi_spec(html: str) -> dict:  # 위 둘을 조합, 정확히 1�
 1. Stable Discovery URL을 GET, redirect를 허용한다.
 2. 최종 URL을 `resolved_documentation_url`로 기록한다.
 3. 응답 HTML에서 정규식 `r"window\.__DATA__\s*=\s*"`로 마커 위치를 찾는다. 정확한 문자열이 아니라 정규식을 쓰는 이유는 Atlassian 빌드가 공백만 바꿔도 깨지지 않게 하기 위해서다.
-4. 마커를 찾지 못하면 extraction failure.
+4. 마커를 찾지 못하면 extraction failure. **(v1.2: 명확화)** HTML 안에 `window.__DATA__` 할당이 **정확히 하나가 아니면**(0개 또는 2개 이상) 그 자체로 extraction failure다 — "첫 번째 매치를 쓴다" 같은 관용은 두지 않는다. 현재 관찰된 세 페이지 모두 정확히 하나이며, 페이지 구조가 예상과 달라졌을 때 조용히 일부 데이터만 쓰는 것보다 fail closed가 이 설계의 철학(§38)과 일치한다.
 5. 마커 뒤 위치부터 `json.JSONDecoder().raw_decode(html[pos:])`로 첫 JSON value만 파싱한다. 뒤에 `;`나 `</script>` 같은 JS 문법이 이어져도 `raw_decode`는 유효한 JSON이 끝나는 지점에서 멈추므로 문제없다. **`eval`, `exec`, JS parser는 절대 사용하지 않는다.**
 6. 파싱된 트리를 순회하며 OpenAPI 후보를 찾는다. **재귀 대신 스택 기반 iterative DFS**를 사용한다 — 예상보다 깊은 JSON nesting에서도 Python recursion limit 문제가 생기지 않는다.
 
@@ -253,7 +255,7 @@ project/
 │   ├── test_sync.py
 │   └── live_smoke.py        # 실제 Atlassian 접근, 기본 unittest 실행에는 포함 안 함
 │
-├── .atlassian-docs/          # gitignore 대상, ephemeral cache (§29)
+├── .atlassian-docs/          # gitignore 대상, ephemeral cache (§30)
 │   ├── jira-platform.json
 │   ├── jira-software.json
 │   ├── confluence.json
@@ -294,6 +296,14 @@ source =      source =
 - `api_version == null`은 오류가 아니다. Sync는 정상적으로 성공한다 (Jira Software가 이 경우에 해당).
 - OpenAPI 자체의 `info.version`은 필요하면 별도의 비authoritative 필드 `spec_info_version`으로만 기록한다. `api_version`과 `spec_info_version`을 같은 의미로 취급하지 않는다.
 - Version detection 실패(=`null`)는 synchronization 실패 사유가 아니다. 핵심 조건은 버전 문자열이 아니라 OpenAPI specification이 정상인지 여부다.
+
+**(v1.2: 추출 규칙 명확화)** 구현자가 서로 다르게 해석하지 않도록 추출 위치를 못 박는다:
+
+- `api_version`은 `resolved_documentation_url`의 **URL path**에서만 추출한다. 전체 URL 문자열, `info.version`, `paths` 키, query string, HTML body 내용에서는 절대 추론하지 않는다.
+- 추출 정규식은 `urllib.parse.urlparse(resolved_url).path`에 대해 `r"/rest/(v\d+)(?:/|$)"`를 적용한다.
+  - `.../rest/v3/` → `"v3"`
+  - `.../rest/v2/` → `"v2"`
+  - `.../rest/` → `null`
 
 ## 16. Major Version Change Detection
 
@@ -360,7 +370,7 @@ refresh 실행 → metadata 확인 → now - last_checked < 24h ?
 - **`spec_info_version`** — OpenAPI `info.version` 원본 값. 진단용이며 `api_version`과 혼동하지 않는다.
 - **`last_checked`** — 마지막으로 fetch+extraction+validation까지 **성공**한 시각 (§17).
 - **`last_updated`** — 실제 cached specification의 SHA-256이 변경된 시각.
-- **`sha256`** — 현재 local cache의 canonical JSON 기준 SHA-256 (§21).
+- **`sha256`** — OpenAPI dict를 canonical JSON으로 직렬화한 결과의 SHA-256. **절대 raw file bytes의 해시가 아니다** — 불변식은 §22 참고.
 
 ## 20. 전체 Update Algorithm
 
@@ -371,7 +381,8 @@ START
 Read metadata
   │
   ▼
-Cache exists AND actual sha256(cache) == metadata.sha256 ?
+Cache exists AND canonicalize(parse(cache)) 기준 SHA-256 == metadata.sha256 ?
+  (raw file bytes가 아니라 JSON parse → validate → canonical 직렬화를 거친 값으로 비교, §22)
   │
   ├─ NO (mismatch 또는 cache 없음) ──► cache를 stale로 취급
   │                                     TTL 게이트를 건너뛰고 곧장 extraction 시도로 진행
@@ -433,17 +444,21 @@ Extractor의 candidate 판정(§8)이 최소 검증을 겸한다: `dict`이고 `
 
 ## 22. Atomic Update와 Cache/Metadata 불일치 복구 (v1.2: 신설)
 
-새 specification을 기존 cache 위에 즉시 쓰지 않는다: `jira-platform.json.tmp`에 먼저 쓰고, JSON/OpenAPI validation과 SHA-256 계산을 마친 뒤 atomic rename한다. metadata도 동일한 `.tmp → rename` 방식으로 별도로 쓴다.
+새 specification을 기존 cache 위에 즉시 쓰지 않는다: `jira-platform.json.tmp`에 먼저 쓰고, JSON/OpenAPI validation과 SHA-256 계산을 마친 뒤 atomic rename한다. metadata도 동일한 `.tmp → rename` 방식으로 별도로 쓴다. **쓰기 순서는 항상 cache 먼저, metadata 나중이다** — 이 순서라야 "cache=NEW, metadata=OLD" 상태만 발생할 수 있고, 이는 아래 복구 규칙으로 정상 회복된다. 반대 순서(metadata 먼저)를 쓰면 "metadata=NEW, cache=OLD"라는, sha256만으로는 구분할 수 없는 위험한 상태가 생길 수 있으므로 금지한다.
 
 **주의:** cache 파일과 metadata 파일은 **두 개의 독립된 atomic write**이지 하나의 트랜잭션이 아니다. 따라서 "새 cache 저장 성공 → 프로세스 강제 종료 → metadata 쓰기 실패"가 발생하면 `실제 cache의 sha256 != metadata.sha256` 상태가 될 수 있다.
 
-**복구 규칙:** 매 실행 시작 시 실제 cache 파일의 SHA-256을 계산해 metadata의 `sha256`과 비교한다.
+**`sha256`의 의미는 하나로 고정한다 (v1.2: 필수 불변식):**
+
+> `metadata.sha256`은 **항상** "OpenAPI dict를 canonical JSON으로 직렬화한 결과"의 SHA-256이다 (§21의 `json.dumps(spec, sort_keys=True, separators=(",", ":"), ensure_ascii=False)` 기준). Remote에서 새로 추출했을 때든, 로컬 cache를 검증할 때든 **동일한 canonicalization 함수**를 거친 값끼리만 비교한다. **cache 파일의 raw bytes를 직접 해싱한 값과는 절대 비교하지 않는다** — cache를 pretty-print로 저장하든 compact로 저장하든 canonical 표현이 같으면 같은 해시가 나와야 하기 때문이다.
+
+**복구 규칙:** 매 실행 시작 시 다음 순서로 local cache의 실제 해시를 구해 metadata의 `sha256`과 비교한다: `cache 파일 읽기 → JSON parse → OpenAPI validation(§21) → canonical JSON 직렬화 → SHA-256`.
 
 - 다르면 cache를 **stale**로 취급하고 extraction을 시도한다 (TTL과 무관하게).
-- extraction까지 실패했는데 로컬 cache 자체는 valid JSON + valid OpenAPI 구조라면, 그 cache를 fallback으로 계속 사용해도 된다.
+- extraction까지 실패했는데 로컬 cache 자체는 (위 파이프라인을 통과하는) valid JSON + valid OpenAPI 구조라면, 그 cache를 fallback으로 계속 사용해도 된다.
 - **mismatch ≠ corrupt**다 — sha256이 다르다고 cache를 삭제하거나 사용을 거부하지 않는다.
 
-별도의 transaction 파일이나 lock DB는 두지 않는다.
+별도의 transaction 파일이나 lock DB는 두지 않는다. 여러 프로세스가 동시에 이 CLI를 실행하는 상황(concurrent execution / file locking)은 v1.2 범위 밖이다 — atomic replace가 파일이 반쪽짜리가 되는 것은 막아 주므로, 실제 필요성이 확인되면 이후 버전에서 다룬다.
 
 ## 23. Failure Policy
 
@@ -497,11 +512,23 @@ Jira Software
 [ERROR] confluence: unable to extract OpenAPI specification (no existing cache)
 ```
 
-## 26. AI Agent 사용 방식
+## 26. CLI Exit Code (v1.2: 신설)
+
+실패 정책(§23)은 무엇을 유지하고 무엇을 실패로 볼지 정의하지만, 그 결과를 CLI가 어떤 exit code로 알릴지는 정의하지 않았다. Claude Code 같은 agent가 이 도구를 호출할 때 exit code로 다음 작업을 판단해야 하므로 명확히 계약한다.
+
+- **`exit 0`** — 모든 source가 사용 가능하다. TTL 이내라 cache를 그대로 썼거나, 시도한 remote refresh가 전부 성공했다.
+- **`exit 1`** — degraded but usable. 하나 이상의 source에서 remote refresh가 실패했지만, 모든 source에 사용 가능한 fallback cache가 있다.
+- **`exit 2`** — unavailable. 하나 이상의 source에 사용 가능한 cache 자체가 없다 (최초 실행에서 extraction 실패 등).
+
+예: Jira Platform 성공, Jira Software 실패(기존 cache로 fallback), Confluence 성공 → `exit 1`. Jira Platform이 최초 실행인데 extraction 실패 → `exit 2` (다른 source가 전부 성공해도 하나라도 unavailable이면 2).
+
+`--status`는 조회만 하므로 이 규칙과 무관하게 항상 `exit 0`이다 (파일을 읽을 수 없는 경우는 예외로 0이 아닌 코드를 반환해도 된다).
+
+## 27. AI Agent 사용 방식
 
 AI Agent는 `.atlassian-docs/` 내부 파일을 authoritative local API reference로 간주한다. Jira/Confluence 작업 전 `python -m tools.atlassian_docs`를 실행한 뒤 `jira-platform.json` / `jira-software.json` / `confluence.json`을 사용한다. 파일명에서 API version을 추측하지 않고, 필요하면 `metadata.json`의 `api_version`(null일 수 있음)을 확인한다.
 
-## 27. Agent Instruction 예시
+## 28. Agent Instruction 예시
 
 ```text
 ## Atlassian APIs
@@ -527,37 +554,37 @@ names. jira-software's api_version may legitimately be null/unknown —
 this does not mean the cache is invalid.
 ```
 
-## 28. Refresh 시점
+## 29. Refresh 시점
 
 별도의 background polling을 두지 않는다. AI Agent 작업 시작 시 `python -m tools.atlassian_docs`를 실행하고, TTL이 유효하면 cache를 그대로 사용하며, 만료되었으면 extraction을 수행한다.
 
-## 29. Git 정책
+## 30. Git 정책
 
 `.atlassian-docs/`를 `.gitignore`에 포함한다 — cache는 ephemeral artifact다. repository에는 `tools/atlassian_docs/`와 `tests/`만 포함한다.
 
-## 30. Dependencies
+## 31. Dependencies
 
 Python 표준 라이브러리만 사용한다: `urllib.request`, `urllib.parse`, `re`, `json`, `hashlib`, `pathlib`, `datetime`, `argparse`, `tempfile`, `os`, `dataclasses`, `unittest`, `unittest.mock`. **`html.parser`는 사용하지 않는다** (v1.1 대비 제거). `pip install` 없이 실행 가능한 것이 목표다.
 
 테스트 프레임워크는 `unittest`(stdlib)를 기본으로 한다 — 본체가 zero runtime dependency인데 테스트 때문에 `pytest` 설치가 필요해지는 것은 원칙에 맞지 않는다. 이 도구가 이미 `pytest`를 표준으로 쓰는 상위 프로젝트에 편입되는 경우에만 예외적으로 `pytest`를 따른다.
 
-## 31. 코드 규모
+## 32. 코드 규모
 
 목표는 약 150~250 lines (extractor의 실패 케이스 처리와 iterative traversal이 추가되며 v1.1 목표치보다 다소 늘어남). 범위를 크게 넘어가면 구조를 재검토한다: source definitions, TTL, HTTP fetch, redirect, embedded JSON extraction, candidate search, JSON/OpenAPI validation, version detection, canonical hash, atomic replace, cache/metadata 불일치 복구, metadata, 기본 CLI.
 
-## 32. 보안
+## 33. 보안
 
 공식 OpenAPI reference는 public resource를 대상으로 한다. 다음은 저장하지 않는다: Atlassian API Token, OAuth Access/Refresh Token, Account credential, Jira/Confluence user data, site-specific private content.
 
-## 33. v1 구현 우선순위
+## 34. v1 구현 우선순위
 
-**P0:** Stable discovery URL configuration, HTTP redirect follow, embedded JSON extractor (marker regex + raw_decode + iterative candidate search), 세 source 모두에 대한 extraction, local cache, 24h TTL, `last_checked` 성공시에만 갱신, metadata, canonical SHA-256, version detection (URL segment only, null 허용), 기존 cache fallback, atomic update, cache/metadata 불일치 복구.
+**P0:** Stable discovery URL configuration, HTTP redirect follow, embedded JSON extractor (marker regex + raw_decode + iterative candidate search, 정확히 1개 assignment/1개 candidate 요구), 세 source 모두에 대한 extraction, local cache, 24h TTL, `last_checked` 성공시에만 갱신, metadata, canonical SHA-256 불변식(§22), version detection (URL path regex only, null 허용), 기존 cache fallback, atomic update(cache→metadata 순서), cache/metadata 불일치 복구, CLI exit code(§26).
 
 **P1:** `--force`, `--status`, major version change 출력.
 
 **P2:** source별 개별 refresh, configurable TTL, extraction 진단 로그.
 
-## 34. Acceptance Criteria
+## 35. Acceptance Criteria
 
 - **AC-01** 최초 실행 시 `.atlassian-docs/` 디렉터리가 자동 생성된다.
 - **AC-02** configuration(`sources.py`)에는 API version이 존재하지 않는다.
@@ -582,9 +609,13 @@ Python 표준 라이브러리만 사용한다: `urllib.request`, `urllib.parse`,
 - **AC-21** major version이 변경되더라도 local cache filename은 변경되지 않는다.
 - **AC-22** 외부 Python package 없이 실행 가능하다 (`html.parser`도 사용하지 않음).
 - **AC-23** 실패한 synchronization 시도는 `last_checked`를 갱신하지 않으며, 다음 실행에서 TTL과 무관하게 재시도된다.
-- **AC-24** 실제 cache 파일의 SHA-256이 metadata의 `sha256`과 다르면 cache를 stale로 취급해 refresh를 시도하되, refresh도 실패하고 cache 자체는 valid하면 fallback으로 계속 사용한다.
+- **AC-24** cache 파일을 `JSON parse → OpenAPI validation → canonical 직렬화 → SHA-256`한 값이 metadata의 `sha256`과 다르면 cache를 stale로 취급해 refresh를 시도하되, refresh도 실패하고 cache 자체는 (같은 파이프라인으로) valid하면 fallback으로 계속 사용한다. (v1.2: cache의 raw file bytes를 직접 해싱한 값과는 비교하지 않는다 — §22 불변식)
+- **AC-25** `api_version`은 `resolved_documentation_url`의 URL path에서 `r"/rest/(v\d+)(?:/|$)"` 패턴으로만 추출한다. `info.version`, `paths` 키, query string에서는 추론하지 않는다.
+- **AC-26** HTML 안에 `window.__DATA__` 할당이 정확히 하나가 아니면(0개 또는 2개 이상) extraction failure로 처리하며, 첫 번째 매치를 임의로 쓰지 않는다.
+- **AC-27** CLI는 종료 시 `exit 0`(모든 source 사용 가능)/`exit 1`(하나 이상 degraded지만 전부 fallback으로 사용 가능)/`exit 2`(하나 이상 unavailable) 중 하나를 반환한다.
+- **AC-28** cache와 metadata는 항상 cache를 먼저, metadata를 나중에 atomic replace한다 (반대 순서로 구현하지 않는다).
 
-## 35. 예상 Major Version Migration
+## 36. 예상 Major Version Migration
 
 ```text
 현재: Stable URL → Jira Platform REST v3 → embedded OpenAPI v3 → jira-platform.json
@@ -594,15 +625,15 @@ Python 표준 라이브러리만 사용한다: `urllib.request`, `urllib.parse`,
 변하지 않는 것: discovery URL, logical source ID, local cache filename, Agent instruction, CLI invocation, extractor 알고리즘(embedded JSON 위치가 바뀌지 않는 한).
 변하는 것: `resolved_documentation_url`, `api_version`, OpenAPI 내용, SHA-256.
 
-## 36. 확장 가능성
+## 37. 확장 가능성
 
 Phase 2 (Semantic Diff), Phase 3 (Atlassian Changelog 연동), Phase 4 (AI-friendly derived Markdown docs, OpenAPI 원본은 계속 authoritative), Phase 5 (Snapshot History) — 실제 필요성이 확인되면 추가한다. v1에서는 하지 않는다.
 
-## 37. 핵심 설계 원칙
+## 38. 핵심 설계 원칙
 
 Official-first / Discovery-first / Version-agnostic / Stable interface / Cache-first / Fail-safe / Pull-on-demand / Minimal state / No infrastructure / **Thin extractor** (HTML 전체를 파싱하지 않고 embedded JSON에서 OpenAPI 후보를 찾는 데 필요한 최소한만 한다) / Expand only when necessary.
 
-## 38. 최종 아키텍처
+## 39. 최종 아키텍처
 
 ```text
 sources.py ──(discovery_url ×3)──► sync.py
@@ -638,6 +669,6 @@ sources.py ──(discovery_url ×3)──► sync.py
                               AI Coding Agent
 ```
 
-## 39. v1.2 한 줄 정의
+## 40. v1.2 한 줄 정의
 
 > `python -m tools.atlassian_docs`는 Atlassian의 version-independent 공식 REST 문서 진입점에서, 페이지에 인라인 임베드된 OpenAPI specification을 안전하게 추출하고, 버전 변화와 무관한 고정 경로에 실패-안전(fail-safe) 방식으로 캐싱하는 zero-infrastructure reference extractor다.
