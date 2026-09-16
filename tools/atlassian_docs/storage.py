@@ -53,8 +53,11 @@ def read_metadata() -> dict:
     path = metadata_path()
     if not path.exists():
         return {}
-    with path.open("r", encoding="utf-8") as handle:
-        return json.load(handle)
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            return json.load(handle)
+    except json.JSONDecodeError:
+        return {}
 
 
 def write_metadata(metadata: dict) -> None:

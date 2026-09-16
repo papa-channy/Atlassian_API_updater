@@ -51,6 +51,11 @@ class TestMetadataRoundtrip(StorageTestCase):
         leftovers = list(storage.CACHE_DIR.glob("*.tmp"))
         self.assertEqual(leftovers, [])
 
+    def test_read_malformed_metadata_returns_empty_dict(self):
+        storage.ensure_cache_dir()
+        storage.metadata_path().write_text("{not valid json", encoding="utf-8")
+        self.assertEqual(storage.read_metadata(), {})
+
 
 class TestCacheSpecRoundtrip(StorageTestCase):
     def test_read_missing_cache_returns_none(self):
