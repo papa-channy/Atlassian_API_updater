@@ -195,7 +195,8 @@ class TestSyncSourceRefresh(SyncSourceTestCase):
 
 class TestSyncSourceFailurePolicy(SyncSourceTestCase):
     def test_falls_back_on_fetch_error_when_cache_is_valid(self):
-        metadata = self._seed_consistent_cache("jira-platform", SPEC_V1, self._stale_timestamp())
+        stale = self._stale_timestamp()
+        metadata = self._seed_consistent_cache("jira-platform", SPEC_V1, stale)
         with mock.patch(
             "tools.atlassian_docs.sync.fetch_documentation_html",
             side_effect=sync.FetchError("network down"),
@@ -203,7 +204,7 @@ class TestSyncSourceFailurePolicy(SyncSourceTestCase):
             result = sync.sync_source("jira-platform", "https://x/", metadata, force=False)
         self.assertEqual(result.status, "warn_fallback")
         # last_checked must NOT be updated on failure (AC-23):
-        self.assertEqual(metadata["jira-platform"]["last_checked"], self._stale_timestamp())
+        self.assertEqual(metadata["jira-platform"]["last_checked"], stale)
 
     def test_falls_back_on_extraction_error_when_cache_is_valid(self):
         metadata = self._seed_consistent_cache("jira-platform", SPEC_V1, self._stale_timestamp())

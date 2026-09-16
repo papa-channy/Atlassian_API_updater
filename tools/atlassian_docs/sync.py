@@ -10,7 +10,7 @@ import urllib.parse
 import urllib.request
 from typing import Optional
 
-from . import extractor, storage
+from . import extractor, sources, storage
 
 _VERSION_SEGMENT_PATTERN = re.compile(r"/rest/(v\d+)(?:/|$)")
 
@@ -51,6 +51,7 @@ def fetch_documentation_html(discovery_url: str, timeout: float = 10.0):
 
 TTL_SECONDS = 24 * 60 * 60
 _TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
+TIMESTAMP_FORMAT = _TIMESTAMP_FORMAT
 
 
 def _now_iso() -> str:
@@ -196,13 +197,16 @@ class MetadataPersistenceError(Exception):
     already safely on disk (each was atomic-replaced before this point) —
     only the freshness/version bookkeeping failed to persist for this
     run. __main__.py treats this as degraded (exit 1), never as
-    unavailable (exit 2).
+    unavailable (exit 2) -- unless the per-source results it carries show
+    a genuine unavailable source, in which case exit 2 still applies.
     """
+
+    def __init__(self, message, results=None):
+        super().__init__(message)
+        self.results = results if results is not None else []
 
 
 def sync_all(force: bool = False) -> list:
-    from . import sources  # local import: avoids a module-load cycle with __main__
-
     metadata = storage.read_metadata()
     results = []
     for name, config in sources.SOURCES.items():
@@ -211,14 +215,21 @@ def sync_all(force: bool = False) -> list:
         except Exception as exc:  # noqa: BLE001 - contain one source's surprise
             # failure (e.g. a disk error inside storage.write_cache_spec) so
             # the remaining sources still get processed and metadata.json
-            # still gets written for them.
-            result = SyncResult(source_name=name, status="error_unavailable", message=str(exc))
+            # still gets written for them. If the existing on-disk cache
+            # for this source is still valid, this is degraded (fallback
+            # usable), not unavailable -- same distinction sync_source
+            # itself makes for FetchError/ExtractionError.
+            if _read_valid_cache_spec(name) is not None:
+                status = "warn_fallback"
+            else:
+                status = "error_unavailable"
+            result = SyncResult(source_name=name, status=status, message=str(exc))
         results.append(result)
 
     try:
         storage.write_metadata(metadata)  # written once, after every cache file is on disk
     except OSError as exc:
-        raise MetadataPersistenceError(str(exc)) from exc
+        raise MetadataPersistenceError(str(exc), results) from exc
 
     return results
 
