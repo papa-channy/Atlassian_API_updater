@@ -803,8 +803,9 @@ This is the core of the whole tool: it implements the Update Algorithm from spec
 - Produces (used by `__main__.py` in Task 5 and `live_smoke.py` in Task 6):
   - `@dataclasses.dataclass class SyncResult` with fields `source_name: str`, `status: str`, `api_version: str | None`, `previous_api_version: str | None`, `message: str` — `status` is one of `"ok"`, `"updated"`, `"version_changed"`, `"warn_fallback"`, `"error_unavailable"`.
   - `TTL_SECONDS: int`
-  - `def sync_source(source_name: str, discovery_url: str, metadata: dict, force: bool) -> SyncResult` — **mutates `metadata[source_name]` in place** on any successful fetch/extraction (even if the cached file content didn't change), so the caller can persist it.
-  - `def sync_all(force: bool = False) -> list[SyncResult]`
+  - `def sync_source(source_name: str, discovery_url: str, metadata: dict, force: bool) -> SyncResult` — **mutates `metadata[source_name]` in place** on any successful fetch/extraction (even if the cached file content didn't change), so the caller can persist it. Never raises `FetchError`/`ExtractionError` itself — those are caught internally and turned into a `SyncResult`.
+  - `class MetadataPersistenceError(Exception)` — raised by `sync_all` (not `sync_source`) only if the final `metadata.json` write fails after every source was otherwise processed.
+  - `def sync_all(force: bool = False) -> list[SyncResult]` — contains any unexpected exception from an individual `sync_source` call (turns it into an `"error_unavailable"` result) so one source's surprise failure never skips processing the rest or skips the final metadata write.
   - `def exit_code_for(results: list[SyncResult]) -> int`
 
 - [ ] **Step 1: Write the failing tests**
@@ -994,6 +995,37 @@ class TestSyncSourceSelfHeal(SyncSourceTestCase):
         # and since the cache itself is structurally valid, it's a usable fallback:
         self.assertEqual(result.status, "warn_fallback")
 
+    def test_mismatch_recovery_skips_cache_rewrite_when_content_is_actually_unchanged(self):
+        # The on-disk cache already holds SPEC_V1 (this is the "true"
+        # content). metadata.sha256 is wrong (simulating an interrupted
+        # metadata write), so the TTL fast-path is skipped and a remote
+        # fetch is attempted — and the remote happens to return the exact
+        # same SPEC_V1. There is nothing to rewrite; only metadata.sha256
+        # needs correcting.
+        storage.write_cache_spec("jira-platform", SPEC_V1)
+        old_last_updated = "2020-01-01T00:00:00Z"
+        metadata = {
+            "jira-platform": {
+                "sha256": "0" * 64,  # wrong on purpose
+                "last_checked": self._stale_timestamp(),
+                "last_updated": old_last_updated,
+                "api_version": "v1",
+            }
+        }
+        html = "<script>window.__DATA__ = " + json.dumps(SPEC_V1) + ";</script>"
+        with mock.patch(
+            "tools.atlassian_docs.sync.fetch_documentation_html",
+            return_value=("https://developer.atlassian.com/cloud/x/rest/v1/", html),
+        ):
+            with mock.patch(
+                "tools.atlassian_docs.sync.storage.write_cache_spec"
+            ) as fake_write_cache:
+                result = sync.sync_source("jira-platform", "https://x/", metadata, force=False)
+        fake_write_cache.assert_not_called()  # content on disk already matched
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(metadata["jira-platform"]["sha256"], storage.sha256_of_spec(SPEC_V1))
+        self.assertEqual(metadata["jira-platform"]["last_updated"], old_last_updated)  # untouched
+
 
 class TestSyncAllAndExitCode(SyncSourceTestCase):
     def test_sync_all_returns_one_result_per_configured_source(self):
@@ -1003,6 +1035,39 @@ class TestSyncAllAndExitCode(SyncSourceTestCase):
         ):
             results = sync.sync_all(force=False)
         self.assertEqual({r.source_name for r in results}, set(sources.SOURCES.keys()))
+
+    def test_one_sources_unexpected_exception_does_not_abort_the_others(self):
+        real_sync_source = sync.sync_source
+
+        def flaky_sync_source(source_name, discovery_url, metadata, force):
+            if source_name == "jira-platform":
+                raise RuntimeError("disk exploded")
+            return real_sync_source(source_name, discovery_url, metadata, force)
+
+        with mock.patch("tools.atlassian_docs.sync.sync_source", side_effect=flaky_sync_source):
+            with mock.patch(
+                "tools.atlassian_docs.sync.fetch_documentation_html",
+                side_effect=sync.FetchError("offline"),
+            ):
+                results = sync.sync_all(force=False)
+
+        self.assertEqual({r.source_name for r in results}, set(sources.SOURCES.keys()))
+        failed = next(r for r in results if r.source_name == "jira-platform")
+        self.assertEqual(failed.status, "error_unavailable")
+        # metadata.json must still have been written for the run to matter:
+        self.assertIsInstance(storage.read_metadata(), dict)
+
+    def test_metadata_write_failure_raises_metadata_persistence_error(self):
+        with mock.patch(
+            "tools.atlassian_docs.sync.fetch_documentation_html",
+            side_effect=sync.FetchError("offline"),
+        ):
+            with mock.patch(
+                "tools.atlassian_docs.sync.storage.write_metadata",
+                side_effect=OSError("disk full"),
+            ):
+                with self.assertRaises(sync.MetadataPersistenceError):
+                    sync.sync_all(force=False)
 
     def test_exit_code_all_ok_is_zero(self):
         results = [sync.SyncResult(source_name="a", status="ok")]
@@ -1153,14 +1218,21 @@ def sync_source(
         }
     )
 
-    changed = digest != source_meta.get("sha256")
+    # Compare against the ACTUAL on-disk cache content, not source_meta's
+    # (possibly stale/mismatched) sha256 field. This matters for the
+    # self-heal path: if metadata was stale but the on-disk cache file
+    # already holds the same content the remote just returned, there is
+    # nothing to rewrite — only the metadata bookkeeping needs fixing.
+    on_disk_spec = _read_valid_cache_spec(source_name)
+    on_disk_digest = storage.sha256_of_spec(on_disk_spec) if on_disk_spec is not None else None
+    changed = digest != on_disk_digest
     if changed:
-        storage.write_cache_spec(source_name, spec)
+        storage.write_cache_spec(source_name, spec)  # write cache BEFORE metadata is mutated below
         new_meta["last_updated"] = now_iso
     else:
         new_meta["last_updated"] = source_meta.get("last_updated", now_iso)
 
-    metadata[source_name] = new_meta
+    metadata[source_name] = new_meta  # only mutated after any cache write above has succeeded
 
     version_changed = (
         previous_api_version is not None
@@ -1184,15 +1256,36 @@ def sync_source(
     )
 
 
+class MetadataPersistenceError(Exception):
+    """Raised when metadata.json cannot be saved after all sources were
+    processed. Distinct from source unavailability: every cache file is
+    already safely on disk (each was atomic-replaced before this point) —
+    only the freshness/version bookkeeping failed to persist for this
+    run. __main__.py treats this as degraded (exit 1), never as
+    unavailable (exit 2).
+    """
+
+
 def sync_all(force: bool = False) -> list:
     from . import sources  # local import: avoids a module-load cycle with __main__
 
     metadata = storage.read_metadata()
-    results = [
-        sync_source(name, config["discovery_url"], metadata, force)
-        for name, config in sources.SOURCES.items()
-    ]
-    storage.write_metadata(metadata)  # written once, after every cache file is already on disk
+    results = []
+    for name, config in sources.SOURCES.items():
+        try:
+            result = sync_source(name, config["discovery_url"], metadata, force)
+        except Exception as exc:  # noqa: BLE001 - contain one source's surprise
+            # failure (e.g. a disk error inside storage.write_cache_spec) so
+            # the remaining sources still get processed and metadata.json
+            # still gets written for them.
+            result = SyncResult(source_name=name, status="error_unavailable", message=str(exc))
+        results.append(result)
+
+    try:
+        storage.write_metadata(metadata)  # written once, after every cache file is on disk
+    except OSError as exc:
+        raise MetadataPersistenceError(str(exc)) from exc
+
     return results
 
 
@@ -1227,7 +1320,7 @@ git commit -m "feat: implement sync orchestration with TTL, self-heal, and fail-
 - Create: `tests/test_cli.py`
 
 **Interfaces:**
-- Consumes: `sync.SyncResult`, `sync.sync_all`, `sync.exit_code_for`, `sync._TIMESTAMP_FORMAT` (Task 3-4); `storage.read_metadata` (Task 2); `sources.SOURCES` (Task 2).
+- Consumes: `sync.SyncResult`, `sync.sync_all`, `sync.exit_code_for`, `sync.MetadataPersistenceError`, `sync._TIMESTAMP_FORMAT` (Task 3-4); `storage.read_metadata` (Task 2); `sources.SOURCES` (Task 2).
 - Produces: `def main(argv: list[str] | None = None) -> int` — the process entry point.
 
 - [ ] **Step 1: Write the failing tests**
@@ -1310,6 +1403,14 @@ class TestMain(unittest.TestCase):
         ) as fake_sync_all:
             cli.main(["--force"])
         fake_sync_all.assert_called_once_with(force=True)
+
+    def test_metadata_persistence_error_returns_exit_one_not_two(self):
+        with mock.patch(
+            "tools.atlassian_docs.__main__.sync.sync_all",
+            side_effect=sync.MetadataPersistenceError("disk full"),
+        ):
+            code = cli.main([])
+        self.assertEqual(code, 1)
 
     def test_status_flag_does_not_call_sync_all_and_returns_zero(self):
         with mock.patch("tools.atlassian_docs.__main__.sync.sync_all") as fake_sync_all:
@@ -1398,7 +1499,16 @@ def main(argv=None) -> int:
     if args.status:
         return _show_status()
 
-    results = sync.sync_all(force=args.force)
+    try:
+        results = sync.sync_all(force=args.force)
+    except sync.MetadataPersistenceError as exc:
+        # Every cache file that could be refreshed already was (atomic
+        # replace happens per-source before this point) — only the
+        # metadata.json bookkeeping failed to save. That's a degraded
+        # run, not an unavailable API reference, so it's exit 1, not 2.
+        print(f"[WARN] metadata.json could not be saved: {exc}")
+        return 1
+
     _print_results(results)
     return sync.exit_code_for(results)
 
