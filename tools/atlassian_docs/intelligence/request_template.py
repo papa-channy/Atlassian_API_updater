@@ -1,4 +1,5 @@
 """HTTP request *template* from an operation — no server URL, no credentials (spec §15)."""
+import copy
 import urllib.parse
 from typing import Any, Optional
 
@@ -11,7 +12,7 @@ OUT_OF_SCOPE_NOTE = "server URL and Authorization are out of scope for Phase 2"
 
 
 def _param_entry(p, value: Any, given: bool) -> dict:
-    entry = {"required": p.required, "schema": p.schema, "deprecated": p.deprecated}
+    entry = {"required": p.required, "schema": copy.deepcopy(p.schema), "deprecated": p.deprecated}
     if given:
         entry["value"] = value
     return entry
@@ -54,7 +55,8 @@ def build_request_template(state, key: str, values: Optional[dict] = None) -> di
             headers[p.name] = _param_entry(p, hit[1] if hit else None, hit is not None)
         else:
             cookies[p.name] = _param_entry(p, None, False)
-        if p.required and p.location != "cookie" and "value" not in {**path_params, **query, **headers}.get(p.name, {}):
+        bucket = {"path": path_params, "query": query, "header": headers}.get(p.location)
+        if p.required and bucket is not None and "value" not in bucket.get(p.name, {}):
             missing.append(p.name)
     unknown = {
         "path_params": sorted(k for k in given_path if k not in path_params),

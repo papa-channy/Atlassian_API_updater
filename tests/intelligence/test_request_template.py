@@ -57,3 +57,22 @@ class TestTemplate(unittest.TestCase):
         out = rt.build_request_template(self.state, CREATE)
         self.assertEqual(out["security"][0], []); self.assertEqual(out["oauth2_scopes"], ["write:thing", "read:thing"])
         self.assertEqual(rt.build_request_template(self.state, "edge:GET:/nope")["error"]["code"], "operation_not_found")
+
+    def test_returned_schema_is_independent_of_registry(self):
+        out = rt.build_request_template(self.state, ATT)
+        out["path_params"]["issueIdOrKey"]["schema"]["mutated"] = True
+        again = rt.build_request_template(self.state, ATT)
+        self.assertNotIn("mutated", again["path_params"]["issueIdOrKey"]["schema"])
+
+    def test_same_name_query_and_header_do_not_collide(self):
+        from types import SimpleNamespace
+        from unittest import mock
+        from tools.atlassian_docs.intelligence import models
+        q = models.Parameter("foo", "query", True, None, {"type": "string"}, False)
+        h = models.Parameter("foo", "header", True, None, {"type": "string"}, False)
+        real = self.state.registry.get_operation(THING)
+        fake = models.Operation(**{**real.__dict__, "parameters": (q, h)})
+        with mock.patch("tools.atlassian_docs.intelligence.request_template.insp.resolve_operation", return_value=(fake, None)):
+            out = rt.build_request_template(self.state, THING, {"query": {"foo": "1"}})
+        self.assertEqual(out["missing_required"], ["foo"])          # only the header is missing
+        self.assertEqual(out["query"]["foo"]["value"], "1")
