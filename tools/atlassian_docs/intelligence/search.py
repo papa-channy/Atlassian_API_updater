@@ -3,7 +3,8 @@ import re
 from dataclasses import dataclass
 from typing import Any, Mapping, Optional
 
-from . import schemas
+from .. import sources
+from . import provenance, schemas
 
 STOPWORDS = frozenset("a an the to of for in on at and or with by from is are be this that".split())
 FIELD_WEIGHTS = {"operation_id": 5, "summary": 4, "tags": 3, "path": 3,
@@ -70,3 +71,55 @@ def build_index(operations: tuple) -> SearchIndex:
         }
         entries.append(IndexEntry(op.key, fields))
     return SearchIndex(tuple(entries))
+
+
+MAX_LIMIT = 50
+ALL_MATCH_BONUS = 2
+DEPRECATED_FACTOR = 0.7
+
+
+def _score(entry: IndexEntry, query_tokens: frozenset, deprecated: bool) -> float:
+    score = 0.0
+    matched_any_token = set()
+    for field, weight in FIELD_WEIGHTS.items():
+        hits = query_tokens & entry.fields[field]
+        score += weight * len(hits)
+        matched_any_token |= hits
+    if score and matched_any_token == query_tokens:
+        score += ALL_MATCH_BONUS
+    return score * DEPRECATED_FACTOR if deprecated else score
+
+
+def search_operations(state, query: str, *, source=None, method=None, tag=None,
+                      include_deprecated: bool = True, limit: int = 10) -> dict:
+    if not isinstance(limit, int) or not 1 <= limit <= MAX_LIMIT:
+        return provenance.error_response("invalid_argument", f"limit must be 1..{MAX_LIMIT}")
+    if source is not None and source not in sources.SOURCES:
+        return provenance.error_response("invalid_argument", f"unknown source {source!r}")
+    query_tokens = tokenize(query)
+    if not query_tokens:
+        return provenance.error_response("empty_query", "query has no searchable tokens")
+    scope = [source] if source else sorted(sources.SOURCES)
+    scored = []
+    for name in scope:
+        sr = state.registry.sources.get(name)
+        if sr is None:
+            continue
+        for entry in sr.search_index.entries:
+            op = sr.operations_by_key[entry.key]
+            if method and op.method != method.upper():
+                continue
+            if tag and tag not in op.tags:
+                continue
+            if not include_deprecated and op.deprecated:
+                continue
+            s = _score(entry, query_tokens, op.deprecated)
+            if s > 0:
+                scored.append((s, op))
+    scored.sort(key=lambda item: (-item[0], item[1].deprecated, item[1].source, item[1].key))
+    results = [{"key": op.key, "source": op.source, "operation_id": op.operation_id, "method": op.method,
+                "path": op.path, "summary": op.summary, "tags": list(op.tags), "deprecated": op.deprecated,
+                "experimental": op.experimental, "score": round(s, 3)}
+               for s, op in scored[:limit]]
+    payload = {"query": query, "results": results, "total_matches": len(scored)}
+    return provenance.with_provenance(payload, state, scope)
