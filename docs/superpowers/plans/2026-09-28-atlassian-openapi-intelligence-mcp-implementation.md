@@ -1718,8 +1718,8 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 - Produces:
   - `@dataclass(frozen=True) class GateResult: ok: bool, code: str | None, message: str`
   - `check_compatibility(spec) -> GateResult` — codes `incompatible_dialect`, `invalid_structure`, `no_operations`
-  - `check_integrity(source_registry) -> GateResult` — codes `empty_registry`, `duplicate_keys`, `invalid_components`
-  - `build_candidate(source_name: str, spec) -> tuple[SourceRegistry | None, GateResult]` — gate → normalize (catching `NormalizationError` → `normalization_failed`) → build → integrity.
+  - `check_integrity(source_registry) -> GateResult` — codes `empty_registry`, `duplicate_keys`
+  - `build_candidate(source_name: str, spec) -> tuple[SourceRegistry | None, GateResult]` — gate → `invalid_components` check on the raw spec → normalize (catching `NormalizationError` → `normalization_failed`) → build → integrity.
 
 - [ ] **Step 1: Write the failing tests**
 
