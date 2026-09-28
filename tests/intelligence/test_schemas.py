@@ -52,8 +52,14 @@ class TestResolve(unittest.TestCase):
 
     def test_node_budget(self):
         r = schemas.resolve({"$ref": "#/components/schemas/Node"}, self.ns, max_depth=8, max_nodes=1)
-        self.assertTrue(r.truncated)
-        self.assertLessEqual(r.node_count, 2)
+        self.assertEqual(r.node_count, 1)
+        self.assertIn("#/components/schemas/Node", r.cycles)
+
+    def test_cycle_precedence_over_budget(self):
+        r = schemas.resolve({"$ref": "#/components/schemas/Node"}, self.ns, max_depth=8, max_nodes=1)
+        parent = r.schema["properties"]["parent"]
+        self.assertEqual(parent, {"$ref": "#/components/schemas/Node", "_cycle": True})
+        self.assertIn("#/components/schemas/Node", r.cycles)
 
     def test_input_not_mutated_and_output_independent(self):
         node = {"$ref": "#/components/schemas/Strict"}

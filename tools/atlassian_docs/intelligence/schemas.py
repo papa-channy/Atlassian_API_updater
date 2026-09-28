@@ -53,15 +53,15 @@ def _walk(node: Any, components: Any, depth: int, max_depth: int, stack: tuple, 
         return copy.deepcopy(node)
     ref = node.get("$ref")
     if isinstance(ref, str):
-        if budget.count >= budget.max_nodes:
-            budget.truncated = True
-            return {"$ref": ref, "_truncated": "nodes"}
         if ref in stack:
             budget.cycles.append(ref)
             return {"$ref": ref, "_cycle": True}
         if depth >= max_depth:
             budget.truncated = True
             return {"$ref": ref, "_truncated": "depth"}
+        if budget.count >= budget.max_nodes:
+            budget.truncated = True
+            return {"$ref": ref, "_truncated": "nodes"}
         target, status = lookup_ref(components, ref)
         if target is None:
             budget.unresolved.append(ref)
@@ -70,7 +70,7 @@ def _walk(node: Any, components: Any, depth: int, max_depth: int, stack: tuple, 
         return _walk(target, components, depth + 1, max_depth, stack + (ref,), budget)
     out = {}
     for key, value in node.items():
-        if key in _RECURSE_KEYS or key == "properties":
+        if key in _RECURSE_KEYS:
             if key == "properties" and isinstance(value, dict):
                 out[key] = {k: _walk(v, components, depth, max_depth, stack, budget) for k, v in value.items()}
             else:
