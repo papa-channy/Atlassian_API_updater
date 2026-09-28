@@ -69,6 +69,7 @@
   "components": {
     "parameters": {"PageSize": {"name": "limit", "in": "query", "required": true, "schema": {"type": "integer"}}},
     "schemas": {
+      "KeepsExampleProp": {"type": "object", "properties": {"example": {"type": "string"}, "x": {"type": "string", "example": "drop"}}, "example": {"example": 1}},
       "Node": {"type": "object", "properties": {"id": {"type": "string"}, "children": {"type": "array", "items": {"$ref": "#/components/schemas/Node"}}, "parent": {"$ref": "#/components/schemas/Node"}}},
       "Strict": {"type": "object", "additionalProperties": false, "required": ["name"],
                  "properties": {"name": {"type": "string"}, "count": {"type": "integer"}, "kind": {"type": "string", "enum": ["a", "b"]}, "note": {"type": "string", "nullable": true}}},

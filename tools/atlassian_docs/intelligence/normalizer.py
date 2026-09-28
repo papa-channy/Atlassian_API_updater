@@ -30,10 +30,21 @@ class NormalizedSpec:
     normalization_partial: bool
 
 
-def strip_examples(node: Any) -> Any:
-    """Deep copy of node with every `example`/`examples` key removed."""
+_NAME_MAP_KEYS = frozenset({"properties", "patternProperties", "definitions", "$defs"})
+
+
+def strip_examples(node: Any, *, in_name_map: bool = False) -> Any:
+    """Deep copy of node with `example`/`examples` schema keywords removed.
+
+    Entries of a name map (`properties`, `patternProperties`, `definitions`, `$defs`, or a
+    components section when called with in_name_map=True) are user-chosen names, so a property
+    literally called `example` is kept; the entry values are schemas again.
+    """
     if isinstance(node, dict):
-        return {k: strip_examples(v) for k, v in node.items() if k not in _EXAMPLE_KEYS}
+        if in_name_map:
+            return {k: strip_examples(v) for k, v in node.items()}
+        return {k: strip_examples(v, in_name_map=k in _NAME_MAP_KEYS)
+                for k, v in node.items() if k not in _EXAMPLE_KEYS}
     if isinstance(node, list):
         return [strip_examples(v) for v in node]
     return copy.deepcopy(node)
@@ -216,10 +227,10 @@ def normalize_openapi(source_name: str, spec: dict) -> NormalizedSpec:
         openapi_version=str(spec.get("openapi")),
         title=info.get("title") if isinstance(info.get("title"), str) else None,
         operations=tuple(operations),
-        schemas=strip_examples(components["schemas"]),
-        parameters=strip_examples(components["parameters"]),
-        request_bodies=strip_examples(components["requestBodies"]),
-        responses=strip_examples(components["responses"]),
+        schemas=strip_examples(components["schemas"], in_name_map=True),
+        parameters=strip_examples(components["parameters"], in_name_map=True),
+        request_bodies=strip_examples(components["requestBodies"], in_name_map=True),
+        responses=strip_examples(components["responses"], in_name_map=True),
         security_schemes=copy.deepcopy(components["securitySchemes"]),
         tags=tuple(tags),
         warnings=tuple(warnings),

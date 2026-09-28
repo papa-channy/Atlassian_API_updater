@@ -106,6 +106,20 @@ class TestEdgeCases(unittest.TestCase):
         op = _find(self.ns, "POST", "/things/{thingId}")
         self.assertEqual(op.oauth2_scopes, ("write:thing", "read:thing"))
 
+    def test_property_named_example_is_kept(self):
+        schema = {"type": "object", "properties": {"example": {"type": "string"}, "x": {"type": "string", "example": "drop"}},
+                  "example": {"example": 1}}
+        out = normalizer.strip_examples(schema)
+        self.assertEqual(out["properties"]["example"], {"type": "string"})
+        self.assertEqual(out["properties"]["x"], {"type": "string"})
+        self.assertNotIn("example", out)
+
+    def test_fixture_schema_with_example_property_survives(self):
+        s = self.ns.schemas["KeepsExampleProp"]
+        self.assertIn("example", s["properties"])
+        self.assertNotIn("example", s["properties"]["x"])
+        self.assertNotIn("example", s)
+
     def test_example_inside_media_type_dropped(self):
         op = _find(self.ns, "POST", "/things/{thingId}")
         self.assertEqual(op.request_body.content[0].schema, {"$ref": "#/components/schemas/Strict"})
