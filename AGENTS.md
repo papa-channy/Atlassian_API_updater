@@ -26,3 +26,14 @@ this does not mean the cache is invalid.
 - `--force` ignores the 24h TTL and re-extracts immediately.
 - `--status` shows cached state without extracting anything; always exits 0.
 - Exit code from a normal run: `0` = every source usable, `1` = degraded (some source fell back to an existing cache after a failed refresh), `2` = unavailable (some source has no usable cache at all). Treat exit 2 as a signal that Jira/Confluence work should not proceed until this is investigated.
+
+## Atlassian OpenAPI Intelligence MCP (Phase 2)
+
+Prefer the MCP server over reading `.atlassian-docs/*.json` directly. Start it from the
+repository root: `python -m tools.atlassian_docs.mcp` (needs `pip install -r requirements-mcp.txt`).
+
+Tools: `search_operations` → `get_operation` → `get_schema` → `build_request_template` → `check_request`;
+`get_api_status` and `refresh_api_docs` for freshness. Every result carries `provenance`: if a source
+is `stale`, the answer comes from the last good spec (`active_*` fields say which). `check_request.compatible`
+only means the fixed rule set found no error. The server never calls Jira/Confluence APIs and never
+produces server URLs or credentials. Without the MCP SDK, fall back to the Phase 1 CLI and the cached files.
