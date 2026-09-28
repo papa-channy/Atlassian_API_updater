@@ -81,23 +81,27 @@ _JOIN = re.compile(r"[^a-z0-9]")
 
 def _query_tokens(query: str) -> frozenset:
     """tokenize() plus each whitespace word's joined lowercase form, so an exact schema
-    name typed as one identifier (IssueCreateMetadata) matches the index's exact-name token."""
+    name typed as one identifier (IssueCreateMetadata) matches the index's exact-name token.
+    The joined form is added only for words that tokenize into 2+ tokens."""
     toks = set(tokenize(query))
     for word in (query or "").split():
         joined = _JOIN.sub("", word.lower())
-        if len(joined) > 3:
+        if len(tokenize(word)) >= 2 and len(joined) > 3 and joined not in STOPWORDS:
             toks.add(joined)
     return frozenset(toks)
 
 
-def _score(entry: IndexEntry, query_tokens: frozenset, deprecated: bool) -> float:
+def _score(entry: IndexEntry, query_tokens: frozenset, deprecated: bool,
+           base_tokens: Optional[frozenset] = None) -> float:
+    """base_tokens (tokenize(query), no joined forms) decide the all-match bonus."""
+    base = query_tokens if base_tokens is None else base_tokens
     score = 0.0
     matched_any_token = set()
     for field, weight in FIELD_WEIGHTS.items():
         hits = query_tokens & entry.fields[field]
         score += weight * len(hits)
         matched_any_token |= hits
-    if score and matched_any_token == query_tokens:
+    if score and base and base <= matched_any_token:
         score += ALL_MATCH_BONUS
     return score * DEPRECATED_FACTOR if deprecated else score
 
@@ -109,6 +113,7 @@ def search_operations(state, query: str, *, source=None, method=None, tag=None,
     if source is not None and source not in sources.SOURCES:
         return provenance.error_response("invalid_argument", f"unknown source {source!r}")
     query_tokens = _query_tokens(query)
+    base_tokens = tokenize(query)
     if not query_tokens:
         return provenance.error_response("empty_query", "query has no searchable tokens")
     scope = [source] if source else sorted(sources.SOURCES)
@@ -125,7 +130,7 @@ def search_operations(state, query: str, *, source=None, method=None, tag=None,
                 continue
             if not include_deprecated and op.deprecated:
                 continue
-            s = _score(entry, query_tokens, op.deprecated)
+            s = _score(entry, query_tokens, op.deprecated, base_tokens)
             if s > 0:
                 scored.append((s, op))
     scored.sort(key=lambda item: (-item[0], item[1].deprecated, item[1].source, item[1].key))

@@ -68,6 +68,8 @@ class Registry:
     built_at: str
 
     def components(self, source: str) -> Optional[SourceRegistry]:
+        """Internal read-only surface; callers must never mutate the returned mappings — use
+        get_schema/to_dict copies."""
         return self.sources.get(source)
 
     def get_operation(self, key: str) -> Optional[Operation]:

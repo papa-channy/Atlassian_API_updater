@@ -83,6 +83,24 @@ class TestSearchOperations(unittest.TestCase):
         self.assertIn("issuecreatemetadata", search._query_tokens("IssueCreateMetadata"))
         self.assertEqual(search._query_tokens("a to"), frozenset())
 
+    def test_joined_token_only_for_multi_token_words(self):
+        self.assertEqual(search._query_tokens("with"), frozenset())
+        self.assertEqual(search._query_tokens("attachment"), frozenset({"attachment"}))
+        self.assertNotIn("issueattachment", search._query_tokens("issue attachment"))
+
+    def test_all_match_bonus_ignores_joined_forms(self):
+        import types
+        fields = {f: frozenset() for f in search.FIELD_WEIGHTS}
+        first = next(iter(search.FIELD_WEIGHTS))
+        fields[first] = frozenset({"issue", "attachment"})
+        entry = types.SimpleNamespace(fields=fields)
+        q = "issue attachment"
+        with_bonus = search._score(entry, search._query_tokens(q), False, search.tokenize(q))
+        self.assertEqual(with_bonus, 2 * search.FIELD_WEIGHTS[first] + search.ALL_MATCH_BONUS)
+        q2 = "IssueAttachment"   # joined token absent from the entry must not cancel the bonus
+        self.assertIn("issueattachment", search._query_tokens(q2))
+        self.assertEqual(search._score(entry, search._query_tokens(q2), False, search.tokenize(q2)), with_bonus)
+
     def test_source_filter(self):
         self.assertTrue(all(k.startswith("confluence:") for k in self._keys(query="issue page", source="confluence")))
 
