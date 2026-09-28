@@ -27,7 +27,8 @@ def get_api_status(manager) -> dict:
     return {
         "registry_fingerprint": state.registry.fingerprint, "built_at": state.registry.built_at,
         "sources": {name: p.to_dict() for name, p in state.provenance.items()},
-        "refresh": {**state.refresh.to_dict(), "backoff_active": manager.backoff_active},
+        "refresh": {**state.refresh.to_dict(), "backoff_active": manager.backoff_active,
+                    "in_progress": manager.refresh_in_progress},
         "execution": "disabled",
     }
 

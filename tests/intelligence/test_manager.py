@@ -88,6 +88,20 @@ class TestStartup(Harness):
         self.assertEqual(p.candidate["rejected_reason"], "incompatible_dialect")
         self.assertGreater(p.operation_count, 0)
 
+    def test_non_dict_metadata_is_tolerated(self):
+        self.write_cache("confluence", load_fixture("confluence"))
+        m = manager.RegistryManager(sync_all=self.fake_sync, read_metadata=lambda: [], clock=self.clock, now=lambda: NOW)
+        m.start()
+        self.assertIn("confluence", m.active.registry.sources)
+        self.assertEqual(self.sync_calls, 0)
+
+    def test_startup_from_last_good_only(self):  # AC-26
+        lastgood.write_last_good("confluence", load_fixture("confluence"))
+        m = self.make()
+        self.assertEqual(self.sync_calls, 0)
+        p = m.active.provenance["confluence"]
+        self.assertEqual((p.status, p.reason), ("stale", "served_from_last_good"))
+
 
 class TestRefresh(Harness):
     def setUp(self):
@@ -130,9 +144,37 @@ class TestRefresh(Harness):
         self.assertEqual(m.active.provenance["confluence"].status, "fresh")
 
     def test_warn_fallback_counts_as_failed(self):
+        self.write_cache("jira-platform", load_fixture("jira-platform"), checked=NOW - datetime.timedelta(hours=30))
         self.sync_behaviour = "fail"
         m = self.make(); m.ensure_fresh()
         self.assertTrue(m.backoff_active)
+        self.assertEqual(m.active.provenance["jira-platform"].reason, "refresh_failed")
+        self.assertNotEqual(m.active.provenance["confluence"].reason, "refresh_failed")
+
+    def test_unreadable_cache_does_not_break_ensure_fresh(self):
+        state = {"broken": False}
+        def reader(source):
+            if state["broken"] and source == "confluence":
+                raise UnicodeDecodeError("utf-8", b"", 0, 1, "bad")
+            return storage.read_cache_spec(source)
+        m = manager.RegistryManager(sync_all=self.fake_sync, read_cache_spec=reader, clock=self.clock, now=lambda: NOW)
+        m.start()
+        state["broken"] = True
+        m.ensure_fresh()
+        self.assertIn("confluence", m.active.registry.sources)
+        self.assertTrue(any(w["kind"] == "cache_read_failed" for w in m.active.provenance["confluence"].warnings))
+
+    def test_ensure_fresh_never_raises_and_refresh_reports_failed(self):
+        m = self.make(); before = m.active
+        def boom(): raise AttributeError("kaboom")
+        m._rebuild = lambda **kw: boom()
+        m.ensure_fresh()
+        self.assertIs(m.active, before)
+        self.assertTrue(m.backoff_active)
+        self.clock.t += 901
+        out = m.refresh()
+        self.assertEqual(out["status"], "failed")
+        self.assertIn("kaboom", out["error"])
 
     def test_metadata_persistence_error_counts_as_failed_refresh(self):
         self.sync_behaviour = "metadata_error"

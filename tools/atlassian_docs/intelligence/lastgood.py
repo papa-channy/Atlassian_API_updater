@@ -24,7 +24,7 @@ def read_last_good(source: str) -> Optional[dict]:
     try:
         with path.open("r", encoding="utf-8") as handle:
             data = json.load(handle)
-    except (json.JSONDecodeError, OSError):
+    except (ValueError, OSError):  # ValueError covers JSONDecodeError and UnicodeDecodeError
         return None
     return data if isinstance(data, dict) else None
 

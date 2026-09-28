@@ -56,6 +56,12 @@ class TestRunTool(unittest.TestCase):
         self.assertEqual(set(out["sources"]), {"jira-platform", "jira-software", "confluence"})
         self.assertEqual(out["execution"], "disabled"); self.assertIn("backoff_active", out["refresh"])
         self.assertEqual(self.m._test_sync_calls, [])
+        self.assertFalse(out["refresh"]["in_progress"])
+
+    def test_status_reports_in_progress_while_lock_held(self):
+        with self.m._lock:
+            out = tools.run_tool(self.m, "get_api_status", {})
+        self.assertTrue(out["refresh"]["in_progress"])
 
     def test_ensure_fresh_called_only_for_intelligence_tools(self):
         with mock.patch.object(self.m, "ensure_fresh", wraps=self.m.ensure_fresh) as ef:
