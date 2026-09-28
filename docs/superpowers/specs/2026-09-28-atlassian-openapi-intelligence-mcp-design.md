@@ -76,7 +76,7 @@ Phase 1 core(`sources.py`, `extractor.py`, `sync.py`, `storage.py`, `__main__.py
 | 14 | allOf 동일 property 충돌 시 해당 property 검사 생략 + `conflicting_allof_property` | §16 |
 | 15 | `SecurityAlternative`로 OpenAPI security의 OR/AND 구조 보존 | §6 |
 | 16 | `build_request_template`: 잘못된 content_type은 조용히 대체하지 않고 `invalid_content_type`; `unknown_parameters` 출력 필드 명시; path substitution은 primitive만 | §15 |
-| 17 | `normalization_partial` 품질 신호, `x-experimental`은 bool `True`만 인정 | §7.5, §7.7, §12 |
+| 17 | `normalization_partial` 품질 신호, `x-experimental`은 bool `True`만 인정, `x-atlassian-oauth2-scopes`는 실제 관찰된 객체 배열 형태로 파싱 | §7.5, §7.7, §12 |
 | 18 | OpenAPI 3.1 지원과 Phase 1 candidate check 충돌 여부 코드로 확인 → 충돌 없음 | §0.2 |
 | 19 | `get_operation` 옵션명을 동작대로 `include_full_description`, `include_response_schemas`로 변경 | §14.2 |
 | 20 | MCP Resources는 **Phase 2 P0 DoD에서 제외**, P1 optional enhancement로 일관되게 표기 | §2, §18, §22 |
@@ -358,7 +358,7 @@ def normalize_openapi(source_name: str, spec: dict) -> SourceRegistry
 
 - operation에 `security` 키가 있으면 그것을, 없으면 최상위 `security`를 사용한다. `security: []`는 "인증 없음"으로 빈 tuple.
 - 각 원소 `{"OAuth2": ["write:jira-work"], "basicAuth": []}`는 `SecurityAlternative(requirements=(SecurityRequirement("OAuth2", ...), SecurityRequirement("basicAuth", ())))`로 변환한다. 원소 순서와 내부 키 순서를 보존한다.
-- `x-atlassian-oauth2-scopes`: 문자열 배열이면 `oauth2_scopes`로 보존. 다른 형태면 무시.
+- `x-atlassian-oauth2-scopes`: 실제 형태는 `[{"scheme": "OAuth2", "scopes": [...], "state": "Current"|"Beta"}, ...]`(2026-09-28 관찰)이다. 각 원소의 `scopes` 문자열 배열을 등장 순서대로 합치고 중복을 제거해 `oauth2_scopes`로 보존한다. 문자열 배열이 직접 오면 그대로 보존한다. 그 외 형태는 무시하고 `warnings`에 `oauth2_scopes_shape_ignored`를 남긴다.
 - `x-experimental`: **값이 bool `True`일 때만** `experimental=True`. 문자열 `"true"`, 숫자 등은 `False`로 취급하고 `warnings`에 `experimental_value_ignored`를 남긴다.
 - 그 외 `x-*`는 무시한다.
 
