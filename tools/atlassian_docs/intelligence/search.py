@@ -39,28 +39,14 @@ class SearchIndex:
     entries: tuple
 
 
-def _schema_names(op: Any, component_schemas: dict = None) -> frozenset:
+def _schema_names(op: Any) -> frozenset:
     names: set = set()
     if op.request_body:
         for media in op.request_body.content:
             names.update(schemas.collect_local_ref_names(media.schema))
-            # Resolve references to find nested schemas
-            if component_schemas and media.schema and media.schema.get("$ref"):
-                ref = media.schema.get("$ref")
-                schema_name = ref.split("/")[-1] if "/" in ref else None
-                if schema_name and schema_name in component_schemas:
-                    resolved = component_schemas[schema_name]
-                    names.update(schemas.collect_local_ref_names(resolved))
     for resp in op.responses:
         for media in resp.content:
             names.update(schemas.collect_local_ref_names(media.schema))
-            # Resolve references to find nested schemas
-            if component_schemas and media.schema and media.schema.get("$ref"):
-                ref = media.schema.get("$ref")
-                schema_name = ref.split("/")[-1] if "/" in ref else None
-                if schema_name and schema_name in component_schemas:
-                    resolved = component_schemas[schema_name]
-                    names.update(schemas.collect_local_ref_names(resolved))
     for p in op.parameters:
         names.update(schemas.collect_local_ref_names(p.schema))
     toks: set = set()
@@ -70,7 +56,7 @@ def _schema_names(op: Any, component_schemas: dict = None) -> frozenset:
     return frozenset(toks)
 
 
-def build_index(operations: tuple, component_schemas: dict = None) -> SearchIndex:
+def build_index(operations: tuple) -> SearchIndex:
     entries = []
     for op in operations:
         fields = {
@@ -78,7 +64,7 @@ def build_index(operations: tuple, component_schemas: dict = None) -> SearchInde
             "summary": tokenize(op.summary),
             "tags": frozenset().union(*(tokenize(t) for t in op.tags)) if op.tags else frozenset(),
             "path": tokenize(op.path),
-            "schema_names": _schema_names(op, component_schemas),
+            "schema_names": _schema_names(op),
             "method": frozenset({op.method.lower()}),
             "description": tokenize((op.description or "")[:DESCRIPTION_INDEX_CHARS]),
         }

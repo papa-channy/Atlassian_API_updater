@@ -35,7 +35,7 @@ class TestTokenize(unittest.TestCase):
 class TestBuildIndex(unittest.TestCase):
     def test_index_fields_for_attachment_operation(self):
         ns = normalizer.normalize_openapi("jira-platform", load_fixture("jira-platform"))
-        index = search.build_index(ns.operations, ns.schemas)
+        index = search.build_index(ns.operations)
         entry = next(e for e in index.entries if e.key.endswith("/attachments"))
         self.assertIn("attachment", entry.fields["operation_id"])
         self.assertIn("multipartfile", entry.fields["schema_names"])
@@ -44,8 +44,8 @@ class TestBuildIndex(unittest.TestCase):
 
     def test_nested_schema_names_indexed(self):
         ns = normalizer.normalize_openapi("edge", load_fixture("edge-cases"))
-        index = search.build_index(ns.operations, ns.schemas)
+        index = search.build_index(ns.operations)
         entry = next(e for e in index.entries if e.key == "edge:POST:/things/{thingId}")
         self.assertIn("strict", entry.fields["schema_names"])
         merge = next(e for e in index.entries if e.key == "edge:POST:/merge")
-        self.assertTrue({"merged", "base"} <= merge.fields["schema_names"])  # via allOf
+        self.assertIn("merged", merge.fields["schema_names"])  # body is a bare $ref; no resolution (spec §13.2)
