@@ -84,6 +84,7 @@ def error_response(code: str, message: str, **extra) -> dict:
 
 
 def with_provenance(payload: dict, state, source_names) -> dict:
+    """Add `provenance` and `registry_fingerprint` to payload IN PLACE and return it."""
     prov = {}
     for name in source_names:
         p = state.provenance.get(name)

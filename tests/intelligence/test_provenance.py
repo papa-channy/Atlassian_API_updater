@@ -67,6 +67,18 @@ class TestStatus(unittest.TestCase):
         p = provenance.build_source_provenance(sr, _obs(sr), now=NOW)
         self.assertFalse(any(w["kind"] == "normalization_partial" for w in p.warnings))  # fixture is complete
 
+    def test_partial_normalization_warning_positive(self):
+        from tools.atlassian_docs import storage
+        from tools.atlassian_docs.intelligence import normalizer, registry
+        spec = {"openapi": "3.0.0", "info": {}, "paths": {
+            "/ok": {"get": {"responses": {}}},
+            "/bad": {"get": {"parameters": "not-a-list", "responses": {}}},
+        }}
+        sr = registry.build_source_registry(normalizer.normalize_openapi("x", spec), storage.sha256_of_spec(spec))
+        self.assertTrue(sr.normalization_partial)
+        p = provenance.build_source_provenance(sr, _obs(sr), now=NOW)
+        self.assertIn({"kind": "normalization_partial", "skipped": 1}, list(p.warnings))
+
 
 class TestBuildProvenanceAndHelpers(unittest.TestCase):
     def test_all_configured_sources_present(self):
