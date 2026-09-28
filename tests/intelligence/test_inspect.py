@@ -23,6 +23,14 @@ class TestResolveOperation(unittest.TestCase):
         err = insp.resolve_operation(self.state, operation_id="dupId")[1]["error"]
         self.assertEqual(err["code"], "ambiguous_operation_id"); self.assertEqual(len(err["candidates"]), 2)
 
+    def test_aliased_source_key_and_source_param(self):
+        op, err = insp.resolve_operation(self.state, key="edge:GET:/things/{thingId}")
+        self.assertIsNone(err); self.assertEqual(op.path, "/things/{thingId}")
+        op, err = insp.resolve_operation(self.state, source="edge", operation_id="mergeThing")
+        self.assertIsNone(err); self.assertEqual(op.key, "edge:POST:/merge")
+        self.assertEqual(insp.resolve_operation(self.state, key="github:GET:/x")[1]["error"]["code"], "invalid_argument")
+        self.assertEqual(insp.resolve_operation(self.state, source="jira-software", operation_id="x")[1]["error"]["code"], "source_unavailable")
+
 
 class TestGetOperation(unittest.TestCase):
     @classmethod
