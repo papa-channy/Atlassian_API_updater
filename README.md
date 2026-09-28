@@ -65,7 +65,7 @@ AI 에이전트가 이 도구를 어떻게 써야 하는지는 [`AGENTS.md`](./A
 ## 현재 상태
 
 - ✅ 스펙(v1.2) → 구현 계획(6개 TDD 태스크) → Subagent-Driven Development로 구현 → 태스크별 리뷰 6/6 통과 → 전체 브랜치 최종 리뷰 및 수정 → `main` 머지 및 `origin` push 완료.
-- ✅ 오프라인 유닛 테스트 67개 전부 통과 (`python -m unittest discover -s tests -t .`).
+- ✅ 오프라인 유닛 테스트 전부 통과 — Phase 1 67개 포함 전체 230개 (`python -m unittest discover -s tests -t .`). Phase 2에서 `intelligence/`(정규화·레지스트리·검색·요청 검증)와 `mcp/`(MCP 서버) 모듈이 추가되었다 (아래 Phase 2 절 참고).
 - ✅ 실제 Atlassian 사이트 대상 live smoke test(`tests/live_smoke.py`, 수동 실행) 통과 — jira-platform `v3`, jira-software `(버전 없음)`, confluence `v2` 확인.
 
 ### 알려진 후속 과제 (머지는 막지 않음)
@@ -91,9 +91,12 @@ tools/atlassian_docs/
 ├── sources.py      # 3개 discovery URL만 (버전/CDN URL 없음)
 ├── extractor.py     # 순수 함수: HTML → OpenAPI dict (HTTP 모름)
 ├── sync.py          # orchestration: TTL, HTTP, 캐시/metadata self-heal, 버전 감지, 실패 정책
-└── storage.py        # cache/metadata 파일 읽기/쓰기, atomic replace
+├── storage.py        # cache/metadata 파일 읽기/쓰기, atomic replace
+├── intelligence/     # Phase 2: normalizer, gate, registry, search, schemas, inspect,
+│                     #          request_template, request_check, provenance, lastgood, manager
+└── mcp/              # Phase 2: MCP stdio 서버 (__main__, server, tools) — mcp SDK 필요
 
-tests/               # unittest 67개 (오프라인) + live_smoke.py (수동, 네트워크 필요)
+tests/               # unittest (오프라인, Phase 1 + tests/intelligence + tests/mcp) + live_smoke.py / live_mcp_smoke.py (수동, 네트워크 필요)
 ```
 
 의존성 방향은 `__main__ → sync → {extractor, storage}` 한 방향으로 고정되어 있다.
@@ -115,11 +118,19 @@ python -m tools.atlassian_docs.mcp    # stdio transport, 저장소 루트에서 
 
 Phase 1과 마찬가지로 캐시 경로는 현재 작업 디렉터리 기준이므로 반드시 저장소 루트에서 실행한다. MCP SDK가 설치되어 있지 않으면 `tools.atlassian_docs.mcp`의 `ImportError`를 잡아 설치 안내와 함께 exit code 3으로 종료한다 — Phase 1 CLI와 `intelligence/` 계층은 SDK 없이도 그대로 동작한다.
 
-Claude Code에 연결하려면 (예: `.claude/settings.json` 또는 `claude mcp add`):
+Claude Code에 연결하려면 저장소 루트에서 project scope로 등록한다:
+
+```bash
+claude mcp add atlassian-openapi -- python -m tools.atlassian_docs.mcp
+```
+
+또는 저장소 루트의 project `.mcp.json`(이 저장소에 포함되어 있다)을 사용한다:
 
 ```json
-{ "mcpServers": { "atlassian-openapi": { "command": "python", "args": ["-m", "tools.atlassian_docs.mcp"], "cwd": "<repo root>" } } }
+{ "mcpServers": { "atlassian-openapi": { "command": "python", "args": ["-m", "tools.atlassian_docs.mcp"] } } }
 ```
+
+Claude Code는 project-scoped 서버를 프로젝트 루트를 작업 디렉터리로 하여 시작하므로, 캐시 경로(`.atlassian-docs/`, 현재 작업 디렉터리 기준)가 올바르게 잡힌다.
 
 ### 7개 Tool
 

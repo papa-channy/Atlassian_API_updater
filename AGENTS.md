@@ -31,6 +31,9 @@ this does not mean the cache is invalid.
 
 Prefer the MCP server over reading `.atlassian-docs/*.json` directly. Start it from the
 repository root: `python -m tools.atlassian_docs.mcp` (needs `pip install -r requirements-mcp.txt`).
+In Claude Code it is registered by the project `.mcp.json` at the repository root (or run
+`claude mcp add atlassian-openapi -- python -m tools.atlassian_docs.mcp` from the repository root);
+Claude Code starts project-scoped servers with the project root as the working directory, which the cache path needs.
 
 Tools: `search_operations` → `get_operation` → `get_schema` → `build_request_template` → `check_request`;
 `get_api_status` and `refresh_api_docs` for freshness. Every result carries `provenance`: if a source

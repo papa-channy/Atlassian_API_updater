@@ -1,0 +1,1 @@
+{ "mcpServers": { "atlassian-openapi": { "command": "python", "args": ["-m", "tools.atlassian_docs.mcp"] } } }
