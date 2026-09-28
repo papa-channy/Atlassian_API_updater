@@ -1367,7 +1367,7 @@ class TestBuildIndex(unittest.TestCase):
         entry = next(e for e in index.entries if e.key == "edge:POST:/things/{thingId}")
         self.assertIn("strict", entry.fields["schema_names"])
         merge = next(e for e in index.entries if e.key == "edge:POST:/merge")
-        self.assertTrue({"merged", "base"} <= merge.fields["schema_names"])  # via allOf
+        self.assertIn("merged", merge.fields["schema_names"])  # body is a bare $ref; no resolution (spec §13.2)
 ```
 
 - [ ] **Step 2: Run to verify failure** — `python -m unittest tests.intelligence.test_search` → ImportError.
@@ -1389,7 +1389,7 @@ FIELD_WEIGHTS = {"operation_id": 5, "summary": 4, "tags": 3, "path": 3,
                  "schema_names": 2, "method": 1, "description": 1}
 DESCRIPTION_INDEX_CHARS = 1000
 _CAMEL_1 = re.compile(r"([a-z0-9])([A-Z])")        # fooBar -> foo Bar
-_CAMEL_2 = re.compile(r"([A-Z]+)([A-Z][a-z])")     # JQLQuery -> JQL Query
+_CAMEL_2 = re.compile(r"([A-Z]{2,})([A-Z][a-z])")  # JQLQuery -> JQL Query (2+ so OAuth2 stays whole)
 _SPLIT = re.compile(r"[^a-z0-9]+")
 
 
