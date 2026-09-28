@@ -2135,7 +2135,9 @@ class TestSearchOperations(unittest.TestCase):
         self.assertEqual(self._keys(query="create confluence page")[0], "confluence:POST:/pages")
 
     def test_exact_schema_name(self):
-        self.assertEqual(self._keys(query="IssueCreateMetadata")[0], "jira-platform:GET:/rest/api/3/issue/createmeta")
+        self.assertEqual(self._keys(query="MultipartFile")[0], "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/attachments")
+        # getCreateIssueMeta is deprecated in the real spec (x0.7), so only top-2 is pinned
+        self.assertIn("jira-platform:GET:/rest/api/3/issue/createmeta", self._keys(query="IssueCreateMetadata")[:2])
 
     def test_source_filter(self):
         self.assertTrue(all(k.startswith("confluence:") for k in self._keys(query="issue page", source="confluence")))
@@ -2194,13 +2196,27 @@ def _score(entry: IndexEntry, query_tokens: frozenset, deprecated: bool) -> floa
     return score * DEPRECATED_FACTOR if deprecated else score
 
 
+_JOIN = re.compile(r"[^a-z0-9]")
+
+
+def _query_tokens(query: str) -> frozenset:
+    """tokenize() plus each whitespace word's joined lowercase form, so an exact schema
+    name typed as one identifier (IssueCreateMetadata) matches the index's exact-name token."""
+    toks = set(tokenize(query))
+    for word in (query or "").split():
+        joined = _JOIN.sub("", word.lower())
+        if len(joined) > 3:
+            toks.add(joined)
+    return frozenset(toks)
+
+
 def search_operations(state, query: str, *, source=None, method=None, tag=None,
                       include_deprecated: bool = True, limit: int = 10) -> dict:
     if not isinstance(limit, int) or not 1 <= limit <= MAX_LIMIT:
         return provenance.error_response("invalid_argument", f"limit must be 1..{MAX_LIMIT}")
     if source is not None and source not in sources.SOURCES:
         return provenance.error_response("invalid_argument", f"unknown source {source!r}")
-    query_tokens = tokenize(query)
+    query_tokens = _query_tokens(query)
     if not query_tokens:
         return provenance.error_response("empty_query", "query has no searchable tokens")
     scope = [source] if source else sorted(sources.SOURCES)

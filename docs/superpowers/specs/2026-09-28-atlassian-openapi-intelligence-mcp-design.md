@@ -696,6 +696,7 @@ def tokenize(text: str) -> frozenset[str]
 5. 영어 기능어 stopword 제거: `a an the to of for in on at and or with by from is are be this that`
 6. **plural variant 추가** (stemming 대신): 길이 > 3이고 `s`로 끝나는 토큰은 원형을 유지한 채 마지막 `s`를 뗀 형태를 **추가**한다. 단 `ss`, `us`, `is`로 끝나는 토큰은 variant를 만들지 않는다. 예: `attachments` → `{attachments, attachment}`, `issues` → `{issues, issue}`, `status` → `{status}`, `process` → `{process}`, `analysis` → `{analysis}`, `statuses` → `{statuses, statuse}` (variant가 무의미해도 원형이 남으므로 검색은 훼손되지 않는다).
 7. 결과는 set (중복 제거). query와 index 모두 같은 함수를 쓴다.
+8. **query에 한해** 공백으로 나뉜 각 단어의 소문자·영숫자 결합형(길이 > 3)을 토큰에 추가한다(`IssueCreateMetadata` → `issuecreatemetadata`). index의 schema name 정확형(§13.2)과 매칭되게 하기 위해서다.
 
 tokenizer fixture 테스트에 다음을 포함한다: `issueIdOrKey`, `IssueCreateMetadata`, `OAuth2`, `JQL`, `statuses`, `status`, `process`, `create_issue`, `/rest/api/3/issue/{issueIdOrKey}/attachments`.
 
@@ -737,7 +738,8 @@ def search_operations(state, query: str, *, source=None, method=None, tag=None,
 - `"upload attachment to issue"` → 1위가 jira-platform `addAttachment`
 - `"sprint board backlog"` → 상위 3개가 전부 jira-software
 - `"create confluence page"` → 상위 1개가 confluence `POST .../pages`
-- `"IssueCreateMetadata"` (정확한 schema 이름) → 해당 schema를 참조하는 operation이 1위
+- `"MultipartFile"` (정확한 schema 이름) → 해당 schema를 참조하는 `addAttachment`가 1위
+- `"IssueCreateMetadata"` → `GET .../issue/createmeta`가 상위 2개 안 (실제 스펙에서 deprecated라 ×0.7 페널티를 받으므로 1위를 고정하지 않는다)
 - `source="confluence"` 필터 시 jira 결과 0개
 - `"issue attachments"`와 `"issue attachment"`가 같은 1위를 반환 (plural variant)
 
