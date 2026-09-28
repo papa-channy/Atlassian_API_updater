@@ -45,3 +45,20 @@ class TestBuildCandidate(unittest.TestCase):
         spec = {"openapi": "3.0.0", "info": {}, "paths": {"/a": {"get": {"responses": {}}}}, "components": {"schemas": []}}
         sr, result = gate.build_candidate("x", spec)
         self.assertIsNone(sr); self.assertEqual(result.code, "invalid_components")
+
+    def test_empty_registry_when_only_operation_is_skipped(self):
+        # passes the compatibility gate (has a get key) but the operation is dropped by the normalizer
+        spec = {"openapi": "3.0.0", "info": {}, "paths": {"/bad": {"get": {"parameters": "not-a-list", "responses": {}}}}}
+        sr, result = gate.build_candidate("x", spec)
+        self.assertIsNone(sr); self.assertEqual(result.code, "empty_registry")
+
+    def test_duplicate_keys_detected_by_check_integrity(self):
+        from types import SimpleNamespace
+        op = SimpleNamespace(key="x:GET:/a")
+        stub = SimpleNamespace(operations=(op, op))
+        result = gate.check_integrity(stub)
+        self.assertFalse(result.ok); self.assertEqual(result.code, "duplicate_keys")
+
+    def test_check_integrity_ok_on_real_registry(self):
+        sr, _ = gate.build_candidate("confluence", load_fixture("confluence"))
+        self.assertTrue(gate.check_integrity(sr).ok)

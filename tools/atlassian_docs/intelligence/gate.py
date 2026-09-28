@@ -39,7 +39,7 @@ def check_integrity(sr: registry.SourceRegistry) -> GateResult:
     return _OK
 
 
-def build_candidate(source_name: str, spec: Any) -> tuple:
+def build_candidate(source_name: str, spec: Any) -> "tuple[Optional[registry.SourceRegistry], GateResult]":
     result = check_compatibility(spec)
     if not result.ok:
         return None, result
