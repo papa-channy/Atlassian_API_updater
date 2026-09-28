@@ -76,6 +76,18 @@ def build_index(operations: tuple) -> SearchIndex:
 MAX_LIMIT = 50
 ALL_MATCH_BONUS = 2
 DEPRECATED_FACTOR = 0.7
+_JOIN = re.compile(r"[^a-z0-9]")
+
+
+def _query_tokens(query: str) -> frozenset:
+    """tokenize() plus each whitespace word's joined lowercase form, so an exact schema
+    name typed as one identifier (IssueCreateMetadata) matches the index's exact-name token."""
+    toks = set(tokenize(query))
+    for word in (query or "").split():
+        joined = _JOIN.sub("", word.lower())
+        if len(joined) > 3:
+            toks.add(joined)
+    return frozenset(toks)
 
 
 def _score(entry: IndexEntry, query_tokens: frozenset, deprecated: bool) -> float:
@@ -96,7 +108,7 @@ def search_operations(state, query: str, *, source=None, method=None, tag=None,
         return provenance.error_response("invalid_argument", f"limit must be 1..{MAX_LIMIT}")
     if source is not None and source not in sources.SOURCES:
         return provenance.error_response("invalid_argument", f"unknown source {source!r}")
-    query_tokens = tokenize(query)
+    query_tokens = _query_tokens(query)
     if not query_tokens:
         return provenance.error_response("empty_query", "query has no searchable tokens")
     scope = [source] if source else sorted(sources.SOURCES)

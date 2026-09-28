@@ -75,7 +75,13 @@ class TestSearchOperations(unittest.TestCase):
         self.assertEqual(self._keys(query="create confluence page")[0], "confluence:POST:/pages")
 
     def test_exact_schema_name(self):
-        self.assertEqual(self._keys(query="IssueCreateMetadata")[0], "jira-platform:GET:/rest/api/3/issue/createmeta")
+        self.assertEqual(self._keys(query="MultipartFile")[0], "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/attachments")
+        # getCreateIssueMeta is deprecated in the real spec (x0.7), so only top-2 is pinned
+        self.assertIn("jira-platform:GET:/rest/api/3/issue/createmeta", self._keys(query="IssueCreateMetadata")[:2])
+
+    def test_query_tokens_includes_joined_word_and_empty_for_stopwords(self):
+        self.assertIn("issuecreatemetadata", search._query_tokens("IssueCreateMetadata"))
+        self.assertEqual(search._query_tokens("a to"), frozenset())
 
     def test_source_filter(self):
         self.assertTrue(all(k.startswith("confluence:") for k in self._keys(query="issue page", source="confluence")))
