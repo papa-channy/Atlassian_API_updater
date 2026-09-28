@@ -22,7 +22,7 @@ PROVENANCE_NOTE = ("Every result carries `provenance` per source: status fresh|s
 
 
 def _text(payload: dict) -> str:
-    return json.dumps(payload, ensure_ascii=False)
+    return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))  # same bytes tools.payload_size measures
 
 
 def create_server(manager) -> MCPServer:
@@ -32,7 +32,7 @@ def create_server(manager) -> MCPServer:
         payload = await asyncio.to_thread(tools.run_tool, manager, name, args)
         return CallToolResult(content=[TextContent(type="text", text=_text(payload))], is_error="error" in payload)
 
-    @mcp.tool(name="search_operations", description="Weighted English lexical search over official Jira/Confluence OpenAPI operations "
+    @mcp.tool(name="search_operations", description="Weighted English ASCII lexical search over official Jira/Confluence OpenAPI operations "
               "(operationId, summary, tags, path, schema names, description). Filters: source, method, tag, include_deprecated, limit (<=50). " + PROVENANCE_NOTE)
     async def search_operations(query: str, source: Optional[str] = None, method: Optional[str] = None, tag: Optional[str] = None,
                                 include_deprecated: bool = True, limit: int = 10) -> CallToolResult:
@@ -73,6 +73,7 @@ def create_server(manager) -> MCPServer:
         return await _run("get_api_status", {})
 
     @mcp.tool(name="refresh_api_docs", description="Run the Phase 1 sync (24h TTL respected; no force) and rebuild the registry if the spec changed. "
+              "Downloads only the official OpenAPI docs pages via the Phase 1 sync; never calls Jira/Confluence APIs. "
               "Returns refresh_in_progress if another refresh is running.")
     async def refresh_api_docs() -> CallToolResult:
         return await _run("refresh_api_docs", {})

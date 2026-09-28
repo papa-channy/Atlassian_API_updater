@@ -57,6 +57,15 @@ class TestRunTool(unittest.TestCase):
         self.assertEqual(out["execution"], "disabled"); self.assertIn("backoff_active", out["refresh"])
         self.assertEqual(self.m._test_sync_calls, [])
 
+    def test_ensure_fresh_called_only_for_intelligence_tools(self):
+        with mock.patch.object(self.m, "ensure_fresh", wraps=self.m.ensure_fresh) as ef:
+            tools.run_tool(self.m, "get_api_status", {})
+            tools.run_tool(self.m, "refresh_api_docs", {})
+            self.assertEqual(ef.call_count, 0)
+            tools.run_tool(self.m, "search_operations", {"query": "issue"})
+            tools.run_tool(self.m, "get_schema", {"source": "jira-platform", "name": "MultipartFile"})
+            self.assertEqual(ef.call_count, 2)
+
     def test_body_absent_vs_null(self):
         absent = tools.run_tool(self.m, "check_request", {"key": ATT, "path_params": {"issueIdOrKey": "A"}, "content_type": "multipart/form-data"})
         self.assertTrue(any(e["rule"] == "body_required" for e in absent["errors"]))
