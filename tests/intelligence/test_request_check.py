@@ -70,6 +70,12 @@ class TestBody(unittest.TestCase):
         good = rc.check_request(self.state, CREATE, path_params={"thingId": "1"}, content_type="application/json", body={"name": "n"})
         self.assertTrue(good["compatible"])
 
+    def test_non_dict_body_against_object_schema_is_root_type_error(self):
+        for bad in (["not", "a", "dict"], "a string body", 42):
+            out = rc.check_request(self.state, CREATE, path_params={"thingId": "1"}, content_type="application/json", body=bad)
+            self.assertIn(("body", "body_root_type"), _rules(out), bad)
+            self.assertFalse(out["compatible"])
+
     def test_allof_merge_and_conflict(self):
         out = rc.check_request(self.state, MERGE, body={"id": "1"})
         self.assertIn(("body.extra", "body_required_properties"), _rules(out))

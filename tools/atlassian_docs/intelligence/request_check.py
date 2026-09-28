@@ -24,8 +24,11 @@ def _type_ok(value: Any, schema: dict, *, from_string: bool) -> Optional[bool]:
         nullable = schema.get("nullable") is True
     if value is None:
         return True if nullable else (None if typ is None else False)
-    if typ in (None, "object"):
+    if typ is None:
         return None
+    if typ == "object":
+        # query/header strings cannot be checked as objects; body values can.
+        return None if from_string and isinstance(value, str) else isinstance(value, dict)
     if from_string and isinstance(value, str):
         if typ == "string":
             return True
