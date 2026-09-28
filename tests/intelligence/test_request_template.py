@@ -76,3 +76,18 @@ class TestTemplate(unittest.TestCase):
             out = rt.build_request_template(self.state, THING, {"query": {"foo": "1"}})
         self.assertEqual(out["missing_required"], ["foo"])          # only the header is missing
         self.assertEqual(out["query"]["foo"]["value"], "1")
+
+
+class TestTransportHeaders(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.state = make_state("edge-cases", source_map={"edge-cases": "edge"})
+
+    def test_content_type_header_is_transport_not_unknown(self):
+        out = rt.build_request_template(self.state, CREATE, {"headers": {"Content-Type": "application/json"}})
+        self.assertEqual(out["transport_headers"], [{"name": "Content-Type", "value": "application/json"}])
+        self.assertNotIn("Content-Type", out["unknown_parameters"]["headers"])
+
+    def test_content_type_with_parameters_selects_base_type(self):
+        out = rt.build_request_template(self.state, CREATE, {"content_type": "application/json; charset=utf-8"})
+        self.assertEqual(out["selected_content_type"], "application/json"); self.assertEqual(out["errors"], [])

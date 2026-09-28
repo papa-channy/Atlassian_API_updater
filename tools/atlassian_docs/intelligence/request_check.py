@@ -4,10 +4,13 @@ from typing import Any, Optional
 
 from . import inspect as insp
 from . import provenance, schemas
+from .request_template import CREDENTIAL_HEADERS, media_type
 
 MISSING = object()
 CHECKED_RULES = ("required", "type", "enum", "body_required", "content_type", "body_root_type",
-                 "body_required_properties", "body_property_type", "body_property_enum", "body_unknown_property")
+                 "body_required_properties", "body_property_type", "body_property_enum", "body_unknown_property",
+                 "body_not_declared")
+TRANSPORT_HEADERS = frozenset({"content-type", "accept", "content-length", "host", "user-agent"})
 NOT_CHECKED = ("oneOf/anyOf", "pattern", "format", "minimum/maximum", "minLength/maxLength",
                "nested objects beyond depth 2", "cookie parameters", "conflicting allOf properties")
 _INT = re.compile(r"^-?\d+$")
@@ -98,7 +101,15 @@ def check_request(state, key: str, *, path_params=None, query=None, headers=None
     comps = state.registry.sources[op.source]
     path_params, query, headers = path_params or {}, query or {}, headers or {}
     errors, warnings = [], []
-    hdr = {k.lower(): v for k, v in headers.items()}
+    hdr = {}
+    for k, v in headers.items():
+        if k.lower() in CREDENTIAL_HEADERS:   # never echo the value
+            warnings.append({"location": f"header.{k}", "rule": "credential_header_ignored",
+                             "message": "credential headers are out of scope and were ignored"})
+        else:
+            hdr[k.lower()] = v
+    if content_type is None and isinstance(hdr.get("content-type"), str):
+        content_type = hdr["content-type"]
     declared = {"query": set(), "header": set()}
 
     for p in op.parameters:
@@ -125,7 +136,8 @@ def check_request(state, key: str, *, path_params=None, query=None, headers=None
         if name not in declared["query"]:
             warnings.append({"location": f"query.{name}", "rule": "unknown_parameter", "message": "not declared in the specification"})
     for name in headers:
-        if name.lower() not in declared["header"]:
+        low = name.lower()
+        if low not in declared["header"] and low not in TRANSPORT_HEADERS and low not in CREDENTIAL_HEADERS:
             warnings.append({"location": f"header.{name}", "rule": "unknown_parameter", "message": "not declared in the specification"})
 
     body_schema = None
@@ -133,15 +145,20 @@ def check_request(state, key: str, *, path_params=None, query=None, headers=None
         types = [m.content_type for m in op.request_body.content]
         if op.request_body.required and body is MISSING:
             errors.append({"location": "body", "rule": "body_required", "message": "request body is required"})
-        if content_type is not None and content_type not in types:
+        wanted = media_type(content_type) if isinstance(content_type, str) else content_type
+        matching = [t for t in types if media_type(t) == wanted]
+        if content_type is not None and not matching:
             errors.append({"location": "content_type", "rule": "content_type", "message": f"not declared; declared: {types}"})
         elif content_type is None and len(types) > 1 and body is not MISSING:
             warnings.append({"location": "content_type", "rule": "content_type_ambiguous",
                              "message": "several content types declared; pass content_type to check the body"})
             warnings.append({"location": "body", "rule": "structure_not_checked", "message": "content type ambiguous"})
         else:
-            chosen = content_type or (types[0] if types else None)
+            chosen = matching[0] if content_type is not None else (types[0] if types else None)
             body_schema = next((m.schema for m in op.request_body.content if m.content_type == chosen), None)
+
+    elif body is not MISSING:
+        warnings.append({"location": "body", "rule": "body_not_declared", "message": "operation declares no request body"})
 
     if body is not MISSING and body_schema is not None:
         resolved = schemas.resolve(body_schema, comps, max_depth=2, max_nodes=200).schema

@@ -7,6 +7,12 @@ from . import inspect as insp
 from . import provenance
 
 CREDENTIAL_HEADERS = frozenset({"authorization", "cookie"})
+TRANSPORT_HEADERS = frozenset({"content-type", "accept", "content-length", "host", "user-agent"})
+
+
+def media_type(value: str) -> str:
+    """`application/json; charset=utf-8` -> `application/json` (parameters dropped, lower-cased)."""
+    return value.split(";")[0].strip().lower()
 _PRIMITIVES = (str, int, float, bool)
 OUT_OF_SCOPE_NOTE = "server URL and Authorization are out of scope for Phase 2"
 
@@ -58,10 +64,12 @@ def build_request_template(state, key: str, values: Optional[dict] = None) -> di
         bucket = {"path": path_params, "query": query, "header": headers}.get(p.location)
         if p.required and bucket is not None and "value" not in bucket.get(p.name, {}):
             missing.append(p.name)
+    transport = [{"name": orig, "value": v} for low, (orig, v) in sorted(header_lookup.items())
+                 if low in TRANSPORT_HEADERS and low not in used_headers]
     unknown = {
         "path_params": sorted(k for k in given_path if k not in path_params),
         "query": sorted(k for k in given_query if k not in query),
-        "headers": sorted(orig for low, (orig, _) in header_lookup.items() if low not in used_headers),
+        "headers": sorted(orig for low, (orig, _) in header_lookup.items() if low not in used_headers and low not in TRANSPORT_HEADERS),
     }
     path = None
     if all("value" in e for e in path_params.values()):
@@ -72,10 +80,13 @@ def build_request_template(state, key: str, values: Optional[dict] = None) -> di
     content_types = [m.content_type for m in op.request_body.content] if op.request_body else []
     schemas_by_ct = {m["content_type"]: m["schema"] for m in (op_dict["request_body"] or {}).get("content", [])}
     requested = values.get("content_type")
+    if requested is None:
+        requested = next((t["value"] for t in transport if t["name"].lower() == "content-type"), None)
     selected, body_schema = None, None
     if requested is not None:
-        if requested in content_types:
-            selected = requested
+        match = [ct for ct in content_types if isinstance(requested, str) and media_type(ct) == media_type(requested)]
+        if match:
+            selected = match[0]
         else:
             errors.append({"location": "content_type", "rule": "invalid_content_type",
                            "message": f"{requested!r} is not declared; declared: {content_types}"})
@@ -92,7 +103,7 @@ def build_request_template(state, key: str, values: Optional[dict] = None) -> di
     out = {
         "key": op.key, "method": op.method, "path_template": op.path, "path": path,
         "path_params": path_params, "query": query, "headers": headers, "cookies": cookies,
-        "unknown_parameters": unknown, "content_types": content_types, "selected_content_type": selected,
+        "unknown_parameters": unknown, "transport_headers": transport, "content_types": content_types, "selected_content_type": selected,
         "body_schema": body_schema, "body": values.get("body"), "body_required": body_required,
         "security": op_dict["security"], "oauth2_scopes": op_dict["oauth2_scopes"], "server": None,
         "missing_required": missing, "errors": errors, "notes": notes,

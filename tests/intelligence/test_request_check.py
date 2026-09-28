@@ -90,3 +90,32 @@ class TestBody(unittest.TestCase):
     def test_checked_lists_present(self):
         out = rc.check_request(self.state, CHOICE)
         self.assertIn("required", out["checked"]); self.assertIn("oneOf/anyOf", out["not_checked"])
+
+
+class TestFinalReviewFixes(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.state = make_state("edge-cases", source_map={"edge-cases": "edge"})
+
+    def test_body_on_operation_without_request_body_warns(self):
+        out = rc.check_request(self.state, THING, path_params={"thingId": "1"}, query={"limit": "5"}, body={"a": 1})
+        self.assertIn(("body", "body_not_declared"), _rules(out, "warnings"))
+        self.assertTrue(out["compatible"]); self.assertIn("body_not_declared", out["checked"])
+
+    def test_content_type_parameters_ignored(self):
+        out = rc.check_request(self.state, CREATE, path_params={"thingId": "1"}, body={"name": "n"},
+                               content_type="application/json; charset=utf-8")
+        self.assertNotIn("content_type", [e["rule"] for e in out["errors"]])
+        self.assertTrue(out["compatible"])
+
+    def test_transport_and_credential_headers(self):
+        out = rc.check_request(self.state, CREATE, path_params={"thingId": "1"}, body={},
+                               headers={"Content-Type": "application/json", "Authorization": "Basic x"})
+        warn = _rules(out, "warnings")
+        self.assertNotIn(("header.Content-Type", "unknown_parameter"), warn)
+        self.assertNotIn(("header.Authorization", "unknown_parameter"), warn)
+        self.assertEqual([w for w in out["warnings"] if w["rule"] == "credential_header_ignored"][0]["location"],
+                         "header.Authorization")
+        self.assertEqual(sum(1 for w in out["warnings"] if w["rule"] == "credential_header_ignored"), 1)
+        self.assertNotIn("Basic x", repr(out))
+        self.assertIn(("body.name", "body_required_properties"), _rules(out))
