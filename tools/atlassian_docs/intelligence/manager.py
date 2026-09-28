@@ -36,7 +36,6 @@ class RegistryManager:
         self._last_failed_mono: Optional[float] = None
         self._last_attempt_at: Optional[str] = None
         self._last_result: Optional[dict] = None
-        self._last_rejected_sha: dict = {}
         self._served_from_last_good: set = set()
         self._rejected: dict = {}
         self._extra_warnings: dict = {}
@@ -61,10 +60,11 @@ class RegistryManager:
                 raise registry.RegistryUnavailableError("no usable OpenAPI cache for any source")
 
     def needs_refresh(self, source: str) -> bool:
-        if source not in self._active.registry.sources:
+        active = self._active
+        if source not in active.registry.sources:
             return True
         md = self._read_metadata().get(source, {})
-        prov = self._active.provenance[source]
+        prov = active.provenance[source]
         if prov.observed_cache_sha256 != md.get("sha256"):
             return True
         checked = provenance._parse_ts(md.get("last_checked"))
@@ -124,11 +124,11 @@ class RegistryManager:
         sha = storage.sha256_of_spec(spec)
         if previous_sr is not None and sha == previous_sr.spec_sha256:
             return previous_sr, sha, None
-        if sha == self._last_rejected_sha.get(source):
-            return None, sha, self._rejected.get(source)
+        rec = self._rejected.get(source)
+        if rec and rec["sha256"] == sha:
+            return None, sha, rec
         sr, result = gate.build_candidate(source, spec)
         if sr is None:
-            self._last_rejected_sha[source] = sha
             return None, sha, {"sha256": sha, "rejected_reason": result.code, "message": result.message}
         return sr, sha, None
 
@@ -146,7 +146,9 @@ class RegistryManager:
             if spec is not None:
                 chosen, _, rejected = self._candidate_from(source, spec, prev_sr)
                 if chosen is not None and chosen is not prev_sr:
-                    if lastgood.last_good_sha(source) != observed_sha:
+                    lg = self._read_last_good(source)
+                    lg_sha = storage.sha256_of_spec(lg) if lg is not None else None
+                    if lg_sha != observed_sha:
                         try:
                             self._write_last_good(source, spec)
                         except OSError as exc:

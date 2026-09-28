@@ -172,19 +172,47 @@ class TestRefresh(Harness):
         m._lock.acquire()
         try:
             self.assertEqual(m.refresh(), {"status": "refresh_in_progress"})
+            n = self.sync_calls
             m.ensure_fresh()  # lock busy -> silently keep current
+            self.assertEqual(self.sync_calls, n)
         finally:
             m._lock.release()
 
     def test_state_snapshot_is_consistent(self):
-        m = self.make()
-        state = m.active
-        new = load_fixture("confluence"); new["info"]["title"] = "changed"
+        orig_sha = storage.sha256_of_spec(load_fixture("confluence"))
+        new = load_fixture("confluence"); new["paths"]["/zzz-snap"] = {"get": {"operationId": "zzzSnap", "responses": {}}}
         def sync_and_write(force=False):
             self.write_cache("confluence", new); return self.fake_sync(force)
-        m2 = manager.RegistryManager(sync_all=sync_and_write, clock=self.clock, now=lambda: NOW); m2.start(); m2.ensure_fresh()
-        self.assertEqual(state.registry.fingerprint, state.registry.fingerprint)  # captured snapshot untouched
-        self.assertEqual(m2.active.provenance["confluence"].active_spec_sha256, m2.active.registry.sources["confluence"].spec_sha256)
+        m = manager.RegistryManager(sync_all=sync_and_write, clock=self.clock, now=lambda: NOW); m.start()
+        before = m.active
+        m.ensure_fresh()
+        after = m.active
+        self.assertIsNot(after, before)
+        self.assertNotEqual(before.registry.fingerprint, after.registry.fingerprint)
+        self.assertEqual(before.provenance["confluence"].active_spec_sha256, before.registry.sources["confluence"].spec_sha256)
+        self.assertEqual(after.provenance["confluence"].active_spec_sha256, after.registry.sources["confluence"].spec_sha256)
+        self.assertEqual(before.registry.sources["confluence"].spec_sha256, orig_sha)
+
+    def test_refresh_bypasses_backoff(self):
+        self.sync_behaviour = "raise"
+        m = self.make()
+        m.ensure_fresh()
+        self.assertEqual(self.sync_calls, 1)
+        self.assertTrue(m.backoff_active)
+        m.refresh()
+        self.assertEqual(self.sync_calls, 2)
+
+    def test_rejected_then_accepted_then_rejected_again_keeps_record(self):
+        a = load_fixture("unsupported-dialect")
+        b = load_fixture("confluence"); b["paths"]["/zzz-b"] = {"get": {"operationId": "zzzB", "responses": {}}}
+        m = self.make()
+        for spec in (a, b, a):
+            self.write_cache("confluence", spec)
+            m.refresh()
+        p = m.active.provenance["confluence"]
+        self.assertEqual((p.status, p.reason), ("stale", "incompatible_dialect"))
+        self.assertEqual(p.candidate["sha256"], storage.sha256_of_spec(a))
+        self.assertEqual(p.active_spec_sha256, storage.sha256_of_spec(b))
 
     def test_last_good_write_failure_does_not_block_swap(self):
         def boom(source, spec): raise OSError("disk full")
