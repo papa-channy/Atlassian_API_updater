@@ -1,0 +1,80 @@
+{
+  "openapi": "3.1.0",
+  "info": {"title": "Edge Cases", "version": "0"},
+  "security": [{"basicAuth": []}],
+  "paths": {
+    "/things/{thingId}": {
+      "parameters": [
+        {"name": "thingId", "in": "path", "required": true, "schema": {"type": "string"}},
+        {"name": "expand", "in": "query", "schema": {"type": "string", "enum": ["a", "b"]}}
+      ],
+      "get": {
+        "summary": "Get thing",
+        "tags": ["Things"],
+        "parameters": [
+          {"name": "expand", "in": "query", "schema": {"type": "string", "enum": ["x", "y"]}},
+          {"$ref": "#/components/parameters/PageSize"},
+          {"name": "session", "in": "cookie", "schema": {"type": "string"}}
+        ],
+        "responses": {"200": {"description": "ok", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Node"}}}}}
+      },
+      "post": {
+        "operationId": "dupId",
+        "summary": "Create thing",
+        "tags": ["Things"],
+        "security": [{}, {"OAuth2": ["write:thing"], "basicAuth": []}],
+        "x-experimental": "true",
+        "x-atlassian-oauth2-scopes": [{"scheme": "OAuth2", "scopes": ["write:thing", "read:thing"], "state": "Current"}, {"scheme": "OAuth2", "scopes": ["write:thing"], "state": "Beta"}],
+        "requestBody": {"required": true, "content": {
+          "application/json": {"schema": {"$ref": "#/components/schemas/Strict"}, "example": {"name": "drop me"}},
+          "multipart/form-data": {"schema": {"type": "object"}}
+        }},
+        "responses": {"201": {"description": "created"}}
+      },
+      "delete": {
+        "operationId": "dupId",
+        "summary": "Delete thing",
+        "tags": ["Things"],
+        "x-experimental": true,
+        "responses": {"204": {"description": "gone"}}
+      }
+    },
+    "/merge": {
+      "post": {
+        "operationId": "mergeThing",
+        "summary": "Merge with allOf conflict",
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Merged"}}}},
+        "responses": {"200": {"description": "ok"}}
+      }
+    },
+    "/choice": {
+      "post": {
+        "operationId": "chooseThing",
+        "summary": "oneOf body",
+        "requestBody": {"required": false, "content": {"application/json": {"schema": {"oneOf": [{"$ref": "#/components/schemas/Strict"}, {"type": "string"}]}}}},
+        "responses": {"200": {"description": "ok"}}
+      }
+    },
+    "/external": {
+      "get": {
+        "operationId": "externalRef",
+        "summary": "external and missing refs",
+        "responses": {"200": {"description": "ok", "content": {"application/json": {"schema": {"type": "object", "properties": {
+          "ext": {"$ref": "https://example.com/other.json#/components/schemas/X"},
+          "gone": {"$ref": "#/components/schemas/DoesNotExist"}
+        }}}}}}
+      }
+    }
+  },
+  "components": {
+    "parameters": {"PageSize": {"name": "limit", "in": "query", "required": true, "schema": {"type": "integer"}}},
+    "schemas": {
+      "Node": {"type": "object", "properties": {"id": {"type": "string"}, "children": {"type": "array", "items": {"$ref": "#/components/schemas/Node"}}, "parent": {"$ref": "#/components/schemas/Node"}}},
+      "Strict": {"type": "object", "additionalProperties": false, "required": ["name"],
+                 "properties": {"name": {"type": "string"}, "count": {"type": "integer"}, "kind": {"type": "string", "enum": ["a", "b"]}, "note": {"type": "string", "nullable": true}}},
+      "Base": {"type": "object", "required": ["id"], "properties": {"id": {"type": "string"}, "shared": {"type": "string"}}},
+      "Merged": {"allOf": [{"$ref": "#/components/schemas/Base"}, {"type": "object", "required": ["extra"], "properties": {"extra": {"type": "integer"}, "shared": {"type": "integer"}}}]}
+    },
+    "securitySchemes": {"basicAuth": {"type": "http", "scheme": "basic"}, "OAuth2": {"type": "oauth2", "flows": {}}}
+  }
+}

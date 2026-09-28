@@ -1,0 +1,2469 @@
+{
+  "components": {
+    "schemas": {
+      "IssueBean": {
+        "additionalProperties": false,
+        "description": "Details about an issue.",
+        "properties": {
+          "changelog": {
+            "allOf": [
+              {
+                "additionalProperties": false,
+                "description": "A page of changelogs.",
+                "properties": {
+                  "histories": {
+                    "description": "The list of changelogs.",
+                    "items": {
+                      "additionalProperties": false,
+                      "description": "A log of changes made to issue fields. Changelogs related to workflow associations are currently being deprecated.",
+                      "properties": {
+                        "author": {
+                          "allOf": [
+                            {
+                              "additionalProperties": false,
+                              "description": "User details permitted by the user's Atlassian Account privacy settings. However, be aware of these exceptions:\n\n *  User record deleted from Atlassian: This occurs as the result of a right to be forgotten request. In this case, `displayName` provides an indication and other parameters have default values or are blank (for example, email is blank).\n *  User record corrupted: This occurs as a results of events such as a server import and can only happen to deleted users. In this case, `accountId` returns *unknown* and all other parameters have fallback values.\n *  User record unavailable: This usually occurs due to an internal service outage. In this case, all parameters have fallback values.",
+                              "properties": {
+                                "accountId": {
+                                  "description": "The account ID of the user, which uniquely identifies the user across all Atlassian products. For example, *5b10ac8d82e05b22cc7d4ef5*.",
+                                  "maxLength": 128,
+                                  "type": "string"
+                                },
+                                "accountType": {
+                                  "description": "The type of account represented by this user. This will be one of 'atlassian' (normal users), 'app' (application user) or 'customer' (Jira Service Desk customer user)",
+                                  "readOnly": true,
+                                  "type": "string"
+                                },
+                                "active": {
+                                  "description": "Whether the user is active.",
+                                  "readOnly": true,
+                                  "type": "boolean"
+                                },
+                                "avatarUrls": {
+                                  "allOf": [
+                                    {
+                                      "additionalProperties": false,
+                                      "properties": {
+                                        "16x16": {
+                                          "description": "The URL of the item's 16x16 pixel avatar.",
+                                          "format": "uri",
+                                          "type": "string"
+                                        },
+                                        "24x24": {
+                                          "description": "The URL of the item's 24x24 pixel avatar.",
+                                          "format": "uri",
+                                          "type": "string"
+                                        },
+                                        "32x32": {
+                                          "description": "The URL of the item's 32x32 pixel avatar.",
+                                          "format": "uri",
+                                          "type": "string"
+                                        },
+                                        "48x48": {
+                                          "description": "The URL of the item's 48x48 pixel avatar.",
+                                          "format": "uri",
+                                          "type": "string"
+                                        }
+                                      },
+                                      "type": "object"
+                                    }
+                                  ],
+                                  "description": "The avatars of the user.",
+                                  "readOnly": true
+                                },
+                                "displayName": {
+                                  "description": "The display name of the user. Depending on the user’s privacy settings, this may return an alternative value.",
+                                  "readOnly": true,
+                                  "type": "string"
+                                },
+                                "emailAddress": {
+                                  "description": "The email address of the user. Depending on the user’s privacy settings, this may be returned as null.",
+                                  "readOnly": true,
+                                  "type": "string"
+                                },
+                                "key": {
+                                  "description": "This property is no longer available and will be removed from the documentation soon. See the [deprecation notice](https://developer.atlassian.com/cloud/jira/platform/deprecation-notice-user-privacy-api-migration-guide/) for details.",
+                                  "readOnly": true,
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "description": "This property is no longer available and will be removed from the documentation soon. See the [deprecation notice](https://developer.atlassian.com/cloud/jira/platform/deprecation-notice-user-privacy-api-migration-guide/) for details.",
+                                  "readOnly": true,
+                                  "type": "string"
+                                },
+                                "self": {
+                                  "description": "The URL of the user.",
+                                  "readOnly": true,
+                                  "type": "string"
+                                },
+                                "timeZone": {
+                                  "description": "The time zone specified in the user's profile. Depending on the user’s privacy settings, this may be returned as null.",
+                                  "readOnly": true,
+                                  "type": "string"
+                                }
+                              },
+                              "type": "object"
+                            }
+                          ],
+                          "description": "The user who made the change.",
+                          "readOnly": true
+                        },
+                        "created": {
+                          "description": "The date on which the change took place.",
+                          "format": "date-time",
+                          "readOnly": true,
+                          "type": "string"
+                        },
+                        "historyMetadata": {
+                          "allOf": [
+                            {
+                              "additionalProperties": true,
+                              "description": "Details of issue history metadata.",
+                              "properties": {
+                                "activityDescription": {
+                                  "description": "The activity described in the history record.",
+                                  "type": "string"
+                                },
+                                "activityDescriptionKey": {
+                                  "description": "The key of the activity described in the history record.",
+                                  "type": "string"
+                                },
+                                "actor": {
+                                  "allOf": [
+                                    {
+                                      "additionalProperties": true,
+                                      "description": "Details of user or system associated with a issue history metadata item.",
+                                      "properties": {
+                                        "avatarUrl": {
+                                          "description": "The URL to an avatar for the user or system associated with a history record.",
+                                          "type": "string"
+                                        },
+                                        "displayName": {
+                                          "description": "The display name of the user or system associated with a history record.",
+                                          "type": "string"
+                                        },
+                                        "displayNameKey": {
+                                          "description": "The key of the display name of the user or system associated with a history record.",
+                                          "type": "string"
+                                        },
+                                        "id": {
+                                          "description": "The ID of the user or system associated with a history record.",
+                                          "type": "string"
+                                        },
+                                        "type": {
+                                          "description": "The type of the user or system associated with a history record.",
+                                          "type": "string"
+                                        },
+                                        "url": {
+                                          "description": "The URL of the user or system associated with a history record.",
+                                          "type": "string"
+                                        }
+                                      },
+                                      "type": "object"
+                                    }
+                                  ],
+                                  "description": "Details of the user whose action created the history record."
+                                },
+                                "cause": {
+                                  "allOf": [
+                                    {
+                                      "additionalProperties": true,
+                                      "description": "Details of user or system associated with a issue history metadata item.",
+                                      "properties": {
+                                        "avatarUrl": {
+                                          "description": "The URL to an avatar for the user or system associated with a history record.",
+                                          "type": "string"
+                                        },
+                                        "displayName": {
+                                          "description": "The display name of the user or system associated with a history record.",
+                                          "type": "string"
+                                        },
+                                        "displayNameKey": {
+                                          "description": "The key of the display name of the user or system associated with a history record.",
+                                          "type": "string"
+                                        },
+                                        "id": {
+                                          "description": "The ID of the user or system associated with a history record.",
+                                          "type": "string"
+                                        },
+                                        "type": {
+                                          "description": "The type of the user or system associated with a history record.",
+                                          "type": "string"
+                                        },
+                                        "url": {
+                                          "description": "The URL of the user or system associated with a history record.",
+                                          "type": "string"
+                                        }
+                                      },
+                                      "type": "object"
+                                    }
+                                  ],
+                                  "description": "Details of the cause that triggered the creation the history record."
+                                },
+                                "description": {
+                                  "description": "The description of the history record.",
+                                  "type": "string"
+                                },
+                                "descriptionKey": {
+                                  "description": "The description key of the history record.",
+                                  "type": "string"
+                                },
+                                "emailDescription": {
+                                  "description": "The description of the email address associated the history record.",
+                                  "type": "string"
+                                },
+                                "emailDescriptionKey": {
+                                  "description": "The description key of the email address associated the history record.",
+                                  "type": "string"
+                                },
+                                "extraData": {
+                                  "additionalProperties": {
+                                    "type": "string"
+                                  },
+                                  "description": "Additional arbitrary information about the history record.",
+                                  "type": "object"
+                                },
+                                "generator": {
+                                  "allOf": [
+                                    {
+                                      "additionalProperties": true,
+                                      "description": "Details of user or system associated with a issue history metadata item.",
+                                      "properties": {
+                                        "avatarUrl": {
+                                          "description": "The URL to an avatar for the user or system associated with a history record.",
+                                          "type": "string"
+                                        },
+                                        "displayName": {
+                                          "description": "The display name of the user or system associated with a history record.",
+                                          "type": "string"
+                                        },
+                                        "displayNameKey": {
+                                          "description": "The key of the display name of the user or system associated with a history record.",
+                                          "type": "string"
+                                        },
+                                        "id": {
+                                          "description": "The ID of the user or system associated with a history record.",
+                                          "type": "string"
+                                        },
+                                        "type": {
+                                          "description": "The type of the user or system associated with a history record.",
+                                          "type": "string"
+                                        },
+                                        "url": {
+                                          "description": "The URL of the user or system associated with a history record.",
+                                          "type": "string"
+                                        }
+                                      },
+                                      "type": "object"
+                                    }
+                                  ],
+                                  "description": "Details of the system that generated the history record."
+                                },
+                                "type": {
+                                  "description": "The type of the history record.",
+                                  "type": "string"
+                                }
+                              },
+                              "type": "object"
+                            }
+                          ],
+                          "description": "The history metadata associated with the changed.",
+                          "readOnly": true
+                        },
+                        "id": {
+                          "description": "The ID of the changelog.",
+                          "readOnly": true,
+                          "type": "string"
+                        },
+                        "items": {
+                          "description": "The list of items changed.",
+                          "items": {
+                            "additionalProperties": false,
+                            "description": "A change item.",
+                            "properties": {
+                              "field": {
+                                "description": "The name of the field changed.",
+                                "readOnly": true,
+                                "type": "string"
+                              },
+                              "fieldId": {
+                                "description": "The ID of the field changed.",
+                                "readOnly": true,
+                                "type": "string"
+                              },
+                              "fieldtype": {
+                                "description": "The type of the field changed.",
+                                "readOnly": true,
+                                "type": "string"
+                              },
+                              "from": {
+                                "description": "The details of the original value.",
+                                "readOnly": true,
+                                "type": "string"
+                              },
+                              "fromString": {
+                                "description": "The details of the original value as a string.",
+                                "readOnly": true,
+                                "type": "string"
+                              },
+                              "to": {
+                                "description": "The details of the new value.",
+                                "readOnly": true,
+                                "type": "string"
+                              },
+                              "toString": {
+                                "description": "The details of the new value as a string.",
+                                "readOnly": true,
+                                "type": "string"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "readOnly": true,
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "readOnly": true,
+                    "type": "array"
+                  },
+                  "maxResults": {
+                    "description": "The maximum number of results that could be on the page.",
+                    "format": "int32",
+                    "readOnly": true,
+                    "type": "integer"
+                  },
+                  "startAt": {
+                    "description": "The index of the first item returned on the page.",
+                    "format": "int32",
+                    "readOnly": true,
+                    "type": "integer"
+                  },
+                  "total": {
+                    "description": "The number of results on the page.",
+                    "format": "int32",
+                    "readOnly": true,
+                    "type": "integer"
+                  }
+                },
+                "type": "object"
+              }
+            ],
+            "description": "Details of changelogs associated with the issue.",
+            "readOnly": true
+          },
+          "editmeta": {
+            "allOf": [
+              {
+                "description": "A list of editable field details.",
+                "properties": {
+                  "fields": {
+                    "additionalProperties": {
+                      "additionalProperties": false,
+                      "description": "The metadata describing an issue field.",
+                      "properties": {
+                        "allowedValues": {
+                          "description": "The list of values allowed in the field.",
+                          "items": {
+                            "readOnly": true
+                          },
+                          "readOnly": true,
+                          "type": "array"
+                        },
+                        "autoCompleteUrl": {
+                          "description": "The URL that can be used to automatically complete the field.",
+                          "readOnly": true,
+                          "type": "string"
+                        },
+                        "configuration": {
+                          "additionalProperties": {
+                            "readOnly": true
+                          },
+                          "description": "The configuration properties.",
+                          "readOnly": true,
+                          "type": "object"
+                        },
+                        "defaultValue": {
+                          "description": "The default value of the field.",
+                          "readOnly": true
+                        },
+                        "hasDefaultValue": {
+                          "description": "Whether the field has a default value.",
+                          "readOnly": true,
+                          "type": "boolean"
+                        },
+                        "key": {
+                          "description": "The key of the field.",
+                          "readOnly": true,
+                          "type": "string"
+                        },
+                        "name": {
+                          "description": "The name of the field.",
+                          "readOnly": true,
+                          "type": "string"
+                        },
+                        "operations": {
+                          "description": "The list of operations that can be performed on the field.",
+                          "items": {
+                            "readOnly": true,
+                            "type": "string"
+                          },
+                          "readOnly": true,
+                          "type": "array"
+                        },
+                        "required": {
+                          "description": "Whether the field is required.",
+                          "readOnly": true,
+                          "type": "boolean"
+                        },
+                        "schema": {
+                          "allOf": [
+                            {
+                              "additionalProperties": false,
+                              "description": "The schema of a field.",
+                              "properties": {
+                                "configuration": {
+                                  "additionalProperties": {
+                                    "readOnly": true
+                                  },
+                                  "description": "If the field is a custom field, the configuration of the field.",
+                                  "readOnly": true,
+                                  "type": "object"
+                                },
+                                "custom": {
+                                  "description": "If the field is a custom field, the URI of the field.",
+                                  "readOnly": true,
+                                  "type": "string"
+                                },
+                                "customId": {
+                                  "description": "If the field is a custom field, the custom ID of the field.",
+                                  "format": "int64",
+                                  "readOnly": true,
+                                  "type": "integer"
+                                },
+                                "items": {
+                                  "description": "When the data type is an array, the name of the field items within the array.",
+                                  "readOnly": true,
+                                  "type": "string"
+                                },
+                                "system": {
+                                  "description": "If the field is a system field, the name of the field.",
+                                  "readOnly": true,
+                                  "type": "string"
+                                },
+                                "type": {
+                                  "description": "The data type of the field.",
+                                  "readOnly": true,
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "type"
+                              ],
+                              "type": "object"
+                            }
+                          ],
+                          "description": "The data type of the field.",
+                          "readOnly": true
+                        }
+                      },
+                      "required": [
+                        "key",
+                        "name",
+                        "operations",
+                        "required",
+                        "schema"
+                      ],
+                      "type": "object",
+                      "xml": {
+                        "name": "availableField"
+                      }
+                    },
+                    "readOnly": true,
+                    "type": "object"
+                  }
+                },
+                "type": "object"
+              }
+            ],
+            "description": "The metadata for the fields on the issue that can be amended.",
+            "readOnly": true
+          },
+          "expand": {
+            "description": "Expand options that include additional issue details in the response.",
+            "readOnly": true,
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "fields": {
+            "additionalProperties": {},
+            "type": "object"
+          },
+          "fieldsToInclude": {
+            "additionalProperties": false,
+            "properties": {
+              "actuallyIncluded": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "uniqueItems": true
+              },
+              "excluded": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "uniqueItems": true
+              },
+              "included": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "uniqueItems": true
+              }
+            },
+            "type": "object"
+          },
+          "id": {
+            "description": "The ID of the issue.",
+            "readOnly": true,
+            "type": "string"
+          },
+          "key": {
+            "description": "The key of the issue.",
+            "readOnly": true,
+            "type": "string"
+          },
+          "names": {
+            "additionalProperties": {
+              "readOnly": true,
+              "type": "string"
+            },
+            "description": "The ID and name of each field present on the issue.",
+            "readOnly": true,
+            "type": "object"
+          },
+          "operations": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Operations"
+              }
+            ],
+            "description": "The operations that can be performed on the issue.",
+            "readOnly": true
+          },
+          "properties": {
+            "additionalProperties": {
+              "readOnly": true
+            },
+            "description": "Details of the issue properties identified in the request.",
+            "readOnly": true,
+            "type": "object"
+          },
+          "renderedFields": {
+            "additionalProperties": {
+              "readOnly": true
+            },
+            "description": "The rendered value of each field present on the issue.",
+            "readOnly": true,
+            "type": "object"
+          },
+          "schema": {
+            "additionalProperties": {
+              "additionalProperties": false,
+              "description": "The schema of a field.",
+              "properties": {
+                "configuration": {
+                  "additionalProperties": {
+                    "readOnly": true
+                  },
+                  "description": "If the field is a custom field, the configuration of the field.",
+                  "readOnly": true,
+                  "type": "object"
+                },
+                "custom": {
+                  "description": "If the field is a custom field, the URI of the field.",
+                  "readOnly": true,
+                  "type": "string"
+                },
+                "customId": {
+                  "description": "If the field is a custom field, the custom ID of the field.",
+                  "format": "int64",
+                  "readOnly": true,
+                  "type": "integer"
+                },
+                "items": {
+                  "description": "When the data type is an array, the name of the field items within the array.",
+                  "readOnly": true,
+                  "type": "string"
+                },
+                "system": {
+                  "description": "If the field is a system field, the name of the field.",
+                  "readOnly": true,
+                  "type": "string"
+                },
+                "type": {
+                  "description": "The data type of the field.",
+                  "readOnly": true,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "type": "object"
+            },
+            "description": "The schema describing each field present on the issue.",
+            "readOnly": true,
+            "type": "object"
+          },
+          "self": {
+            "description": "The URL of the issue details.",
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "transitions": {
+            "description": "The transitions that can be performed on the issue.",
+            "items": {
+              "additionalProperties": true,
+              "description": "Details of an issue transition.",
+              "properties": {
+                "expand": {
+                  "description": "Expand options that include additional transition details in the response.",
+                  "readOnly": true,
+                  "type": "string"
+                },
+                "fields": {
+                  "additionalProperties": {
+                    "additionalProperties": false,
+                    "description": "The metadata describing an issue field.",
+                    "properties": {
+                      "allowedValues": {
+                        "description": "The list of values allowed in the field.",
+                        "items": {
+                          "readOnly": true
+                        },
+                        "readOnly": true,
+                        "type": "array"
+                      },
+                      "autoCompleteUrl": {
+                        "description": "The URL that can be used to automatically complete the field.",
+                        "readOnly": true,
+                        "type": "string"
+                      },
+                      "configuration": {
+                        "additionalProperties": {
+                          "readOnly": true
+                        },
+                        "description": "The configuration properties.",
+                        "readOnly": true,
+                        "type": "object"
+                      },
+                      "defaultValue": {
+                        "description": "The default value of the field.",
+                        "readOnly": true
+                      },
+                      "hasDefaultValue": {
+                        "description": "Whether the field has a default value.",
+                        "readOnly": true,
+                        "type": "boolean"
+                      },
+                      "key": {
+                        "description": "The key of the field.",
+                        "readOnly": true,
+                        "type": "string"
+                      },
+                      "name": {
+                        "description": "The name of the field.",
+                        "readOnly": true,
+                        "type": "string"
+                      },
+                      "operations": {
+                        "description": "The list of operations that can be performed on the field.",
+                        "items": {
+                          "readOnly": true,
+                          "type": "string"
+                        },
+                        "readOnly": true,
+                        "type": "array"
+                      },
+                      "required": {
+                        "description": "Whether the field is required.",
+                        "readOnly": true,
+                        "type": "boolean"
+                      },
+                      "schema": {
+                        "allOf": [
+                          {
+                            "additionalProperties": false,
+                            "description": "The schema of a field.",
+                            "properties": {
+                              "configuration": {
+                                "additionalProperties": {
+                                  "readOnly": true
+                                },
+                                "description": "If the field is a custom field, the configuration of the field.",
+                                "readOnly": true,
+                                "type": "object"
+                              },
+                              "custom": {
+                                "description": "If the field is a custom field, the URI of the field.",
+                                "readOnly": true,
+                                "type": "string"
+                              },
+                              "customId": {
+                                "description": "If the field is a custom field, the custom ID of the field.",
+                                "format": "int64",
+                                "readOnly": true,
+                                "type": "integer"
+                              },
+                              "items": {
+                                "description": "When the data type is an array, the name of the field items within the array.",
+                                "readOnly": true,
+                                "type": "string"
+                              },
+                              "system": {
+                                "description": "If the field is a system field, the name of the field.",
+                                "readOnly": true,
+                                "type": "string"
+                              },
+                              "type": {
+                                "description": "The data type of the field.",
+                                "readOnly": true,
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "type"
+                            ],
+                            "type": "object"
+                          }
+                        ],
+                        "description": "The data type of the field.",
+                        "readOnly": true
+                      }
+                    },
+                    "required": [
+                      "key",
+                      "name",
+                      "operations",
+                      "required",
+                      "schema"
+                    ],
+                    "type": "object",
+                    "xml": {
+                      "name": "availableField"
+                    }
+                  },
+                  "description": "Details of the fields associated with the issue transition screen. Use this information to populate `fields` and `update` in a transition request.",
+                  "readOnly": true,
+                  "type": "object"
+                },
+                "hasScreen": {
+                  "description": "Whether there is a screen associated with the issue transition.",
+                  "readOnly": true,
+                  "type": "boolean"
+                },
+                "id": {
+                  "description": "The ID of the issue transition. Required when specifying a transition to undertake.",
+                  "type": "string"
+                },
+                "isAvailable": {
+                  "description": "Whether the transition is available to be performed.",
+                  "readOnly": true,
+                  "type": "boolean"
+                },
+                "isConditional": {
+                  "description": "Whether the issue has to meet criteria before the issue transition is applied.",
+                  "readOnly": true,
+                  "type": "boolean"
+                },
+                "isGlobal": {
+                  "description": "Whether the issue transition is global, that is, the transition is applied to issues regardless of their status.",
+                  "readOnly": true,
+                  "type": "boolean"
+                },
+                "isInitial": {
+                  "description": "Whether this is the initial issue transition for the workflow.",
+                  "readOnly": true,
+                  "type": "boolean"
+                },
+                "looped": {
+                  "type": "boolean"
+                },
+                "name": {
+                  "description": "The name of the issue transition.",
+                  "readOnly": true,
+                  "type": "string"
+                },
+                "to": {
+                  "allOf": [
+                    {
+                      "additionalProperties": true,
+                      "description": "A status.",
+                      "properties": {
+                        "description": {
+                          "description": "The description of the status.",
+                          "readOnly": true,
+                          "type": "string"
+                        },
+                        "iconUrl": {
+                          "description": "The URL of the icon used to represent the status.",
+                          "readOnly": true,
+                          "type": "string"
+                        },
+                        "id": {
+                          "description": "The ID of the status.",
+                          "readOnly": true,
+                          "type": "string"
+                        },
+                        "name": {
+                          "description": "The name of the status.",
+                          "readOnly": true,
+                          "type": "string"
+                        },
+                        "scope": {
+                          "allOf": [
+                            {
+                              "additionalProperties": true,
+                              "description": "The projects the item is associated with. Indicated for items associated with [next-gen projects](https://confluence.atlassian.com/x/loMyO).",
+                              "properties": {
+                                "project": {
+                                  "allOf": [
+                                    {
+                                      "additionalProperties": false,
+                                      "description": "Details about a project.",
+                                      "properties": {
+                                        "avatarUrls": {
+                                          "allOf": [
+                                            {
+                                              "additionalProperties": false,
+                                              "properties": {
+                                                "16x16": {
+                                                  "description": "The URL of the item's 16x16 pixel avatar.",
+                                                  "format": "uri",
+                                                  "type": "string"
+                                                },
+                                                "24x24": {
+                                                  "description": "The URL of the item's 24x24 pixel avatar.",
+                                                  "format": "uri",
+                                                  "type": "string"
+                                                },
+                                                "32x32": {
+                                                  "description": "The URL of the item's 32x32 pixel avatar.",
+                                                  "format": "uri",
+                                                  "type": "string"
+                                                },
+                                                "48x48": {
+                                                  "description": "The URL of the item's 48x48 pixel avatar.",
+                                                  "format": "uri",
+                                                  "type": "string"
+                                                }
+                                              },
+                                              "type": "object"
+                                            }
+                                          ],
+                                          "description": "The URLs of the project's avatars.",
+                                          "readOnly": true
+                                        },
+                                        "id": {
+                                          "description": "The ID of the project.",
+                                          "type": "string"
+                                        },
+                                        "key": {
+                                          "description": "The key of the project.",
+                                          "readOnly": true,
+                                          "type": "string"
+                                        },
+                                        "name": {
+                                          "description": "The name of the project.",
+                                          "readOnly": true,
+                                          "type": "string"
+                                        },
+                                        "projectCategory": {
+                                          "allOf": [
+                                            {
+                                              "additionalProperties": false,
+                                              "description": "A project category.",
+                                              "properties": {
+                                                "description": {
+                                                  "description": "The name of the project category.",
+                                                  "readOnly": true,
+                                                  "type": "string"
+                                                },
+                                                "id": {
+                                                  "description": "The ID of the project category.",
+                                                  "readOnly": true,
+                                                  "type": "string"
+                                                },
+                                                "name": {
+                                                  "description": "The description of the project category.",
+                                                  "readOnly": true,
+                                                  "type": "string"
+                                                },
+                                                "self": {
+                                                  "description": "The URL of the project category.",
+                                                  "readOnly": true,
+                                                  "type": "string"
+                                                }
+                                              },
+                                              "type": "object"
+                                            }
+                                          ],
+                                          "description": "The category the project belongs to.",
+                                          "readOnly": true
+                                        },
+                                        "projectTypeKey": {
+                                          "description": "The [project type](https://confluence.atlassian.com/x/GwiiLQ#Jiraapplicationsoverview-Productfeaturesandprojecttypes) of the project.",
+                                          "enum": [
+                                            "software",
+                                            "service_desk",
+                                            "business"
+                                          ],
+                                          "readOnly": true,
+                                          "type": "string"
+                                        },
+                                        "self": {
+                                          "description": "The URL of the project details.",
+                                          "readOnly": true,
+                                          "type": "string"
+                                        },
+                                        "simplified": {
+                                          "description": "Whether or not the project is simplified.",
+                                          "readOnly": true,
+                                          "type": "boolean"
+                                        }
+                                      },
+                                      "type": "object"
+                                    }
+                                  ],
+                                  "description": "The project the item has scope in.",
+                                  "readOnly": true
+                                },
+                                "type": {
+                                  "description": "The type of scope.",
+                                  "enum": [
+                                    "PROJECT",
+                                    "TEMPLATE"
+                                  ],
+                                  "readOnly": true,
+                                  "type": "string"
+                                }
+                              },
+                              "type": "object"
+                            }
+                          ],
+                          "description": "The scope of the field.",
+                          "readOnly": true
+                        },
+                        "self": {
+                          "description": "The URL of the status.",
+                          "readOnly": true,
+                          "type": "string"
+                        },
+                        "statusCategory": {
+                          "allOf": [
+                            {
+                              "additionalProperties": true,
+                              "description": "A status category.",
+                              "properties": {
+                                "colorName": {
+                                  "description": "The name of the color used to represent the status category.",
+                                  "readOnly": true,
+                                  "type": "string"
+                                },
+                                "id": {
+                                  "description": "The ID of the status category.",
+                                  "format": "int64",
+                                  "readOnly": true,
+                                  "type": "integer"
+                                },
+                                "key": {
+                                  "description": "The key of the status category.",
+                                  "readOnly": true,
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "description": "The name of the status category.",
+                                  "readOnly": true,
+                                  "type": "string"
+                                },
+                                "self": {
+                                  "description": "The URL of the status category.",
+                                  "readOnly": true,
+                                  "type": "string"
+                                }
+                              },
+                              "type": "object"
+                            }
+                          ],
+                          "description": "The category assigned to the status.",
+                          "readOnly": true
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ],
+                  "description": "Details of the issue status after the transition.",
+                  "readOnly": true
+                }
+              },
+              "type": "object"
+            },
+            "readOnly": true,
+            "type": "array"
+          },
+          "versionedRepresentations": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "readOnly": true
+              },
+              "readOnly": true,
+              "type": "object"
+            },
+            "description": "The versions of each field on the issue.",
+            "readOnly": true,
+            "type": "object"
+          }
+        },
+        "type": "object",
+        "xml": {
+          "name": "issue"
+        }
+      },
+      "IssueIdOrKeysAssociation": {
+        "description": "An association type referencing issues in Jira.\n",
+        "example": {
+          "associationType": "issueIdOrKeys",
+          "values": [
+            "ABC-123",
+            "ABC-456"
+          ]
+        },
+        "properties": {
+          "associationType": {
+            "description": "Defines the association type.\n",
+            "enum": [
+              "issueKeys",
+              "issueIdOrKeys"
+            ],
+            "example": "issueIdOrKeys",
+            "type": "string"
+          },
+          "values": {
+            "description": "The Jira issue keys or IDs to associate the entity with.\n\nThe number of values counted across all associationTypes must not exceed a limit of 500.\n",
+            "items": {
+              "description": "An issue key or ID that references an issue in Jira.\n",
+              "example": "ABC-123",
+              "pattern": "(\\w{1,255}-\\d{1,255}|\\d{1,255})",
+              "type": "string"
+            },
+            "maxItems": 500,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "associationType",
+          "values"
+        ],
+        "type": "object"
+      },
+      "LinkGroup": {
+        "additionalProperties": false,
+        "description": "Details a link group, which defines issue operations.",
+        "properties": {
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/LinkGroup"
+            },
+            "type": "array"
+          },
+          "header": {
+            "additionalProperties": false,
+            "description": "Details about the operations available in this version.",
+            "properties": {
+              "href": {
+                "type": "string"
+              },
+              "iconClass": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "styleClass": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "weight": {
+                "format": "int32",
+                "type": "integer"
+              }
+            },
+            "type": "object",
+            "xml": {
+              "name": "link"
+            }
+          },
+          "id": {
+            "type": "string"
+          },
+          "links": {
+            "items": {
+              "additionalProperties": false,
+              "description": "Details about the operations available in this version.",
+              "properties": {
+                "href": {
+                  "type": "string"
+                },
+                "iconClass": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "styleClass": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "weight": {
+                  "format": "int32",
+                  "type": "integer"
+                }
+              },
+              "type": "object",
+              "xml": {
+                "name": "link"
+              }
+            },
+            "type": "array"
+          },
+          "styleClass": {
+            "type": "string"
+          },
+          "weight": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "Operations": {
+        "additionalProperties": true,
+        "description": "Details of the operations that can be performed on the issue.",
+        "properties": {
+          "linkGroups": {
+            "description": "Details of the link groups defining issue operations.",
+            "items": {
+              "$ref": "#/components/schemas/LinkGroup"
+            },
+            "readOnly": true,
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "SearchResults": {
+        "additionalProperties": false,
+        "description": "The result of a JQL search.",
+        "properties": {
+          "expand": {
+            "description": "Expand options that include additional search result details in the response.",
+            "readOnly": true,
+            "type": "string"
+          },
+          "issues": {
+            "description": "The list of issues found by the search.",
+            "items": {
+              "$ref": "#/components/schemas/IssueBean"
+            },
+            "readOnly": true,
+            "type": "array"
+          },
+          "maxResults": {
+            "description": "The maximum number of results that could be on the page.",
+            "format": "int32",
+            "readOnly": true,
+            "type": "integer"
+          },
+          "names": {
+            "additionalProperties": {
+              "readOnly": true,
+              "type": "string"
+            },
+            "description": "The ID and name of each field in the search results.",
+            "readOnly": true,
+            "type": "object"
+          },
+          "schema": {
+            "additionalProperties": {
+              "additionalProperties": false,
+              "description": "The schema of a field.",
+              "properties": {
+                "configuration": {
+                  "additionalProperties": {
+                    "readOnly": true
+                  },
+                  "description": "If the field is a custom field, the configuration of the field.",
+                  "readOnly": true,
+                  "type": "object"
+                },
+                "custom": {
+                  "description": "If the field is a custom field, the URI of the field.",
+                  "readOnly": true,
+                  "type": "string"
+                },
+                "customId": {
+                  "description": "If the field is a custom field, the custom ID of the field.",
+                  "format": "int64",
+                  "readOnly": true,
+                  "type": "integer"
+                },
+                "items": {
+                  "description": "When the data type is an array, the name of the field items within the array.",
+                  "readOnly": true,
+                  "type": "string"
+                },
+                "system": {
+                  "description": "If the field is a system field, the name of the field.",
+                  "readOnly": true,
+                  "type": "string"
+                },
+                "type": {
+                  "description": "The data type of the field.",
+                  "readOnly": true,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "type": "object"
+            },
+            "description": "The schema describing the field types in the search results.",
+            "readOnly": true,
+            "type": "object"
+          },
+          "startAt": {
+            "description": "The index of the first item returned on the page.",
+            "format": "int32",
+            "readOnly": true,
+            "type": "integer"
+          },
+          "total": {
+            "description": "The number of results on the page.",
+            "format": "int32",
+            "readOnly": true,
+            "type": "integer"
+          },
+          "warningMessages": {
+            "description": "Any warnings related to the JQL query.",
+            "items": {
+              "readOnly": true,
+              "type": "string"
+            },
+            "readOnly": true,
+            "type": "array"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "OAuth2": {
+        "description": "OAuth2 scopes for Jira",
+        "flows": {
+          "authorizationCode": {
+            "authorizationUrl": "https://auth.atlassian.com/authorize",
+            "scopes": {
+              "delete:board-scope.admin:jira-software": "Remove board configuration, features, and properties.",
+              "delete:build-info:jira": "Delete build information",
+              "delete:deployment-info:jira": "Delete deployment information",
+              "delete:dev-info:jira": "Delete development information",
+              "delete:feature-flag-info:jira": "Delete feature flag information",
+              "delete:remote-link-info:jira": "Delete remote link information",
+              "delete:security:jira": "Delete security information",
+              "delete:sprint:jira-software": "Delete sprints and their properties.",
+              "manage:jira-configuration": "Configure Jira settings that require the Jira administrators permission, for example, create projects and custom fields, view workflows, manage issue link types.",
+              "manage:jira-project": "Create and edit project settings and create new project-level objects, for example, versions, components.",
+              "manage:jira-webhook": "Manage Jira webhooks. Enables an OAuth app to register and unregister dynamic webhooks in Jira. It also provides for fetching of registered webhooks.",
+              "read:board-scope.admin:jira-software": "View configuration, features, filters, project, properties and quick filters related to the given board.",
+              "read:board-scope:jira-software": "View board and issues from a board, view issues from a backlog and view reports and versions.",
+              "read:build-info:jira": "Read build information",
+              "read:build:jira-software": "View builds.",
+              "read:deployment-info:jira": "Read deployment information",
+              "read:deployment:jira-software": "View deployments.",
+              "read:dev-info:jira": "Read development information",
+              "read:epic:jira-software": "View and search for epics, view issues related to an epic and issues without an epic.",
+              "read:feature-flag-info:jira": "Read feature flag information",
+              "read:feature-flag:jira-software": "View feature flags.",
+              "read:issue:jira-software": "View issues, issue estimations and field used for estimations.",
+              "read:jira-user": "View user information in Jira that you have access to, including usernames, email addresses, and avatars.",
+              "read:jira-work": "Read project and issue data. Search for issues and objects associated with issues (such as attachments and worklogs).",
+              "read:remote-link-info:jira": "Read remote link information",
+              "read:remote-link:jira-software": "View remote links.",
+              "read:security:jira": "Read security information",
+              "read:source-code:jira-software": "View repositories and check if data exists for the supplied properties.",
+              "read:sprint:jira-software": "View sprints and sprint related issues and properties.",
+              "write:board-scope.admin:jira-software": "Create board, toggle features and set and delete properties.",
+              "write:board-scope:jira-software": "Move issues to a backlog and move issues from a backlog to a board.",
+              "write:build-info:jira": "Write build information",
+              "write:build:jira-software": "Submit and delete build.",
+              "write:deployment-info:jira": "Write deployment information",
+              "write:deployment:jira-software": "Submit and delete deployment.",
+              "write:dev-info:jira": "Write development information",
+              "write:epic:jira-software": "Remove issues from epic, move issues to epic, rank epics and partially update epics. A partial update means that fields not present in the request JSON will not be updated.",
+              "write:feature-flag-info:jira": "Write feature flag information",
+              "write:feature-flag:jira-software": "Submit and delete feature flag.",
+              "write:issue:jira-software": "Move (rank) issues and update estimation of the issue.",
+              "write:jira-work": "Create and edit issues in Jira, post comments, create worklogs, and delete issues.",
+              "write:remote-link-info:jira": "Write remote link information",
+              "write:remote-link:jira-software": "Submit and delete remote link.",
+              "write:security:jira": "Write security information",
+              "write:source-code:jira-software": "Store and delete development information, delete repository and delete development information entity.",
+              "write:sprint:jira-software": "Save, move issues to sprints, and change the order of sprints."
+            },
+            "tokenUrl": "https://auth.atlassian.com/oauth/token"
+          }
+        },
+        "type": "oauth2"
+      },
+      "basicAuth": {
+        "description": "Basic authentication using email and API token",
+        "scheme": "basic",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "Jira Software Cloud API",
+    "version": "1001.0.0"
+  },
+  "openapi": "3.0.1",
+  "paths": {
+    "/rest/agile/1.0/backlog/issue": {
+      "post": {
+        "deprecated": false,
+        "description": "Move issues to the backlog.  \nThis operation is equivalent to remove future and active sprints from a given set of issues. At most 50 issues may be moved at once.",
+        "operationId": "moveIssuesToBacklog",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "issues": [
+                  "10001",
+                  "PR-1",
+                  "PR-3"
+                ]
+              },
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "issues": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array",
+                    "uniqueItems": true
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Empty response is returned if operation was successful."
+          },
+          "400": {
+            "description": "Returned if the request is invalid."
+          },
+          "401": {
+            "description": "Returned if the user is not logged in."
+          },
+          "403": {
+            "description": "Returned if the user does not have a valid license or does not have permission to assign issues."
+          },
+          "404": {
+            "description": "Returned if sprint does not exist or the user cannot view it."
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          },
+          {
+            "OAuth2": [
+              "write:board-scope:jira-software"
+            ]
+          }
+        ],
+        "summary": "Move issues to backlog",
+        "tags": [
+          "Backlog"
+        ],
+        "x-atlassian-connect-scope": "WRITE",
+        "x-atlassian-data-security-policy": [
+          {
+            "app-access-rule-exempt": true
+          }
+        ]
+      }
+    },
+    "/rest/agile/1.0/board/{boardId}/backlog": {
+      "get": {
+        "deprecated": true,
+        "description": "Returns all issues from the board's backlog, for the given board ID. This only includes issues that the user has permission to view. The backlog contains incomplete issues that are not assigned to any future or active sprint. Note, if the user does not have permission to view the board, no issues will be returned at all. Issues returned from this resource include Agile fields, like sprint, closedSprints, flagged, and epic. By default, the returned issues are ordered by rank.",
+        "operationId": "getIssuesForBacklog",
+        "parameters": [
+          {
+            "description": "The ID of the board that has the backlog containing the requested issues.",
+            "in": "path",
+            "name": "boardId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The starting index of the returned issues. Base index: 0. See the 'Pagination' section at the top of this page for more details.",
+            "in": "query",
+            "name": "startAt",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The maximum number of issues to return per page. Default: 50. See the 'Pagination' section at the top of this page for more details. Note, the total number of issues returned is limited by the property 'jira.search.views.default.max' in your Jira instance. If you exceed this limit, your results will be truncated.",
+            "in": "query",
+            "name": "maxResults",
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Filters results using a JQL query. If you define an order in your JQL query, it will override the default order of the returned issues.  \nNote that `username` and `userkey` can't be used as search terms for this parameter due to privacy reasons. Use `accountId` instead.",
+            "in": "query",
+            "name": "jql",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Specifies whether to validate the JQL query or not. Default: true.",
+            "in": "query",
+            "name": "validateQuery",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "The list of fields to return for each issue. By default, all navigable and Agile fields are returned.",
+            "in": "query",
+            "name": "fields",
+            "schema": {
+              "items": {
+                "additionalProperties": false,
+                "type": "object"
+              },
+              "type": "array"
+            }
+          },
+          {
+            "description": "This parameter is currently not used.",
+            "in": "query",
+            "name": "expand",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": "{\"expand\":\"names,schema\",\"issues\":[{\"expand\":\"\",\"fields\":{\"flagged\":true,\"sprint\":{\"id\":37,\"self\":\"https://your-domain.atlassian.net/rest/agile/1.0/sprint/13\",\"state\":\"future\",\"name\":\"sprint 2\",\"goal\":\"sprint 2 goal\"},\"closedSprints\":[{\"id\":37,\"self\":\"https://your-domain.atlassian.net/rest/agile/1.0/sprint/23\",\"state\":\"closed\",\"name\":\"sprint 1\",\"startDate\":\"2015-04-11T15:22:00.000+10:00\",\"endDate\":\"2015-04-20T01:22:00.000+10:00\",\"completeDate\":\"2015-04-20T11:04:00.000+10:00\",\"goal\":\"sprint 1 goal\"}],\"description\":\"example bug report\",\"project\":{\"avatarUrls\":{\"16x16\":\"https://your-domain.atlassian.net/secure/projectavatar?size=xsmall&pid=10000\",\"24x24\":\"https://your-domain.atlassian.net/secure/projectavatar?size=small&pid=10000\",\"32x32\":\"https://your-domain.atlassian.net/secure/projectavatar?size=medium&pid=10000\",\"48x48\":\"https://your-domain.atlassian.net/secure/projectavatar?size=large&pid=10000\"},\"id\":\"10000\",\"insight\":{\"lastIssueUpdateTime\":\"2021-04-22T05:37:05.000+0000\",\"totalIssueCount\":100},\"key\":\"EX\",\"name\":\"Example\",\"projectCategory\":{\"description\":\"First Project Category\",\"id\":\"10000\",\"name\":\"FIRST\",\"self\":\"https://your-domain.atlassian.net/rest/api/3/projectCategory/10000\"},\"self\":\"https://your-domain.atlassian.net/rest/api/3/project/EX\",\"simplified\":false,\"style\":\"classic\"},\"comment\":[{\"author\":{\"accountId\":\"5b10a2844c20165700ede21g\",\"active\":false,\"displayName\":\"Mia Krystof\",\"self\":\"https://your-domain.atlassian.net/rest/api/3/user?accountId=5b10a2844c20165700ede21g\"},\"body\":{\"type\":\"doc\",\"version\":1,\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque eget venenatis elit. Duis eu justo eget augue iaculis fermentum. Sed semper quam laoreet nisi egestas at posuere augue semper.\"}]}]},\"created\":\"2021-01-17T12:34:00.000+0000\",\"id\":\"10000\",\"self\":\"https://your-domain.atlassian.net/rest/api/3/issue/10010/comment/10000\",\"updateAuthor\":{\"accountId\":\"5b10a2844c20165700ede21g\",\"active\":false,\"displayName\":\"Mia Krystof\",\"self\":\"https://your-domain.atlassian.net/rest/api/3/user?accountId=5b10a2844c20165700ede21g\"},\"updated\":\"2021-01-18T23:45:00.000+0000\",\"visibility\":{\"identifier\":\"Administrators\",\"type\":\"role\",\"value\":\"Administrators\"}}],\"epic\":{\"id\":37,\"self\":\"https://your-domain.atlassian.net/rest/agile/1.0/epic/23\",\"name\":\"epic 1\",\"summary\":\"epic 1 summary\",\"color\":{\"key\":\"color_4\"},\"done\":true},\"worklog\":[{\"author\":{\"accountId\":\"5b10a2844c20165700ede21g\",\"active\":false,\"displayName\":\"Mia Krystof\",\"self\":\"https://your-domain.atlassian.net/rest/api/3/user?accountId=5b10a2844c20165700ede21g\"},\"comment\":{\"type\":\"doc\",\"version\":1,\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"I did some work here.\"}]}]},\"id\":\"100028\",\"issueId\":\"10002\",\"self\":\"https://your-domain.atlassian.net/rest/api/3/issue/10010/worklog/10000\",\"started\":\"2021-01-17T12:34:00.000+0000\",\"timeSpent\":\"3h 20m\",\"timeSpentSeconds\":12000,\"updateAuthor\":{\"accountId\":\"5b10a2844c20165700ede21g\",\"active\":false,\"displayName\":\"Mia Krystof\",\"self\":\"https://your-domain.atlassian.net/rest/api/3/user?accountId=5b10a2844c20165700ede21g\"},\"updated\":\"2021-01-18T23:45:00.000+0000\",\"visibility\":{\"identifier\":\"276f955c-63d7-42c8-9520-92d01dca0625\",\"type\":\"group\",\"value\":\"jira-developers\"}}],\"updated\":1,\"timetracking\":{\"originalEstimate\":\"10m\",\"originalEstimateSeconds\":600,\"remainingEstimate\":\"3m\",\"remainingEstimateSeconds\":200,\"timeSpent\":\"6m\",\"timeSpentSeconds\":400}},\"id\":\"10001\",\"key\":\"HSP-1\",\"self\":\"https://your-domain.atlassian.net/rest/agile/1.0/board/92/issue/10001\"}],\"maxResults\":50,\"startAt\":0,\"total\":1}",
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResults"
+                }
+              }
+            },
+            "description": "Returns the requested issues, at the specified page of the results."
+          },
+          "400": {
+            "description": "Returned if the request is invalid."
+          },
+          "401": {
+            "description": "Returned if the user is not logged in."
+          },
+          "403": {
+            "description": "Returned if the user does not have a valid license."
+          },
+          "404": {
+            "description": "Returned if the board does not exist or the user does not have permission to view it."
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          },
+          {
+            "OAuth2": [
+              "read:board-scope:jira-software",
+              "read:issue-details:jira"
+            ]
+          }
+        ],
+        "summary": "Get issues for backlog",
+        "tags": [
+          "Board"
+        ],
+        "x-atlassian-connect-scope": "READ",
+        "x-atlassian-data-security-policy": [
+          {
+            "app-access-rule-exempt": false
+          }
+        ]
+      }
+    },
+    "/rest/agile/1.0/board/{boardId}/sprint": {
+      "get": {
+        "deprecated": false,
+        "description": "Returns all sprints from a board, for a given board ID. This only includes sprints that the user has permission to view.",
+        "operationId": "getAllSprints",
+        "parameters": [
+          {
+            "description": "The ID of the board that contains the requested sprints.",
+            "in": "path",
+            "name": "boardId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The starting index of the returned sprints. Base index: 0. See the 'Pagination' section at the top of this page for more details.",
+            "in": "query",
+            "name": "startAt",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The maximum number of sprints to return per page. See the 'Pagination' section at the top of this page for more details.",
+            "in": "query",
+            "name": "maxResults",
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Filters results to sprints in specified states. Valid values: future, active, closed. You can define multiple states separated by commas, e.g. state=active,closed",
+            "in": "query",
+            "name": "state",
+            "schema": {
+              "additionalProperties": false,
+              "type": "object"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": "{\"isLast\":false,\"maxResults\":2,\"startAt\":1,\"total\":5,\"values\":[{\"id\":37,\"self\":\"https://your-domain.atlassian.net/rest/agile/1.0/sprint/23\",\"state\":\"closed\",\"name\":\"sprint 1\",\"startDate\":\"2015-04-11T15:22:00.000+10:00\",\"endDate\":\"2015-04-20T01:22:00.000+10:00\",\"completeDate\":\"2015-04-20T11:04:00.000+10:00\",\"originBoardId\":5,\"goal\":\"sprint 1 goal\"},{\"id\":72,\"self\":\"https://your-domain.atlassian.net/rest/agile/1.0/sprint/73\",\"state\":\"future\",\"name\":\"sprint 2\",\"goal\":\"sprint 2 goal\"}]}"
+              }
+            },
+            "description": "Returns the requested sprints, at the specified page of the results. Sprints will be ordered first by state (i.e. closed, active, future) then by their position in the backlog."
+          },
+          "400": {
+            "description": "Returned if the request is invalid."
+          },
+          "401": {
+            "description": "Returned if the user is not logged in."
+          },
+          "403": {
+            "description": "Returned if the user does not have a valid license."
+          },
+          "404": {
+            "description": "Returned if board does not exist or the user does not have permission to view it."
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          },
+          {
+            "OAuth2": [
+              "read:sprint:jira-software"
+            ]
+          }
+        ],
+        "summary": "Get all sprints",
+        "tags": [
+          "Board"
+        ],
+        "x-atlassian-connect-scope": "READ",
+        "x-atlassian-data-security-policy": [
+          {
+            "app-access-rule-exempt": true
+          }
+        ]
+      }
+    },
+    "/rest/agile/1.0/sprint": {
+      "post": {
+        "deprecated": false,
+        "description": "Creates a future sprint. Sprint name and origin board id are required. Start date, end date, and goal are optional.\n\nNote that the sprint name is trimmed. Also, when starting sprints from the UI, the \"endDate\" set through this call is ignored and instead the last sprint's duration is used to fill the form.",
+        "operationId": "createSprint",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "endDate": "2015-04-20T01:22:00.000+10:00",
+                "goal": "sprint 1 goal",
+                "name": "sprint 1",
+                "originBoardId": 5,
+                "startDate": "2015-04-11T15:22:00.000+10:00"
+              },
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "endDate": {
+                    "type": "string"
+                  },
+                  "goal": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "originBoardId": {
+                    "format": "int64",
+                    "type": "integer"
+                  },
+                  "startDate": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "example": "{\"id\":37,\"self\":\"https://your-domain.atlassian.net/rest/agile/1.0/sprint/23\",\"state\":\"future\",\"name\":\"sprint 1\",\"startDate\":\"2015-04-11T15:22:00.000+10:00\",\"endDate\":\"2015-04-20T01:22:00.000+10:00\",\"originBoardId\":5,\"goal\":\"sprint 1 goal\"}"
+              }
+            },
+            "description": "Created sprint"
+          },
+          "400": {
+            "description": "Returned if the request is invalid."
+          },
+          "401": {
+            "description": "Returned if the user is not logged in."
+          },
+          "403": {
+            "description": "Returned if the user does not have a valid license."
+          },
+          "404": {
+            "description": "Returned if the board does not exist or the user does not have permission to view it."
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          },
+          {
+            "OAuth2": [
+              "write:sprint:jira-software"
+            ]
+          }
+        ],
+        "summary": "Create sprint",
+        "tags": [
+          "Sprint"
+        ],
+        "x-atlassian-connect-scope": "WRITE",
+        "x-atlassian-data-security-policy": [
+          {
+            "app-access-rule-exempt": true
+          }
+        ]
+      }
+    },
+    "/rest/agile/1.0/sprint/{sprintId}/issue": {
+      "get": {
+        "deprecated": true,
+        "description": "Returns all issues in a sprint, for a given sprint ID. This only includes issues that the user has permission to view. By default, the returned issues are ordered by rank.",
+        "operationId": "getIssuesForSprint",
+        "parameters": [
+          {
+            "description": "The ID of the sprint that contains the requested issues.",
+            "in": "path",
+            "name": "sprintId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The starting index of the returned issues. Base index: 0. See the 'Pagination' section at the top of this page for more details.",
+            "in": "query",
+            "name": "startAt",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The maximum number of issues to return per page. See the 'Pagination' section at the top of this page for more details. Note, the total number of issues returned is limited by the property 'jira.search.views.default.max' in your Jira instance. If you exceed this limit, your results will be truncated.",
+            "in": "query",
+            "name": "maxResults",
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Filters results using a JQL query. If you define an order in your JQL query, it will override the default order of the returned issues.  \nNote that `username` and `userkey` can't be used as search terms for this parameter due to privacy reasons. Use `accountId` instead.",
+            "in": "query",
+            "name": "jql",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Specifies whether to validate the JQL query or not. Default: true.",
+            "in": "query",
+            "name": "validateQuery",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "The list of fields to return for each issue. By default, all navigable and Agile fields are returned.",
+            "in": "query",
+            "name": "fields",
+            "schema": {
+              "items": {
+                "additionalProperties": false,
+                "type": "object"
+              },
+              "type": "array"
+            }
+          },
+          {
+            "description": "A comma-separated list of the parameters to expand.",
+            "in": "query",
+            "name": "expand",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": "{\"expand\":\"\",\"fields\":{\"flagged\":true,\"sprint\":{\"id\":37,\"self\":\"https://your-domain.atlassian.net/rest/agile/1.0/sprint/13\",\"state\":\"future\",\"name\":\"sprint 2\",\"goal\":\"sprint 2 goal\"},\"closedSprints\":[{\"id\":37,\"self\":\"https://your-domain.atlassian.net/rest/agile/1.0/sprint/23\",\"state\":\"closed\",\"name\":\"sprint 1\",\"startDate\":\"2015-04-11T15:22:00.000+10:00\",\"endDate\":\"2015-04-20T01:22:00.000+10:00\",\"completeDate\":\"2015-04-20T11:04:00.000+10:00\",\"goal\":\"sprint 1 goal\"}],\"description\":\"example bug report\",\"project\":{\"avatarUrls\":{\"16x16\":\"https://your-domain.atlassian.net/secure/projectavatar?size=xsmall&pid=10000\",\"24x24\":\"https://your-domain.atlassian.net/secure/projectavatar?size=small&pid=10000\",\"32x32\":\"https://your-domain.atlassian.net/secure/projectavatar?size=medium&pid=10000\",\"48x48\":\"https://your-domain.atlassian.net/secure/projectavatar?size=large&pid=10000\"},\"id\":\"10000\",\"insight\":{\"lastIssueUpdateTime\":\"2021-04-22T05:37:05.000+0000\",\"totalIssueCount\":100},\"key\":\"EX\",\"name\":\"Example\",\"projectCategory\":{\"description\":\"First Project Category\",\"id\":\"10000\",\"name\":\"FIRST\",\"self\":\"https://your-domain.atlassian.net/rest/api/3/projectCategory/10000\"},\"self\":\"https://your-domain.atlassian.net/rest/api/3/project/EX\",\"simplified\":false,\"style\":\"classic\"},\"comment\":[{\"author\":{\"accountId\":\"5b10a2844c20165700ede21g\",\"active\":false,\"displayName\":\"Mia Krystof\",\"self\":\"https://your-domain.atlassian.net/rest/api/3/user?accountId=5b10a2844c20165700ede21g\"},\"body\":{\"type\":\"doc\",\"version\":1,\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque eget venenatis elit. Duis eu justo eget augue iaculis fermentum. Sed semper quam laoreet nisi egestas at posuere augue semper.\"}]}]},\"created\":\"2021-01-17T12:34:00.000+0000\",\"id\":\"10000\",\"self\":\"https://your-domain.atlassian.net/rest/api/3/issue/10010/comment/10000\",\"updateAuthor\":{\"accountId\":\"5b10a2844c20165700ede21g\",\"active\":false,\"displayName\":\"Mia Krystof\",\"self\":\"https://your-domain.atlassian.net/rest/api/3/user?accountId=5b10a2844c20165700ede21g\"},\"updated\":\"2021-01-18T23:45:00.000+0000\",\"visibility\":{\"identifier\":\"Administrators\",\"type\":\"role\",\"value\":\"Administrators\"}}],\"epic\":{\"id\":37,\"self\":\"https://your-domain.atlassian.net/rest/agile/1.0/epic/23\",\"name\":\"epic 1\",\"summary\":\"epic 1 summary\",\"color\":{\"key\":\"color_4\"},\"done\":true},\"worklog\":[{\"author\":{\"accountId\":\"5b10a2844c20165700ede21g\",\"active\":false,\"displayName\":\"Mia Krystof\",\"self\":\"https://your-domain.atlassian.net/rest/api/3/user?accountId=5b10a2844c20165700ede21g\"},\"comment\":{\"type\":\"doc\",\"version\":1,\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"I did some work here.\"}]}]},\"id\":\"100028\",\"issueId\":\"10002\",\"self\":\"https://your-domain.atlassian.net/rest/api/3/issue/10010/worklog/10000\",\"started\":\"2021-01-17T12:34:00.000+0000\",\"timeSpent\":\"3h 20m\",\"timeSpentSeconds\":12000,\"updateAuthor\":{\"accountId\":\"5b10a2844c20165700ede21g\",\"active\":false,\"displayName\":\"Mia Krystof\",\"self\":\"https://your-domain.atlassian.net/rest/api/3/user?accountId=5b10a2844c20165700ede21g\"},\"updated\":\"2021-01-18T23:45:00.000+0000\",\"visibility\":{\"identifier\":\"276f955c-63d7-42c8-9520-92d01dca0625\",\"type\":\"group\",\"value\":\"jira-developers\"}}],\"updated\":1,\"timetracking\":{\"originalEstimate\":\"10m\",\"originalEstimateSeconds\":600,\"remainingEstimate\":\"3m\",\"remainingEstimateSeconds\":200,\"timeSpent\":\"6m\",\"timeSpentSeconds\":400}},\"id\":\"10001\",\"key\":\"HSP-1\",\"self\":\"https://your-domain.atlassian.net/rest/agile/1.0/board/92/issue/10001\"}"
+              }
+            },
+            "description": "Returns the requested issues, at the specified page of the results."
+          },
+          "401": {
+            "description": "Returned if the user is not logged in."
+          },
+          "403": {
+            "description": "Returned if the user does not have a valid license."
+          },
+          "404": {
+            "description": "Returned if sprint does not exist or the user cannot view it."
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          },
+          {
+            "OAuth2": [
+              "read:sprint:jira-software",
+              "read:issue-details:jira",
+              "read:jql:jira"
+            ]
+          }
+        ],
+        "summary": "Get issues for sprint",
+        "tags": [
+          "Sprint"
+        ],
+        "x-atlassian-connect-scope": "READ",
+        "x-atlassian-data-security-policy": [
+          {
+            "app-access-rule-exempt": false
+          }
+        ]
+      },
+      "post": {
+        "deprecated": false,
+        "description": "Moves issues to a sprint, for a given sprint ID. Issues can only be moved to open or active sprints. The maximum number of issues that can be moved in one operation is 50.",
+        "operationId": "moveIssuesToSprintAndRank",
+        "parameters": [
+          {
+            "description": "The ID of the sprint that you want to assign issues to.",
+            "in": "path",
+            "name": "sprintId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "issues": [
+                  "PR-1",
+                  "10001",
+                  "PR-3"
+                ],
+                "rankBeforeIssue": "PR-4",
+                "rankCustomFieldId": 10521
+              },
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "issues": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "rankAfterIssue": {
+                    "type": "string"
+                  },
+                  "rankBeforeIssue": {
+                    "type": "string"
+                  },
+                  "rankCustomFieldId": {
+                    "format": "int64",
+                    "type": "integer"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Empty response is returned if operation was successful."
+          },
+          "400": {
+            "description": "Returned if the request is invalid."
+          },
+          "401": {
+            "description": "Returned if the user is not logged in."
+          },
+          "403": {
+            "description": "Returned if the user does not have a valid license or does not have permission to assign issues."
+          },
+          "404": {
+            "description": "Returned if the sprint does not exist or the user does not have permission to view it."
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          },
+          {
+            "OAuth2": [
+              "write:sprint:jira-software"
+            ]
+          }
+        ],
+        "summary": "Move issues to sprint and rank",
+        "tags": [
+          "Sprint"
+        ],
+        "x-atlassian-connect-scope": "WRITE",
+        "x-atlassian-data-security-policy": [
+          {
+            "app-access-rule-exempt": true
+          }
+        ]
+      }
+    },
+    "/rest/builds/0.1/bulk": {
+      "parameters": [
+        {
+          "description": "All requests must be signed with either a Connect JWT token or OAuth token for an on-premise integration that corresponds to an app installed in Jira.\n\nIf the Connect JWT token corresponds to an app that does not define `jiraBuildInfoProvider` module it will be rejected with a 403.\n\nSee https://developer.atlassian.com/blog/2015/01/understanding-jwt/ for more details about Connect JWT tokens.\nSee https://developer.atlassian.com/cloud/jira/software/integrate-jsw-cloud-with-onpremises-tools/ for details about on-premise integrations.\n",
+          "in": "header",
+          "name": "Authorization",
+          "required": true,
+          "schema": {
+            "pattern": "JWT \\S+",
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "description": "Update / insert builds data.\n\nBuilds are identified by the combination of `pipelineId` and `buildNumber`, and existing build data for the same\nbuild will be replaced if it exists and the `updateSequenceNumber` of the existing data is less than the\nincoming data.\n\nSubmissions are performed asynchronously. Submitted data will eventually be available in Jira; most updates are\navailable within a short period of time, but may take some time during peak load and/or maintenance times.\nThe `getBuildByKey` operation can be used to confirm that data has been stored successfully (if needed).\n\nIn the case of multiple builds being submitted in one request, each is validated individually prior to\nsubmission. Details of which build failed submission (if any) are available in the response object.\n",
+        "operationId": "submitBuilds",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "description": "The payload used to submit (update / insert) build data.",
+                "properties": {
+                  "builds": {
+                    "description": "A list of builds to submit to Jira.\n\nEach build may be associated with one or more Jira issue keys, and will be associated with any properties\nincluded in this request.\n",
+                    "items": {
+                      "description": "Data related to a single build\n",
+                      "properties": {
+                        "associations": {
+                          "description": "The Jira issue keys or IDs to associate the build with.",
+                          "items": {
+                            "$ref": "#/components/schemas/IssueIdOrKeysAssociation"
+                          },
+                          "type": "array"
+                        },
+                        "buildNumber": {
+                          "description": "Identifies a build within the sequence of builds identified by the build `pipelineId`.\n\nUsed to identify the 'most recent' build in that sequence of builds.\n\nThe combination of `pipelineId` and `buildNumber` must uniquely identify a build you have provided.\n",
+                          "example": 16,
+                          "format": "int64",
+                          "type": "integer"
+                        },
+                        "description": {
+                          "description": "An optional description to attach to this build.\n\nThis may be anything that makes sense in your system.\n",
+                          "example": "My Project build #16: Failed",
+                          "maxLength": 255,
+                          "type": "string"
+                        },
+                        "displayName": {
+                          "description": "The human-readable name for the build.\n\nWill be shown in the UI.\n",
+                          "example": "My Project build #16",
+                          "maxLength": 255,
+                          "type": "string"
+                        },
+                        "issueKeys": {
+                          "deprecated": true,
+                          "description": "The Jira issue keys to associate the build information with.\n\nYou are free to associate issue keys in any way you like. However, we recommend that you use the name\nof the branch the build was executed on, and extract issue keys from that name using a simple regex. This has\nthe advantage that it provides an intuitive association of builds to issue keys.\n",
+                          "items": {
+                            "description": "An issue key that references an issue in Jira.\n",
+                            "example": "ISSUE-123",
+                            "pattern": "^\\w{1,255}-\\d{1,255}$",
+                            "title": "IssueKey",
+                            "type": "string"
+                          },
+                          "maxItems": 100,
+                          "minItems": 1,
+                          "type": "array"
+                        },
+                        "label": {
+                          "description": "A human-readable string that to provide information about the build.\n",
+                          "maxLength": 255,
+                          "type": "string"
+                        },
+                        "lastUpdated": {
+                          "description": "The last-updated timestamp to present to the user as a summary of the state of the build.\n",
+                          "example": "2018-01-20T23:27:25.000Z",
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "pipelineId": {
+                          "description": "An ID that relates a sequence of builds. Depending on your use case this might be a project ID, pipeline ID,\nplan key etc. - whatever logical unit you use to group a sequence of builds.\n\nThe combination of `pipelineId` and `buildNumber` must uniquely identify a build you have provided.\n",
+                          "example": "my-build-plan",
+                          "maxLength": 255,
+                          "type": "string"
+                        },
+                        "references": {
+                          "description": "Optional information that links a build to a commit, branch etc.\n",
+                          "items": {
+                            "description": "Information that links a build to a commit, branch etc.\n\nUsed to provide a richer user experience by enabling us to associate builds from your system with e.g.\nbranches / commits / tags etc. supplied by another app in the Jira UI.\n",
+                            "properties": {
+                              "commit": {
+                                "description": "Details about the commit the build was run against.\n",
+                                "properties": {
+                                  "id": {
+                                    "description": "The ID of the commit. E.g. for a Git repository this would be the SHA1 hash.\n",
+                                    "example": "08cd9c26b2b8d7cf6e6af6b49da8895d065c259f",
+                                    "maxLength": 255,
+                                    "type": "string"
+                                  },
+                                  "repositoryUri": {
+                                    "description": "An identifier for the repository containing the commit.\n\nIn most cases this should be the URL of the repository in the SCM provider.\n\nFor cases where the build was executed against a local repository etc. this should be some identifier that is\nunique to that repository.\n",
+                                    "example": "https://bitbucket.org/atlassian/biij-vendor-api",
+                                    "maxLength": 2000,
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "repositoryUri"
+                                ],
+                                "title": "BuildCommitReference",
+                                "type": "object"
+                              },
+                              "ref": {
+                                "description": "Details about the ref the build was run on.\n",
+                                "properties": {
+                                  "name": {
+                                    "description": "The name of the ref the build ran on\n",
+                                    "example": "feature/ISSUE-123-some-work",
+                                    "maxLength": 255,
+                                    "type": "string"
+                                  },
+                                  "uri": {
+                                    "description": "An identifer for the ref.\n\nIn most cases this should be the URL of the tag/branch etc. in the SCM provider.\n\nFor cases where the build was executed against a local repository etc. this should be something that uniquely\nidentifies the ref.\n",
+                                    "example": "https://bitbucket.org/atlassian/biij-vendor-api/refs/feature/ISSUE-123-some-work",
+                                    "maxLength": 2000,
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "name",
+                                  "uri"
+                                ],
+                                "title": "BuildRefReference",
+                                "type": "object"
+                              }
+                            },
+                            "title": "BuildReferences",
+                            "type": "object"
+                          },
+                          "maxItems": 5,
+                          "minItems": 1,
+                          "type": "array"
+                        },
+                        "schemaVersion": {
+                          "default": "1.0",
+                          "description": "The schema version used for this data.\n\nPlaceholder to support potential schema changes in the future.\n",
+                          "enum": [
+                            "1.0"
+                          ],
+                          "example": "1.0",
+                          "type": "string"
+                        },
+                        "state": {
+                          "description": "The state of a build.\n\n* `pending` - The build is queued, or some manual action is required.\n* `in_progress` - The build is currently running.\n* `successful` - The build completed successfully.\n* `failed` - The build failed.\n* `cancelled` - The build has been cancelled or stopped.\n* `unknown` - The build is in an unknown state.\n",
+                          "enum": [
+                            "pending",
+                            "in_progress",
+                            "successful",
+                            "failed",
+                            "cancelled",
+                            "unknown"
+                          ],
+                          "example": "failed",
+                          "title": "BuildState",
+                          "type": "string"
+                        },
+                        "testInfo": {
+                          "description": "Information about tests that were executed during a build.\n",
+                          "properties": {
+                            "numberFailed": {
+                              "description": "The number of tests that failed during a build.\n",
+                              "example": 5,
+                              "format": "int64",
+                              "type": "integer"
+                            },
+                            "numberPassed": {
+                              "description": "The number of tests that passed during a build.\n",
+                              "example": 145,
+                              "format": "int64",
+                              "type": "integer"
+                            },
+                            "numberSkipped": {
+                              "default": 0,
+                              "description": "The number of tests that were skipped during a build.\n",
+                              "example": 0,
+                              "format": "int64",
+                              "type": "integer"
+                            },
+                            "totalNumber": {
+                              "description": "The total number of tests considered during a build.\n",
+                              "example": 150,
+                              "format": "int64",
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "totalNumber",
+                            "numberPassed",
+                            "numberFailed"
+                          ],
+                          "title": "TestInfo",
+                          "type": "object"
+                        },
+                        "updateSequenceNumber": {
+                          "description": "A number used to apply an order to the updates to the build, as identified by `pipelineId` and `buildNumber`,\nin the case of out-of-order receipt of update requests.\n\nIt must be a monotonically increasing number. For example, epoch time could be one way to generate the\n`updateSequenceNumber`.\n\nUpdates for a build that is received with an `updateSqeuenceNumber` less than or equal to what is currently\nstored will be ignored.\n",
+                          "example": 1523494301448,
+                          "format": "int64",
+                          "type": "integer"
+                        },
+                        "url": {
+                          "description": "The URL to this build in your system.\n",
+                          "format": "URL",
+                          "maxLength": 2000,
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "pipelineId",
+                        "buildNumber",
+                        "displayName",
+                        "url",
+                        "state",
+                        "lastUpdated",
+                        "updateSequenceNumber"
+                      ],
+                      "title": "BuildData"
+                    },
+                    "maxItems": 100,
+                    "minItems": 1,
+                    "type": "array"
+                  },
+                  "properties": {
+                    "additionalProperties": {
+                      "maxLength": 255,
+                      "type": "string"
+                    },
+                    "description": "Properties assigned to build data that can then be used for delete / query operations.\n\nExamples might be an account or user ID that can then be used to clean up data if an account is removed from\nthe Provider system.\n\nNote that these properties will never be returned with build data. They are not intended for use as\nmetadata to associate with a build. Internally they are stored as a hash so that personal information etc.\nis never stored within Jira.\n\nProperties are supplied as key/value pairs, a maximum of 5 properties can be supplied, and keys must not\ncontain ':' or start with '_'.\n",
+                    "example": {
+                      "accountId": "account-234",
+                      "projectId": "project-123"
+                    },
+                    "maxProperties": 5,
+                    "title": "Properties",
+                    "type": "object"
+                  },
+                  "providerMetadata": {
+                    "description": "Information about the provider. This is useful for auditing, logging, debugging,\nand other internal uses. It is not considered private information. Hence, it may not contain personally\nidentifiable information.\n",
+                    "properties": {
+                      "product": {
+                        "description": "An optional name of the source of the builds data.",
+                        "example": "Bamboo 6.10.2",
+                        "type": "string"
+                      }
+                    },
+                    "title": "ProviderMetadata",
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "builds"
+                ],
+                "title": "SubmitBuildsRequest",
+                "type": "object"
+              }
+            }
+          },
+          "description": "Builds data to submit.\n",
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "The result of a successful `submitBuilds` request.\n",
+                  "properties": {
+                    "acceptedBuilds": {
+                      "description": "The keys of builds that have been accepted for submission. A build key is a composite key that consists of\n`pipelineId` and `buildNumber`.\n\nA build may be rejected if it was only associated with unknown issue keys, or if the submitted data for that\nbuild does not match the required schema.\n\nNote that a build that isn't updated due to it's `updateSequenceNumber` being out of order is not\nconsidered a failed submission.\n",
+                      "items": {
+                        "description": "Fields that uniquely reference a build.\n",
+                        "properties": {
+                          "buildNumber": {
+                            "description": "Identifies a build within the sequence of builds identified by the build `pipelineId`.\n\nUsed to identify the 'most recent' build in that sequence of builds.\n\nThe combination of `pipelineId` and `buildNumber` must uniquely identify the build.\n",
+                            "example": 16,
+                            "format": "int64",
+                            "type": "integer"
+                          },
+                          "pipelineId": {
+                            "description": "An ID that relates a sequence of builds. Depending on your system this might be a project ID, pipeline ID,\nplan key etc. - whatever logical unit you use to group a sequence of builds.\n\nThe combination of `pipelineId` and `buildNumber` must uniquely identify the build.\n",
+                            "example": "my-build-plan",
+                            "maxLength": 255,
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "pipelineId",
+                          "buildNumber"
+                        ],
+                        "title": "BuildKey",
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "rejectedBuilds": {
+                      "description": "Details of builds that have not been accepted for submission.\n\nA build may be rejected if it was only associated with unknown issue keys, or if the submitted data for the\nbuild does not match the required schema.\n",
+                      "items": {
+                        "description": "A build that has not been accepted for submission, usually due to a problem with the request data.\n\nThe object is comprised of the key of the rejected build and the corresponding error messages.\n",
+                        "properties": {
+                          "errors": {
+                            "description": "The error messages for the rejected build",
+                            "items": {
+                              "description": "A message supplied in the case of an error.",
+                              "properties": {
+                                "errorTraceId": {
+                                  "description": "An optional trace ID that can be used by Jira developers to locate the source of the error.",
+                                  "type": "string"
+                                },
+                                "message": {
+                                  "description": "A human-readable message describing the error.",
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "message"
+                              ],
+                              "title": "ErrorMessage",
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
+                          "key": {
+                            "description": "Fields that uniquely reference a build.\n",
+                            "properties": {
+                              "buildNumber": {
+                                "description": "Identifies a build within the sequence of builds identified by the build `pipelineId`.\n\nUsed to identify the 'most recent' build in that sequence of builds.\n\nThe combination of `pipelineId` and `buildNumber` must uniquely identify the build.\n",
+                                "example": 16,
+                                "format": "int64",
+                                "type": "integer"
+                              },
+                              "pipelineId": {
+                                "description": "An ID that relates a sequence of builds. Depending on your system this might be a project ID, pipeline ID,\nplan key etc. - whatever logical unit you use to group a sequence of builds.\n\nThe combination of `pipelineId` and `buildNumber` must uniquely identify the build.\n",
+                                "example": "my-build-plan",
+                                "maxLength": 255,
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "pipelineId",
+                              "buildNumber"
+                            ],
+                            "title": "BuildKey",
+                            "type": "object"
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "errors"
+                        ],
+                        "title": "RejectedBuild",
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "unknownAssociations": {
+                      "description": "Associations that are not known on this Jira instance (if any).\n\nThese may be invalid keys (e.g. `UTF-8` is sometimes incorrectly identified as a Jira issue key), or they may be for projects that no longer exist.\n\nIf a build has been associated with any other association other than those in this array it will still be stored against those valid associations.\nIf a build was only associated with the associations in this array, it is deemed to be invalid and it won't be persisted.\n",
+                      "items": {
+                        "$ref": "#/components/schemas/IssueIdOrKeysAssociation"
+                      },
+                      "type": "array"
+                    },
+                    "unknownIssueKeys": {
+                      "description": "Issue keys that are not known on this Jira instance (if any).\n\nThese may be invalid keys (e.g. `UTF-8` is sometimes incorrectly identified as a Jira issue key), or they\nmay be for projects that no longer exist.\n\nIf a build has been associated with issue keys other than those in this array it will still be stored against\nthose valid keys. If a build was only associated with issue keys deemed to be invalid it won't be persisted.\n",
+                      "items": {
+                        "description": "An issue key that references an issue in Jira.\n",
+                        "example": "ISSUE-123",
+                        "pattern": "^\\w{1,255}-\\d{1,255}$",
+                        "title": "IssueKey",
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "title": "SubmitBuildsResponse",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Submission accepted. Each submitted build that is of a valid format will be eventually available in Jira.\n\nDetails of which builds were submitted and which failed submission (due to data format problems etc.)\nare available in the response object.\n"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Messages supplied in the case of an error.",
+                  "items": {
+                    "description": "A message supplied in the case of an error.",
+                    "properties": {
+                      "errorTraceId": {
+                        "description": "An optional trace ID that can be used by Jira developers to locate the source of the error.",
+                        "type": "string"
+                      },
+                      "message": {
+                        "description": "A human-readable message describing the error.",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "message"
+                    ],
+                    "title": "ErrorMessage",
+                    "type": "object"
+                  },
+                  "minItems": 1,
+                  "title": "ErrorMessages",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Request has incorrect format.\n\nNote that in the case of an individual build having an invalid format (rather than the request as a whole)\nthe response for the request will be a 202 and details of the invalid build will be contained in the\nresponse object.\n"
+          },
+          "401": {
+            "description": "Missing a JWT token, or token is invalid.\n"
+          },
+          "403": {
+            "description": "The JWT token used does not correspond to an app that defines the `jiraBuildInfoProvider` module,\nor the app does not define the 'WRITE' scope.\n"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Messages supplied in the case of an error.",
+                  "items": {
+                    "description": "A message supplied in the case of an error.",
+                    "properties": {
+                      "errorTraceId": {
+                        "description": "An optional trace ID that can be used by Jira developers to locate the source of the error.",
+                        "type": "string"
+                      },
+                      "message": {
+                        "description": "A human-readable message describing the error.",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "message"
+                    ],
+                    "title": "ErrorMessage",
+                    "type": "object"
+                  },
+                  "minItems": 1,
+                  "title": "ErrorMessages",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Data is too large. Submit fewer builds in each payload.\n"
+          },
+          "429": {
+            "description": "API rate limit has been exceeded.\n"
+          },
+          "503": {
+            "description": "Service is unavailable due to maintenance or other reasons.\n"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Messages supplied in the case of an error.",
+                  "items": {
+                    "description": "A message supplied in the case of an error.",
+                    "properties": {
+                      "errorTraceId": {
+                        "description": "An optional trace ID that can be used by Jira developers to locate the source of the error.",
+                        "type": "string"
+                      },
+                      "message": {
+                        "description": "A human-readable message describing the error.",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "message"
+                    ],
+                    "title": "ErrorMessage",
+                    "type": "object"
+                  },
+                  "minItems": 1,
+                  "title": "ErrorMessages",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "An unknown error has occurred.\n"
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          },
+          {
+            "OAuth2": [
+              "write:build-info:jira"
+            ]
+          }
+        ],
+        "summary": "Submit build data",
+        "tags": [
+          "Builds"
+        ],
+        "x-atlassian-connect-scope": "WRITE",
+        "x-atlassian-data-security-policy": [
+          {
+            "app-access-rule-exempt": false
+          }
+        ]
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "https://your-domain.atlassian.net"
+    }
+  ],
+  "tags": [
+    {
+      "description": "Apis related to the backlog",
+      "name": "Backlog"
+    },
+    {
+      "description": "Apis related to boards",
+      "name": "Board"
+    },
+    {
+      "description": "Apis related to sprints",
+      "name": "Sprint"
+    },
+    {
+      "description": "APIs related to integrating build data with Jira Software.\n\nThese APIs are available to Atlassian Connect apps. To use these APIs you must have the `jiraBuildInfoProvider` module in your Connect app's descriptor. See https://developer.atlassian.com/cloud/jira/software/modules/build/. They are also related to integrating Jira Software Cloud with on-premises tools using OAuth 2.0 credentials. See https://developer.atlassian.com/cloud/jira/software/integrate-jsw-cloud-with-onpremises-tools/.\n\nThese APIs are available to Forge apps with the `devops:buildInfoProvider` module in the Forge app's manifest. See https://developer.atlassian.com/platform/forge/manifest-reference/modules/jira-software-build-info/.",
+      "name": "Builds"
+    }
+  ]
+}
