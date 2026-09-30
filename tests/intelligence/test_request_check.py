@@ -182,3 +182,11 @@ class TestFallbackReasons(unittest.TestCase):
              mock.patch("tools.atlassian_docs.intelligence.request_check.oas_schema.oas30_to_draft7", side_effect=ValueError("bad")):
             out = rc.check_request(self.state, "jira-platform:POST:/rest/api/3/issue", content_type="application/json", body={"fields": {}})
         self.assertEqual(out["body_check_reason"], "schema_transpile_failed")
+
+    def test_no_body_vs_no_body_schema(self):
+        missing = rc.check_request(self.state, CREATE, path_params={"thingId": "1"}, content_type="application/json")
+        self.assertEqual(missing["body_check_reason"], "no_body")
+        amb = rc.check_request(self.state, CREATE, path_params={"thingId": "1"}, body={})
+        self.assertEqual(amb["body_check_reason"], "no_body_schema")
+        undeclared = rc.check_request(self.state, "edge:GET:/things/{thingId}", path_params={"thingId": "1"}, query={"limit": "1"}, body={"id": "x"})
+        self.assertEqual(undeclared["body_check_reason"], "no_body_schema")

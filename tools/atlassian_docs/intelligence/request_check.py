@@ -129,6 +129,24 @@ def _path_str(abs_path) -> str:
     return out
 
 
+def _schema_message(e) -> str:
+    """Message built from schema data only — never the submitted value (spec §14; e.message echoes e.instance)."""
+    kw, vv = e.validator, e.validator_value
+    if kw == "type":
+        return f"expected type {vv if isinstance(vv, str) else ' or '.join(map(str, vv))}"
+    if kw == "enum":
+        return f"must be one of {vv}"
+    if kw == "required":
+        return f"{e.message.split(' is a required property')[0]} is a required property"   # the name is schema data
+    if kw == "additionalProperties" and isinstance(e.instance, dict):
+        props = e.schema.get("properties", {}) if isinstance(e.schema, dict) else {}
+        extra = sorted(k for k in e.instance if k not in props)
+        return f"additional property not allowed: {', '.join(extra)}"
+    if isinstance(vv, (int, float)) and not isinstance(vv, bool):
+        return f"violates {kw} ({vv})"
+    return f"violates {kw}"
+
+
 def _jsonschema_body_check(body, body_schema, comps, openapi_version, errors, warnings) -> tuple:
     """Returns ("jsonschema", None) on success or ("structural", reason) when the caller must fall back."""
     if not str(openapi_version).startswith("3.0."):
@@ -158,8 +176,9 @@ def _jsonschema_body_check(body, body_schema, comps, openapi_version, errors, wa
         found = list(validator.iter_errors(body))
     except (js_exc.SchemaError, *unresolvable):
         return "structural", "jsonschema_runtime_error"
+    found.sort(key=lambda e: (tuple(str(p) for p in e.absolute_path), str(e.validator)))
     for e in found[:_MAX_SCHEMA_ERRORS]:
-        errors.append({"location": _path_str(e.absolute_path), "rule": f"schema:{e.validator}", "message": e.message})
+        errors.append({"location": _path_str(e.absolute_path), "rule": f"schema:{e.validator}", "message": _schema_message(e)})
     if len(found) > _MAX_SCHEMA_ERRORS:
         warnings.append({"location": "body", "rule": "errors_truncated", "message": f"{len(found)} schema errors; showing {_MAX_SCHEMA_ERRORS}"})
     for loc in oas_schema.find_readonly_values(body, transpiled.readonly_paths):
@@ -251,7 +270,8 @@ def check_request(state, key: str, *, path_params=None, query=None, headers=None
     elif body is not MISSING:
         warnings.append({"location": "body", "rule": "body_not_declared", "message": "operation declares no request body"})
 
-    body_check, body_check_reason, run_structural = "structural", "no_body", False
+    body_check, run_structural = "structural", False
+    body_check_reason = "no_body" if body is MISSING else "no_body_schema"
     if body is not MISSING and body_schema is not None:
         body_check, reason = _jsonschema_body_check(body, body_schema, comps, comps.openapi_version, errors, warnings)
         body_check_reason = reason or ("structural_only" if body_check == "structural" else None)

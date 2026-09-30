@@ -35,9 +35,9 @@ class TestJsonSchemaPath(unittest.TestCase):
         bad = rc.check_request(self.state, f["key"], body=f["negative_body"], content_type=f["content_type"])
         self.assertTrue(any(e["location"] == f["negative_expect_location"] for e in bad["errors"]), bad["errors"])
 
-    def test_cycle_schema_falls_back(self):
+    def test_body_without_declared_schema_reason(self):
         out = rc.check_request(self.state, "edge:GET:/things/{thingId}", path_params={"thingId": "1"}, query={"limit": "1"}, body={"id": "x"})
-        self.assertEqual(out["body_check"], "structural")   # no requestBody on GET -> body_not_declared; still structural
+        self.assertEqual((out["body_check"], out["body_check_reason"]), ("structural", "no_body_schema"))
 
     def test_readonly_inside_array_items(self):
         from unittest import mock
@@ -62,3 +62,82 @@ class TestJsonSchemaPath(unittest.TestCase):
         st = make_state("edge-cases", source_map={"edge-cases": "edge"})   # edge fixture is openapi 3.1.0
         out = rc.check_request(st, "edge:POST:/things/{thingId}", path_params={"thingId": "1"}, content_type="application/json", body={"name": "n"})
         self.assertEqual((out["body_check"], out["body_check_reason"]), ("structural", "oas31_not_supported"))
+
+
+def _resolved(schema, cycles=()):
+    from tools.atlassian_docs.intelligence import schemas
+    return schemas.ResolvedSchema(schema=schema, truncated=False, unresolved=(), cycles=cycles, node_count=1)
+
+
+@unittest.skipUnless(HAS, "jsonschema not installed (pip install -r requirements-validate.txt)")
+class TestJsonSchemaHardening(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.state = make_state("jira-platform", "confluence")
+
+    def _issue(self, body):
+        return rc.check_request(self.state, ISSUE, content_type="application/json", body=body)
+
+    def test_values_never_echoed_in_messages(self):
+        secret = "Bearer " + "s3cr3tTOKEN" * 120
+        page = {"spaceId": secret, "status": secret, "title": {"nested": secret}, "body": secret, "bogus": secret}
+        out = rc.check_request(self.state, "confluence:POST:/pages", content_type="application/json", body=page)
+        self.assertFalse(out["compatible"])
+        self.assertNotIn("s3cr3tTOKEN", json.dumps(out))
+        bad = self._issue({"fields": secret, "transition": {"id": 42}, "properties": [secret]})
+        self.assertNotIn("s3cr3tTOKEN", json.dumps(bad))
+        root = rc.check_request(self.state, ISSUE, content_type="application/json", body=secret)
+        self.assertNotIn("s3cr3tTOKEN", json.dumps(root)); self.assertFalse(root["compatible"])
+
+    def test_message_shapes(self):
+        out = rc.check_request(self.state, "confluence:POST:/pages", content_type="application/json",
+                               body={"spaceId": "1", "status": "nope", "title": 42})
+        msgs = {(e["location"], e["rule"]): e["message"] for e in out["errors"]}
+        self.assertEqual(msgs[("body.title", "schema:type")], "expected type string")
+        self.assertTrue(msgs[("body.status", "schema:enum")].startswith("must be one of ["))
+
+    def test_readonly_property_present(self):
+        body = dict(ISSUE_BODY, transition={"id": "1", "fields": {}, "expand": "x"})
+        out = self._issue(body)
+        self.assertEqual(out["body_check"], "jsonschema")
+        warns = [(w["location"], w["rule"]) for w in out["warnings"]]
+        self.assertIn(("body.transition.fields", "readonly_property_present"), warns)
+        self.assertIn(("body.transition.expand", "readonly_property_present"), warns)
+
+    def test_not_fully_resolvable_cycle_marker(self):
+        from unittest import mock
+        cyc = _resolved({"$ref": "#/components/schemas/X", "_cycle": True}, cycles=("#/components/schemas/X",))
+        with mock.patch("tools.atlassian_docs.intelligence.request_check.schemas.resolve", return_value=cyc):
+            out = self._issue(ISSUE_BODY)
+        self.assertEqual((out["body_check"], out["body_check_reason"]), ("structural", "schema_not_fully_resolvable"))
+
+    def test_schema_error_and_runtime_error_reasons(self):
+        from unittest import mock
+        import jsonschema
+        with mock.patch.object(jsonschema.Draft7Validator, "check_schema", side_effect=jsonschema.exceptions.SchemaError("x")):
+            self.assertEqual(self._issue(ISSUE_BODY)["body_check_reason"], "jsonschema_schema_error")
+        from referencing.exceptions import Unresolvable
+        for exc in (jsonschema.exceptions.SchemaError("x"), Unresolvable(ref="#/nope")):
+            with mock.patch.object(jsonschema.Draft7Validator, "check_schema"), \
+                 mock.patch.object(jsonschema.Draft7Validator, "iter_errors", side_effect=exc):   # check_schema uses iter_errors
+                out = self._issue(ISSUE_BODY)
+            self.assertEqual((out["body_check"], out["body_check_reason"]), ("structural", "jsonschema_runtime_error"))
+
+    def test_other_exceptions_propagate(self):
+        from unittest import mock
+        import jsonschema
+        with mock.patch.object(jsonschema.Draft7Validator, "check_schema"), \
+             mock.patch.object(jsonschema.Draft7Validator, "iter_errors", side_effect=RuntimeError("boom")):
+            with self.assertRaises(RuntimeError):
+                self._issue(ISSUE_BODY)
+
+    def test_errors_truncated_and_sorted(self):
+        from unittest import mock
+        schema = {"type": "object", "properties": {f"p{i:02d}": {"type": "string"} for i in reversed(range(60))}}
+        body = {f"p{i:02d}": i for i in reversed(range(60))}
+        with mock.patch("tools.atlassian_docs.intelligence.request_check.schemas.resolve",
+                        return_value=_resolved(schema)):
+            out = self._issue(body)
+        self.assertEqual(len(out["errors"]), 50)
+        self.assertEqual([e["location"] for e in out["errors"]], [f"body.p{i:02d}" for i in range(50)])
+        self.assertIn(("body", "errors_truncated"), [(w["location"], w["rule"]) for w in out["warnings"]])
