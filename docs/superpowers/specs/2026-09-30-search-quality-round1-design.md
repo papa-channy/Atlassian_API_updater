@@ -109,7 +109,7 @@ Phase 2.5 계획 단계에서 추가된 alias `change→update`, `post→add`, `
 ### 5.3 커밋 T — 구조 테이블 freeze (코드 변경 없음)
 - `search_ranking.json`을 §6.2의 초기값으로 커밋. 이 커밋의 `ranking_structure_sha256`(§6.2)을 `tests/benchmarks/test_evaluator.py`의 상수로 함께 커밋한다. 이후 테이블 변경은 AC-13 위반이다.
 - T가 B보다 앞서는 이유: hidden 집합을 만들기 전에 구조 테이블을 고정해, 테이블이 hidden 집합에 맞춰졌을 가능성을 원천 차단한다.
-- **스냅샷 생성 시점은 T 직후**: 컨트롤러가 `.atlassian-docs/` 전체를 repo 밖 `round1-cache/`로 복사하고, §5.4의 operation catalog는 **이 스냅샷에서** 추출한다. 생성·튜닝·최종 평가가 같은 universe를 쓴다.
+- **스냅샷 생성 시점은 T 직후**: 컨트롤러가 `.atlassian-docs/` 전체를 repo 밖 `$ATLASSIAN_DOCS_ROUND1_CACHE`(기본 `~/.atlassian_api_updater/round1-cache/`)로 복사하고, §5.4의 operation catalog는 **이 스냅샷에서** 추출한다. 생성·튜닝·최종 평가가 같은 universe를 쓴다.
 
 ### 5.4 새 집합 생성 (clean context)
 - 생성기는 **이 스펙, 실패 목록, scorer/alias/ranking 정책을 모르는** 컨텍스트: 새 ChatGPT 대화(기존 스레드 금지) 또는 fresh subagent. 제공 정보는 (a) T 직후 스냅샷에서 추출한 operation catalog(canonical key, method, summary, tags; description 제외), (b) 아래 규칙뿐.
@@ -124,7 +124,7 @@ Phase 2.5 계획 단계에서 추가된 alias `change→update`, `post→add`, `
 - 재요청: 거부 시 피드백은 "item N rejected; generate a replacement satisfying the original rules"만. 기존 질의·seed·점수·사유 상세를 전달하지 않는다. 재요청 횟수를 기록한다.
 
 ### 5.5 커밋 B — 해시·스냅샷 봉인
-- 평문 `round1-sealed.json`(held_out 16 + negative 8)은 repo 밖 `$ATLASSIAN_DOCS_SEALED_BENCH`(기본 `~/.atlassian_api_updater/sealed/round1-sealed.json`)에. 스냅샷 `round1-cache/`는 T 직후 만든 것을 그대로 쓴다(§5.3). 구현·튜닝 서브에이전트에는 경로를 알리지 않는다.
+- 평문 `round1-sealed.json`(held_out 16 + negative 8)은 repo 밖 `$ATLASSIAN_DOCS_SEALED_BENCH`(기본 `~/.atlassian_api_updater/sealed/round1-sealed.json`)에. 스냅샷은 T 직후 만든 것을 그대로 쓴다(§5.3); 스냅샷은 비밀이 아니므로 구현·튜닝 서브에이전트에 그 경로를 알려도 된다. **봉인 평문 경로만** 알리지 않는다.
 - `search_queries.json`의 `held_out`/`negative`:
   ```json
   "held_out": {"sealed": true, "round": 1, "count": 16, "sha256": "<canonical sha256 of record list>",
@@ -248,6 +248,7 @@ exact_match = len(pinned_ops) > 0                             # limit로 잘려�
 ### 6.7 응답 필드
 - 항목: `score`, `signals`, `match`(pinned만). exact 항목의 `signals`는 모두 0/빈 값.
 - 최상위 `intelligence_policy`에 `ranking_sha256`, `ranking_structure_sha256`. 기존 필드 제거 없음.
+- **fingerprint**: `intelligence_fingerprint = sha256(registry_fp \n aliases_sha256 \n overrides_sha256 \n ranking_sha256 \n POLICY_VERSIONS)`. 함수 **시그니처는 유지**(`intelligence_fingerprint(registry_fingerprint, aliases_sha256, overrides_sha256)`): `ranking().sha256`은 함수 내부에서 읽는다. 이유: 호출자 `request_template.py`, `request_check.py`, `mcp/tools.py`는 §4 불변 파일이고 도구 간 fingerprint 정의가 같아야 한다. `policy_block(aliases_sha256, overrides_sha256)`도 내부에서 `ranking_sha256`, `ranking_structure_sha256`을 추가한다. `POLICY_VERSIONS["search"] = 3`.
 
 ## 7. alias/rule 보강 (R4 전용, 상한 있음)
 
