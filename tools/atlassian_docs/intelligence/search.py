@@ -15,18 +15,51 @@ _CAMEL_2 = re.compile(r"([A-Z]{2,})([A-Z][a-z])")  # JQLQuery -> JQL Query
 _SPLIT = re.compile(r"[^a-z0-9]+")
 
 
-def tokenize(text: Optional[str]) -> frozenset:
+IRREGULAR_SINGULAR = {"statuses": "status"}          # observed in the real cache vocabulary only (spec §6.1)
+UNCHANGED_PLURAL = frozenset({"series", "species", "news"})
+
+
+def tokenize_unigrams(text: Optional[str]) -> tuple:
     if not text:
-        return frozenset()
+        return ()
     text = _CAMEL_2.sub(r"\1 \2", _CAMEL_1.sub(r"\1 \2", text)).lower()
-    out = set()
+    out, seen = [], set()
     for tok in _SPLIT.split(text):
-        if len(tok) < 2 or tok in STOPWORDS:
+        if len(tok) < 2 or tok in STOPWORDS or tok in seen:
             continue
-        out.add(tok)
-        if len(tok) > 3 and tok.endswith("s") and not tok.endswith(("ss", "us", "is")):
-            out.add(tok[:-1])
+        seen.add(tok); out.append(tok)
+    return tuple(out)
+
+
+def singular(t: str) -> str:
+    if t in IRREGULAR_SINGULAR:
+        return IRREGULAR_SINGULAR[t]
+    if t in UNCHANGED_PLURAL or len(t) <= 3:
+        return t
+    if t.endswith("ies"):
+        return t[:-3] + "y"
+    if t.endswith(("sses", "shes", "ches", "xes")):
+        return t[:-2]
+    if t.endswith(("ss", "us", "is")):
+        return t
+    if t.endswith("s"):
+        return t[:-1]
+    return t
+
+
+def token_forms(t: str) -> frozenset:
+    return frozenset({t, singular(t)})
+
+
+def expand_token_forms(tokens) -> frozenset:
+    out = set()
+    for t in tokens:
+        out |= token_forms(t)
     return frozenset(out)
+
+
+def tokenize(text: Optional[str]) -> frozenset:
+    return expand_token_forms(tokenize_unigrams(text))
 
 
 @dataclass(frozen=True)
@@ -79,16 +112,21 @@ DEPRECATED_FACTOR = 0.7
 _JOIN = re.compile(r"[^a-z0-9]")
 
 
-def _query_tokens(query: str) -> frozenset:
-    """tokenize() plus each whitespace word's joined lowercase form, so an exact schema
-    name typed as one identifier (IssueCreateMetadata) matches the index's exact-name token.
-    The joined form is added only for words that tokenize into 2+ tokens."""
-    toks = set(tokenize(query))
+def joined_query_forms(query: str) -> frozenset:
+    """Each whitespace word that splits into 2+ unigrams contributes its joined lowercase form,
+    so an exact schema name typed as one identifier (IssueCreateMetadata) matches the index's
+    exact-name token (Phase 2.5 §5)."""
+    out = set()
     for word in (query or "").split():
         joined = _JOIN.sub("", word.lower())
-        if len(tokenize(word)) >= 2 and len(joined) > 3 and joined not in STOPWORDS:
-            toks.add(joined)
-    return frozenset(toks)
+        if len(tokenize_unigrams(word)) >= 2 and len(joined) > 3 and joined not in STOPWORDS:
+            out.add(joined)
+    return frozenset(out)
+
+
+def _query_tokens(query: str) -> frozenset:
+    """Legacy helper retained for exact-identifier callers: tokenize() plus joined query forms."""
+    return tokenize(query) | joined_query_forms(query)
 
 
 @dataclass(frozen=True)
@@ -102,28 +140,20 @@ class QueryExpansion:
         return self.base | self.direct | self.cond
 
 
-def _variants(tokens) -> set:
-    out = set()
-    for t in tokens:
-        out.add(t)
-        if len(t) > 3 and t.endswith("s") and not t.endswith(("ss", "us", "is")):
-            out.add(t[:-1])
-    return out
-
-
 def expand_query(query: str, pol) -> QueryExpansion:
-    """base -> direct aliases once -> conditional rules once over base ∪ direct. No cascade (spec §6.2)."""
-    base = _query_tokens(query)
+    """base -> direct aliases once -> conditional rules once over base ∪ direct. No cascade (spec §6.2).
+    base never contains joined forms (spec §6.1/§6.6)."""
+    base = expand_token_forms(tokenize_unigrams(query))
     direct = set()
     for t in base:
         direct.update(pol.aliases.get(t, ()))
-    direct = _variants(direct) - base
+    direct = expand_token_forms(direct) - base
     trigger = base | direct
     cond = set()
     for rule in pol.rules:
         if rule.when_all <= trigger:
             cond.update(rule.add)
-    cond = _variants(cond) - base - direct
+    cond = expand_token_forms(cond) - base - direct
     return QueryExpansion(frozenset(base), frozenset(direct), frozenset(cond))
 
 
@@ -188,6 +218,9 @@ def search_operations(state, query: str, *, source=None, method=None, tag=None,
         return provenance.error_response("invalid_argument", f"unknown source {source!r}")
     pol = policy.aliases()
     exp = expand_query(query, pol)
+    # Phase 2.5 lexical behaviour: joined identifier forms (e.g. "issuecreatemetadata") still
+    # match the index's exact-name tokens, but never appear in QueryExpansion itself (spec §6.1).
+    exp_lex = QueryExpansion(exp.base | joined_query_forms(query), exp.direct, exp.cond)
     bonus_tokens = tokenize(query)
     scope = [source] if source else sorted(sources.SOURCES)
     pinned = exact_matches(state, query, scope, method, tag, include_deprecated)
@@ -203,7 +236,7 @@ def search_operations(state, query: str, *, source=None, method=None, tag=None,
             op = sr.operations_by_key[entry.key]
             if op.key in pinned_keys or not _passes(op, method, tag, include_deprecated):
                 continue
-            s = _score(entry, exp, op.deprecated, bonus_tokens, pol)
+            s = _score(entry, exp_lex, op.deprecated, bonus_tokens, pol)
             if s > 0:
                 scored.append((s, op))
     scored.sort(key=lambda item: (-item[0], item[1].deprecated, item[1].source, item[1].key))

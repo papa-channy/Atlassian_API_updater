@@ -34,7 +34,7 @@ def _token_ok(tok) -> bool:
     toks = search.tokenize(tok)
     if toks == frozenset({tok}):
         return True
-    if len(tok) > 3 and tok.endswith("s") and toks == frozenset({tok, tok[:-1]}):
+    if toks == frozenset({tok, search.singular(tok)}):
         return True
     return False
 

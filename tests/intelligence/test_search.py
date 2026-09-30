@@ -16,11 +16,31 @@ class TestTokenize(unittest.TestCase):
         self.assertEqual(search.tokenize("IssueCreateMetadata"), frozenset({"issue", "create", "metadata"}))
 
     def test_plural_variants(self):
-        self.assertEqual(search.tokenize("statuses"), frozenset({"statuses", "statuse"}))
+        self.assertEqual(search.tokenize("statuses"), frozenset({"statuses", "status"}))
         self.assertEqual(search.tokenize("status"), frozenset({"status"}))
         self.assertEqual(search.tokenize("process"), frozenset({"process"}))
         self.assertEqual(search.tokenize("analysis"), frozenset({"analysis"}))
         self.assertEqual(search.tokenize("issues"), frozenset({"issues", "issue"}))
+
+    def test_singular_contract(self):
+        cases = {"properties": "property", "queries": "query", "statuses": "status", "status": "status", "access": "access",
+                 "issues": "issue", "databases": "database", "schemes": "scheme", "boards": "board", "classes": "class",
+                 "series": "series", "news": "news", "jsis": "jsis", "id": "id"}
+        for word, want in cases.items():
+            self.assertEqual(search.singular(word), want, word)
+
+    def test_unigrams_forms_and_joined(self):
+        self.assertEqual(search.tokenize_unigrams("Get the issueIdOrKey properties"), ("get", "issue", "id", "key", "properties"))
+        self.assertEqual(search.token_forms("properties"), frozenset({"properties", "property"}))
+        self.assertEqual(search.expand_token_forms(("issues", "get")), frozenset({"issues", "issue", "get"}))
+        self.assertEqual(search.joined_query_forms("IssueCreateMetadata get"), frozenset({"issuecreatemetadata"}))
+        self.assertEqual(search.joined_query_forms("issue attachment"), frozenset())
+        self.assertEqual(search._query_tokens("IssueCreateMetadata"), search.tokenize("IssueCreateMetadata") | {"issuecreatemetadata"})
+
+    def test_expansion_never_contains_joined_forms(self):
+        exp = search.expand_query("IssueCreateMetadata getIssue", policy.aliases())
+        self.assertNotIn("issuecreatemetadata", exp.all); self.assertNotIn("getissue", exp.all)
+        self.assertEqual(exp.base, frozenset({"issue", "create", "metadata", "get"}))
 
     def test_stopwords_short_tokens_and_dedupe(self):
         self.assertEqual(search.tokenize("a to the x issue issue"), frozenset({"issue"}))
