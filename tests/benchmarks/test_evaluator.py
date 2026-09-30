@@ -1,4 +1,4 @@
-import json, pathlib, unittest
+import json, os, pathlib, unittest
 from tests.benchmarks.evaluator import evaluate
 from tests.benchmarks import evaluator as ev
 
@@ -95,3 +95,35 @@ class TestRankingTablesFrozen(unittest.TestCase):
         self.assertEqual(set(raw["constants"]), set(raw["tuning_grid"])); self.assertEqual(set(raw["baseline"]), set(raw["tuning_grid"]))
         for k, v in raw["constants"].items():
             self.assertIn(v, raw["tuning_grid"][k], k); self.assertIn(raw["baseline"][k], raw["tuning_grid"][k], k)
+
+
+class TestSealIntegrity(unittest.TestCase):
+    def setUp(self):
+        self.b = json.loads(BENCH.read_text(encoding="utf-8"))
+
+    def test_sealed_or_plain_matches_round1_seal(self):
+        seal = self.b.get("round1_seal")
+        for sect in ("held_out", "negative"):
+            section = self.b[sect]
+            expected_count = 16 if sect == "held_out" else 8
+            if ev.is_sealed(section):
+                self.assertEqual(section["count"], expected_count); self.assertEqual(section["round"], 1)
+                self.assertRegex(section["sha256"], r"^[0-9a-f]{64}$"); self.assertEqual(section["sha256"], seal[f"{sect}_sha256"])
+                self.assertEqual(section["distribution"], seal[f"{sect}_distribution"])
+            elif section:                       # plaintext after commit D
+                from tests.benchmarks import round1_seal as rs
+                self.assertIsNotNone(seal, "plaintext hidden sets require round1_seal")
+                self.assertEqual(len(section), expected_count)
+                self.assertEqual(ev.canonical_sha256(section), seal[f"{sect}_sha256"])
+                self.assertEqual(rs.distribution(section, sect), seal[f"{sect}_distribution"])
+            # empty list before commit B: nothing to check
+
+    def test_hidden_plaintext_machine_rules(self):
+        from tests.benchmarks import round1_seal as rs
+        if ev.is_sealed(self.b["held_out"]) or not self.b["held_out"]:
+            print("hidden sets sealed or absent: machine rules checked at commit D"); return
+        cache = os.environ.get("ATLASSIAN_DOCS_ROUND1_CACHE")
+        if not cache or not pathlib.Path(cache).exists():
+            self.skipTest("snapshot not available for catalog rules")
+        _, internal, _, _ = rs.load_catalogs_from_cache(pathlib.Path(cache))
+        self.assertEqual(rs.machine_check({"held_out": self.b["held_out"], "negative": self.b["negative"]}, self.b, internal), [])
