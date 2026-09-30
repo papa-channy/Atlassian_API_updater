@@ -95,11 +95,13 @@ class TestSearchOperations(unittest.TestCase):
         fields[first] = frozenset({"issue", "attachment"})
         entry = types.SimpleNamespace(fields=fields)
         q = "issue attachment"
-        with_bonus = search._score(entry, search._query_tokens(q), False, search.tokenize(q))
+        pol = policy.AliasPolicy(0.5, 1.0, {}, (), "x")
+        exp = lambda text: search.QueryExpansion(search._query_tokens(text), frozenset(), frozenset())
+        with_bonus = search._score(entry, exp(q), False, search.tokenize(q), pol)
         self.assertEqual(with_bonus, 2 * search.FIELD_WEIGHTS[first] + search.ALL_MATCH_BONUS)
         q2 = "IssueAttachment"   # joined token absent from the entry must not cancel the bonus
         self.assertIn("issueattachment", search._query_tokens(q2))
-        self.assertEqual(search._score(entry, search._query_tokens(q2), False, search.tokenize(q2)), with_bonus)
+        self.assertEqual(search._score(entry, exp(q2), False, search.tokenize(q2), pol), with_bonus)
 
     def test_source_filter(self):
         self.assertTrue(all(k.startswith("confluence:") for k in self._keys(query="issue page", source="confluence")))
@@ -131,3 +133,80 @@ class TestSearchOperations(unittest.TestCase):
         out = search.search_operations(state, "issue", source="jira-platform")
         self.assertEqual(out["results"], [])
         self.assertEqual(out["provenance"]["jira-platform"]["status"], "unavailable")
+
+
+import json, pathlib
+from tests.benchmarks.evaluator import evaluate
+from tools.atlassian_docs.intelligence import policy
+
+BENCH = json.loads((pathlib.Path(__file__).resolve().parents[1] / "benchmarks" / "search_queries.json").read_text(encoding="utf-8"))
+
+
+class TestExpansion(unittest.TestCase):
+    def test_direction_and_order(self):
+        e = search.expand_query("fetch page", policy.aliases())
+        self.assertIn("fetch", e.base); self.assertIn("get", e.direct); self.assertEqual(e.cond, frozenset())
+
+    def test_rule_sees_direct_but_no_cascade(self):
+        p = policy.AliasPolicy(0.5, 1.0, {"edit": ("update",)}, (policy.AliasRule(frozenset({"update", "page"}), ("updatepage",)),
+                               policy.AliasRule(frozenset({"updatepage"}), ("cascade",))), "x")
+        e = search.expand_query("edit page", p)
+        self.assertIn("updatepage", e.cond); self.assertNotIn("cascade", e.cond)
+
+    def test_no_cascade_through_alias_values(self):
+        p = policy.AliasPolicy(0.5, 1.0, {"read": ("get",), "get": ("obtain",)}, (), "x")
+        e = search.expand_query("read", p)
+        self.assertEqual(e.direct, frozenset({"get"}))          # "obtain" must not appear
+
+
+class TestExactMatch(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.state = make_state("jira-platform", "jira-software", "confluence")
+
+    def test_identifier_pinned_case_sensitive_first(self):
+        out = search.search_operations(self.state, "createIssue")
+        self.assertTrue(out["exact_match"]); self.assertEqual(out["results"][0]["match"], "exact_operation_id")
+        self.assertEqual(out["results"][0]["key"], "jira-platform:POST:/rest/api/3/issue")
+        ci = search.search_operations(self.state, "createissue")
+        self.assertEqual(ci["results"][0]["match"], "exact_operation_id_ci")
+
+    def test_duplicate_operation_ids_pinned_in_key_order(self):
+        keys = [r["key"] for r in search.search_operations(self.state, "getIssue")["results"][:2]]
+        self.assertEqual(keys, sorted(keys)); self.assertTrue(all(k.split(":")[2].endswith("issue/{issueIdOrKey}") for k in keys))
+
+    def test_whitespace_query_is_not_pinned(self):
+        out = search.search_operations(self.state, "get issue")
+        self.assertFalse(out["exact_match"]); self.assertNotIn("match", out["results"][0])
+
+    def test_exact_score_is_lexical_max_plus_one(self):
+        out = search.search_operations(self.state, "createIssue")
+        rest = [r["score"] for r in out["results"] if "match" not in r]
+        self.assertAlmostEqual(out["results"][0]["score"], (max(rest) if rest else 0) + 1.0, places=3)
+
+    def test_exact_key_and_filters(self):
+        out = search.search_operations(self.state, "jira-platform:POST:/rest/api/3/issue")
+        self.assertEqual(out["results"][0]["match"], "exact_key")
+        conf = search.search_operations(self.state, "createIssue", source="confluence")
+        self.assertFalse(conf["exact_match"]); self.assertTrue(all("match" not in r for r in conf["results"]))
+
+
+class TestSeedBenchmark(unittest.TestCase):
+    def test_seed_passes_on_fixtures(self):
+        state = make_state("jira-platform", "jira-software", "confluence")
+        fn = lambda q: [r["key"] for r in search.search_operations(state, q, limit=5)["results"]]
+        res = evaluate(BENCH["seed"], fn)
+        self.assertEqual(res["failed"], [], res)
+
+    def test_fields_and_fingerprint(self):
+        state = make_state("jira-platform")
+        out = search.search_operations(state, "fetch issue")
+        self.assertIn("get", out["alias_tokens"]); self.assertIn("fetch", out["query_tokens"])
+        self.assertEqual(set(out["expanded_tokens"]), set(out["query_tokens"]) | set(out["alias_tokens"]))
+        self.assertEqual(len(out["intelligence_fingerprint"]), 64); self.assertEqual(out["intelligence_policy"]["versions"]["search"], 2)
+
+    def test_alias_damped_and_bonus_on_base_only(self):
+        state = make_state("jira-platform")
+        with_alias = search.search_operations(state, "fetch issue")["results"][0]["score"]
+        plain = search.search_operations(state, "get issue")["results"][0]["score"]
+        self.assertLess(with_alias, plain)   # damped alias contributes less than the real token

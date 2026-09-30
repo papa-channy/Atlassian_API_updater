@@ -70,3 +70,15 @@ class TestServer(unittest.TestCase):
                 return res.is_error, json.loads(res.content[0].text)
         is_error, payload = self._call(go())
         self.assertFalse(is_error); self.assertFalse(any(e["rule"] == "body_required" for e in payload["errors"]))
+
+    def test_check_request_body_present_false_warns(self):
+        async def go():
+            async with self._client() as client:
+                res = await client.call_tool("check_request", {"key": ATT, "path_params": {"issueIdOrKey": "A"},
+                                                               "body_present": False, "body": {"x": 1},
+                                                               "content_type": "multipart/form-data"})
+                return res.is_error, json.loads(res.content[0].text)
+        is_error, payload = self._call(go())
+        self.assertFalse(is_error)
+        self.assertTrue(any(w["rule"] == "body_ignored" for w in payload["warnings"]))
+        self.assertTrue(any(e["rule"] == "body_required" for e in payload["errors"]))

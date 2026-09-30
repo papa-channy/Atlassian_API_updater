@@ -7,6 +7,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 PKG = ROOT / "tools" / "atlassian_docs"
 PHASE1 = ["__main__.py", "sources.py", "extractor.py", "sync.py", "storage.py"]
 HTTP_MODULES = {"urllib.request", "http.client", "socket"}
+OPTIONAL_VALIDATORS = {"jsonschema", "referencing"}
 
 
 def _imports(path: pathlib.Path):
@@ -53,4 +54,39 @@ class TestLayering(unittest.TestCase):
                 top = imp.split(".")[0]
                 if imp.startswith(allowed_prefixes) or top in sys.stdlib_module_names:
                     continue
+                if path.name == "request_check.py" and top in OPTIONAL_VALIDATORS:
+                    continue   # guarded optional import; placement checked below
                 self.fail(f"{path.name} imports non-stdlib module {imp}")
+
+    def test_optional_validator_imports_are_function_local(self):
+        path = PKG / "intelligence" / "request_check.py"
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+        hits = 0
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                names = [a.name for a in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.level == 0:
+                names = [node.module or ""]
+            else:
+                continue
+            if not any(n.split(".")[0] in OPTIONAL_VALIDATORS for n in names):
+                continue
+            hits += 1
+            anc = parents.get(node)
+            while anc is not None and not isinstance(anc, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                anc = parents.get(anc)
+            self.assertIsNotNone(anc, f"module-level optional import {names} in request_check.py")
+        self.assertGreater(hits, 0)
+
+    def test_header_constants_defined_once(self):
+        import ast as _ast
+        hits = []
+        for path in _py_files(PKG):
+            tree = _ast.parse(path.read_text(encoding="utf-8"))
+            for node in _ast.walk(tree):
+                if isinstance(node, _ast.Assign):
+                    for t in node.targets:
+                        if isinstance(t, _ast.Name) and t.id in ("TRANSPORT_HEADERS", "CREDENTIAL_HEADERS"):
+                            hits.append((path.name, t.id))
+        self.assertEqual(sorted(hits), [("headers.py", "CREDENTIAL_HEADERS"), ("headers.py", "TRANSPORT_HEADERS")])

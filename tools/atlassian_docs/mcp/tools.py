@@ -1,9 +1,10 @@
 """SDK-independent tool handlers. server.py binds these to the MCP SDK (spec §17)."""
 import json
+import sys
 from typing import Any
 
 from ..intelligence import inspect as insp
-from ..intelligence import provenance, request_check, request_template, search
+from ..intelligence import policy, provenance, quirks, request_check, request_template, search, search_log
 
 MAX_RESULT_BYTES = 200 * 1024
 TOOL_NAMES = ("search_operations", "get_operation", "get_schema", "build_request_template",
@@ -24,11 +25,17 @@ def guard_size(payload: dict) -> dict:
 
 def get_api_status(manager) -> dict:
     state = manager.active
+    al_sha, ov_sha = policy.aliases().sha256, policy.overrides().sha256
     return {
         "registry_fingerprint": state.registry.fingerprint, "built_at": state.registry.built_at,
+        "intelligence_fingerprint": policy.intelligence_fingerprint(state.registry.fingerprint, al_sha, ov_sha),
+        "intelligence_policy": policy.policy_block(al_sha, ov_sha),
         "sources": {name: p.to_dict() for name, p in state.provenance.items()},
         "refresh": {**state.refresh.to_dict(), "backoff_active": manager.backoff_active,
-                    "in_progress": manager.refresh_in_progress},
+                    "in_progress": manager.refresh_in_progress, "search_log_enabled": search_log.enabled()},
+        "capabilities": {"validation": request_check.validation_engine()},
+        "diagnostics": {"orphaned_override_keys": list(quirks.orphaned_override_keys(state.registry)),
+                        "header_candidates": list(quirks.header_candidates(state.registry))},
         "execution": "disabled",
     }
 
@@ -57,14 +64,25 @@ def _dispatch(manager, name: str, args: dict) -> dict:
     if name == "build_request_template":
         return request_template.build_request_template(state, args.get("key", ""), args.get("values"))
     # check_request
-    body = args["body"] if "body" in args else request_check.MISSING
-    return request_check.check_request(state, args.get("key", ""), path_params=args.get("path_params"),
-                                       query=args.get("query"), headers=args.get("headers"), body=body,
-                                       content_type=args.get("content_type"))
+    bp = args.get("body_present")  # spec §12: False -> no body; True -> body (None = JSON null); None -> key presence
+    if bp is False:
+        body, ignored = request_check.MISSING, args.get("body") is not None
+    elif bp is True:
+        body, ignored = args.get("body"), False
+    else:
+        body, ignored = (args["body"] if "body" in args else request_check.MISSING), False
+    out = request_check.check_request(state, args.get("key", ""), path_params=args.get("path_params"),
+                                      query=args.get("query"), headers=args.get("headers"), body=body,
+                                      content_type=args.get("content_type"))
+    if ignored and "warnings" in out:
+        out["warnings"].append({"location": "body", "rule": "body_ignored",
+                                "message": "body_present=false: supplied body was ignored"})
+    return out
 
 
 def run_tool(manager, name: str, arguments: dict) -> dict:
     try:
         return guard_size(_dispatch(manager, name, arguments or {}))
     except Exception as exc:  # noqa: BLE001 - the server process must never die on a tool error
-        return provenance.error_response("internal_error", f"{type(exc).__name__}: {exc}")
+        print(f"[internal_error] {type(exc).__name__}: {exc}", file=sys.stderr)
+        return provenance.error_response("internal_error", type(exc).__name__)

@@ -83,9 +83,24 @@ class TestRunTool(unittest.TestCase):
         with mock.patch("tools.atlassian_docs.mcp.tools.search.search_operations", side_effect=RuntimeError("kaboom")):
             out = tools.run_tool(self.m, "search_operations", {"query": "x"})
         self.assertEqual(out["error"]["code"], "internal_error")
+        self.assertEqual(out["error"]["message"], "RuntimeError")
 
     def test_size_guard(self):
         big = {"blob": "x" * (tools.MAX_RESULT_BYTES + 1)}
         self.assertEqual(tools.guard_size(big)["error"]["code"], "result_too_large")
         self.assertEqual(tools.guard_size({"a": 1}), {"a": 1})
         self.assertEqual(tools.payload_size({"é": 1}), len(json.dumps({"é": 1}, ensure_ascii=False, separators=(",", ":")).encode("utf-8")))
+
+    def test_body_present_mapping(self):
+        base = {"key": ATT, "path_params": {"issueIdOrKey": "A"}, "content_type": "multipart/form-data", "headers": {"X-Atlassian-Token": "no-check"}}
+        absent = tools.run_tool(self.m, "check_request", {**base, "body_present": False, "body": [{}]})
+        self.assertTrue(any(e["rule"] == "body_required" for e in absent["errors"]))
+        self.assertTrue(any(w["rule"] == "body_ignored" for w in absent["warnings"]))
+        null = tools.run_tool(self.m, "check_request", {**base, "body_present": True, "body": None})
+        self.assertFalse(any(e["rule"] == "body_required" for e in null["errors"]))
+
+    def test_status_new_fields(self):
+        out = tools.run_tool(self.m, "get_api_status", {})
+        self.assertEqual(len(out["intelligence_fingerprint"]), 64)
+        self.assertIn("validation", out["capabilities"]); self.assertIn("orphaned_override_keys", out["diagnostics"])
+        self.assertIn("search_log_enabled", out["refresh"])

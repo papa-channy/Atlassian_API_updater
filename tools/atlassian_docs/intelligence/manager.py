@@ -66,13 +66,19 @@ class RegistryManager:
 
     def needs_refresh(self, source: str) -> bool:
         active = self._active
-        if source not in active.registry.sources:
-            return True
         md = self._safe_metadata().get(source, {})
         if not isinstance(md, dict):
             md = {}
+        md_sha = md.get("sha256")
         prov = active.provenance[source]
-        if prov.observed_cache_sha256 != md.get("sha256"):
+        if source not in active.registry.sources:
+            # A gate-rejected cache with unchanged sha only refreshes on TTL expiry (spec §13).
+            rec = self._rejected.get(source)
+            if rec and prov.observed_cache_sha256 == rec["sha256"] == md_sha:
+                checked = provenance._parse_ts(md.get("last_checked"))
+                return checked is None or (self._now() - checked).total_seconds() >= self._ttl
+            return True
+        if prov.observed_cache_sha256 != md_sha:
             return True
         checked = provenance._parse_ts(md.get("last_checked"))
         return checked is None or (self._now() - checked).total_seconds() >= self._ttl

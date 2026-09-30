@@ -1,18 +1,25 @@
 """Structural request check — a fixed, small rule set; never a full validator (spec §16)."""
+import hashlib
+import importlib.metadata
+import importlib.util
 import re
 from typing import Any, Optional
 
 from . import inspect as insp
-from . import provenance, schemas
-from .request_template import CREDENTIAL_HEADERS, media_type
+from . import oas_schema, policy, provenance, quirks, schemas
+from .headers import TRANSPORT_HEADERS, credential_header_names
+from .request_template import media_type
 
 MISSING = object()
 CHECKED_RULES = ("required", "type", "enum", "body_required", "content_type", "body_root_type",
                  "body_required_properties", "body_property_type", "body_property_enum", "body_unknown_property",
-                 "body_not_declared")
-TRANSPORT_HEADERS = frozenset({"content-type", "accept", "content-length", "host", "user-agent"})
+                 "body_not_declared", "quirk_headers")
 NOT_CHECKED = ("oneOf/anyOf", "pattern", "format", "minimum/maximum", "minLength/maxLength",
                "nested objects beyond depth 2", "cookie parameters", "conflicting allOf properties")
+JSONSCHEMA_CHECKED = ("required", "type", "enum", "body_required", "content_type", "body_not_declared",
+                      "quirk_headers", "jsonschema:body")
+JSONSCHEMA_NOT_CHECKED = ("format", "cookie parameters")
+_MAX_SCHEMA_ERRORS = 50
 _INT = re.compile(r"^-?\d+$")
 
 
@@ -93,17 +100,105 @@ def _merge_allof(schema: dict) -> tuple:
     return merged, tuple(sorted(conflicts))
 
 
+def _jsonschema_available() -> bool:
+    return importlib.util.find_spec("jsonschema") is not None
+
+
+def validation_engine() -> dict:
+    avail = _jsonschema_available()
+    version = None
+    if avail:
+        try:
+            version = importlib.metadata.version("jsonschema")
+        except importlib.metadata.PackageNotFoundError:
+            version = None
+    return {"engine": "jsonschema" if avail else "structural", "version": version,
+            "oas_transpiler_version": oas_schema.TRANSPILER_VERSION, "oas31_strong_validation": False}
+
+
+def validation_fingerprint(intelligence_fp: str) -> str:
+    e = validation_engine()
+    blob = "\n".join([intelligence_fp, e["engine"], e["version"] or "-", str(e["oas_transpiler_version"])])
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def _path_str(abs_path) -> str:
+    out = "body"
+    for p in abs_path:
+        out += f"[{p}]" if isinstance(p, int) else f".{p}"
+    return out
+
+
+def _schema_message(e) -> str:
+    """Message built from schema data only — never the submitted value (spec §14; e.message echoes e.instance)."""
+    kw, vv = e.validator, e.validator_value
+    if kw == "type":
+        return f"expected type {vv if isinstance(vv, str) else ' or '.join(map(str, vv))}"
+    if kw == "enum":
+        return f"must be one of {vv}"
+    if kw == "required":
+        return f"{e.message.split(' is a required property')[0]} is a required property"   # the name is schema data
+    if kw == "additionalProperties" and isinstance(e.instance, dict):
+        props = e.schema.get("properties", {}) if isinstance(e.schema, dict) else {}
+        extra = sorted(k for k in e.instance if k not in props)
+        return f"additional property not allowed: {', '.join(extra)}"
+    if isinstance(vv, (int, float)) and not isinstance(vv, bool):
+        return f"violates {kw} ({vv})"
+    return f"violates {kw}"
+
+
+def _jsonschema_body_check(body, body_schema, comps, openapi_version, errors, warnings) -> tuple:
+    """Returns ("jsonschema", None) on success or ("structural", reason) when the caller must fall back."""
+    if not str(openapi_version).startswith("3.0."):
+        return "structural", "oas31_not_supported"
+    if not _jsonschema_available():
+        return "structural", "jsonschema_not_installed"
+    resolved = schemas.resolve(body_schema, comps, max_depth=schemas.MAX_DEPTH_LIMIT, max_nodes=schemas.MAX_NODES_LIMIT)
+    if resolved.unresolved or resolved.cycles or resolved.truncated:
+        return "structural", "schema_not_fully_resolvable"
+    try:
+        transpiled = oas_schema.oas30_to_draft7(resolved.schema)
+    except ValueError:
+        return "structural", "schema_transpile_failed"
+    import jsonschema  # guarded optional import (spec §11.1)
+    from jsonschema import exceptions as js_exc
+    try:
+        from referencing import exceptions as ref_exc
+        unresolvable = (ref_exc.Unresolvable,)
+    except ImportError:  # pragma: no cover
+        unresolvable = ()
+    try:
+        jsonschema.Draft7Validator.check_schema(transpiled.schema)
+    except js_exc.SchemaError:
+        return "structural", "jsonschema_schema_error"
+    try:
+        validator = jsonschema.Draft7Validator(transpiled.schema)
+        found = list(validator.iter_errors(body))
+    except (js_exc.SchemaError, *unresolvable):
+        return "structural", "jsonschema_runtime_error"
+    found.sort(key=lambda e: (tuple(str(p) for p in e.absolute_path), str(e.validator)))
+    for e in found[:_MAX_SCHEMA_ERRORS]:
+        errors.append({"location": _path_str(e.absolute_path), "rule": f"schema:{e.validator}", "message": _schema_message(e)})
+    if len(found) > _MAX_SCHEMA_ERRORS:
+        warnings.append({"location": "body", "rule": "errors_truncated", "message": f"{len(found)} schema errors; showing {_MAX_SCHEMA_ERRORS}"})
+    for loc in oas_schema.find_readonly_values(body, transpiled.readonly_paths):
+        warnings.append({"location": loc, "rule": "readonly_property_present", "message": "readOnly property supplied in a request"})
+    return "jsonschema", None
+
+
 def check_request(state, key: str, *, path_params=None, query=None, headers=None,
                   body=MISSING, content_type=None) -> dict:
     op, err = insp.resolve_operation(state, key=key)
     if err:
         return err
     comps = state.registry.sources[op.source]
+    cred = credential_header_names(comps)
     path_params, query, headers = path_params or {}, query or {}, headers or {}
     errors, warnings = [], []
-    hdr = {}
+    hdr, cred_present = {}, set()
     for k, v in headers.items():
-        if k.lower() in CREDENTIAL_HEADERS:   # never echo the value
+        if k.lower() in cred:   # never echo the value; presence alone still satisfies `required`
+            cred_present.add(k.lower())
             warnings.append({"location": f"header.{k}", "rule": "credential_header_ignored",
                              "message": "credential headers are out of scope and were ignored"})
         else:
@@ -121,6 +216,11 @@ def check_request(state, key: str, *, path_params=None, query=None, headers=None
         lookup = p.name.lower() if loc == "header" else p.name
         declared.get(loc, set()).add(lookup)
         present = lookup in source_map
+        if loc == "header" and lookup in cred:
+            # credential header: value was dropped, so only presence is checked (no type/enum)
+            if p.required and lookup not in cred_present:
+                errors.append({"location": f"{loc}.{p.name}", "rule": "required", "message": f"required {loc} parameter is missing"})
+            continue
         if p.required and not present:
             errors.append({"location": f"{loc}.{p.name}", "rule": "required", "message": f"required {loc} parameter is missing"})
             continue
@@ -132,12 +232,28 @@ def check_request(state, key: str, *, path_params=None, query=None, headers=None
             errors.append({"location": f"{loc}.{p.name}", "rule": "type", "message": f"expected {p.schema.get('type')}"})
         elif _enum_ok(value, p.schema) is False:
             errors.append({"location": f"{loc}.{p.name}", "rule": "enum", "message": f"must be one of {p.schema['enum']}"})
+    q = quirks.for_operation(op)
+    for h in q.headers:
+        low = h.name.lower()
+        declared["header"].add(low)
+        present = low in hdr
+        matches = None if not present or h.value is None else (str(hdr[low]) == h.value)
+        q_err, q_warn = quirks.outcome(h, present, matches)
+        loc = f"header.{h.name}"
+        if q_err == "required":
+            errors.append({"location": loc, "rule": "required", "origin": h.origin, "message": "required header (spec-external quirk) is missing"})
+        elif q_err == "quirk_value_mismatch":
+            errors.append({"location": loc, "rule": "quirk_value_mismatch", "origin": h.origin, "message": f"expected literal value {h.value!r}"})
+        if q_warn == "advisory_header_missing":
+            warnings.append({"location": loc, "rule": "advisory_header_missing", "origin": h.origin, "message": "header mentioned in the official description is absent"})
+        elif q_warn == "quirk_value_mismatch":
+            warnings.append({"location": loc, "rule": "quirk_value_mismatch", "origin": h.origin, "message": f"expected value {h.value!r} (from {h.origin})"})
     for name in query:
         if name not in declared["query"]:
             warnings.append({"location": f"query.{name}", "rule": "unknown_parameter", "message": "not declared in the specification"})
     for name in headers:
         low = name.lower()
-        if low not in declared["header"] and low not in TRANSPORT_HEADERS and low not in CREDENTIAL_HEADERS:
+        if low not in declared["header"] and low not in TRANSPORT_HEADERS and low not in cred:
             warnings.append({"location": f"header.{name}", "rule": "unknown_parameter", "message": "not declared in the specification"})
 
     body_schema = None
@@ -160,7 +276,13 @@ def check_request(state, key: str, *, path_params=None, query=None, headers=None
     elif body is not MISSING:
         warnings.append({"location": "body", "rule": "body_not_declared", "message": "operation declares no request body"})
 
+    body_check, run_structural = "structural", False
+    body_check_reason = "no_body" if body is MISSING else "no_body_schema"
     if body is not MISSING and body_schema is not None:
+        body_check, reason = _jsonschema_body_check(body, body_schema, comps, comps.openapi_version, errors, warnings)
+        body_check_reason = reason or ("structural_only" if body_check == "structural" else None)
+        run_structural = body_check == "structural"
+    if run_structural:
         resolved = schemas.resolve(body_schema, comps, max_depth=2, max_nodes=200).schema
         if "oneOf" in resolved or "anyOf" in resolved:
             warnings.append({"location": "body", "rule": "structure_not_checked", "message": "oneOf/anyOf bodies are not checked"})
@@ -191,6 +313,21 @@ def check_request(state, key: str, *, path_params=None, query=None, headers=None
                     elif _enum_ok(value, sub) is False:
                         errors.append({"location": f"body.{name}", "rule": "body_property_enum", "message": f"must be one of {sub['enum']}"})
 
+    if isinstance(body, dict):
+        for f in q.request_hints.get("multipart_fields", []):
+            if isinstance(f, dict) and f.get("required") and f.get("name") not in body:
+                warnings.append({"location": f"body.{f['name']}", "rule": "multipart_field_missing",
+                                 "message": "multipart form field expected by request hints is absent"})
+
     out = {"compatible": not errors, "errors": errors, "warnings": warnings,
-           "checked": list(CHECKED_RULES), "not_checked": list(NOT_CHECKED)}
+           "checked": list(JSONSCHEMA_CHECKED if body_check == "jsonschema" else CHECKED_RULES),
+           "not_checked": list(JSONSCHEMA_NOT_CHECKED if body_check == "jsonschema" else NOT_CHECKED),
+           "body_check": body_check, "body_check_reason": body_check_reason,
+           "quirks": {"applied": [h.to_dict() for h in q.headers], "suppressed": list(q.suppressed),
+                      "request_hints": q.request_hints, "notes": list(q.notes)}}
+    al_sha, ov_sha = policy.aliases().sha256, policy.overrides().sha256
+    out["intelligence_fingerprint"] = policy.intelligence_fingerprint(state.registry.fingerprint, al_sha, ov_sha)
+    out["intelligence_policy"] = policy.policy_block(al_sha, ov_sha)
+    out["validation_engine"] = validation_engine()
+    out["validation_fingerprint"] = validation_fingerprint(out["intelligence_fingerprint"])
     return provenance.with_provenance(out, state, [op.source])

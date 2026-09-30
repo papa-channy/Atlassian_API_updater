@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping, Optional
 
 from .. import sources
-from . import provenance, schemas
+from . import provenance, schemas, search_log
 
 STOPWORDS = frozenset("a an the to of for in on at and or with by from is are be this that".split())
 FIELD_WEIGHTS = {"operation_id": 5, "summary": 4, "tags": 3, "path": 3,
@@ -91,32 +91,109 @@ def _query_tokens(query: str) -> frozenset:
     return frozenset(toks)
 
 
-def _score(entry: IndexEntry, query_tokens: frozenset, deprecated: bool,
-           base_tokens: Optional[frozenset] = None) -> float:
-    """base_tokens (tokenize(query), no joined forms) decide the all-match bonus."""
-    base = query_tokens if base_tokens is None else base_tokens
+@dataclass(frozen=True)
+class QueryExpansion:
+    base: frozenset
+    direct: frozenset
+    cond: frozenset
+
+    @property
+    def all(self) -> frozenset:
+        return self.base | self.direct | self.cond
+
+
+def _variants(tokens) -> set:
+    out = set()
+    for t in tokens:
+        out.add(t)
+        if len(t) > 3 and t.endswith("s") and not t.endswith(("ss", "us", "is")):
+            out.add(t[:-1])
+    return out
+
+
+def expand_query(query: str, pol) -> QueryExpansion:
+    """base -> direct aliases once -> conditional rules once over base ∪ direct. No cascade (spec §6.2)."""
+    base = _query_tokens(query)
+    direct = set()
+    for t in base:
+        direct.update(pol.aliases.get(t, ()))
+    direct = _variants(direct) - base
+    trigger = base | direct
+    cond = set()
+    for rule in pol.rules:
+        if rule.when_all <= trigger:
+            cond.update(rule.add)
+    cond = _variants(cond) - base - direct
+    return QueryExpansion(frozenset(base), frozenset(direct), frozenset(cond))
+
+
+def _score(entry: IndexEntry, exp: QueryExpansion, deprecated: bool, bonus_tokens: frozenset, pol) -> float:
+    """bonus_tokens (tokenize(query), no joined forms) decide the all-match bonus, counted over base hits only."""
+    ad, rd = pol.alias_damping, pol.rule_damping
     score = 0.0
-    matched_any_token = set()
+    matched = set()
     for field, weight in FIELD_WEIGHTS.items():
-        hits = query_tokens & entry.fields[field]
-        score += weight * len(hits)
-        matched_any_token |= hits
-    if score and base and base <= matched_any_token:
+        f = entry.fields[field]
+        hb, hd, hc = exp.base & f, exp.direct & f, exp.cond & f
+        score += weight * (len(hb) + ad * len(hd) + rd * len(hc))
+        matched |= hb
+    if score and bonus_tokens and bonus_tokens <= matched:
         score += ALL_MATCH_BONUS
     return score * DEPRECATED_FACTOR if deprecated else score
 
 
+def _passes(op, method, tag, include_deprecated) -> bool:
+    if method and op.method != method.upper():
+        return False
+    if tag and tag not in op.tags:
+        return False
+    return include_deprecated or not op.deprecated
+
+
+def exact_matches(state, query: str, scope, method=None, tag=None, include_deprecated: bool = True) -> list:
+    """Whitespace-free query equal to an operation key or operationId (case-sensitive first,
+    case-insensitive fallback). Returns [(Operation, match_kind)] in key order, deduplicated."""
+    q = (query or "").strip()
+    if not q or any(ch.isspace() for ch in q):
+        return []
+    ops = [op for name in scope if (sr := state.registry.sources.get(name)) for op in sr.operations
+           if _passes(op, method, tag, include_deprecated)]
+    hits = [(op, "exact_key") for op in ops if op.key == q] + \
+           [(op, "exact_operation_id") for op in ops if op.operation_id == q]
+    if not hits:
+        ql = q.lower()
+        hits = [(op, "exact_operation_id_ci") for op in ops if op.operation_id and op.operation_id.lower() == ql]
+    seen, out = set(), []
+    for op, kind in sorted(hits, key=lambda h: h[0].key):
+        if op.key not in seen:
+            seen.add(op.key); out.append((op, kind))
+    return out
+
+
+def _item(op, s, match=None) -> dict:
+    d = {"key": op.key, "source": op.source, "operation_id": op.operation_id, "method": op.method,
+         "path": op.path, "summary": op.summary, "tags": list(op.tags), "deprecated": op.deprecated,
+         "experimental": op.experimental, "score": round(s, 3)}
+    if match:
+        d["match"] = match
+    return d
+
+
 def search_operations(state, query: str, *, source=None, method=None, tag=None,
                       include_deprecated: bool = True, limit: int = 10) -> dict:
-    if not isinstance(limit, int) or not 1 <= limit <= MAX_LIMIT:
+    from . import policy  # local import: policy imports search at module level
+    if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= MAX_LIMIT:
         return provenance.error_response("invalid_argument", f"limit must be 1..{MAX_LIMIT}")
     if source is not None and source not in sources.SOURCES:
         return provenance.error_response("invalid_argument", f"unknown source {source!r}")
-    query_tokens = _query_tokens(query)
-    base_tokens = tokenize(query)
-    if not query_tokens:
-        return provenance.error_response("empty_query", "query has no searchable tokens")
+    pol = policy.aliases()
+    exp = expand_query(query, pol)
+    bonus_tokens = tokenize(query)
     scope = [source] if source else sorted(sources.SOURCES)
+    pinned = exact_matches(state, query, scope, method, tag, include_deprecated)
+    pinned_keys = {op.key for op, _ in pinned}
+    if not exp.base and not pinned:
+        return provenance.error_response("empty_query", "query has no searchable tokens")
     scored = []
     for name in scope:
         sr = state.registry.sources.get(name)
@@ -124,19 +201,21 @@ def search_operations(state, query: str, *, source=None, method=None, tag=None,
             continue
         for entry in sr.search_index.entries:
             op = sr.operations_by_key[entry.key]
-            if method and op.method != method.upper():
+            if op.key in pinned_keys or not _passes(op, method, tag, include_deprecated):
                 continue
-            if tag and tag not in op.tags:
-                continue
-            if not include_deprecated and op.deprecated:
-                continue
-            s = _score(entry, query_tokens, op.deprecated, base_tokens)
+            s = _score(entry, exp, op.deprecated, bonus_tokens, pol)
             if s > 0:
                 scored.append((s, op))
     scored.sort(key=lambda item: (-item[0], item[1].deprecated, item[1].source, item[1].key))
-    results = [{"key": op.key, "source": op.source, "operation_id": op.operation_id, "method": op.method,
-                "path": op.path, "summary": op.summary, "tags": list(op.tags), "deprecated": op.deprecated,
-                "experimental": op.experimental, "score": round(s, 3)}
-               for s, op in scored[:limit]]
-    payload = {"query": query, "results": results, "total_matches": len(scored)}
+    top = (scored[0][0] if scored else 0.0) + 1.0
+    results = [_item(op, top, kind) for op, kind in pinned] + [_item(op, s) for s, op in scored]
+    payload = {"query": query, "results": results[:limit], "total_matches": len(pinned) + len(scored),
+               "exact_match": bool(pinned), "query_tokens": sorted(exp.base),
+               "alias_tokens": sorted(exp.direct | exp.cond), "expanded_tokens": sorted(exp.all)}
+    ov = policy.overrides()
+    payload["intelligence_fingerprint"] = policy.intelligence_fingerprint(
+        state.registry.fingerprint, pol.sha256, ov.sha256)
+    payload["intelligence_policy"] = policy.policy_block(pol.sha256, ov.sha256)
+    search_log.record(payload, {"source": source, "method": method, "tag": tag,
+                                 "include_deprecated": include_deprecated, "limit": limit})
     return provenance.with_provenance(payload, state, scope)

@@ -1635,6 +1635,94 @@
         ]
       }
     },
+    "/rest/agile/1.0/issue/{issueIdOrKey}": {
+      "get": {
+        "deprecated": false,
+        "description": "Returns a single issue, for a given issue ID or issue key. Issues returned from this resource include Agile fields, like sprint, closedSprints, flagged, and epic.",
+        "operationId": "getIssue",
+        "parameters": [
+          {
+            "description": "The ID or key of the requested issue.",
+            "in": "path",
+            "name": "issueIdOrKey",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "The list of fields to return for each issue. By default, all navigable and Agile fields are returned.",
+            "in": "query",
+            "name": "fields",
+            "schema": {
+              "items": {
+                "additionalProperties": false,
+                "type": "object"
+              },
+              "type": "array"
+            }
+          },
+          {
+            "description": "A comma-separated list of the parameters to expand.",
+            "in": "query",
+            "name": "expand",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "A boolean indicating whether the issue retrieved by this method should be added to the current user's issue history",
+            "in": "query",
+            "name": "updateHistory",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": "{\"expand\":\"\",\"fields\":{\"flagged\":true,\"sprint\":{\"id\":37,\"self\":\"https://your-domain.atlassian.net/rest/agile/1.0/sprint/13\",\"state\":\"future\",\"name\":\"sprint 2\",\"goal\":\"sprint 2 goal\"},\"closedSprints\":[{\"id\":37,\"self\":\"https://your-domain.atlassian.net/rest/agile/1.0/sprint/23\",\"state\":\"closed\",\"name\":\"sprint 1\",\"startDate\":\"2015-04-11T15:22:00.000+10:00\",\"endDate\":\"2015-04-20T01:22:00.000+10:00\",\"completeDate\":\"2015-04-20T11:04:00.000+10:00\",\"goal\":\"sprint 1 goal\"}],\"description\":\"example bug report\",\"project\":{\"avatarUrls\":{\"16x16\":\"https://your-domain.atlassian.net/secure/projectavatar?size=xsmall&pid=10000\",\"24x24\":\"https://your-domain.atlassian.net/secure/projectavatar?size=small&pid=10000\",\"32x32\":\"https://your-domain.atlassian.net/secure/projectavatar?size=medium&pid=10000\",\"48x48\":\"https://your-domain.atlassian.net/secure/projectavatar?size=large&pid=10000\"},\"id\":\"10000\",\"insight\":{\"lastIssueUpdateTime\":\"2021-04-22T05:37:05.000+0000\",\"totalIssueCount\":100},\"key\":\"EX\",\"name\":\"Example\",\"projectCategory\":{\"description\":\"First Project Category\",\"id\":\"10000\",\"name\":\"FIRST\",\"self\":\"https://your-domain.atlassian.net/rest/api/3/projectCategory/10000\"},\"self\":\"https://your-domain.atlassian.net/rest/api/3/project/EX\",\"simplified\":false,\"style\":\"classic\"},\"comment\":[{\"author\":{\"accountId\":\"5b10a2844c20165700ede21g\",\"active\":false,\"displayName\":\"Mia Krystof\",\"self\":\"https://your-domain.atlassian.net/rest/api/3/user?accountId=5b10a2844c20165700ede21g\"},\"body\":{\"type\":\"doc\",\"version\":1,\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque eget venenatis elit. Duis eu justo eget augue iaculis fermentum. Sed semper quam laoreet nisi egestas at posuere augue semper.\"}]}]},\"created\":\"2021-01-17T12:34:00.000+0000\",\"id\":\"10000\",\"self\":\"https://your-domain.atlassian.net/rest/api/3/issue/10010/comment/10000\",\"updateAuthor\":{\"accountId\":\"5b10a2844c20165700ede21g\",\"active\":false,\"displayName\":\"Mia Krystof\",\"self\":\"https://your-domain.atlassian.net/rest/api/3/user?accountId=5b10a2844c20165700ede21g\"},\"updated\":\"2021-01-18T23:45:00.000+0000\",\"visibility\":{\"identifier\":\"Administrators\",\"type\":\"role\",\"value\":\"Administrators\"}}],\"epic\":{\"id\":37,\"self\":\"https://your-domain.atlassian.net/rest/agile/1.0/epic/23\",\"name\":\"epic 1\",\"summary\":\"epic 1 summary\",\"color\":{\"key\":\"color_4\"},\"done\":true},\"worklog\":[{\"author\":{\"accountId\":\"5b10a2844c20165700ede21g\",\"active\":false,\"displayName\":\"Mia Krystof\",\"self\":\"https://your-domain.atlassian.net/rest/api/3/user?accountId=5b10a2844c20165700ede21g\"},\"comment\":{\"type\":\"doc\",\"version\":1,\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"I did some work here.\"}]}]},\"id\":\"100028\",\"issueId\":\"10002\",\"self\":\"https://your-domain.atlassian.net/rest/api/3/issue/10010/worklog/10000\",\"started\":\"2021-01-17T12:34:00.000+0000\",\"timeSpent\":\"3h 20m\",\"timeSpentSeconds\":12000,\"updateAuthor\":{\"accountId\":\"5b10a2844c20165700ede21g\",\"active\":false,\"displayName\":\"Mia Krystof\",\"self\":\"https://your-domain.atlassian.net/rest/api/3/user?accountId=5b10a2844c20165700ede21g\"},\"updated\":\"2021-01-18T23:45:00.000+0000\",\"visibility\":{\"identifier\":\"276f955c-63d7-42c8-9520-92d01dca0625\",\"type\":\"group\",\"value\":\"jira-developers\"}}],\"updated\":1,\"timetracking\":{\"originalEstimate\":\"10m\",\"originalEstimateSeconds\":600,\"remainingEstimate\":\"3m\",\"remainingEstimateSeconds\":200,\"timeSpent\":\"6m\",\"timeSpentSeconds\":400}},\"id\":\"10001\",\"key\":\"HSP-1\",\"self\":\"https://your-domain.atlassian.net/rest/agile/1.0/board/92/issue/10001\"}"
+              }
+            },
+            "description": "Returns the requested issue."
+          },
+          "400": {
+            "description": "Returned if the request is invalid."
+          },
+          "401": {
+            "description": "Returned if the user is not logged in."
+          },
+          "403": {
+            "description": "Returned if the user does not have a valid license."
+          },
+          "404": {
+            "description": "Returned in these cases:\n\n *  the issue does not exist\n *  the user does not have permission to view issue"
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          },
+          {
+            "OAuth2": [
+              "read:issue:jira-software"
+            ]
+          }
+        ],
+        "summary": "Get issue",
+        "tags": [
+          "Issue"
+        ],
+        "x-atlassian-connect-scope": "READ",
+        "x-atlassian-data-security-policy": [
+          {
+            "app-access-rule-exempt": false
+          }
+        ]
+      }
+    },
     "/rest/agile/1.0/sprint": {
       "post": {
         "deprecated": false,
@@ -2456,6 +2544,10 @@
     {
       "description": "Apis related to boards",
       "name": "Board"
+    },
+    {
+      "description": "Apis related to issues",
+      "name": "Issue"
     },
     {
       "description": "Apis related to sprints",

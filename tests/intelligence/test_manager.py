@@ -261,3 +261,19 @@ class TestRefresh(Harness):
         m = manager.RegistryManager(sync_all=self.fake_sync, write_last_good=boom, clock=self.clock, now=lambda: NOW); m.start()
         self.assertIn("confluence", m.active.registry.sources)
         self.assertTrue(any(w["kind"] == "last_good_write_failed" for w in m.active.provenance["confluence"].warnings))
+
+    def test_rejected_cache_does_not_refresh_every_call(self):
+        self.write_cache("confluence", load_fixture("confluence"))                      # make setUp's stale cache fresh
+        self.write_cache("jira-software", load_fixture("jira-software"))                # otherwise uncached -> always refreshes
+        self.write_cache("jira-platform", load_fixture("unsupported-dialect"))          # fresh metadata, rejected by gate
+        m = self.make()
+        self.assertEqual(m.active.provenance["jira-platform"].status, "unavailable")
+        self.sync_calls = 0
+        before = (storage.CACHE_DIR / "metadata.json").stat().st_mtime_ns
+        for _ in range(5):
+            m.ensure_fresh()
+        self.assertEqual(self.sync_calls, 0)
+        self.assertEqual((storage.CACHE_DIR / "metadata.json").stat().st_mtime_ns, before)
+        with mock.patch.object(m, "_now", return_value=NOW + datetime.timedelta(hours=25)):
+            m.ensure_fresh()
+        self.assertEqual(self.sync_calls, 1)

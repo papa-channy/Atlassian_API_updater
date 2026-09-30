@@ -12,6 +12,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from tools.atlassian_docs.intelligence import (RegistryManager, build_request_template,  # noqa: E402
                                                get_operation, search_operations)
+from tools.atlassian_docs.intelligence.request_check import validation_engine  # noqa: E402
 
 
 def main() -> int:
@@ -28,6 +29,8 @@ def main() -> int:
         if p.status == "unavailable":
             failed = True
     res = search_operations(state, "upload attachment to issue", limit=5)
+    print(f"intelligence_fingerprint: {res.get('intelligence_fingerprint')}")
+    print(f"validation_engine: {json.dumps(validation_engine())}")
     for r in res.get("results", []):
         print(f"  {r['score']:6.1f} {r['key']}")
     if res.get("results"):
