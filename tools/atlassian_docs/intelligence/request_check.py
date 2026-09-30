@@ -1,9 +1,12 @@
 """Structural request check — a fixed, small rule set; never a full validator (spec §16)."""
+import hashlib
+import importlib.metadata
+import importlib.util
 import re
 from typing import Any, Optional
 
 from . import inspect as insp
-from . import policy, provenance, quirks, schemas
+from . import oas_schema, policy, provenance, quirks, schemas
 from .headers import TRANSPORT_HEADERS, credential_header_names
 from .request_template import media_type
 
@@ -13,6 +16,10 @@ CHECKED_RULES = ("required", "type", "enum", "body_required", "content_type", "b
                  "body_not_declared", "quirk_headers")
 NOT_CHECKED = ("oneOf/anyOf", "pattern", "format", "minimum/maximum", "minLength/maxLength",
                "nested objects beyond depth 2", "cookie parameters", "conflicting allOf properties")
+JSONSCHEMA_CHECKED = ("required", "type", "enum", "body_required", "content_type", "body_not_declared",
+                      "quirk_headers", "jsonschema:body")
+JSONSCHEMA_NOT_CHECKED = ("format", "cookie parameters")
+_MAX_SCHEMA_ERRORS = 50
 _INT = re.compile(r"^-?\d+$")
 
 
@@ -91,6 +98,73 @@ def _merge_allof(schema: dict) -> tuple:
     if addl is not None:
         merged["additionalProperties"] = addl
     return merged, tuple(sorted(conflicts))
+
+
+def _jsonschema_available() -> bool:
+    return importlib.util.find_spec("jsonschema") is not None
+
+
+def validation_engine() -> dict:
+    avail = _jsonschema_available()
+    version = None
+    if avail:
+        try:
+            version = importlib.metadata.version("jsonschema")
+        except importlib.metadata.PackageNotFoundError:
+            version = None
+    return {"engine": "jsonschema" if avail else "structural", "version": version,
+            "oas_transpiler_version": oas_schema.TRANSPILER_VERSION, "oas31_strong_validation": False}
+
+
+def validation_fingerprint(intelligence_fp: str) -> str:
+    e = validation_engine()
+    blob = "\n".join([intelligence_fp, e["engine"], e["version"] or "-", str(e["oas_transpiler_version"])])
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def _path_str(abs_path) -> str:
+    out = "body"
+    for p in abs_path:
+        out += f"[{p}]" if isinstance(p, int) else f".{p}"
+    return out
+
+
+def _jsonschema_body_check(body, body_schema, comps, openapi_version, errors, warnings) -> tuple:
+    """Returns ("jsonschema", None) on success or ("structural", reason) when the caller must fall back."""
+    if not str(openapi_version).startswith("3.0."):
+        return "structural", "oas31_not_supported"
+    if not _jsonschema_available():
+        return "structural", "jsonschema_not_installed"
+    resolved = schemas.resolve(body_schema, comps, max_depth=schemas.MAX_DEPTH_LIMIT, max_nodes=schemas.MAX_NODES_LIMIT)
+    if resolved.unresolved or resolved.cycles or resolved.truncated:
+        return "structural", "schema_not_fully_resolvable"
+    try:
+        transpiled = oas_schema.oas30_to_draft7(resolved.schema)
+    except ValueError:
+        return "structural", "schema_transpile_failed"
+    import jsonschema  # guarded optional import (spec §11.1)
+    from jsonschema import exceptions as js_exc
+    try:
+        from referencing import exceptions as ref_exc
+        unresolvable = (ref_exc.Unresolvable,)
+    except ImportError:  # pragma: no cover
+        unresolvable = ()
+    try:
+        jsonschema.Draft7Validator.check_schema(transpiled.schema)
+    except js_exc.SchemaError:
+        return "structural", "jsonschema_schema_error"
+    try:
+        validator = jsonschema.Draft7Validator(transpiled.schema)
+        found = list(validator.iter_errors(body))
+    except (js_exc.SchemaError, *unresolvable):
+        return "structural", "jsonschema_runtime_error"
+    for e in found[:_MAX_SCHEMA_ERRORS]:
+        errors.append({"location": _path_str(e.absolute_path), "rule": f"schema:{e.validator}", "message": e.message})
+    if len(found) > _MAX_SCHEMA_ERRORS:
+        warnings.append({"location": "body", "rule": "errors_truncated", "message": f"{len(found)} schema errors; showing {_MAX_SCHEMA_ERRORS}"})
+    for loc in oas_schema.find_readonly_values(body, transpiled.readonly_paths):
+        warnings.append({"location": loc, "rule": "readonly_property_present", "message": "readOnly property supplied in a request"})
+    return "jsonschema", None
 
 
 def check_request(state, key: str, *, path_params=None, query=None, headers=None,
@@ -177,7 +251,12 @@ def check_request(state, key: str, *, path_params=None, query=None, headers=None
     elif body is not MISSING:
         warnings.append({"location": "body", "rule": "body_not_declared", "message": "operation declares no request body"})
 
+    body_check, body_check_reason, run_structural = "structural", "no_body", False
     if body is not MISSING and body_schema is not None:
+        body_check, reason = _jsonschema_body_check(body, body_schema, comps, comps.openapi_version, errors, warnings)
+        body_check_reason = reason or ("structural_only" if body_check == "structural" else None)
+        run_structural = body_check == "structural"
+    if run_structural:
         resolved = schemas.resolve(body_schema, comps, max_depth=2, max_nodes=200).schema
         if "oneOf" in resolved or "anyOf" in resolved:
             warnings.append({"location": "body", "rule": "structure_not_checked", "message": "oneOf/anyOf bodies are not checked"})
@@ -215,11 +294,14 @@ def check_request(state, key: str, *, path_params=None, query=None, headers=None
                                  "message": "multipart form field expected by request hints is absent"})
 
     out = {"compatible": not errors, "errors": errors, "warnings": warnings,
-           "checked": list(CHECKED_RULES), "not_checked": list(NOT_CHECKED),
-           "body_check": "structural", "body_check_reason": "structural_only",
+           "checked": list(JSONSCHEMA_CHECKED if body_check == "jsonschema" else CHECKED_RULES),
+           "not_checked": list(JSONSCHEMA_NOT_CHECKED if body_check == "jsonschema" else NOT_CHECKED),
+           "body_check": body_check, "body_check_reason": body_check_reason,
            "quirks": {"applied": [h.to_dict() for h in q.headers], "suppressed": list(q.suppressed),
                       "request_hints": q.request_hints, "notes": list(q.notes)}}
     al_sha, ov_sha = policy.aliases().sha256, policy.overrides().sha256
     out["intelligence_fingerprint"] = policy.intelligence_fingerprint(state.registry.fingerprint, al_sha, ov_sha)
     out["intelligence_policy"] = policy.policy_block(al_sha, ov_sha)
+    out["validation_engine"] = validation_engine()
+    out["validation_fingerprint"] = validation_fingerprint(out["intelligence_fingerprint"])
     return provenance.with_provenance(out, state, [op.source])

@@ -158,3 +158,27 @@ class TestQuirksInCheck(unittest.TestCase):
     def test_structural_fields_present(self):
         out = rc.check_request(self.state, CREATE, path_params={"thingId": "1"}, body={"name": "n"}, content_type="application/json")
         self.assertEqual(out["body_check"], "structural"); self.assertEqual(len(out["intelligence_fingerprint"]), 64)
+
+
+class TestFallbackReasons(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.state = make_state("jira-platform", "edge-cases", source_map={"edge-cases": "edge"})
+
+    def test_not_installed_reason(self):
+        from unittest import mock
+        with mock.patch("tools.atlassian_docs.intelligence.request_check._jsonschema_available", return_value=False):
+            out = rc.check_request(self.state, "jira-platform:POST:/rest/api/3/issue", content_type="application/json", body={"fields": {}})
+        self.assertEqual((out["body_check"], out["body_check_reason"]), ("structural", "jsonschema_not_installed"))
+        self.assertEqual(out["validation_engine"]["engine"], "structural")
+
+    def test_oas31_reason_without_sdk(self):
+        out = rc.check_request(self.state, CREATE, path_params={"thingId": "1"}, content_type="application/json", body={"name": "n"})
+        self.assertEqual(out["body_check_reason"], "oas31_not_supported")
+
+    def test_transpile_failure_reason(self):
+        from unittest import mock
+        with mock.patch("tools.atlassian_docs.intelligence.request_check._jsonschema_available", return_value=True), \
+             mock.patch("tools.atlassian_docs.intelligence.request_check.oas_schema.oas30_to_draft7", side_effect=ValueError("bad")):
+            out = rc.check_request(self.state, "jira-platform:POST:/rest/api/3/issue", content_type="application/json", body={"fields": {}})
+        self.assertEqual(out["body_check_reason"], "schema_transpile_failed")
