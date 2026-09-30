@@ -50,6 +50,9 @@ class TestDiagScript(unittest.TestCase):
         cls.good_bench = cls.write_bench("good.json", cls.fp, cls.spec_sha)
         cls.bad_bench = cls.write_bench("bad.json", "0" * 64, cls.spec_sha)
         cls.bad_spec_bench = cls.write_bench("bad_spec.json", cls.fp, {**cls.spec_sha, "confluence": "f" * 64})
+        cls.sealed_bench = cls.write_bench("sealed.json", cls.fp, cls.spec_sha,
+                                            held_out=cls.sealed_section("held_out"),
+                                            negative=cls.sealed_section("negative"))
         seed, reg = cls.bench["seed"], cls.bench["regression_negative"]
         cls.plain = {"held_out": [{**seed[i], "id": f"h-00{i + 1}", "origin": "held_out-r1"} for i in range(2)],
                      "negative": [{**reg[0], "id": "n-001", "origin": "negative-r1"}]}
@@ -61,12 +64,22 @@ class TestDiagScript(unittest.TestCase):
         cls._td.cleanup()
 
     @classmethod
-    def write_bench(cls, name, fp, spec_sha):
+    def write_bench(cls, name, fp, spec_sha, held_out=None, negative=None):
         b = json.loads(json.dumps(cls.bench))
         b["round1_seal"]["registry_fingerprint"], b["round1_seal"]["spec_sha256"] = fp, dict(spec_sha)
+        if held_out is not None:
+            b["held_out"] = held_out
+        if negative is not None:
+            b["negative"] = negative
         path = cls.tmp / name
         path.write_text(json.dumps(b), encoding="utf-8")
         return path
+
+    @classmethod
+    def sealed_section(cls, name):
+        seal = cls.bench["round1_seal"]
+        return {"sealed": True, "round": 1, "count": len(cls.bench[name]),
+                "sha256": seal[f"{name}_sha256"], "distribution": seal[f"{name}_distribution"]}
 
     def run_diag(self, *args):
         with mock.patch("builtins.print"):
@@ -117,8 +130,25 @@ class TestDiagScript(unittest.TestCase):
                                                 "negative": ev.canonical_sha256(self.plain["negative"])})
 
     def test_default_sets_skip_sealed_sections(self):
-        code, rep = self.run_diag("--bench-file", str(self.good_bench))
+        # bench-file built here has held_out/negative as sealed metadata objects, independent of whatever
+        # state the bundled tests/benchmarks/search_queries.json happens to be in (plaintext post-round-1).
+        code, rep = self.run_diag("--bench-file", str(self.sealed_bench))
         self.assertEqual(code, 0); self.assertEqual(set(rep["sets"]), {"seed", "regression_negative"})
+        code2, rep2 = self.run_diag("--bench-file", str(self.sealed_bench), "--sets", "held_out,negative")
+        self.assertEqual(code2, 0)
+        self.assertEqual(rep2["sets"]["held_out"], {"sealed": True, "count": len(self.bench["held_out"])})
+        self.assertEqual(rep2["sets"]["negative"], {"sealed": True, "count": len(self.bench["negative"])})
+
+    def test_default_sets_evaluate_plaintext_hidden_sections_in_bundled_file(self):
+        # Symmetric case: the bundled file currently carries plaintext held_out/negative (post round-1
+        # evaluation), so with default sets they ARE evaluated and show up with passed/total. This must
+        # run against the temp fixture cache, never the real cache.
+        code, rep = self.run_diag("--bench-file", str(self.good_bench))
+        self.assertEqual(code, 0)
+        self.assertEqual(set(rep["sets"]), {"seed", "regression_negative", "held_out", "negative"})
+        for name in ("held_out", "negative"):
+            self.assertIn("passed", rep["sets"][name]); self.assertIn("total", rep["sets"][name])
+            self.assertEqual(rep["sets"][name]["total"], len(self.bench[name]))
 
     def test_json_output_has_every_spec_field(self):
         out = self.tmp / "report.json"
