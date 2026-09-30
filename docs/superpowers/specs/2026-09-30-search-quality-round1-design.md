@@ -130,6 +130,7 @@ Phase 2.5 계획 단계에서 추가된 alias `change→update`, `post→add`, `
   "held_out": {"sealed": true, "round": 1, "count": 16, "sha256": "<canonical sha256 of record list>",
                "distribution": {"source": {...}, "method": {...}, "product_named": 4}}
   ```
+  `negative`도 같은 형태이되 `distribution`은 `forbidden_top1[0]`(유인 오답)의 source/method 기준이다.
   최상위에 **영구 필드** `"round1_seal": {"held_out_sha256": "...", "negative_sha256": "...", "registry_fingerprint": "...", "spec_sha256": {"jira-platform": "...", "jira-software": "...", "confluence": "..."}}`를 둔다. 이 필드는 D 이후에도 남아 frozen evaluator가 평문의 canonical sha256과 비교하는 기준이 된다(테스트 코드에 상수를 넣지 않는다).
 - canonical sha256: Phase 2.5 §10과 동일(`sort_keys`, `separators=(",",":")`, `ensure_ascii=False`, UTF-8), 레코드 리스트만 대상.
 - 평가기는 `sealed: true`를 만나면 평가하지 않고 `{"sealed": true, "count": n}`을 보고한다.
@@ -197,14 +198,18 @@ expand_token_forms(tokens) -> frozenset[str] = ∪ token_forms(t)
     "path_unmatched_penalty": [0.5, 1.0, 1.5, 2.0], "path_unmatched_cap": [2, 3, 4],
     "product_hint_bonus": [2.0, 3.0, 4.0]
   },
+  "baseline": {
+    "method_match_bonus": 2.0, "method_mismatch_penalty": 2.0,
+    "path_unmatched_penalty": 1.0, "path_unmatched_cap": 3, "product_hint_bonus": 3.0
+  },
   "constants": {
     "method_match_bonus": 2.0, "method_mismatch_penalty": 2.0,
     "path_unmatched_penalty": 1.0, "path_unmatched_cap": 3, "product_hint_bonus": 3.0
   }
 }
 ```
-- **두 해시**: `ranking_structure_sha256` = `{verb_methods, path_noise, product_hints, tuning_grid}`의 canonical sha256(커밋 T에서 freeze, AC-13). `ranking_sha256` = 파일 전체(constants 포함)의 canonical sha256(fingerprint용).
-- **Loader 계약**(`load_ranking` → `RankingPolicy`, 위반은 `ValueError`): `version` int ≥ 1; `verb_methods` 키 `^[a-z]+$`, 값 비어 있지 않은 리스트, 원소 ∈ {GET, POST, PUT, PATCH, DELETE}, 중복 금지; `path_noise` 원소 `^[a-z0-9]+$` 중복 금지; `product_hints` 키 `^[a-z]+$`, 값 비어 있지 않고 중복 없음, 원소 ∈ `sources.SOURCES`; `tuning_grid` 키 == `constants` 키 집합(정확히 5개), 각 값 리스트 비어 있지 않고 중복 없음; `constants`의 bonus/penalty는 finite float ≥ 0, `path_unmatched_cap`은 int ≥ 0(bool 거부), 각 값 ∈ 해당 grid; 미지 키 거부. 반환은 frozen dataclass(`tuple`/`frozenset`/`MappingProxyType`), `ranking()` lru_cache.
+- **두 해시**: `ranking_structure_sha256` = `{verb_methods, path_noise, product_hints, tuning_grid, baseline}`의 canonical sha256(커밋 T에서 freeze, AC-13). `baseline`은 §8.2의 "초기값"을 영구 고정한 것으로, 튜닝 중 `constants`가 바뀌어도 L1 거리 기준은 항상 `baseline`이다. `ranking_sha256` = 파일 전체(constants 포함)의 canonical sha256(fingerprint용).
+- **Loader 계약**(`load_ranking` → `RankingPolicy`, 위반은 `ValueError`): `version` int ≥ 1; `verb_methods` 키 `^[a-z]+$`, 값 비어 있지 않은 리스트, 원소 ∈ {GET, POST, PUT, PATCH, DELETE}, 중복 금지; `path_noise` 원소 `^[a-z0-9]+$` 중복 금지; `product_hints` 키 `^[a-z]+$`, 값 비어 있지 않고 중복 없음, 원소 ∈ `sources.SOURCES`; `tuning_grid`·`baseline`·`constants` 키 집합이 모두 같은 5개, 각 값 리스트 비어 있지 않고 중복 없음; `constants`의 bonus/penalty는 finite float ≥ 0, `path_unmatched_cap`은 int ≥ 0(bool 거부), 각 값 ∈ 해당 grid; 미지 키 거부. 반환은 frozen dataclass(`tuple`/`frozenset`/`MappingProxyType`), `ranking()` lru_cache.
 
 ### 6.3 메서드 의도
 - 입력 `verbs = tokenize_unigrams(query) ∩ verb_methods.keys()`(raw unigram 기준). `len(verbs)==0` → 0. `allowed = ∩ verb_methods[v]`; 공집합 → 0. `op.method ∈ allowed` → `+method_match_bonus`, 아니면 `−method_mismatch_penalty`.
@@ -260,11 +265,11 @@ exact_match = len(pinned_ops) > 0                             # limit로 잘려�
 ## 8. 튜닝 절차
 
 ### 8.1 자유도
-- 테이블은 T에서 잠김. 튜닝 가능: `constants` 5개(각자 grid 안) + R4 alias/rule(§7 상한).
+- 테이블(`verb_methods`, `path_noise`, `product_hints`, `tuning_grid`, `baseline`)은 T에서 잠김. 튜닝 가능: `constants` 5개(각자 grid 안) + R4 alias/rule(§7 상한).
 
 ### 8.2 grid 전수 평가와 결정적 선택 (`tests/tune_search_ranking.py`)
 - 스냅샷(`--cache-dir`)에서 grid의 모든 조합(초기 grid 기준 3×4×4×3×3 = 432)을 평가한다. 각 조합마다 seed 22건·regression 7건 pass 수를 계산한다.
-- 선택 규칙(순서대로 tie-break, 결정적): (1) seed 22/22 AND regression 7/7인 조합만; (2) 초기값 대비 정규화 L1 거리(각 축을 grid 인덱스 차이로) 최소; (3) `method_match_bonus + method_mismatch_penalty + path_unmatched_penalty + product_hint_bonus` 최소; (4) 5-튜플 `(method_match_bonus, method_mismatch_penalty, path_unmatched_penalty, path_unmatched_cap, product_hint_bonus)` 사전순 최소. (1)을 만족하는 조합이 없으면 seed pass 최대 → regression pass 최대 → (2)~(4)로 고르고 "seed 미달"을 로그에 남긴다(그 경우 §7의 R4 alias를 추가한 뒤 재실행).
+- 선택 규칙(순서대로 tie-break, 결정적): (1) seed 22/22 AND regression 7/7인 조합만; (2) `baseline`(§6.2, 커밋 T에서 고정) 대비 L1 거리(각 축을 grid 인덱스 차이로) 최소; (3) `method_match_bonus + method_mismatch_penalty + path_unmatched_penalty + product_hint_bonus` 최소; (4) 5-튜플 `(method_match_bonus, method_mismatch_penalty, path_unmatched_penalty, path_unmatched_cap, product_hint_bonus)` 사전순 최소. (1)을 만족하는 조합이 없으면 seed pass 최대 → regression pass 최대 → (2)~(4)로 고르고 "seed 미달"을 로그에 남긴다(그 경우 §7의 R4 alias를 추가한 뒤 재실행).
 - 스크립트는 선택된 조합을 `search_ranking.json`의 `constants`에 기록하고 로그를 남긴다. 사람이 숫자를 손으로 고르지 않는다.
 
 ### 8.3 튜닝 로그 `tests/benchmarks/search-tuning-round1.jsonl`
