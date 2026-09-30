@@ -225,10 +225,41 @@ class TestSeedBenchmark(unittest.TestCase):
     def test_seed_passes_on_fixtures(self):
         state = make_state("jira-platform", "jira-software", "confluence")
         fn = lambda q: [r["key"] for r in search.search_operations(state, q, limit=5)["results"]]
-        res = evaluate(BENCH["seed"], fn)
+        # Only the Round-1 tuning set (r0 origins) targets fixture operations; demoted r1 records mostly do not.
+        seed = [r for r in BENCH["seed"] if r["origin"].endswith("-r0")]
+        neg = [r for r in BENCH["regression_negative"] if r["origin"].endswith("-r0")]
+        self.assertEqual((len(seed), len(neg)), (23, 6))
+        res = evaluate(seed, fn)
         self.assertEqual(res["failed"], [], res)
-        res_neg = evaluate(BENCH["regression_negative"], fn)
+        res_neg = evaluate(neg, fn)
         self.assertEqual(res_neg["failed"], [], res_neg)
+
+    def test_r1_record_keys_exist_in_real_registry(self):
+        """Demoted Round-1 records name real (non-fixture) operations. Their keys are checked against the Round-1
+        snapshot only when ATLASSIAN_DOCS_ROUND1_CACHE points at one whose fingerprint matches round1_seal;
+        otherwise only the schema is checked and the reason is printed (never a failure, never a skip)."""
+        import os
+        from tests.benchmarks import evaluator as ev
+        r1 = {}
+        for sect in ("seed", "regression_negative"):
+            ev.check_schema(sect, BENCH[sect])
+            r1[sect] = [r for r in BENCH[sect] if r["origin"].endswith("-r1")]
+        self.assertEqual((len(r1["seed"]), len(r1["regression_negative"])), (16, 8))
+        cache = os.environ.get("ATLASSIAN_DOCS_ROUND1_CACHE")
+        if not cache or not pathlib.Path(cache).is_dir():
+            print("r1 key check: ATLASSIAN_DOCS_ROUND1_CACHE not set or missing; schema only"); return
+        from tests.benchmarks import round1_seal as rs
+        try:
+            _, internal, fingerprint, _ = rs.load_catalogs_from_cache(pathlib.Path(cache))
+        except SystemExit as e:
+            print(f"r1 key check: snapshot unusable ({e}); schema only"); return
+        if fingerprint != BENCH["round1_seal"]["registry_fingerprint"]:
+            print("r1 key check: snapshot fingerprint differs from round1_seal; schema only"); return
+        keys = {r["key"] for r in internal}
+        for sect, recs in r1.items():
+            for r in recs:
+                for k in r["expected_top1_any"] + r["forbidden_top1"]:
+                    self.assertIn(k, keys, f"{sect}/{r['id']}")
 
     def test_fields_and_fingerprint(self):
         state = make_state("jira-platform")

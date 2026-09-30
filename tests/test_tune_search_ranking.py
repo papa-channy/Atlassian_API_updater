@@ -6,7 +6,7 @@ GRID = {"method_match_bonus": [1.0, 2.0, 3.0], "method_mismatch_penalty": [0.0, 
         "path_unmatched_cap": [2, 3, 4], "product_hint_bonus": [2.0, 3.0, 4.0],
         "resource_match_bonus": [6.0, 8.0, 10.0, 12.0]}
 BASE = {"method_match_bonus": 2.0, "method_mismatch_penalty": 2.0, "path_unmatched_penalty": 1.0, "path_unmatched_cap": 3, "product_hint_bonus": 3.0, "resource_match_bonus": 10.0}
-S, R = tune.SEED_TOTAL, tune.REGRESSION_TOTAL   # 23 seed, 6 regression_negative
+S, R = tune.SEED_TOTAL, tune.REGRESSION_TOTAL   # totals of the bundled bench
 
 
 def pt(**over):
@@ -15,7 +15,12 @@ def pt(**over):
 
 class TestSelector(unittest.TestCase):
     def test_totals_match_benchmark(self):
-        self.assertEqual((S, R), (23, 6))
+        import json, pathlib
+        path = pathlib.Path(__file__).resolve().parent / "benchmarks" / "search_queries.json"
+        with path.open(encoding="utf-8") as fh:
+            b = json.load(fh)
+        self.assertEqual((tune.SEED_TOTAL, tune.REGRESSION_TOTAL), (39, 14))
+        self.assertEqual((tune.SEED_TOTAL, tune.REGRESSION_TOTAL), (len(b["seed"]), len(b["regression_negative"])))
 
     def test_grid_cardinality_and_order(self):
         pts = tune.grid_points(GRID)

@@ -55,7 +55,7 @@ class AliasPolicy:
 
 
 _NOTE_ORIGINS = ("phase2.5", "round1")
-_SEED_ID = re.compile(r"^s-\d{3}$")
+_SEED_ID = re.compile(r"s-\d{3}")               # always fullmatch
 
 
 def _check_alias_notes(notes, expected_keys: set) -> None:
@@ -68,7 +68,7 @@ def _check_alias_notes(notes, expected_keys: set) -> None:
             raise ValueError(f"alias note {key!r} must have origin, failure_classes and evidence")
         if n["origin"] == "round1":
             sid = n.get("seed_query_id")
-            if not isinstance(sid, str) or not _SEED_ID.match(sid) or "R4" not in n["failure_classes"]:
+            if not isinstance(sid, str) or not _SEED_ID.fullmatch(sid) or "R4" not in n["failure_classes"]:
                 raise ValueError(f"round1 alias note {key!r} needs seed_query_id s-NNN and R4 in failure_classes")
         elif n.get("seed_query_id") is not None:
             raise ValueError(f"phase2.5 alias note {key!r} must have seed_query_id null")
@@ -129,7 +129,12 @@ _METHODS = frozenset({"GET", "POST", "PUT", "PATCH", "DELETE"})
 STRUCTURE_KEYS = ("verb_methods", "path_noise", "product_hints", "tuning_grid", "baseline")
 CONSTANT_KEYS = ("method_match_bonus", "method_mismatch_penalty", "path_unmatched_penalty", "path_unmatched_cap", "product_hint_bonus",
                  "resource_match_bonus")
-_WORD = re.compile(r"^[a-z]+$"); _NOISE = re.compile(r"^[a-z0-9]+$")
+_WORD = re.compile(r"[a-z]+"); _NOISE = re.compile(r"[a-z0-9]+")   # always fullmatch ("get\n" must not pass)
+
+
+def _str_list(v) -> bool:
+    """A non-empty list of strings without duplicates (checked before set() so bad elements never raise TypeError)."""
+    return isinstance(v, list) and bool(v) and all(isinstance(x, str) for x in v) and len(set(v)) == len(v)
 
 
 @dataclass(frozen=True)
@@ -217,27 +222,29 @@ def load_ranking(path: Optional[pathlib.Path] = None) -> RankingPolicy:
         raise ValueError("version must be an int >= 1")
     verbs = {}
     for k, v in (raw["verb_methods"] or {}).items() if isinstance(raw["verb_methods"], dict) else [(None, None)]:
-        if k is None or not _WORD.match(k) or not isinstance(v, list) or not v or len(set(v)) != len(v) or not set(v) <= _METHODS:
+        if k is None or not _WORD.fullmatch(k) or not _str_list(v) or not set(v) <= _METHODS:
             raise ValueError(f"invalid verb_methods entry {k!r}")
         verbs[k] = frozenset(v)
     noise = raw["path_noise"]
-    if not isinstance(noise, list) or len(set(noise)) != len(noise) or not all(isinstance(t, str) and _NOISE.match(t) for t in noise):
+    if not isinstance(noise, list) or not all(isinstance(t, str) and _NOISE.fullmatch(t) for t in noise) or len(set(noise)) != len(noise):
         raise ValueError("invalid path_noise")
     hints = {}
     for k, v in (raw["product_hints"] or {}).items() if isinstance(raw["product_hints"], dict) else [(None, None)]:
-        if k is None or not _WORD.match(k) or not isinstance(v, list) or not v or len(set(v)) != len(v) or not set(v) <= set(sources.SOURCES):
+        if k is None or not _WORD.fullmatch(k) or not _str_list(v) or not set(v) <= set(sources.SOURCES):
             raise ValueError(f"invalid product_hints entry {k!r}")
         hints[k] = frozenset(v)
     grid, consts, basel = raw["tuning_grid"], raw["constants"], raw["baseline"]
     if not all(isinstance(d, dict) and set(d) == set(CONSTANT_KEYS) for d in (grid, consts, basel)):
-        raise ValueError("tuning_grid, baseline and constants must each have exactly the five constant keys")
+        raise ValueError(f"tuning_grid, baseline and constants must each have exactly the {len(CONSTANT_KEYS)} constant keys")
     out_grid, out_consts, out_base = {}, {}, {}
     for k in CONSTANT_KEYS:
         integer = k == "path_unmatched_cap"
         vals = grid[k]
-        if not isinstance(vals, list) or not vals or len(set(vals)) != len(vals):
+        if not isinstance(vals, list) or not vals:
             raise ValueError(f"tuning_grid[{k}] must be a non-empty list without duplicates")
-        out_grid[k] = tuple(_num(v, f"tuning_grid[{k}]", integer) for v in vals)
+        out_grid[k] = tuple(_num(v, f"tuning_grid[{k}]", integer) for v in vals)   # rejects non-numbers first
+        if len(set(out_grid[k])) != len(vals):
+            raise ValueError(f"tuning_grid[{k}] must be a non-empty list without duplicates")
         for name, src, dst in (("constants", consts, out_consts), ("baseline", basel, out_base)):
             c = _num(src[k], f"{name}[{k}]", integer)
             if c not in out_grid[k]:

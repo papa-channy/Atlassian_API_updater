@@ -207,3 +207,10 @@ seed 23/23, regression_negative 6/6, held_out 4/16, negative 5/8, gate failed) �
 #### 커밋 D 직후 발견된 테스트 결함
 
 `tests/test_diag_search_queries.py::test_default_sets_skip_sealed_sections`는 번들 벤치마크 파일이 봉인 상태라고 가정해 D 이후 실패한다(테스트 자체가 파일 상태에 의존). C..D whitelist상 D에서는 테스트 코드를 고칠 수 없으므로, D 다음 커밋에서 임시 봉인 벤치를 만들어 검사하도록 고친다.
+
+### Round 2 pre-work (2026-09-30)
+
+- **관찰된 숨김 집합 강등** (`902b447`): `held_out` h-001..h-016 → `seed` s-024..s-039, `negative` n-001..n-008 → `regression_negative` rn-007..rn-014 (순서 유지, origin `held_out-r1`/`negative-r1` 유지). `held_out`/`negative`는 `[]`, `round1_seal`은 변경 없음. seed 39 / regression_negative 14. 픽스처 평가(`TestSeedBenchmark`)는 r0 origin 레코드만(23/23, 6/6) 대상으로 하고, r1 레코드의 키는 `ATLASSIAN_DOCS_ROUND1_CACHE`가 `round1_seal`과 지문이 같은 스냅샷을 가리킬 때만 실제 레지스트리에서 검사한다(아니면 스키마만 검사하고 사유 출력).
+- **라운드 독립 테스트** (`8f5078c`): `TestFinalArtifact`(`round1_seal`과의 내부 일관성만 검사; 현재 트리의 평가 코드 해시 비교와 평문 r1 섹션 요구는 D 전용이므로 제거), `RANKING_STRUCTURE_SHA256` → `tests/benchmarks/round_freeze.json`(`test_evaluator`·`test_policy`가 파일을 읽음), 정책 어휘 출처 검사(seed 단어는 all seed records (r0+r1)에서; 예외 목록은 `{"epic","find","read","rename"}`로 축소), 튜너 총계 테스트(번들 벤치 길이와 비교), `tests/test_diag_search_queries.py`(r0 레코드로 자체 벤치를 만들고 평문/봉인 숨김 섹션도 자체 생성 — 위 "커밋 D 직후 발견된 테스트 결함" 해소).
+- **policy 로더 수정** (`8ef0faf`): `verb_methods`/`product_hints`/`path_noise`/`tuning_grid`의 잘못된 원소(비문자열, 중첩 리스트)는 `TypeError`가 아니라 `ValueError`; 키 정규식은 `fullmatch`(`"get\n"` 거부); 상수 키 오류 메시지는 `len(CONSTANT_KEYS)`(6)에서 파생.
+- **저장소 밖 Round 1 파일 보관**: `~/.atlassian_api_updater/archive/round1/`에 봉인 평문(`sealed/round1-sealed.json`), 내부 카탈로그(`sealed/round1-internal-catalog.json`), 생성 프롬프트(`sealed/round1-generation-prompt.txt`), 캐시 스냅샷(`round1-cache/`). Round 2는 새 숨김 집합으로 A→T→B→C→D를 다시 수행한다.

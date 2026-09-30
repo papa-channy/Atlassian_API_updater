@@ -14,6 +14,17 @@ from tools.atlassian_docs.intelligence import RegistryManager
 FIXTURES = pathlib.Path(__file__).resolve().parent / "fixtures" / "openapi"
 SOURCES = ("jira-platform", "jira-software", "confluence")
 FMT = "%Y-%m-%dT%H:%M:%SZ"
+SEALED_COUNTS = {"held_out": 16, "negative": 8}
+
+
+def base_bench() -> dict:
+    """Bundled bench reduced to what is independent of any round's hidden-set state: seed/regression_negative
+    records with an r0 origin (their answers are in the fixtures) and empty held_out/negative."""
+    b = json.loads(diag.BENCH.read_text(encoding="utf-8"))
+    for sect in ("seed", "regression_negative"):
+        b[sect] = [r for r in b[sect] if r["origin"].endswith("-r0")]
+    b["held_out"], b["negative"] = [], []
+    return b
 
 
 def build_fixture_cache(cache: pathlib.Path) -> None:
@@ -46,7 +57,7 @@ class TestDiagScript(unittest.TestCase):
         cls.cache = cls.tmp / "cache"
         build_fixture_cache(cls.cache)
         cls.fp, cls.spec_sha = fixture_identity(cls.cache)
-        cls.bench = json.loads(diag.BENCH.read_text(encoding="utf-8"))
+        cls.bench = base_bench()
         cls.good_bench = cls.write_bench("good.json", cls.fp, cls.spec_sha)
         cls.bad_bench = cls.write_bench("bad.json", "0" * 64, cls.spec_sha)
         cls.bad_spec_bench = cls.write_bench("bad_spec.json", cls.fp, {**cls.spec_sha, "confluence": "f" * 64})
@@ -78,7 +89,7 @@ class TestDiagScript(unittest.TestCase):
     @classmethod
     def sealed_section(cls, name):
         seal = cls.bench["round1_seal"]
-        return {"sealed": True, "round": 1, "count": len(cls.bench[name]),
+        return {"sealed": True, "round": 1, "count": SEALED_COUNTS[name],
                 "sha256": seal[f"{name}_sha256"], "distribution": seal[f"{name}_distribution"]}
 
     def run_diag(self, *args):
@@ -87,7 +98,7 @@ class TestDiagScript(unittest.TestCase):
 
     def test_cache_dir_is_used_and_restored(self):
         before = storage.CACHE_DIR
-        code, rep = self.run_diag("--sets", "seed")
+        code, rep = self.run_diag("--bench-file", str(self.good_bench), "--sets", "seed")
         self.assertIs(storage.CACHE_DIR, before)
         self.assertEqual(code, 0)
         self.assertEqual(rep["registry_fingerprint"], self.fp); self.assertEqual(rep["spec_sha256"], self.spec_sha)
@@ -131,24 +142,25 @@ class TestDiagScript(unittest.TestCase):
 
     def test_default_sets_skip_sealed_sections(self):
         # bench-file built here has held_out/negative as sealed metadata objects, independent of whatever
-        # state the bundled tests/benchmarks/search_queries.json happens to be in (plaintext post-round-1).
+        # state the bundled tests/benchmarks/search_queries.json happens to be in.
         code, rep = self.run_diag("--bench-file", str(self.sealed_bench))
         self.assertEqual(code, 0); self.assertEqual(set(rep["sets"]), {"seed", "regression_negative"})
         code2, rep2 = self.run_diag("--bench-file", str(self.sealed_bench), "--sets", "held_out,negative")
         self.assertEqual(code2, 0)
-        self.assertEqual(rep2["sets"]["held_out"], {"sealed": True, "count": len(self.bench["held_out"])})
-        self.assertEqual(rep2["sets"]["negative"], {"sealed": True, "count": len(self.bench["negative"])})
+        self.assertEqual(rep2["sets"]["held_out"], {"sealed": True, "count": SEALED_COUNTS["held_out"]})
+        self.assertEqual(rep2["sets"]["negative"], {"sealed": True, "count": SEALED_COUNTS["negative"]})
 
-    def test_default_sets_evaluate_plaintext_hidden_sections_in_bundled_file(self):
-        # Symmetric case: the bundled file currently carries plaintext held_out/negative (post round-1
-        # evaluation), so with default sets they ARE evaluated and show up with passed/total. This must
-        # run against the temp fixture cache, never the real cache.
-        code, rep = self.run_diag("--bench-file", str(self.good_bench))
+    def test_default_sets_evaluate_plaintext_hidden_sections(self):
+        # Symmetric case: a bench-file built here carries plaintext held_out/negative, so with default sets they
+        # ARE evaluated and show up with passed/total. Runs against the temp fixture cache, never the real cache.
+        path = self.write_bench("plain_hidden.json", self.fp, self.spec_sha,
+                                held_out=self.plain["held_out"], negative=self.plain["negative"])
+        code, rep = self.run_diag("--bench-file", str(path))
         self.assertEqual(code, 0)
         self.assertEqual(set(rep["sets"]), {"seed", "regression_negative", "held_out", "negative"})
         for name in ("held_out", "negative"):
             self.assertIn("passed", rep["sets"][name]); self.assertIn("total", rep["sets"][name])
-            self.assertEqual(rep["sets"][name]["total"], len(self.bench[name]))
+            self.assertEqual(rep["sets"][name]["total"], len(self.plain[name]))
 
     def test_json_output_has_every_spec_field(self):
         out = self.tmp / "report.json"

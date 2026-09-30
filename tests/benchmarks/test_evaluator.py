@@ -54,7 +54,13 @@ class TestSchemaAndSemantics(unittest.TestCase):
         for sect in ("seed", "regression_negative", "held_out", "negative"):
             if not ev.is_sealed(b[sect]):
                 ev.check_schema(sect, b[sect])
-        self.assertEqual(len(b["seed"]), 23); self.assertEqual(len(b["regression_negative"]), 6)
+        self.assertEqual(len(b["seed"]), 39); self.assertEqual(len(b["regression_negative"]), 14)
+        # Round 1 hidden sets were observed at commit D and demoted before Round 2 (s-024..s-039, rn-007..rn-014)
+        self.assertEqual([r["id"] for r in b["seed"][23:]], [f"s-{i:03d}" for i in range(24, 40)])
+        self.assertEqual({r["origin"] for r in b["seed"][23:]}, {"held_out-r1"})
+        self.assertEqual([r["id"] for r in b["regression_negative"][6:]], [f"rn-{i:03d}" for i in range(7, 15)])
+        self.assertEqual({r["origin"] for r in b["regression_negative"][6:]}, {"negative-r1"})
+        self.assertEqual((b["held_out"], b["negative"]), ([], []))
 
     def test_no_query_reuse_across_sets(self):
         b = json.loads(BENCH.read_text(encoding="utf-8"))
@@ -77,7 +83,10 @@ class TestSchemaAndSemantics(unittest.TestCase):
 
 
 RANKING = pathlib.Path(__file__).resolve().parents[2] / "tools" / "atlassian_docs" / "intelligence" / "data" / "search_ranking.json"
-RANKING_STRUCTURE_SHA256 = "6b3e79ca4d184b16793fc7fc6c7003733bd2081e35d951af21703c2c407a4de2"
+# The ranking-table structure hash frozen at the current round's commit T lives in a data file, so a new round
+# re-freezes by editing round_freeze.json rather than test code (which is part of evaluation_code_sha256).
+ROUND_FREEZE = pathlib.Path(__file__).resolve().parent / "round_freeze.json"
+RANKING_STRUCTURE_SHA256 = json.loads(ROUND_FREEZE.read_text(encoding="utf-8"))["structure_sha256"]
 STRUCTURE_KEYS = ("verb_methods", "path_noise", "product_hints", "tuning_grid", "baseline")
 
 
@@ -89,6 +98,12 @@ class TestRankingTablesFrozen(unittest.TestCase):
     def test_structure_hash_matches_commit_t(self):
         raw = json.loads(RANKING.read_text(encoding="utf-8"))
         self.assertEqual(ranking_structure_sha256(raw), RANKING_STRUCTURE_SHA256)
+
+    def test_round_freeze_file_shape(self):
+        f = json.loads(ROUND_FREEZE.read_text(encoding="utf-8"))
+        self.assertEqual(set(f), {"round", "commit_T", "structure_sha256"})
+        self.assertIsInstance(f["round"], int); self.assertGreaterEqual(f["round"], 1)
+        self.assertRegex(f["commit_T"], r"^[0-9a-f]{7,40}$"); self.assertRegex(f["structure_sha256"], r"^[0-9a-f]{64}$")
 
     def test_constants_inside_grid(self):
         raw = json.loads(RANKING.read_text(encoding="utf-8"))
@@ -202,7 +217,7 @@ SPEC_R1 = ROOT / "docs" / "superpowers" / "specs" / "2026-09-30-search-quality-r
 # Words of the spec §6.2 tables (frozen at commit T, b3c2ba5, before the hidden sets were generated) that occur in
 # neither a seed query nor a fixture operationId/path. Exact equality below: a new uncovered word fails, and so does
 # a stale entry. Pending controller ruling (Task 8 report).
-PROVENANCE_EXCEPTIONS = frozenset({"epic", "find", "read", "rename", "show", "wiki"})
+PROVENANCE_EXCEPTIONS = frozenset({"epic", "find", "read", "rename"})
 
 
 class TestPolicyVocabularyProvenance(unittest.TestCase):
@@ -214,7 +229,7 @@ class TestPolicyVocabularyProvenance(unittest.TestCase):
         b = json.loads(BENCH.read_text(encoding="utf-8"))
         out = set(sources.SOURCES)
         for rec in b["seed"]:
-            out |= ev.unigram_set(rec["query"])
+            out |= ev.unigram_set(rec["query"])   # every seed record (r0 + demoted r1) is Round 2 tuning vocabulary
         for name in sources.SOURCES:
             spec = json.loads((FIXTURES / f"{name}-openapi.json").read_text(encoding="utf-8"))
             for path, item in spec["paths"].items():
@@ -247,8 +262,13 @@ REPORT_FIELDS = ("sets", "failures", "git_commit", "registry_fingerprint", "inte
 
 
 class TestFinalArtifact(unittest.TestCase):
-    """spec §5.8 (b),(c) / AC-10. `git_commit == C` and `evaluation_code_sha256 == the C record` are compared by the
-    controller at D against docs/phase3-readiness.md; here the hash is recomputed over the checked-out tree."""
+    """spec §5.8 (b),(c) / AC-10, made round-independent. The artifact is checked for internal consistency with
+    round1_seal only: sealed_sha256, registry_fingerprint, spec_sha256, 40-hex git_commit, 64-hex
+    evaluation_code_sha256, and evaluated (not sealed) held_out/negative results with totals 16/8.
+    Two commit-D-only checks were dropped: equality of evaluation_code_sha256 with the current tree (evaluation code
+    changes after D, e.g. this file) and plaintext r1 sections in the bundled bench (demoted into seed /
+    regression_negative before Round 2). `git_commit == C` and the C-record hash were compared at D against
+    docs/phase3-readiness.md."""
 
     def test_final_artifact(self):
         found = sorted(FINAL.parent.glob("round1-final*.json"))
@@ -264,14 +284,9 @@ class TestFinalArtifact(unittest.TestCase):
         self.assertEqual(art["sealed_sha256"], {"held_out": seal["held_out_sha256"], "negative": seal["negative_sha256"]})
         self.assertEqual(art["registry_fingerprint"], seal["registry_fingerprint"])
         self.assertEqual(art["spec_sha256"], seal["spec_sha256"])
-        self.assertEqual(art["evaluation_code_sha256"], ev.evaluation_code_sha256(ROOT))
-        for sect in ("held_out", "negative"):
-            self.assertIsInstance(b[sect], list, f"{sect} must be plaintext once the final artifact exists")
-            self.assertTrue(b[sect], sect)
-            want = "held_out-r1" if sect == "held_out" else "negative-r1"
-            self.assertEqual({r["origin"] for r in b[sect]}, {want}, sect)
-            self.assertFalse([r for r in b[sect] if r["origin"].endswith("-r0")], sect)
+        self.assertRegex(art["evaluation_code_sha256"], r"^[0-9a-f]{64}$")
+        for sect, total in (("held_out", 16), ("negative", 8)):
             res = art["sets"][sect]
             self.assertNotIn("sealed", res, sect)
             self.assertTrue({"passed", "failed", "total"} <= set(res), sect)
-            self.assertEqual(res["total"], len(b[sect]), sect)
+            self.assertEqual(res["total"], total, sect)
