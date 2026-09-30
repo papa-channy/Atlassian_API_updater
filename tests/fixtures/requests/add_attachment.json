@@ -1,0 +1,11 @@
+{
+  "key": "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/attachments",
+  "content_type": "multipart/form-data",
+  "source": "official-doc",
+  "origin_url": "https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-attachments/#api-rest-api-3-issue-issueidorkey-attachments-post",
+  "captured_on": "2026-09-30",
+  "sanitized": true,
+  "path_params": {"issueIdOrKey": "PROJ-1"},
+  "headers": {"X-Atlassian-Token": "no-check"},
+  "expect": {"required_header": "X-Atlassian-Token", "multipart_field": "file"}
+}

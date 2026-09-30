@@ -1,0 +1,11 @@
+{
+  "key": "confluence:POST:/pages",
+  "content_type": "application/json",
+  "source": "official-doc",
+  "origin_url": "https://developer.atlassian.com/cloud/confluence/rest/v2/api-group-page/#api-pages-post",
+  "captured_on": "2026-09-30",
+  "sanitized": true,
+  "body": {"spaceId": "123456", "status": "current", "title": "Release notes", "body": {"representation": "storage", "value": "<p>Hello</p>"}},
+  "negative_body": {"spaceId": "123456", "status": "current", "title": "Release notes", "body": {"representation": "storage", "value": 42}},
+  "negative_expect_location": "body.body.value"
+}

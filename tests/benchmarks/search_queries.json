@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "record_schema": {"query": "str", "expected_top1_any": "[key]", "forbidden_top1": "[key]", "note": "str"},
+  "seed": [
+    {"query": "upload attachment to issue", "expected_top1_any": ["jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/attachments"], "forbidden_top1": []},
+    {"query": "create confluence page", "expected_top1_any": ["confluence:POST:/pages"], "forbidden_top1": []},
+    {"query": "MultipartFile", "expected_top1_any": ["jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/attachments"], "forbidden_top1": []},
+    {"query": "transition issue status", "expected_top1_any": ["jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/transitions", "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/transitions"], "forbidden_top1": []},
+    {"query": "update page content", "expected_top1_any": ["confluence:PUT:/pages/{id}"], "forbidden_top1": []},
+    {"query": "get issue by key", "expected_top1_any": ["jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}"], "forbidden_top1": []},
+    {"query": "createIssue", "expected_top1_any": ["jira-platform:POST:/rest/api/3/issue"], "forbidden_top1": []},
+    {"query": "sprint board backlog", "expected_top1_any": ["jira-software:GET:/rest/agile/1.0/board/{boardId}/backlog", "jira-software:GET:/rest/agile/1.0/board/{boardId}/sprint", "jira-software:POST:/rest/agile/1.0/backlog/issue", "jira-software:POST:/rest/agile/1.0/sprint", "jira-software:GET:/rest/agile/1.0/sprint/{sprintId}/issue", "jira-software:POST:/rest/agile/1.0/backlog/{boardId}/issue"], "forbidden_top1": []},
+    {"query": "issue attachment", "expected_top1_any": ["jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/attachments"], "forbidden_top1": []}
+  ],
+  "held_out": [
+    {"query": "attach a file to a jira ticket", "expected_top1_any": ["jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/attachments"], "forbidden_top1": []},
+    {"query": "change issue assignee", "expected_top1_any": ["jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}/assignee"], "forbidden_top1": []},
+    {"query": "post a comment on an issue", "expected_top1_any": ["jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/comment"], "forbidden_top1": []},
+    {"query": "create a new confluence page in a space", "expected_top1_any": ["confluence:POST:/pages"], "forbidden_top1": []},
+    {"query": "fetch page by id", "expected_top1_any": ["confluence:GET:/pages/{id}"], "forbidden_top1": []},
+    {"query": "run jql query", "expected_top1_any": ["jira-platform:GET:/rest/api/3/search/jql", "jira-platform:POST:/rest/api/3/search/jql"], "forbidden_top1": []},
+    {"query": "add issue to sprint", "expected_top1_any": ["jira-software:POST:/rest/agile/1.0/sprint/{sprintId}/issue"], "forbidden_top1": []},
+    {"query": "list boards", "expected_top1_any": ["jira-software:GET:/rest/agile/1.0/board"], "forbidden_top1": []},
+    {"query": "delete an attachment", "expected_top1_any": ["jira-platform:DELETE:/rest/api/3/attachment/{id}"], "forbidden_top1": []},
+    {"query": "get project by key", "expected_top1_any": ["jira-platform:GET:/rest/api/3/project/{projectIdOrKey}"], "forbidden_top1": []},
+    {"query": "update page title", "expected_top1_any": ["confluence:PUT:/pages/{id}", "confluence:PUT:/pages/{id}/title"], "forbidden_top1": []},
+    {"query": "move issue to backlog", "expected_top1_any": ["jira-software:POST:/rest/agile/1.0/backlog/issue", "jira-software:POST:/rest/agile/1.0/backlog/{boardId}/issue"], "forbidden_top1": []}
+  ],
+  "negative": [
+    {"query": "get issue status", "expected_top1_any": [], "forbidden_top1": ["jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/transitions", "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/transitions"], "note": "status query must not surface transition APIs"},
+    {"query": "get user", "expected_top1_any": ["jira-platform:GET:/rest/api/3/user"], "forbidden_top1": ["jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}/assignee"]},
+    {"query": "list users", "expected_top1_any": ["jira-platform:GET:/rest/api/3/users/search", "jira-platform:GET:/rest/api/3/users"], "forbidden_top1": ["jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}/assignee"]},
+    {"query": "update issue summary", "expected_top1_any": ["jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}"], "forbidden_top1": ["confluence:PUT:/pages/{id}"]},
+    {"query": "get page property", "expected_top1_any": ["confluence:GET:/pages/{page-id}/properties/{property-id}", "confluence:GET:/pages/{page-id}/properties"], "forbidden_top1": ["confluence:PUT:/pages/{id}"]},
+    {"query": "get transitions", "expected_top1_any": ["jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/transitions"], "forbidden_top1": []},
+    {"query": "read issue comments", "expected_top1_any": ["jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/comment"], "forbidden_top1": ["jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/comment"]},
+    {"query": "remove page", "expected_top1_any": ["confluence:DELETE:/pages/{id}"], "forbidden_top1": ["confluence:PUT:/pages/{id}"]}
+  ]
+}

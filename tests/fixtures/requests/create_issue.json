@@ -1,0 +1,12 @@
+{
+  "key": "jira-platform:POST:/rest/api/3/issue",
+  "content_type": "application/json",
+  "source": "official-doc",
+  "origin_url": "https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/#api-rest-api-3-issue-post",
+  "captured_on": "2026-09-30",
+  "sanitized": true,
+  "body": {"fields": {"project": {"key": "PROJ"}, "summary": "Main order flow broken", "issuetype": {"name": "Task"},
+           "description": {"type": "doc", "version": 1, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Order entry fails when selecting supplier."}]}]}}},
+  "negative_body": {"fields": {"project": "PROJ", "summary": "x", "issuetype": {"name": "Task"}}},
+  "negative_expect_location": "body.fields.project"
+}
