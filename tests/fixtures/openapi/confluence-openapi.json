@@ -98,6 +98,34 @@
         },
         "required": true
       },
+      "PageTitleUpdateRequest": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "status": {
+                  "description": "The status of the page, current or draft.",
+                  "enum": [
+                    "current",
+                    "draft"
+                  ],
+                  "type": "string"
+                },
+                "title": {
+                  "description": "The updated title for the page",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "status",
+                "title"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "required": true
+      },
       "PageUpdateRequest": {
         "content": {
           "application/json": {
@@ -264,6 +292,142 @@
           },
           "webui": {
             "description": "Web UI link of the content.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "AttachmentSingle": {
+        "properties": {
+          "_links": {
+            "$ref": "#/components/schemas/AttachmentLinks"
+          },
+          "blogPostId": {
+            "description": "ID of the containing blog post.\n\nNote: This is only returned if the attachment has a container that is a blog post.",
+            "type": "string"
+          },
+          "comment": {
+            "description": "Comment for the attachment.",
+            "type": "string"
+          },
+          "createdAt": {
+            "description": "Date and time when the attachment was created. In format \"YYYY-MM-DDTHH:mm:ss.sssZ\".",
+            "format": "date-time",
+            "type": "string"
+          },
+          "customContentId": {
+            "description": "ID of the containing custom content.\n\nNote: This is only returned if the attachment has a container that is custom content.",
+            "type": "string"
+          },
+          "downloadLink": {
+            "description": "Download link of the attachment.",
+            "type": "string"
+          },
+          "fileId": {
+            "description": "File ID of the attachment. This is the ID referenced in `atlas_doc_format` bodies and is distinct from the attachment ID.",
+            "type": "string"
+          },
+          "fileSize": {
+            "description": "File size of the attachment.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "id": {
+            "description": "ID of the attachment.",
+            "type": "string"
+          },
+          "labels": {
+            "properties": {
+              "_links": {
+                "$ref": "#/components/schemas/OptionalFieldLinks"
+              },
+              "meta": {
+                "$ref": "#/components/schemas/OptionalFieldMeta"
+              },
+              "results": {
+                "items": {
+                  "$ref": "#/components/schemas/Label"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
+          "mediaType": {
+            "description": "Media Type for the attachment.",
+            "type": "string"
+          },
+          "mediaTypeDescription": {
+            "description": "Media Type description for the attachment.",
+            "type": "string"
+          },
+          "operations": {
+            "properties": {
+              "_links": {
+                "$ref": "#/components/schemas/OptionalFieldLinks"
+              },
+              "meta": {
+                "$ref": "#/components/schemas/OptionalFieldMeta"
+              },
+              "results": {
+                "items": {
+                  "$ref": "#/components/schemas/Operation"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
+          "pageId": {
+            "description": "ID of the containing page.\n\nNote: This is only returned if the attachment has a container that is a page.",
+            "type": "string"
+          },
+          "properties": {
+            "properties": {
+              "_links": {
+                "$ref": "#/components/schemas/OptionalFieldLinks"
+              },
+              "meta": {
+                "$ref": "#/components/schemas/OptionalFieldMeta"
+              },
+              "results": {
+                "items": {
+                  "$ref": "#/components/schemas/ContentProperty"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ContentStatus"
+          },
+          "title": {
+            "description": "Title of the comment.",
+            "type": "string"
+          },
+          "version": {
+            "$ref": "#/components/schemas/Version"
+          },
+          "versions": {
+            "properties": {
+              "_links": {
+                "$ref": "#/components/schemas/OptionalFieldLinks"
+              },
+              "meta": {
+                "$ref": "#/components/schemas/OptionalFieldMeta"
+              },
+              "results": {
+                "items": {
+                  "$ref": "#/components/schemas/Version"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
+          "webuiLink": {
+            "description": "WebUI link of the attachment.",
             "type": "string"
           }
         },
@@ -556,6 +720,53 @@
           },
           "version": {
             "$ref": "#/components/schemas/Version"
+          }
+        },
+        "type": "object"
+      },
+      "ContentPropertyCreateRequest": {
+        "properties": {
+          "key": {
+            "description": "Key of the content property",
+            "type": "string"
+          },
+          "value": {
+            "description": "Value of the content property."
+          }
+        },
+        "type": "object"
+      },
+      "ContentPropertySortOrder": {
+        "description": "The sort fields for content properties. The default sort direction is ascending. To sort in descending order, append a `-` character before the sort field. For example, `fieldName` or `-fieldName`.",
+        "enum": [
+          "key",
+          "-key"
+        ],
+        "type": "string"
+      },
+      "ContentPropertyUpdateRequest": {
+        "properties": {
+          "key": {
+            "description": "Key of the content property",
+            "type": "string"
+          },
+          "value": {
+            "description": "Value of the content property."
+          },
+          "version": {
+            "description": "New version number and associated message",
+            "properties": {
+              "message": {
+                "description": "Message to be associated with the new version.",
+                "type": "string"
+              },
+              "number": {
+                "description": "Version number of the new version. Should be 1 more than the current version number.",
+                "format": "int32",
+                "type": "integer"
+              }
+            },
+            "type": "object"
           }
         },
         "type": "object"
@@ -1145,6 +1356,229 @@
           }
         ],
         "summary": "Get attachments",
+        "tags": [
+          "Attachment"
+        ],
+        "x-atlassian-connect-scope": "READ",
+        "x-atlassian-data-security-policy": [
+          {
+            "app-access-rule-exempt": false
+          }
+        ],
+        "x-atlassian-oauth2-scopes": [
+          {
+            "scheme": "oAuthDefinitions",
+            "scopes": [
+              "read:attachment:confluence"
+            ],
+            "state": "Current"
+          }
+        ]
+      }
+    },
+    "/attachments/{id}": {
+      "delete": {
+        "description": "Delete an attachment by id.\n\nDeleting an attachment moves the attachment to the trash, where it can be restored later. To permanently delete an attachment (or \"purge\" it),\nthe endpoint must be called on a **trashed** attachment with the following param `purge=true`.\n\n**[Permissions](https://support.atlassian.com/confluence-cloud/docs/what-are-confluences-roles/) required**:\nPermission to view the container of the attachment.\nPermission to delete attachments in the space.\n[`manage/content`](https://developer.atlassian.com/cloud/confluence/rest/v2/api-group-space-permissions/#api-space-permissions-get) permission for the space (if attempting to purge).\n\n**Note:** To find the display name for each permission ID, call the [Get available space permissions](https://developer.atlassian.com/cloud/confluence/rest/v2/api-group-space-permissions/#api-space-permissions-get) API.",
+        "operationId": "deleteAttachment",
+        "parameters": [
+          {
+            "description": "The ID of the attachment to be deleted.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "If attempting to purge the attachment.",
+            "in": "query",
+            "name": "purge",
+            "required": false,
+            "schema": {
+              "default": false,
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "content": {},
+            "description": "Returned if the attachment was successfully deleted."
+          },
+          "400": {
+            "content": {},
+            "description": "Returned if an invalid request is provided."
+          },
+          "401": {
+            "content": {},
+            "description": "Returned if the authentication credentials are incorrect or missing\nfrom the request."
+          },
+          "404": {
+            "description": "Returned if:\n- The provided attachment does not exist\n- The user does not have permissions to view the container of the attachment\n- The user does not have the needed permissions to delete an attachment in the space"
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          },
+          {
+            "oAuthDefinitions": [
+              "delete:attachment:confluence"
+            ]
+          }
+        ],
+        "summary": "Delete attachment",
+        "tags": [
+          "Attachment"
+        ],
+        "x-atlassian-connect-scope": "DELETE",
+        "x-atlassian-data-security-policy": [
+          {
+            "app-access-rule-exempt": false
+          }
+        ],
+        "x-atlassian-oauth2-scopes": [
+          {
+            "scheme": "oAuthDefinitions",
+            "scopes": [
+              "delete:attachment:confluence"
+            ],
+            "state": "Current"
+          }
+        ]
+      },
+      "get": {
+        "description": "Returns a specific attachment.\n\n**[Permissions](https://confluence.atlassian.com/x/_AozKw) required**:\nPermission to view the attachment's container.",
+        "operationId": "getAttachmentById",
+        "parameters": [
+          {
+            "description": "The ID of the attachment to be returned. If you don't know the attachment's ID, use Get attachments for page/blogpost/custom content.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "pattern": "(att)?[0-9]+",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Allows you to retrieve a previously published version. Specify the previous version's number to retrieve its details.",
+            "in": "query",
+            "name": "version",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Includes labels associated with this attachment in the response.\nThe number of results will be limited to 50 and sorted in the default sort order. \nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results.",
+            "in": "query",
+            "name": "include-labels",
+            "schema": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Includes content properties associated with this attachment in the response.\nThe number of results will be limited to 50 and sorted in the default sort order. \nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results.",
+            "in": "query",
+            "name": "include-properties",
+            "schema": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Includes operations associated with this attachment in the response, as defined in the `Operation` object.\nThe number of results will be limited to 50 and sorted in the default sort order. \nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results.",
+            "in": "query",
+            "name": "include-operations",
+            "schema": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Includes versions associated with this attachment in the response.\nThe number of results will be limited to 50 and sorted in the default sort order. \nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results.",
+            "in": "query",
+            "name": "include-versions",
+            "schema": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Includes the current version associated with this attachment in the response.\nBy default this is included and can be omitted by setting the value to `false`.",
+            "in": "query",
+            "name": "include-version",
+            "schema": {
+              "default": true,
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Includes collaborators on the attachment.",
+            "in": "query",
+            "name": "include-collaborators",
+            "schema": {
+              "default": false,
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/AttachmentSingle"
+                    },
+                    {
+                      "properties": {
+                        "_links": {
+                          "properties": {
+                            "base": {
+                              "description": "Base url of the Confluence site.",
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Returned if the requested attachment is returned."
+          },
+          "400": {
+            "content": {},
+            "description": "Returned if an invalid request is provided."
+          },
+          "401": {
+            "content": {},
+            "description": "Returned if the authentication credentials are incorrect or missing\nfrom the request."
+          },
+          "404": {
+            "content": {},
+            "description": "Returned if the calling user does not have permission to view the\nrequested attachment or the attachment was not found."
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          },
+          {
+            "oAuthDefinitions": [
+              "read:attachment:confluence"
+            ]
+          }
+        ],
+        "summary": "Get attachment by id",
         "tags": [
           "Attachment"
         ],
@@ -2113,6 +2547,726 @@
           }
         ]
       }
+    },
+    "/pages/{id}/title": {
+      "put": {
+        "description": "Updates the title of a specified page.\n\n**[Permissions](https://confluence.atlassian.com/x/_AozKw) required**:\nPermission to view the page and its corresponding space. Permission to update pages in the space.",
+        "operationId": "updatePageTitle",
+        "parameters": [
+          {
+            "description": "The ID of the page to be updated. If you don't know the page ID, use Get Pages and filter the results",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/PageTitleUpdateRequest"
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/PageSingle"
+                    },
+                    {
+                      "properties": {
+                        "_links": {
+                          "properties": {
+                            "base": {
+                              "description": "Base url of the Confluence site.",
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Returned if the requested page is successfully updated."
+          },
+          "400": {
+            "content": {},
+            "description": "Returned if an invalid request is provided."
+          },
+          "401": {
+            "content": {},
+            "description": "Returned if the authentication credentials are incorrect or missing\nfrom the request."
+          },
+          "404": {
+            "description": "Returned if:\n- The provided page does not exist\n- The user does not have permissions to view the page\n- The user does not have the needed permissions to update a page in the space\n- The user provides a parentId for a page that does not exist or they do not have permission to view\n- There are no spaces associated with the given spaceId"
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          },
+          {
+            "oAuthDefinitions": [
+              "write:page:confluence"
+            ]
+          }
+        ],
+        "summary": "Update page title",
+        "tags": [
+          "Page"
+        ],
+        "x-atlassian-connect-scope": "WRITE",
+        "x-atlassian-data-security-policy": [
+          {
+            "app-access-rule-exempt": false
+          }
+        ],
+        "x-atlassian-oauth2-scopes": [
+          {
+            "scheme": "oAuthDefinitions",
+            "scopes": [
+              "write:page:confluence"
+            ],
+            "state": "Current"
+          }
+        ]
+      }
+    },
+    "/pages/{page-id}/properties": {
+      "get": {
+        "description": "Retrieves Content Properties tied to a specified page.\n\n**[Permissions](https://confluence.atlassian.com/x/_AozKw) required**:\nPermission to view the page.",
+        "operationId": "getPageContentProperties",
+        "parameters": [
+          {
+            "description": "The ID of the page for which content properties should be returned.",
+            "in": "path",
+            "name": "page-id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Filters the response to return a specific content property with matching key (case sensitive).",
+            "in": "query",
+            "name": "key",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Used to sort the result by a particular field.",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ContentPropertySortOrder"
+            }
+          },
+          {
+            "description": "Used for pagination, this opaque cursor will be returned in the `next` URL in the `Link` response header. Use the relative URL in the `Link` header to retrieve the `next` set of results.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Maximum number of attachments per result to return. If more results exist, use the `Link` header to retrieve a relative URL that will return the next set of results.",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 25,
+              "format": "int32",
+              "maximum": 250,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "_links": {
+                      "$ref": "#/components/schemas/MultiEntityLinks"
+                    },
+                    "results": {
+                      "items": {
+                        "$ref": "#/components/schemas/ContentProperty"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "title": "MultiEntityResult<ContentProperty>",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Returned if the requested content properties are successfully retrieved.",
+            "headers": {
+              "Link": {
+                "description": "This header contains URL(s) within angle brackets and a relation description for each URL, describing how the provided URL relates to the incoming request's URL. For example, rel=\"next\" would be the URL necessary to get the next page of information. Example response header format: `Link: </wiki/api/v2/pages/<page-id>/properties?cursor=<opaque cursor token>>; rel=\"next\", <https://site.atlassian.net/wiki>; rel=\"base\"`\n",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {},
+            "description": "Returned if an invalid request is provided."
+          },
+          "401": {
+            "content": {},
+            "description": "Returned if the authentication credentials are incorrect or missing\nfrom the request."
+          },
+          "404": {
+            "content": {},
+            "description": "Returned if the calling user does not have permission to view the\nspecified page or the page was not found."
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          },
+          {
+            "oAuthDefinitions": [
+              "read:page:confluence"
+            ]
+          }
+        ],
+        "summary": "Get content properties for page",
+        "tags": [
+          "Content Properties"
+        ],
+        "x-atlassian-connect-scope": "READ",
+        "x-atlassian-data-security-policy": [
+          {
+            "app-access-rule-exempt": false
+          }
+        ],
+        "x-atlassian-oauth2-scopes": [
+          {
+            "scheme": "oAuthDefinitions",
+            "scopes": [
+              "read:page:confluence"
+            ],
+            "state": "Current"
+          }
+        ]
+      },
+      "post": {
+        "description": "Creates a new content property for a page.\n\n**[Permissions](https://confluence.atlassian.com/x/_AozKw) required**:\nPermission to update the page.",
+        "operationId": "createPageProperty",
+        "parameters": [
+          {
+            "description": "The ID of the page to create a property for.",
+            "in": "path",
+            "name": "page-id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContentPropertyCreateRequest"
+              }
+            }
+          },
+          "description": "The content property to be created",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContentProperty"
+                }
+              }
+            },
+            "description": "Returned if the content property was created successfully."
+          },
+          "400": {
+            "content": {},
+            "description": "Returned if an invalid request is provided."
+          },
+          "401": {
+            "content": {},
+            "description": "Returned if the authentication credentials are incorrect or missing\nfrom the request."
+          },
+          "404": {
+            "content": {},
+            "description": "Returned if the calling user does not have permission to view the\nspecified page or the page was not found."
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          },
+          {
+            "oAuthDefinitions": [
+              "read:page:confluence",
+              "write:page:confluence"
+            ]
+          }
+        ],
+        "summary": "Create content property for page",
+        "tags": [
+          "Content Properties"
+        ],
+        "x-atlassian-connect-scope": "WRITE",
+        "x-atlassian-data-security-policy": [
+          {
+            "app-access-rule-exempt": false
+          }
+        ],
+        "x-atlassian-oauth2-scopes": [
+          {
+            "scheme": "oAuthDefinitions",
+            "scopes": [
+              "read:page:confluence",
+              "write:page:confluence"
+            ],
+            "state": "Current"
+          }
+        ]
+      }
+    },
+    "/pages/{page-id}/properties/{property-id}": {
+      "delete": {
+        "description": "Deletes a content property for a page by its id. \n\n**[Permissions](https://confluence.atlassian.com/x/_AozKw) required**:\nPermission to edit the page.",
+        "operationId": "deletePagePropertyById",
+        "parameters": [
+          {
+            "description": "The ID of the page the property belongs to.",
+            "in": "path",
+            "name": "page-id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The ID of the property to be deleted.",
+            "in": "path",
+            "name": "property-id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Returned if the content property was deleted successfully."
+          },
+          "400": {
+            "content": {},
+            "description": "Returned if an invalid request is provided."
+          },
+          "401": {
+            "content": {},
+            "description": "Returned if the authentication credentials are incorrect or missing\nfrom the request."
+          },
+          "404": {
+            "content": {},
+            "description": "Returned if the calling user does not have permission to view the\nspecified page or the page was not found."
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          },
+          {
+            "oAuthDefinitions": [
+              "read:page:confluence",
+              "write:page:confluence"
+            ]
+          }
+        ],
+        "summary": "Delete content property for page by id",
+        "tags": [
+          "Content Properties"
+        ],
+        "x-atlassian-connect-scope": "WRITE",
+        "x-atlassian-data-security-policy": [
+          {
+            "app-access-rule-exempt": false
+          }
+        ],
+        "x-atlassian-oauth2-scopes": [
+          {
+            "scheme": "oAuthDefinitions",
+            "scopes": [
+              "read:page:confluence",
+              "write:page:confluence"
+            ],
+            "state": "Current"
+          }
+        ]
+      },
+      "get": {
+        "description": "Retrieves a specific Content Property by ID that is attached to a specified page.\n\n**[Permissions](https://confluence.atlassian.com/x/_AozKw) required**:\nPermission to view the page.",
+        "operationId": "getPageContentPropertiesById",
+        "parameters": [
+          {
+            "description": "The ID of the page for which content properties should be returned.",
+            "in": "path",
+            "name": "page-id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The ID of the content property being requested.",
+            "in": "path",
+            "name": "property-id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContentProperty"
+                }
+              }
+            },
+            "description": "Returned if the requested content property is successfully retrieved."
+          },
+          "400": {
+            "content": {},
+            "description": "Returned if an invalid request is provided."
+          },
+          "401": {
+            "content": {},
+            "description": "Returned if the authentication credentials are incorrect or missing\nfrom the request."
+          },
+          "404": {
+            "content": {},
+            "description": "Returned if the calling user does not have permission to view the\nspecified page, the page was not found, or the property was not found."
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          },
+          {
+            "oAuthDefinitions": [
+              "read:page:confluence"
+            ]
+          }
+        ],
+        "summary": "Get content property for page by id",
+        "tags": [
+          "Content Properties"
+        ],
+        "x-atlassian-connect-scope": "READ",
+        "x-atlassian-data-security-policy": [
+          {
+            "app-access-rule-exempt": false
+          }
+        ],
+        "x-atlassian-oauth2-scopes": [
+          {
+            "scheme": "oAuthDefinitions",
+            "scopes": [
+              "read:page:confluence"
+            ],
+            "state": "Current"
+          }
+        ]
+      },
+      "put": {
+        "description": "Update a content property for a page by its id. \n\n**[Permissions](https://confluence.atlassian.com/x/_AozKw) required**:\nPermission to edit the page.",
+        "operationId": "updatePagePropertyById",
+        "parameters": [
+          {
+            "description": "The ID of the page the property belongs to.",
+            "in": "path",
+            "name": "page-id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The ID of the property to be updated.",
+            "in": "path",
+            "name": "property-id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContentPropertyUpdateRequest"
+              }
+            }
+          },
+          "description": "The content property to be updated.",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContentProperty"
+                }
+              }
+            },
+            "description": "Returned if the content property was updated successfully."
+          },
+          "400": {
+            "content": {},
+            "description": "Returned if an invalid request is provided."
+          },
+          "401": {
+            "content": {},
+            "description": "Returned if the authentication credentials are incorrect or missing\nfrom the request."
+          },
+          "404": {
+            "content": {},
+            "description": "Returned if the calling user does not have permission to view the\nspecified page or the page was not found."
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          },
+          {
+            "oAuthDefinitions": [
+              "read:page:confluence",
+              "write:page:confluence"
+            ]
+          }
+        ],
+        "summary": "Update content property for page by id",
+        "tags": [
+          "Content Properties"
+        ],
+        "x-atlassian-connect-scope": "WRITE",
+        "x-atlassian-data-security-policy": [
+          {
+            "app-access-rule-exempt": false
+          }
+        ],
+        "x-atlassian-oauth2-scopes": [
+          {
+            "scheme": "oAuthDefinitions",
+            "scopes": [
+              "read:page:confluence",
+              "write:page:confluence"
+            ],
+            "state": "Current"
+          }
+        ]
+      }
+    },
+    "/spaces/{id}/pages": {
+      "get": {
+        "description": "Returns all pages in a space. The number of results is limited by the `limit` parameter and additional results (if available)\nwill be available through the `next` URL present in the `Link` response header.\n\n**[Permissions](https://confluence.atlassian.com/x/_AozKw) required**:\nPermission to access the Confluence site ('Can use' global permission) and 'View' permission for the space.\nOnly pages that the user has permission to view will be returned.",
+        "operationId": "getPagesInSpace",
+        "parameters": [
+          {
+            "description": "The ID of the space for which pages should be returned.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Filter the results to pages at the root level of the space or to all pages in the space.",
+            "in": "query",
+            "name": "depth",
+            "required": false,
+            "schema": {
+              "default": "all",
+              "enum": [
+                "all",
+                "root"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Used to sort the result by a particular field.",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/PageSortOrder"
+            }
+          },
+          {
+            "description": "Filter the results to pages based on their status. By default, `current` and `archived` are used.",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "items": {
+                "enum": [
+                  "current",
+                  "archived",
+                  "deleted",
+                  "trashed"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          {
+            "description": "Filter the results to pages based on their title.",
+            "in": "query",
+            "name": "title",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "The content format types to be returned in the `body` field of the response. If available, the representation will be available under a response field of the same name under the `body` field.",
+            "in": "query",
+            "name": "body-format",
+            "schema": {
+              "$ref": "#/components/schemas/PrimaryBodyRepresentation"
+            }
+          },
+          {
+            "description": "Used for pagination, this opaque cursor will be returned in the `next` URL in the `Link` response header. Use the relative URL in the `Link` header to retrieve the `next` set of results.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Maximum number of pages per result to return. If more results exist, use the `Link` header to retrieve a relative URL that will return the next set of results.",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 25,
+              "format": "int32",
+              "maximum": 250,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "_links": {
+                      "$ref": "#/components/schemas/MultiEntityLinks"
+                    },
+                    "results": {
+                      "items": {
+                        "$ref": "#/components/schemas/PageBulk"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "title": "MultiEntityResult<Page>",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Returned if the requested pages are returned.",
+            "headers": {
+              "Link": {
+                "description": "This header contains URL(s) within angle brackets and a relation description for each URL, describing how the provided URL relates to the incoming request's URL. For example, rel=\"next\" would be the URL necessary to get the next page of information. Example response header format: `Link: </wiki/api/v2/spaces/<id>/pages?cursor=<opaque cursor token>>; rel=\"next\", <https://site.atlassian.net/wiki>; rel=\"base\"`\n",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {},
+            "description": "Returned if an invalid request is provided."
+          },
+          "401": {
+            "content": {},
+            "description": "Returned if the authentication credentials are incorrect or missing\nfrom the request."
+          },
+          "404": {
+            "content": {},
+            "description": "Returned if the calling user does not have permission to view the\nspecified space or the space was not found."
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          },
+          {
+            "oAuthDefinitions": [
+              "read:page:confluence"
+            ]
+          }
+        ],
+        "summary": "Get pages in space",
+        "tags": [
+          "Page"
+        ],
+        "x-atlassian-connect-scope": "READ",
+        "x-atlassian-data-security-policy": [
+          {
+            "app-access-rule-exempt": false
+          }
+        ],
+        "x-atlassian-oauth2-scopes": [
+          {
+            "scheme": "oAuthDefinitions",
+            "scopes": [
+              "read:page:confluence"
+            ],
+            "state": "Current"
+          }
+        ]
+      }
     }
   },
   "servers": [
@@ -2134,6 +3288,10 @@
     {
       "description": "",
       "name": "Blog Post"
+    },
+    {
+      "description": "",
+      "name": "Content Properties"
     },
     {
       "description": "",

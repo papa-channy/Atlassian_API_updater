@@ -127,3 +127,47 @@ class TestSealIntegrity(unittest.TestCase):
             self.skipTest("snapshot not available for catalog rules")
         _, internal, _, _ = rs.load_catalogs_from_cache(pathlib.Path(cache))
         self.assertEqual(rs.machine_check({"held_out": self.b["held_out"], "negative": self.b["negative"]}, self.b, internal), [])
+
+
+ALIASES = RANKING.parent / "search_aliases.json"
+TUNING_LOG = pathlib.Path(__file__).resolve().parent / "search-tuning-round1.jsonl"
+
+
+class TestAliasNotesAndTuningLog(unittest.TestCase):
+    def test_alias_notes_r4_only(self):
+        raw = json.loads(ALIASES.read_text(encoding="utf-8")); b = json.loads(BENCH.read_text(encoding="utf-8"))
+        seed_ids = {r["id"]: r for r in b["seed"]}
+        expected_keys = set(raw["aliases"]) | {f"rule:{i}" for i in range(len(raw["rules"]))}
+        self.assertEqual(set(raw["notes"]), expected_keys)
+        per_seed = {}
+        for k, n in raw["notes"].items():
+            self.assertIn(n["origin"], ("phase2.5", "round1"))
+            if n["origin"] == "round1":
+                self.assertIn(n["seed_query_id"], seed_ids); self.assertIn("R4", n["failure_classes"])
+                self.assertIn("R4", seed_ids[n["seed_query_id"]]["failure_classes"])
+                per_seed[n["seed_query_id"]] = per_seed.get(n["seed_query_id"], 0) + 1
+        self.assertTrue(all(c <= 1 for c in per_seed.values()), per_seed)
+
+    def test_tuning_log_adopted(self):
+        raw = json.loads(RANKING.read_text(encoding="utf-8")); b = json.loads(BENCH.read_text(encoding="utf-8"))
+        lines = [json.loads(l) for l in TUNING_LOG.read_text(encoding="utf-8").splitlines() if l.strip()]
+        for l in lines:   # every logged run, adopted or not
+            for k, v in l["selected"].items():
+                self.assertIn(v, raw["tuning_grid"][k])
+            self.assertEqual(l["registry_fingerprint"], b["round1_seal"]["registry_fingerprint"])
+            self.assertEqual(l["baseline"], raw["baseline"])
+        adopted = [l for l in lines if l.get("adopted")]
+        if not adopted:
+            self.skipTest("Round 1: seed shortfall pending controller ruling")
+        self.assertEqual(len(adopted), 1); self.assertEqual(adopted[0]["selected"], raw["constants"])
+
+    def test_every_round1_alias_has_one_false_to_true_transition(self):
+        raw = json.loads(ALIASES.read_text(encoding="utf-8"))
+        lines = [json.loads(l) for l in TUNING_LOG.read_text(encoding="utf-8").splitlines() if l.strip()]
+        changes = [l["alias_change"] for l in lines if l.get("alias_change")]
+        for key, n in raw["notes"].items():
+            if n["origin"] != "round1":
+                continue
+            mine = [c for c in changes if c["policy_key"] == key]
+            self.assertEqual(len(mine), 1, key); self.assertEqual((mine[0]["before_pass"], mine[0]["after_pass"]), (False, True), key)
+            self.assertEqual(mine[0]["seed_query_id"], n["seed_query_id"])

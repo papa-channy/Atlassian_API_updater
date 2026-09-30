@@ -213,7 +213,7 @@ class TestExactMatch(unittest.TestCase):
 
 
 class TestSeedBenchmark(unittest.TestCase):
-    @unittest.skip("enabled in Round 1 Task 7")
+    @unittest.skip("Round 1: seed shortfall pending controller ruling")
     def test_seed_passes_on_fixtures(self):
         state = make_state("jira-platform", "jira-software", "confluence")
         fn = lambda q: [r["key"] for r in search.search_operations(state, q, limit=5)["results"]]
@@ -311,7 +311,7 @@ class TestScoringAlgorithm(unittest.TestCase):
         self.assertEqual(pinned["signals"], {"method_intent": {"value": 0.0, "allowed": []}, "path_unmatched": {"value": 0.0, "tokens": []}, "product_hint": {"value": 0.0, "sources": []}})
         other = out["results"][1]
         self.assertEqual(set(other["signals"]), {"method_intent", "path_unmatched", "product_hint"})
-        self.assertEqual(set(out["intelligence_policy"]) >= {"ranking_sha256", "ranking_structure_sha256"}, True)
+        self.assertLessEqual({"ranking_sha256", "ranking_structure_sha256"}, set(out["intelligence_policy"]))
 
 
 class TestScoringNumbers(unittest.TestCase):
@@ -329,7 +329,7 @@ class TestScoringNumbers(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        import pathlib, tempfile
+        import os, pathlib, tempfile
         from unittest import mock
         from tests.intelligence.helpers import state_from_source_registries
         from tools.atlassian_docs.intelligence import normalizer, registry
@@ -337,15 +337,15 @@ class TestScoringNumbers(unittest.TestCase):
         raw["constants"] = {"method_match_bonus": 2.0, "method_mismatch_penalty": 2.0, "path_unmatched_penalty": 1.0, "path_unmatched_cap": 3, "product_hint_bonus": 3.0}
         with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as fh:
             json.dump(raw, fh)
-        fixed = policy.load_ranking(pathlib.Path(fh.name))
-        cls._p1 = mock.patch.object(policy, "ranking", return_value=fixed); cls._p1.start()
+        try:
+            fixed = policy.load_ranking(pathlib.Path(fh.name))
+        finally:
+            os.unlink(fh.name)
+        cls._p1 = mock.patch.object(policy, "ranking", return_value=fixed); cls._p1.start(); cls.addClassCleanup(cls._p1.stop)
         cls._p2 = mock.patch.object(policy, "aliases", return_value=policy.AliasPolicy(0.5, 1.0, {}, (), "x")); cls._p2.start()
+        cls.addClassCleanup(cls._p2.stop)
         ns = normalizer.normalize_openapi("jira-platform", cls.SPEC)
         cls.state = state_from_source_registries({"jira-platform": registry.build_source_registry(ns, "0" * 64)})
-
-    @classmethod
-    def tearDownClass(cls):
-        cls._p1.stop(); cls._p2.stop()
 
     def test_list_widget_numbers(self):
         out = search.search_operations(self.state, "list widget")

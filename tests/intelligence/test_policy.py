@@ -37,6 +37,26 @@ class TestAliases(unittest.TestCase):
         with self.assertRaises(ValueError):
             policy.load_aliases(self._write({"version": 1, "alias_damping": 0.5, "rule_damping": 1.0, "aliases": {}, "rules": [{"when_all": [], "add": ["x"]}]}))
 
+    def test_alias_notes_required_and_validated(self):
+        ph = {"origin": "phase2.5", "seed_query_id": None, "failure_classes": [], "evidence": "phase2.5 §6.1"}
+        base = {"version": 1, "alias_damping": 0.5, "rule_damping": 1.0, "aliases": {"fetch": ["get"]},
+                "rules": [{"when_all": ["issue", "key"], "add": ["getissue"]}]}
+        good = {**base, "notes": {"fetch": ph, "rule:0": ph}}
+        self.assertEqual(policy.load_aliases(self._write(good)).aliases["fetch"], ("get",))
+        r1 = {"origin": "round1", "seed_query_id": "s-015", "failure_classes": ["R4"], "evidence": "searchAndReconsileIssuesUsingJql"}
+        policy.load_aliases(self._write({**base, "notes": {"fetch": r1, "rule:0": ph}}))
+        bads = [base, {**base, "notes": {"fetch": ph}}, {**base, "notes": {"fetch": ph, "rule:0": ph, "rule:1": ph}},
+                {**base, "notes": {"fetch": ph, "rule:0": ph, "other": ph}},
+                {**base, "notes": {"fetch": {**r1, "seed_query_id": None}, "rule:0": ph}},
+                {**base, "notes": {"fetch": {**r1, "seed_query_id": "s-15"}, "rule:0": ph}},
+                {**base, "notes": {"fetch": {**r1, "failure_classes": ["R1"]}, "rule:0": ph}},
+                {**base, "notes": {"fetch": {**ph, "origin": "x"}, "rule:0": ph}},
+                {**base, "notes": {"fetch": "text", "rule:0": ph}}, {**base, "notes": []}]
+        for bad in bads:
+            with self.assertRaises(ValueError, msg=repr(bad)):
+                policy.load_aliases(self._write(bad))
+        self.assertIsNotNone(policy.load_aliases().sha256)
+
 
 class TestOverrides(unittest.TestCase):
     def test_bundled_file_has_four_operations(self):

@@ -54,6 +54,26 @@ class AliasPolicy:
     sha256: str
 
 
+_NOTE_ORIGINS = ("phase2.5", "round1")
+_SEED_ID = re.compile(r"^s-\d{3}$")
+
+
+def _check_alias_notes(notes, expected_keys: set) -> None:
+    """Round 1 spec §7: every alias word and rule:<index> carries provenance notes; round1 entries are R4-only."""
+    if not isinstance(notes, dict) or set(notes) != expected_keys:
+        raise ValueError("alias 'notes' must cover exactly the alias words and rule:<index> keys")
+    for key, n in notes.items():
+        if not isinstance(n, dict) or n.get("origin") not in _NOTE_ORIGINS \
+                or not isinstance(n.get("failure_classes"), list) or not isinstance(n.get("evidence"), str):
+            raise ValueError(f"alias note {key!r} must have origin, failure_classes and evidence")
+        if n["origin"] == "round1":
+            sid = n.get("seed_query_id")
+            if not isinstance(sid, str) or not _SEED_ID.match(sid) or "R4" not in n["failure_classes"]:
+                raise ValueError(f"round1 alias note {key!r} needs seed_query_id s-NNN and R4 in failure_classes")
+        elif n.get("seed_query_id") is not None:
+            raise ValueError(f"phase2.5 alias note {key!r} must have seed_query_id null")
+
+
 def load_aliases(path: Optional[pathlib.Path] = None) -> AliasPolicy:
     raw = _read(path or DATA_DIR / "search_aliases.json")
     if not isinstance(raw, dict) or not isinstance(raw.get("aliases") or {}, dict) \
@@ -77,6 +97,7 @@ def load_aliases(path: Optional[pathlib.Path] = None) -> AliasPolicy:
                 or not all(_token_ok(t) for t in when + add):
             raise ValueError(f"invalid rule {r!r}")
         rules.append(AliasRule(frozenset(when), tuple(add)))
+    _check_alias_notes(raw.get("notes"), set(aliases) | {f"rule:{i}" for i in range(len(rules))})
     return AliasPolicy(float(raw["alias_damping"]), float(raw["rule_damping"]),
                        MappingProxyType(aliases), tuple(rules), canonical_sha256(raw))
 

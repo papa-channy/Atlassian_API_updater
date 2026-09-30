@@ -16,5 +16,18 @@
     {"when_all": ["transition", "issue"], "add": ["transitions", "dotransition"]},
     {"when_all": ["update", "page"], "add": ["updatepage"]},
     {"when_all": ["issue", "key"], "add": ["getissue"]}
-  ]
+  ],
+  "notes": {
+    "fetch": {"origin": "phase2.5", "seed_query_id": null, "failure_classes": [], "evidence": "phase2.5 §6.1"},
+    "read": {"origin": "phase2.5", "seed_query_id": null, "failure_classes": [], "evidence": "phase2.5 §6.1"},
+    "edit": {"origin": "phase2.5", "seed_query_id": null, "failure_classes": [], "evidence": "phase2.5 §6.1"},
+    "change": {"origin": "phase2.5", "seed_query_id": null, "failure_classes": [], "evidence": "phase2.5 §6.1"},
+    "remove": {"origin": "phase2.5", "seed_query_id": null, "failure_classes": [], "evidence": "phase2.5 §6.1"},
+    "ticket": {"origin": "phase2.5", "seed_query_id": null, "failure_classes": [], "evidence": "phase2.5 §6.1"},
+    "post": {"origin": "phase2.5", "seed_query_id": null, "failure_classes": [], "evidence": "phase2.5 §6.1"},
+    "attach": {"origin": "phase2.5", "seed_query_id": null, "failure_classes": [], "evidence": "phase2.5 §6.1"},
+    "rule:0": {"origin": "phase2.5", "seed_query_id": null, "failure_classes": [], "evidence": "phase2.5 §6.1"},
+    "rule:1": {"origin": "phase2.5", "seed_query_id": null, "failure_classes": [], "evidence": "phase2.5 §6.1"},
+    "rule:2": {"origin": "phase2.5", "seed_query_id": null, "failure_classes": [], "evidence": "phase2.5 §6.1"}
+  }
 }
