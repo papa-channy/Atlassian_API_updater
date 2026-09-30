@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "operations": {
+    "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/attachments": {
+      "headers": [{"name": "X-Atlassian-Token", "action": "set", "value": "no-check", "enforcement": "required", "value_policy": "literal",
+                   "note": "Atlassian docs: XSRF check bypass required for multipart uploads"}],
+      "request_hints": {"multipart_fields": [{"name": "file", "required": true, "kind": "file", "note": "one or more files"}]},
+      "notes": []
+    },
+    "jira-platform:POST:/rest/api/3/issuetype/{id}/avatar2": {
+      "headers": [{"name": "X-Atlassian-Token", "action": "set", "value": "no-check", "enforcement": "required", "value_policy": "literal", "note": "XSRF bypass for image upload"}],
+      "request_hints": {}, "notes": []
+    },
+    "jira-platform:POST:/rest/api/3/project/{projectIdOrKey}/avatar2": {
+      "headers": [{"name": "X-Atlassian-Token", "action": "set", "value": "no-check", "enforcement": "required", "value_policy": "literal", "note": "XSRF bypass for image upload"}],
+      "request_hints": {}, "notes": []
+    },
+    "jira-platform:POST:/rest/api/3/universal_avatar/type/{type}/owner/{entityId}": {
+      "headers": [{"name": "X-Atlassian-Token", "action": "set", "value": "no-check", "enforcement": "required", "value_policy": "literal", "note": "XSRF bypass for image upload"}],
+      "request_hints": {}, "notes": []
+    }
+  }
+}

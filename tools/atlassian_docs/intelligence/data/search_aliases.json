@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "alias_damping": 0.5,
+  "rule_damping": 1.0,
+  "aliases": {
+    "fetch": ["get"],
+    "read": ["get"],
+    "edit": ["update"],
+    "change": ["update"],
+    "remove": ["delete"],
+    "ticket": ["issue"],
+    "post": ["add"],
+    "attach": ["attachment"]
+  },
+  "rules": [
+    {"when_all": ["transition", "issue"], "add": ["transitions", "dotransition"]},
+    {"when_all": ["update", "page"], "add": ["updatepage"]},
+    {"when_all": ["issue", "key"], "add": ["getissue"]}
+  ]
+}
