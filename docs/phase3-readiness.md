@@ -96,3 +96,20 @@ Phase 3 전에 form 계열 media type(`multipart/*`, `application/x-www-form-url
 - 알려진 한계: `additionalProperties`/`not` 값 스키마 아래의 `readOnly`는 본문에서 검출하지 않는다 (키는 제거하고
   하위 스키마도 변환하지만 경로를 기록하지 않으므로 `readonly_property_present` 경고도 나오지 않는다). 스키마 오류
   메시지는 제출값을 되풀이하지 않으므로 `anyOf`/`pattern` 실패는 "violates <validator>" 식의 일반 문구로 나온다.
+
+## Search Quality Round 1 — decision record (2026-09-30)
+
+스펙: `docs/superpowers/specs/2026-09-30-search-quality-round1-design.md` v1.3. 절차 A→T→B→C→D.
+
+| 항목 | 값 |
+|---|---|
+| 커밋 A (강등) | `d15f760` — seed 23 (관찰된 held_out 12 + negative 중 정답 있는 2 포함), regression_negative 6 |
+| 커밋 T (테이블 freeze) | `b3c2ba5` — `ranking_structure_sha256 = 8bcd33bb905e3d4946218f05d0edcebe9df6c30060d9de567e88157c820dcf9f` |
+| 스냅샷 | T 직후 `$ATLASSIAN_DOCS_ROUND1_CACHE`로 복사; registry_fingerprint `a13ba026ab6b6a3f19845a3aaa694a1e98427220fdbdc74bb711c316730a793f`; spec sha jira-platform `2aa6ef12…`, jira-software `cb7e24b3…`, confluence `e4de6c11…` |
+| 생성 프롬프트 sha256 | `14a03d3337ec6b272aa2690327b1cf6e0d7d7c1aaf3e034faa2b42167615d482` (clean context: 새 ChatGPT 대화, generator catalog + 규칙만 제공; seed·실패·정책 미제공) |
+| 생성 결과(평문) sha256 | `e6cf5c9c5f9acbaa13b22ff3983c130d4bc27f96e0c1e4b1d433fd4bd002f68f` (repo 밖 보관) |
+| 재요청 | 3회 (semantic reviewer 거부 h-008, n-004; 분포 위반 h-008) — 피드백은 "item N rejected; generate a replacement satisfying the original rules"만 |
+| 커밋 B (봉인) | `b0cfee2a4866b8e64598f75201152ab658266b50` — held_out 16 sha256 `606535e1…`, negative 8 sha256 `17313dda…` (`round1_seal` 참조) |
+| 커밋 C / D | (미정) |
+
+Attestation(컨트롤러): 봉인 평문 경로는 어떤 구현·튜닝 서브에이전트에도 전달하지 않았다. machine check 0 violation. 의미 검증은 seed 파일과 scorer를 보지 않은 별도 reviewer가 수행.
