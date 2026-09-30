@@ -111,3 +111,30 @@ class TestMachineCheck(unittest.TestCase):
     def test_generator_view_hides_operation_id_and_description(self):
         for r in rs.generator_view(CAT):
             self.assertEqual(set(r), {"key", "source", "method", "summary", "tags"})
+
+
+class TestHiddenOriginAndIds(unittest.TestCase):
+    """Fix round 1: origin/id-prefix per section and cross-section duplicate ids."""
+    def _msgs(self, mutate):
+        plain = valid_plain(); mutate(plain)
+        return rs.machine_check(plain, BENCH, CAT)
+
+    def test_held_out_bad_origin_rejected(self):
+        msgs = self._msgs(lambda p: p["held_out"][0].__setitem__("origin", "held_out-r0"))
+        self.assertTrue(any(m.startswith("h-001") and "origin" in m for m in msgs))
+
+    def test_negative_bad_origin_rejected(self):
+        msgs = self._msgs(lambda p: p["negative"][0].__setitem__("origin", "held_out-r1"))
+        self.assertTrue(any(m.startswith("n-001") and "origin" in m for m in msgs))
+
+    def test_n_id_inside_held_out_rejected(self):
+        msgs = self._msgs(lambda p: p["held_out"][0].__setitem__("id", "n-099"))
+        self.assertTrue(any(m.startswith("n-099") and "id" in m and "held_out" in m for m in msgs))
+
+    def test_h_id_inside_negative_rejected(self):
+        msgs = self._msgs(lambda p: p["negative"][0].__setitem__("id", "h-099"))
+        self.assertTrue(any(m.startswith("h-099") and "id" in m and "negative" in m for m in msgs))
+
+    def test_duplicate_id_across_sections_rejected(self):
+        msgs = self._msgs(lambda p: p["negative"][0].__setitem__("id", "h-001"))
+        self.assertTrue(any(m.startswith("h-001") and "duplicate id" in m for m in msgs))

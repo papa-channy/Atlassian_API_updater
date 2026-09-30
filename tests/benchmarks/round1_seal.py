@@ -6,7 +6,7 @@ CLI (run from the repo root):
   python tests/benchmarks/round1_seal.py seal   --plain PLAIN.json --bench BENCH.json --cache-dir DIR
   python tests/benchmarks/round1_seal.py unseal --plain PLAIN.json --bench BENCH.json
 Uses tools.atlassian_docs read-only (only to build catalogs from a cache snapshot)."""
-import argparse, json, pathlib, re, sys
+import argparse, json, os, pathlib, re, sys
 
 if __package__ in (None, ""):  # executed as a script: make `tests.benchmarks` importable
     sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
@@ -15,6 +15,8 @@ from tests.benchmarks.evaluator import STOPWORDS, canonical_sha256, check_schema
 
 ROUND = 1
 HIDDEN = (("held_out", 16), ("negative", 8))
+SECTION_ID_PREFIX = {"held_out": "h-", "negative": "n-"}
+SECTION_ORIGIN = {"held_out": f"held_out-r{ROUND}", "negative": f"negative-r{ROUND}"}
 GENERATOR_FIELDS = ("key", "source", "method", "summary", "tags")
 MIN_SOURCE = {"jira-platform": 6, "jira-software": 4, "confluence": 5}
 MIN_METHOD = {"GET": 4, "POST": 4, "PUT": 2, "DELETE": 2}
@@ -167,7 +169,7 @@ def machine_check(plain, bench, internal_catalog) -> list:
     """All machine-checkable §5.4 violations; each message starts with the record id (or section name)."""
     by_key = {r["key"]: r for r in internal_catalog}
     opid_sets = [(r["operation_id"], unigram_set(r["operation_id"])) for r in internal_catalog if r.get("operation_id")]
-    out, hidden = [], []
+    out, hidden, seen_ids = [], [], {}
     for sect, count in HIDDEN:
         recs = plain.get(sect)
         if not isinstance(recs, list):
@@ -175,13 +177,19 @@ def machine_check(plain, bench, internal_catalog) -> list:
             continue
         if len(recs) != count:
             out.append(f"{sect}: expected {count} records, got {len(recs)}")
-        ids = [r.get("id") for r in recs if isinstance(r, dict)]
-        for dup in sorted({i for i in ids if ids.count(i) > 1}, key=str):
-            out.append(f"{dup}: duplicate id in {sect}")
         for rec in recs:
             if not isinstance(rec, dict):
                 out.append(f"{sect}: record must be an object")
                 continue
+            rid = rec.get("id", "?")
+            if rid in seen_ids:
+                out.append(f"{rid}: duplicate id in {sect} (already used in {seen_ids[rid]})")
+            else:
+                seen_ids[rid] = sect
+            if not str(rid).startswith(SECTION_ID_PREFIX[sect]):
+                out.append(f"{rid}: id in {sect} must start with {SECTION_ID_PREFIX[sect]!r}")
+            if rec.get("origin") != SECTION_ORIGIN[sect]:
+                out.append(f"{rid}: origin {rec.get('origin')!r} in {sect} must be {SECTION_ORIGIN[sect]!r}")
             out += _record_checks(sect, rec, by_key, opid_sets)
             hidden.append(rec)
         if sect == "held_out":
@@ -221,8 +229,11 @@ def _write_bench(path, bench):
         same = False
     if not same:  # prefix keys changed in memory, or unexpected layout: fall back to full rewrite
         new = "{\n" + ",\n".join(f"  {json.dumps(k)}: {_fmt_value(v)}" for k, v in bench.items()) + "\n}\n"
-    assert json.loads(new) == bench
-    path.write_text(new, encoding="utf-8")
+    if json.loads(new) != bench:
+        raise RuntimeError(f"{path}: rewritten bench does not round-trip; refusing to write")
+    tmp = path.with_name(f".{path.name}.tmp")
+    tmp.write_text(new, encoding="utf-8")
+    os.replace(tmp, path)
 
 
 # ---------------------------------------------------------------- CLI commands
@@ -254,6 +265,9 @@ def cmd_seal(args):
     plain, bench = _read_json(args.plain), _read_json(args.bench)
     if any(is_sealed(bench.get(s)) or bench.get(s) for s, _ in HIDDEN):
         print("REFUSED: bench held_out/negative are not empty (already sealed or plaintext)")
+        return 1
+    if "round1_seal" in bench:
+        print("REFUSED: bench already has a round1_seal key (Round 1 was sealed before)")
         return 1
     _, internal, fp, shas = load_catalogs_from_cache(args.cache_dir)
     violations = machine_check(plain, bench, internal)
