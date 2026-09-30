@@ -11,7 +11,7 @@ from typing import Mapping, Optional
 from . import search
 from .headers import CREDENTIAL_HEADERS
 
-POLICY_VERSIONS = {"search": 2, "quirks": 1, "oas_transpiler": 1}
+POLICY_VERSIONS = {"search": 3, "quirks": 1, "oas_transpiler": 1}
 DATA_DIR = pathlib.Path(__file__).resolve().parent / "data"
 _KEY = re.compile(r"^[a-z][a-z0-9-]*:[A-Z]+:/")
 _ACTIONS, _ENFORCEMENT, _VALUE_POLICY = ("set", "suppress"), ("advisory", "required"), ("observed", "literal")
@@ -34,7 +34,7 @@ def _token_ok(tok) -> bool:
     toks = search.tokenize(tok)
     if toks == frozenset({tok}):
         return True
-    if len(tok) > 3 and tok.endswith("s") and toks == frozenset({tok, tok[:-1]}):
+    if toks == frozenset({tok, search.singular(tok)}):
         return True
     return False
 
@@ -52,6 +52,26 @@ class AliasPolicy:
     aliases: Mapping[str, tuple]
     rules: tuple
     sha256: str
+
+
+_NOTE_ORIGINS = ("phase2.5", "round1")
+_SEED_ID = re.compile(r"^s-\d{3}$")
+
+
+def _check_alias_notes(notes, expected_keys: set) -> None:
+    """Round 1 spec §7: every alias word and rule:<index> carries provenance notes; round1 entries are R4-only."""
+    if not isinstance(notes, dict) or set(notes) != expected_keys:
+        raise ValueError("alias 'notes' must cover exactly the alias words and rule:<index> keys")
+    for key, n in notes.items():
+        if not isinstance(n, dict) or n.get("origin") not in _NOTE_ORIGINS \
+                or not isinstance(n.get("failure_classes"), list) or not isinstance(n.get("evidence"), str):
+            raise ValueError(f"alias note {key!r} must have origin, failure_classes and evidence")
+        if n["origin"] == "round1":
+            sid = n.get("seed_query_id")
+            if not isinstance(sid, str) or not _SEED_ID.match(sid) or "R4" not in n["failure_classes"]:
+                raise ValueError(f"round1 alias note {key!r} needs seed_query_id s-NNN and R4 in failure_classes")
+        elif n.get("seed_query_id") is not None:
+            raise ValueError(f"phase2.5 alias note {key!r} must have seed_query_id null")
 
 
 def load_aliases(path: Optional[pathlib.Path] = None) -> AliasPolicy:
@@ -77,6 +97,7 @@ def load_aliases(path: Optional[pathlib.Path] = None) -> AliasPolicy:
                 or not all(_token_ok(t) for t in when + add):
             raise ValueError(f"invalid rule {r!r}")
         rules.append(AliasRule(frozenset(when), tuple(add)))
+    _check_alias_notes(raw.get("notes"), set(aliases) | {f"rule:{i}" for i in range(len(rules))})
     return AliasPolicy(float(raw["alias_damping"]), float(raw["rule_damping"]),
                        MappingProxyType(aliases), tuple(rules), canonical_sha256(raw))
 
@@ -102,6 +123,34 @@ class OverrideEntry:
 class QuirkOverrides:
     operations: Mapping[str, OverrideEntry]
     sha256: Optional[str]
+
+
+_METHODS = frozenset({"GET", "POST", "PUT", "PATCH", "DELETE"})
+STRUCTURE_KEYS = ("verb_methods", "path_noise", "product_hints", "tuning_grid", "baseline")
+CONSTANT_KEYS = ("method_match_bonus", "method_mismatch_penalty", "path_unmatched_penalty", "path_unmatched_cap", "product_hint_bonus",
+                 "resource_match_bonus")
+_WORD = re.compile(r"^[a-z]+$"); _NOISE = re.compile(r"^[a-z0-9]+$")
+
+
+@dataclass(frozen=True)
+class RankingPolicy:
+    version: int
+    verb_methods: Mapping[str, frozenset]
+    path_noise: frozenset
+    product_hints: Mapping[str, frozenset]
+    tuning_grid: Mapping[str, tuple]
+    baseline: Mapping[str, float]
+    constants: Mapping[str, float]
+    sha256: str
+    structure_sha256: str
+
+
+def _num(v, name, integer=False):
+    if isinstance(v, bool) or not isinstance(v, (int, float)) or v != v or v in (float("inf"), float("-inf")) or v < 0:
+        raise ValueError(f"{name} must be a finite non-negative number")
+    if integer and not isinstance(v, int):
+        raise ValueError(f"{name} must be an int")
+    return int(v) if integer else float(v)
 
 
 def load_quirk_overrides(path: Optional[pathlib.Path] = None) -> QuirkOverrides:
@@ -159,6 +208,51 @@ def load_quirk_overrides(path: Optional[pathlib.Path] = None) -> QuirkOverrides:
     return QuirkOverrides(MappingProxyType(ops), canonical_sha256(raw))
 
 
+def load_ranking(path: Optional[pathlib.Path] = None) -> RankingPolicy:
+    from .. import sources
+    raw = _read(path or DATA_DIR / "search_ranking.json")
+    if not isinstance(raw, dict) or set(raw) != {"version", *STRUCTURE_KEYS, "constants"}:
+        raise ValueError("ranking policy must have exactly version, verb_methods, path_noise, product_hints, tuning_grid, baseline, constants")
+    if not isinstance(raw["version"], int) or isinstance(raw["version"], bool) or raw["version"] < 1:
+        raise ValueError("version must be an int >= 1")
+    verbs = {}
+    for k, v in (raw["verb_methods"] or {}).items() if isinstance(raw["verb_methods"], dict) else [(None, None)]:
+        if k is None or not _WORD.match(k) or not isinstance(v, list) or not v or len(set(v)) != len(v) or not set(v) <= _METHODS:
+            raise ValueError(f"invalid verb_methods entry {k!r}")
+        verbs[k] = frozenset(v)
+    noise = raw["path_noise"]
+    if not isinstance(noise, list) or len(set(noise)) != len(noise) or not all(isinstance(t, str) and _NOISE.match(t) for t in noise):
+        raise ValueError("invalid path_noise")
+    hints = {}
+    for k, v in (raw["product_hints"] or {}).items() if isinstance(raw["product_hints"], dict) else [(None, None)]:
+        if k is None or not _WORD.match(k) or not isinstance(v, list) or not v or len(set(v)) != len(v) or not set(v) <= set(sources.SOURCES):
+            raise ValueError(f"invalid product_hints entry {k!r}")
+        hints[k] = frozenset(v)
+    grid, consts, basel = raw["tuning_grid"], raw["constants"], raw["baseline"]
+    if not all(isinstance(d, dict) and set(d) == set(CONSTANT_KEYS) for d in (grid, consts, basel)):
+        raise ValueError("tuning_grid, baseline and constants must each have exactly the five constant keys")
+    out_grid, out_consts, out_base = {}, {}, {}
+    for k in CONSTANT_KEYS:
+        integer = k == "path_unmatched_cap"
+        vals = grid[k]
+        if not isinstance(vals, list) or not vals or len(set(vals)) != len(vals):
+            raise ValueError(f"tuning_grid[{k}] must be a non-empty list without duplicates")
+        out_grid[k] = tuple(_num(v, f"tuning_grid[{k}]", integer) for v in vals)
+        for name, src, dst in (("constants", consts, out_consts), ("baseline", basel, out_base)):
+            c = _num(src[k], f"{name}[{k}]", integer)
+            if c not in out_grid[k]:
+                raise ValueError(f"{name}[{k}]={c} is outside its tuning grid")
+            dst[k] = c
+    return RankingPolicy(raw["version"], MappingProxyType(verbs), frozenset(noise), MappingProxyType(hints),
+                         MappingProxyType(out_grid), MappingProxyType(out_base), MappingProxyType(out_consts),
+                         canonical_sha256(raw), canonical_sha256({k: raw[k] for k in STRUCTURE_KEYS}))
+
+
+@functools.lru_cache(maxsize=1)
+def ranking() -> RankingPolicy:
+    return load_ranking()
+
+
 @functools.lru_cache(maxsize=1)
 def aliases() -> AliasPolicy:
     return load_aliases()
@@ -170,10 +264,11 @@ def overrides() -> QuirkOverrides:
 
 
 def intelligence_fingerprint(registry_fingerprint: str, aliases_sha256: str, overrides_sha256: Optional[str]) -> str:
-    blob = "\n".join([registry_fingerprint, aliases_sha256, overrides_sha256 or "-",
+    blob = "\n".join([registry_fingerprint, aliases_sha256, overrides_sha256 or "-", ranking().sha256,
                       json.dumps(POLICY_VERSIONS, sort_keys=True, separators=(",", ":"))])
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
 
 def policy_block(aliases_sha256: str, overrides_sha256: Optional[str]) -> dict:
-    return {"aliases_sha256": aliases_sha256, "overrides_sha256": overrides_sha256, "versions": dict(POLICY_VERSIONS)}
+    return {"aliases_sha256": aliases_sha256, "overrides_sha256": overrides_sha256, "versions": dict(POLICY_VERSIONS),
+            "ranking_sha256": ranking().sha256, "ranking_structure_sha256": ranking().structure_sha256}

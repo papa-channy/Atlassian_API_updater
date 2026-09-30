@@ -65,7 +65,7 @@ AI 에이전트가 이 도구를 어떻게 써야 하는지는 [`AGENTS.md`](./A
 ## 현재 상태
 
 - ✅ 스펙(v1.2) → 구현 계획(6개 TDD 태스크) → Subagent-Driven Development로 구현 → 태스크별 리뷰 6/6 통과 → 전체 브랜치 최종 리뷰 및 수정 → `main` 머지 및 `origin` push 완료.
-- ✅ 오프라인 유닛 테스트 전부 통과 — Phase 1 67개 포함 전체 328개 (Phase 2.5 브랜치 기준, `python -m unittest discover -s tests -t .`; `python -S`로 선택 의존성 없이 실행하면 18개 skip). Phase 2에서 `intelligence/`(정규화·레지스트리·검색·요청 검증)와 `mcp/`(MCP 서버) 모듈이 추가되었다 (아래 Phase 2 절 참고).
+- ✅ 오프라인 유닛 테스트 전부 통과 — Phase 1 67개 포함 전체 401개 (`python -m unittest discover -s tests -t .`; `python -S`로 선택 의존성 없이 실행하면 18개 skip). Phase 2에서 `intelligence/`(정규화·레지스트리·검색·요청 검증)와 `mcp/`(MCP 서버) 모듈이 추가되었다 (아래 Phase 2 절 참고).
 - ✅ 실제 Atlassian 사이트 대상 live smoke test(`tests/live_smoke.py`, 수동 실행) 통과 — jira-platform `v3`, jira-software `(버전 없음)`, confluence `v2` 확인.
 
 ### 알려진 후속 과제 (머지는 막지 않음)
@@ -246,11 +246,37 @@ MCP SDK는 "body 생략"과 "JSON null"을 둘 다 `None`으로 전달하므로 
 - 스펙 gate에서 거부된 캐시만 있는 source는 메타데이터가 TTL 이내면 매 호출마다 다시 sync하지 않는다.
 - 자격증명 헤더 값(정적·동적 apiKey 헤더)은 template/check 결과, 오류 메시지, 검색 로그, MCP `internal_error`에 나타나지 않는다.
 
+**검색 품질 라운드 1 (search 정책 버전 3)**
+
+설계: [Round 1 spec](docs/superpowers/specs/2026-09-30-search-quality-round1-design.md).
+어휘 점수에 네 가지 구조 신호를 더한다: 질의 동사와 HTTP 메서드의 일치(`method_intent`), 질의가 언급하지 않은
+경로 세그먼트 감점(`path_unmatched`, 상한 있음), 제품 단어 힌트(`product_hint` — `jira`/`confluence`/`wiki`/
+`agile`/`board`/`sprint`/`backlog`/`epic`이 해당 source를 가산), 경로 마지막 리터럴 세그먼트를 질의가 온전히
+언급할 때의 가산(`resource_match`, 터미널 리소스 일치). 각 결과의 `signals`가 네 값과 근거 토큰을 보여 주어 왜 그
+순위인지 설명한다. 표(동사·noise·힌트)와 상수는 `intelligence/data/search_ranking.json`에 있고
+`POLICY_VERSIONS["search"] == 3`, `intelligence_policy`에 `ranking_sha256`·`ranking_structure_sha256`이 붙는다.
+
+상수는 손으로 고르지 않는다. `tests/tune_search_ranking.py --cache-dir <스냅샷>`이 `tuning_grid`의 모든 조합을
+seed·regression_negative로 평가해 결정적 규칙으로 하나를 고르고 `constants`만 기록하며,
+`tests/benchmarks/search-tuning-round1.jsonl`에 한 줄을 남긴다(`--dry-run`은 아무것도 쓰지 않는다).
+
+벤치마크는 봉인 절차를 따른다: A(관찰된 집합을 seed로 강등) → T(표 freeze + 캐시 스냅샷) → B(새 held_out 16·
+negative 8을 repo 밖 평문으로 두고 sha256·분포만 `round1_seal`에 봉인) → T2(v1.4 표 재동결) → 구현·튜닝 →
+C(scorer·정책·평가기 freeze, `evaluation_code_sha256` 기록) → D(봉인 해제, 최종 평가 1회). 기록은
+[docs/phase3-readiness.md](docs/phase3-readiness.md).
+
+Round 1 결과: Discovery gate 실패 (held_out 4/16, negative 5/8) → Round 2 필요; 판정 기록은
+[docs/phase3-readiness.md](docs/phase3-readiness.md#search-quality-round-1--decision-record-2026-09-30) 참고.
+
 **검색 벤치마크 진단 (수동, 오프라인)**
 
 ```bash
-python tests/diag_search_queries.py [--json out.json]   # 실제 캐시로 seed/held_out/negative 평가, 벤치마크 파일은 수정하지 않음
+python tests/diag_search_queries.py --sets seed,regression_negative --cache-dir ~/.atlassian_api_updater/round1-cache
+python tests/diag_search_queries.py --bench <평문> --cache-dir <스냅샷> --json out.json   # 커밋 D 전용
 ```
 
-결과와 fingerprint는 [docs/phase3-readiness.md](docs/phase3-readiness.md)에 기록한다. held_out·negative 집합과
-alias 데이터는 동결되어 있으며, 실패 질의 반영은 spec §7.3 승격 절차로만 한다.
+`--cache-dir`는 스냅샷의 임시 복사본으로 `storage.CACHE_DIR`를 패치한다(기본은 `.atlassian-docs/`). 시작 시 registry
+fingerprint·spec sha를 `round1_seal`과 비교해 다르면 경고하고, 그 상태에서 held_out/negative를 요청했거나 `--bench`가
+주어졌으면 평가 없이 exit 2.
+실패마다 top-5(key, score, signals)와 `git_commit`·fingerprint·`evaluation_code_sha256`·`sealed_sha256`을 보고한다.
+벤치마크 파일은 수정하지 않는다.

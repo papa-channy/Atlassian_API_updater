@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "verb_methods": {
+    "get": ["GET"], "fetch": ["GET"], "read": ["GET"], "list": ["GET"], "find": ["GET"], "search": ["GET"], "show": ["GET"],
+    "create": ["POST"], "add": ["POST"], "post": ["POST"], "upload": ["POST"], "run": ["POST"], "submit": ["POST"], "assign": ["PUT"],
+    "update": ["PUT"], "change": ["PUT"], "edit": ["PUT"], "set": ["PUT"], "rename": ["PUT"],
+    "move": ["PUT", "POST"], "transition": ["PUT", "POST"],
+    "delete": ["DELETE"], "remove": ["DELETE"]
+  },
+  "path_noise": ["rest", "api", "agile", "software", "wiki"],
+  "product_hints": {
+    "jira": ["jira-platform", "jira-software"],
+    "confluence": ["confluence"], "wiki": ["confluence"],
+    "agile": ["jira-software"], "board": ["jira-software"], "sprint": ["jira-software"],
+    "backlog": ["jira-software"], "epic": ["jira-software"]
+  },
+  "tuning_grid": {
+    "method_match_bonus": [1.0, 2.0, 3.0], "method_mismatch_penalty": [0.0, 1.0, 2.0, 3.0],
+    "path_unmatched_penalty": [0.5, 1.0, 1.5, 2.0], "path_unmatched_cap": [2, 3, 4],
+    "product_hint_bonus": [2.0, 3.0, 4.0],
+    "resource_match_bonus": [6.0, 8.0, 10.0, 12.0]
+  },
+  "baseline": {
+    "method_match_bonus": 2.0, "method_mismatch_penalty": 2.0,
+    "path_unmatched_penalty": 1.0, "path_unmatched_cap": 3, "product_hint_bonus": 3.0,
+    "resource_match_bonus": 10.0
+  },
+  "constants": {
+    "method_match_bonus": 2.0, "method_mismatch_penalty": 2.0,
+    "path_unmatched_penalty": 1.0, "path_unmatched_cap": 3, "product_hint_bonus": 3.0,
+    "resource_match_bonus": 10.0
+  }
+}

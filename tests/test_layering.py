@@ -90,3 +90,18 @@ class TestLayering(unittest.TestCase):
                         if isinstance(t, _ast.Name) and t.id in ("TRANSPORT_HEADERS", "CREDENTIAL_HEADERS"):
                             hits.append((path.name, t.id))
         self.assertEqual(sorted(hits), [("headers.py", "CREDENTIAL_HEADERS"), ("headers.py", "TRANSPORT_HEADERS")])
+
+    def test_ranking_constants_not_in_search_py(self):
+        """AC-05: inside _structural_signals every numeric literal is 0/1 (structure only) and every
+        bonus/penalty/cap/table is read through the RankingPolicy argument."""
+        path = PKG / "intelligence" / "search.py"
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        fn = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "_structural_signals")
+        nums = {n.value for n in ast.walk(fn) if isinstance(n, ast.Constant) and isinstance(n.value, (int, float)) and not isinstance(n.value, bool)}
+        self.assertTrue(nums <= {0, 1, 0.0, 1.0}, nums)
+        attrs = {n.attr for n in ast.walk(fn) if isinstance(n, ast.Attribute)}
+        self.assertTrue({"constants", "verb_methods", "path_noise", "product_hints"} - attrs <= {"path_noise"}, attrs)  # noise is applied at index build
+        subs = {n.slice.value for n in ast.walk(fn) if isinstance(n, ast.Subscript) and isinstance(n.slice, ast.Constant)}
+        self.assertTrue({"method_match_bonus", "method_mismatch_penalty", "path_unmatched_penalty", "path_unmatched_cap", "product_hint_bonus", "resource_match_bonus"} <= subs, subs)
+        module_names = {n.targets[0].id for n in tree.body if isinstance(n, ast.Assign) and isinstance(n.targets[0], ast.Name)}
+        self.assertFalse(any(k in module_names for k in ("VERB_METHODS", "PRODUCT_HINTS", "PATH_NOISE", "METHOD_INTENT")), module_names)

@@ -1,6 +1,6 @@
 # Search Quality Round 1 — Technical Specification
 
-**문서 버전:** v1.3
+**문서 버전:** v1.4
 **기준일:** 2026-09-30
 **선행 구현:** Phase 2.5 Discovery Hardening (spec v1.2, `main` d63a2ca, 오프라인 테스트 328개)
 **목적:** Phase 3 진입 조건의 Discovery 축(Phase 2.5 spec §18: held_out top-1 ≥ 90%, negative 실패 0)을 §7.3 승격 절차에 따라 **한 번의 iteration**으로, **독립적으로 증명 가능한** 방식으로 충족시킨다.
@@ -37,6 +37,7 @@ Phase 2.5 계획 단계에서 추가된 alias `change→update`, `post→add`, `
 - 2026-09-30 외부 검수 1차(v1.0→v1.1): 관찰된 집합 전부 gate 제외, 해시 봉인, clean-context 생성, 의미 검증, 자동 검사 규칙, target 중복 허용, vocabulary 테스트 격하, scorer freeze 커밋, PathToken 모델, 보수적 단수화, unigram 경로 토큰, 단일 합산 알고리즘, 동사 단위 메서드 집합, loader 계약, product 이중 계산 명시, 튜닝 자유도 봉인, alias는 R4만, competitor 픽스처, 진단에 git commit, AST AC, baseline 명시, fresh 평가 AC, end-to-end 점수 테스트, origin 카운팅 테스트, Round DoD와 gate 분리.
 - 2026-09-30 외부 검수 2차(v1.1→v1.2): 커밋 순서 A→T→B→C→D 확정과 ancestor AC, OpenAPI/registry 스냅샷 봉인과 동일 스냅샷 평가, 평가기 코드 C에서 동결(`evaluation_code_sha256`), `ranking_structure_sha256`/`ranking_sha256` 분리, 단수화 예외 집합(`statuses`), `tokenize_unigrams`/`token_forms`/`expand_token_forms` 계약과 표현 고정, `failure_classes` 복수, grid 전수 평가와 결정적 선택 규칙, R4 alias 상한, `limit` 적용 위치, regression_negative 판정 정의, 규칙의 machine-check/reviewer-check 분리, 재요청 피드백 최소화, AC-04/11/15/16 자동 검증 범위와 attestation 분리, summary 연속 토큰 복사 금지 — 전부 반영.
 - 2026-09-30 외부 검수 3차(v1.2→v1.3): AC-01을 구간 규칙(B..C에서만 가변 파일 변경)으로 재정의, `round1_seal` 최상위 영구 필드로 D에서 테스트 코드 무변경, joined token의 lexical 참여를 §6.6에 명시(구조 신호·all-match는 unigram만), alias `notes.origin`(phase2.5|round1)으로 AC-12 범위 한정, 스냅샷을 T 직후 생성하고 catalog도 그 스냅샷에서 추출, `evaluation_code_sha256` 알고리즘, 5-튜플 순서, ambiguous 분포 집계 기준 — 전부 반영. 검수자 판정: 이 4건 수정 시 구현 계획 진행 가능.
+- 2026-09-30 v1.3→v1.4 (구현 중, 커밋 B 이후·C 이전, 사용자 결정): grid 432점 전수 평가에서 seed 23/23 도달 불가(최선 17/23; R1 4건이 모든 점에서 실패). 원인은 질의 속성어(`key`/`content`/`summary`)가 하위 리소스 op의 operationId·summary에 정확히 매칭되어 4–10점의 어휘 격차가 생기는데, 경로 감산 상한(cap 3 × 2.0)이 이를 못 넘는 것. 구조 신호 4번째 **터미널 리소스 일치**(§6.5b)와 상수 `resource_match_bonus`를 추가하고 테이블을 커밋 T2에서 재동결한다. 봉인 집합은 그대로다. 이 변경은 봉인 이후의 설계 변경이므로 독립성 근거가 약해진다: 유도 근거는 seed 실패 기록(s-005, s-006, s-019, s-022, s-011)만이며 readiness에 attestation으로 남긴다. 집합 크기는 seed 23 / regression_negative 6(커밋 A에서 positive-control 1건이 seed로 이동).
 
 ---
 
@@ -49,7 +50,7 @@ Phase 2.5 계획 단계에서 추가된 alias `change→update`, `post→add`, `
 ### 2.1 포함
 1. 벤치마크 재편: 관찰된 held_out 12 + negative 8 → `seed`/`regression_negative`. 새 `held_out` 16, 새 `negative` 8 생성·봉인.
 2. `search_ranking.json`, 로더, `POLICY_VERSIONS["search"] = 3`, tokenizer 계약 3종과 보수적 단수화.
-3. 세 구조 신호, 응답 `signals`.
+3. 네 구조 신호, 응답 `signals`.
 4. alias/rule 보강(R4 전용, 상한 있음).
 5. 커밋 A/T/B/C/D 절차, 스냅샷 봉인, grid 전수 튜닝 스크립트와 로그.
 6. 진단 스크립트 확장, 무결성 테스트, readiness 2차 행, Phase 2.5 스펙 보정 한 줄(§11.2 `oneOf→anyOf`).
@@ -149,7 +150,7 @@ Phase 2.5 계획 단계에서 추가된 alias `change→update`, `post→add`, `
 - "정확히 한 번 실행했다"는 repo로 증명할 수 없다. 자동 AC는 "커밋된 최종 결과 artifact가 정확히 하나이고 위 (b)를 만족"까지이고, 1회 실행은 컨트롤러 attestation(readiness decision record)으로 남긴다.
 
 ### 5.9 게이트
-- Discovery gate: 봉인 held_out 16건 중 ≥ 15, 봉인 negative 8건 실패 0. `regression_negative`는 gate 제외(튜닝 중 7/7 요구).
+- Discovery gate: 봉인 held_out 16건 중 ≥ 15, 봉인 negative 8건 실패 0. `regression_negative`는 gate 제외(튜닝 중 6/6 요구).
 - Round 1 DoD와 gate 판정은 별개(§11).
 
 ## 6. 순위 모델 (search 정책 버전 3)
@@ -196,20 +197,23 @@ expand_token_forms(tokens) -> frozenset[str] = ∪ token_forms(t)
   "tuning_grid": {
     "method_match_bonus": [1.0, 2.0, 3.0], "method_mismatch_penalty": [0.0, 1.0, 2.0, 3.0],
     "path_unmatched_penalty": [0.5, 1.0, 1.5, 2.0], "path_unmatched_cap": [2, 3, 4],
-    "product_hint_bonus": [2.0, 3.0, 4.0]
+    "product_hint_bonus": [2.0, 3.0, 4.0],
+    "resource_match_bonus": [6.0, 8.0, 10.0, 12.0]
   },
   "baseline": {
     "method_match_bonus": 2.0, "method_mismatch_penalty": 2.0,
-    "path_unmatched_penalty": 1.0, "path_unmatched_cap": 3, "product_hint_bonus": 3.0
+    "path_unmatched_penalty": 1.0, "path_unmatched_cap": 3, "product_hint_bonus": 3.0,
+    "resource_match_bonus": 10.0
   },
   "constants": {
     "method_match_bonus": 2.0, "method_mismatch_penalty": 2.0,
-    "path_unmatched_penalty": 1.0, "path_unmatched_cap": 3, "product_hint_bonus": 3.0
+    "path_unmatched_penalty": 1.0, "path_unmatched_cap": 3, "product_hint_bonus": 3.0,
+    "resource_match_bonus": 10.0
   }
 }
 ```
-- **두 해시**: `ranking_structure_sha256` = `{verb_methods, path_noise, product_hints, tuning_grid, baseline}`의 canonical sha256(커밋 T에서 freeze, AC-13). `baseline`은 §8.2의 "초기값"을 영구 고정한 것으로, 튜닝 중 `constants`가 바뀌어도 L1 거리 기준은 항상 `baseline`이다. `ranking_sha256` = 파일 전체(constants 포함)의 canonical sha256(fingerprint용).
-- **Loader 계약**(`load_ranking` → `RankingPolicy`, 위반은 `ValueError`): `version` int ≥ 1; `verb_methods` 키 `^[a-z]+$`, 값 비어 있지 않은 리스트, 원소 ∈ {GET, POST, PUT, PATCH, DELETE}, 중복 금지; `path_noise` 원소 `^[a-z0-9]+$` 중복 금지; `product_hints` 키 `^[a-z]+$`, 값 비어 있지 않고 중복 없음, 원소 ∈ `sources.SOURCES`; `tuning_grid`·`baseline`·`constants` 키 집합이 모두 같은 5개, 각 값 리스트 비어 있지 않고 중복 없음; `constants`의 bonus/penalty는 finite float ≥ 0, `path_unmatched_cap`은 int ≥ 0(bool 거부), 각 값 ∈ 해당 grid; 미지 키 거부. 반환은 frozen dataclass(`tuple`/`frozenset`/`MappingProxyType`), `ranking()` lru_cache.
+- **두 해시**: `ranking_structure_sha256` = `{verb_methods, path_noise, product_hints, tuning_grid, baseline}`의 canonical sha256(커밋 T에서 freeze, AC-13). `baseline`은 §8.2의 "초기값"을 영구 고정한 것으로, 튜닝 중 `constants`가 바뀌어도 L1 거리 기준은 항상 `baseline`이다. **v1.4 재동결(커밋 T2)**: 테이블에 `resource_match_bonus`가 추가되어 구조 해시가 바뀐다; AC-13은 T2의 해시를 기준으로 한다. T2는 B 이후 커밋이며 그 사유는 §0.4에 기록한다. `ranking_sha256` = 파일 전체(constants 포함)의 canonical sha256(fingerprint용).
+- **Loader 계약**(`load_ranking` → `RankingPolicy`, 위반은 `ValueError`): `version` int ≥ 1; `verb_methods` 키 `^[a-z]+$`, 값 비어 있지 않은 리스트, 원소 ∈ {GET, POST, PUT, PATCH, DELETE}, 중복 금지; `path_noise` 원소 `^[a-z0-9]+$` 중복 금지; `product_hints` 키 `^[a-z]+$`, 값 비어 있지 않고 중복 없음, 원소 ∈ `sources.SOURCES`; `tuning_grid`·`baseline`·`constants` 키 집합이 모두 같은 6개(v1.4: `resource_match_bonus` 추가), 각 값 리스트 비어 있지 않고 중복 없음; `constants`의 bonus/penalty는 finite float ≥ 0, `path_unmatched_cap`은 int ≥ 0(bool 거부), 각 값 ∈ 해당 grid; 미지 키 거부. 반환은 frozen dataclass(`tuple`/`frozenset`/`MappingProxyType`), `ranking()` lru_cache.
 
 ### 6.3 메서드 의도
 - 입력 `verbs = tokenize_unigrams(query) ∩ verb_methods.keys()`(raw unigram 기준). `len(verbs)==0` → 0. `allowed = ∩ verb_methods[v]`; 공집합 → 0. `op.method ∈ allowed` → `+method_match_bonus`, 아니면 `−method_mismatch_penalty`.
@@ -227,6 +231,12 @@ expand_token_forms(tokens) -> frozenset[str] = ∪ token_forms(t)
 - 힌트 토큰은 어휘 매칭에도 참여한다(**이중 계산 의도적**, 테스트로 고정).
 - `signals.product_hint = {"value": float, "sources": [sorted]}`.
 
+### 6.5b 터미널 리소스 일치 (v1.4)
+- 인덱스 빌드 시 op마다 `terminal_tokens: tuple[str]` = 경로의 **마지막 리터럴(비-파라미터) 세그먼트**를 `tokenize_unigrams`한 origin 목록(숫자만인 토큰 제외; `path_noise`는 제외하지 않는다). 비어 있으면 신호 0.
+- 검색 시 `matched = terminal_tokens ≠ () and ∀t ∈ terminal_tokens: token_forms(t) ∩ exp.all ≠ ∅` (모든 origin이 매칭되어야 한다: `validProjectKey` → {valid, project, key}는 `valid`가 없으면 불일치).
+- `matched` → `+resource_match_bonus`, 아니면 0. `signals.resource_match = {"value": float, "tokens": [terminal origins]}`.
+- 근거: R1 실패는 질의가 가리키는 리소스(`issue`, `page`, `project`)가 경로의 마지막 세그먼트인 op와, 그 리소스의 하위 리소스(`properties`)를 마지막 세그먼트로 갖는 op 사이의 어휘 격차다. 마지막 세그먼트는 "무엇을 대상으로 하는가"를 나타내므로 질의가 그것을 온전히 언급할 때만 가산한다.
+
 ### 6.6 전체 알고리즘 (단일 정의)
 ```
 filtered = [op for op in ops if passes(method, tag, source, include_deprecated)]   # Phase 2 필터
@@ -237,7 +247,7 @@ for op in filtered:
     lexical = Σ_field weight × (|lexical_base∩f| + ad·|direct∩f| + rd·|cond∩f|)
     if lexical == 0: continue
     if all_match(bonus_tokens, matched_base): lexical += ALL_MATCH_BONUS
-    structural = method_intent + path_unmatched + product_hint
+    structural = method_intent + path_unmatched + product_hint + resource_match
     clamped = max(lexical + structural, 0.0)
     final = clamped × (DEPRECATED_FACTOR if op.deprecated else 1.0)
     if final == 0.0: continue
@@ -251,7 +261,7 @@ exact_match = len(pinned_ops) > 0                             # limit로 잘려�
 ```
 
 ### 6.7 응답 필드
-- 항목: `score`, `signals`, `match`(pinned만). exact 항목의 `signals`는 모두 0/빈 값.
+- 항목: `score`, `signals`(`method_intent`, `path_unmatched`, `product_hint`, `resource_match`), `match`(pinned만). exact 항목의 `signals`는 모두 0/빈 값.
 - 최상위 `intelligence_policy`에 `ranking_sha256`, `ranking_structure_sha256`. 기존 필드 제거 없음.
 - **fingerprint**: `intelligence_fingerprint = sha256(registry_fp \n aliases_sha256 \n overrides_sha256 \n ranking_sha256 \n POLICY_VERSIONS)`. 함수 **시그니처는 유지**(`intelligence_fingerprint(registry_fingerprint, aliases_sha256, overrides_sha256)`): `ranking().sha256`은 함수 내부에서 읽는다. 이유: 호출자 `request_template.py`, `request_check.py`, `mcp/tools.py`는 §4 불변 파일이고 도구 간 fingerprint 정의가 같아야 한다. `policy_block(aliases_sha256, overrides_sha256)`도 내부에서 `ranking_sha256`, `ranking_structure_sha256`을 추가한다. `POLICY_VERSIONS["search"] = 3`.
 
@@ -265,15 +275,15 @@ exact_match = len(pinned_ops) > 0                             # limit로 잘려�
 ## 8. 튜닝 절차
 
 ### 8.1 자유도
-- 테이블(`verb_methods`, `path_noise`, `product_hints`, `tuning_grid`, `baseline`)은 T에서 잠김. 튜닝 가능: `constants` 5개(각자 grid 안) + R4 alias/rule(§7 상한).
+- 테이블(`verb_methods`, `path_noise`, `product_hints`, `tuning_grid`, `baseline`)은 T에서 잠김. 튜닝 가능: `constants` 6개(각자 grid 안) + R4 alias/rule(§7 상한).
 
 ### 8.2 grid 전수 평가와 결정적 선택 (`tests/tune_search_ranking.py`)
-- 스냅샷(`--cache-dir`)에서 grid의 모든 조합(초기 grid 기준 3×4×4×3×3 = 432)을 평가한다. 각 조합마다 seed 22건·regression 7건 pass 수를 계산한다.
-- 선택 규칙(순서대로 tie-break, 결정적): (1) seed 22/22 AND regression 7/7인 조합만; (2) `baseline`(§6.2, 커밋 T에서 고정) 대비 L1 거리(각 축을 grid 인덱스 차이로) 최소; (3) `method_match_bonus + method_mismatch_penalty + path_unmatched_penalty + product_hint_bonus` 최소; (4) 5-튜플 `(method_match_bonus, method_mismatch_penalty, path_unmatched_penalty, path_unmatched_cap, product_hint_bonus)` 사전순 최소. (1)을 만족하는 조합이 없으면 seed pass 최대 → regression pass 최대 → (2)~(4)로 고르고 "seed 미달"을 로그에 남긴다(그 경우 §7의 R4 alias를 추가한 뒤 재실행).
+- 스냅샷(`--cache-dir`)에서 grid의 모든 조합(v1.4 grid 기준 3×4×4×3×3×4 = 1728)을 평가한다. 각 조합마다 seed 23건·regression 6건 pass 수를 계산한다.
+- 선택 규칙(순서대로 tie-break, 결정적): (1) seed 23/23 AND regression 6/6인 조합만; (2) `baseline`(§6.2, 커밋 T에서 고정) 대비 L1 거리(각 축을 grid 인덱스 차이로) 최소; (3) `method_match_bonus + method_mismatch_penalty + path_unmatched_penalty + product_hint_bonus + resource_match_bonus` 최소; (4) 6-튜플 `(method_match_bonus, method_mismatch_penalty, path_unmatched_penalty, path_unmatched_cap, product_hint_bonus, resource_match_bonus)` 사전순 최소. (1)을 만족하는 조합이 없으면 seed pass 최대 → regression pass 최대 → (2)~(4)로 고르고 "seed 미달"을 로그에 남긴다(그 경우 §7의 R4 alias를 추가한 뒤 재실행).
 - 스크립트는 선택된 조합을 `search_ranking.json`의 `constants`에 기록하고 로그를 남긴다. 사람이 숫자를 손으로 고르지 않는다.
 
 ### 8.3 튜닝 로그 `tests/benchmarks/search-tuning-round1.jsonl`
-- 한 실행당 한 줄: `{"run_at", "git_commit", "registry_fingerprint", "alias_sha256", "ranking_structure_sha256", "grid_size", "passing_combos", "selected": {...5개}, "seed": "n/22", "regression_negative": "n/7", "adopted": bool, "note"}`. alias 변경 후 재실행은 `note`에 `alias:<word> for <seed_query_id> (before: fail, after: pass)`.
+- 한 실행당 한 줄: `{"run_at", "git_commit", "registry_fingerprint", "alias_sha256", "ranking_structure_sha256", "grid_size", "passing_combos", "selected": {...6개}, "seed": "n/23", "regression_negative": "n/6", "adopted": bool, "note"}`. alias 변경 후 재실행은 `note`에 `alias:<word> for <seed_query_id> (before: fail, after: pass)`.
 - 자동 AC(AC-15): `adopted: true`인 줄이 정확히 하나, 그 `selected` == 현재 `constants`, 모든 줄의 `selected`가 grid 안, `registry_fingerprint`가 `round1_seal.registry_fingerprint`와 같음. "모든 실험을 기록했다"는 attestation.
 
 ## 9. 진단 스크립트
@@ -291,7 +301,7 @@ exact_match = len(pinned_ops) > 0                             # limit로 잘려�
 - end-to-end 합산: 합성 픽스처로 §6.6 전 단계를 **숫자**로 고정(음수→clamp→제외, deprecated, pinned score, 정렬 튜플, `limit`이 pinned를 자르는 경우, `exact_match` true 유지).
 - `lexical == 0` 제외. Loader 계약 위반 전부 `ValueError`; 반환 불변; 두 해시 분리(constants 변경 시 `ranking_sha256`만 바뀜).
 - fingerprint 민감/안정, `POLICY_VERSIONS["search"] == 3`, `signals` 형태.
-- `TestSeedBenchmark`: seed 22/22, regression 7/7(픽스처). 픽스처 생성기에 정답 op와 §0.1의 각 실제 1위 competitor op 포함.
+- `TestSeedBenchmark`: seed 23/23, regression 6/6(픽스처). 픽스처 생성기에 정답 op와 §0.1의 각 실제 1위 competitor op 포함.
 - AST(AC-05): `search.py`에 신호용 숫자 리터럴·테이블 리터럴 없음.
 
 ### 10.2 벤치마크 무결성 (`tests/benchmarks/test_evaluator.py`)
@@ -308,7 +318,7 @@ exact_match = len(pinned_ops) > 0                             # limit로 잘려�
 
 - Round 1 DoD: AC-01..AC-16 자동 항목 통과 + attestation 항목 기록 + 커밋 D 존재. gate와 무관하게 "Round 1 completed".
 - Discovery gate: `passed`/`failed`. 실패 시 "Round 1 completed, gate failed → Round 2".
-- readiness 2차 행: 날짜, 커밋 A/T/B/C/D sha, `evaluation_code_sha256`, `round1_seal`(해시 2개, registry fingerprint, spec sha), fingerprints, `ranking_sha256`/`ranking_structure_sha256`/`alias_sha256`, seed 22·regression 7·held_out 16·negative 8 결과, gate 판정.
+- readiness 2차 행: 날짜, 커밋 A/T/B/C/D sha, `evaluation_code_sha256`, `round1_seal`(해시 2개, registry fingerprint, spec sha), fingerprints, `ranking_sha256`/`ranking_structure_sha256`/`alias_sha256`, seed 23·regression 6·held_out 16·negative 8 결과, gate 판정.
 - Attestation(컨트롤러 서명 항목): 생성 프롬프트 sha256, 생성 결과 sha256, 재요청 횟수와 피드백 형식 준수, 최종 평가 1회 실행, 튜닝 로그 완전성, 서브에이전트에 봉인 경로 미노출.
 
 ## 12. Acceptance Criteria
@@ -317,19 +327,19 @@ exact_match = len(pinned_ops) > 0                             # limit로 잘려�
 
 | ID | 기준 | 검증 |
 |---|---|---|
-| AC-01 | A < T < B < C < D (ancestor 관계 4회) **그리고** 가변 파일(`search.py`, `policy.py`, `search_aliases.json`, `search_ranking.json`의 `constants`)의 변경 커밋이 T..B와 C..D 구간에 없다(B..C 구간에서만 허용) | `git merge-base --is-ancestor` + `git log --name-only T..B`, `C..D` |
+| AC-01 | A < T < B < T2 < C < D (ancestor 관계 5회) **그리고** 가변 파일(`search.py`, `policy.py`, `search_aliases.json`, `search_ranking.json`)의 변경 커밋이 T..B와 C..D 구간에 없다(B..C 구간에서만 허용; T2는 그 안의 테이블 재동결 커밋) | `git merge-base --is-ancestor` + `git log --name-only T..B`, `C..D` |
 | AC-02 | C..D 변경 파일 ⊆ §5.7 whitelist | `git diff --name-only C D` |
 | AC-03 | D의 held_out/negative canonical sha256 == `round1_seal.held_out_sha256`/`negative_sha256`; D는 테스트 코드를 변경하지 않음 | 테스트 + `git diff --name-only C D` |
 | AC-04 | gate 집합 레코드의 `origin` ∈ {`held_out-r1`, `negative-r1`}, r0 레코드 0개 | 테스트 |
 | AC-05 | 신호 상수·테이블이 `RankingPolicy` 밖 production Python에 없음 | AST 테스트 |
-| AC-06 | seed 22/22(픽스처·스냅샷), regression 7/7 | 테스트 + 튜닝 로그 |
+| AC-06 | seed 23/23(픽스처·스냅샷), regression 6/6 | 테스트 + 튜닝 로그 |
 | AC-07 | §10.1 신호별·end-to-end 테스트 통과 | 테스트 |
 | AC-08 | fingerprint 민감, `POLICY_VERSIONS["search"]==3`, `signals`·두 해시 노출 | 테스트 |
 | AC-09 | `git diff d63a2ca -- <§4 불변 목록>` 비어 있음 | git diff |
 | AC-10 | 최종 artifact에 §9 provenance 필드 전부 존재, `git_commit`==C, `evaluation_code_sha256`==C 기록, `sealed_sha256`==B, `registry_fingerprint`==`round1_seal.registry_fingerprint` | 테스트 |
 | AC-11 | 커밋된 최종 artifact가 정확히 하나; D 이후 `search_ranking.json`/`search_aliases.json`/`search.py` 변경 커밋 없음(이 라운드 브랜치 내) | 테스트 + git log |
 | AC-12 | 모든 alias/rule에 `notes`가 있고, `origin == "round1"`인 항목은 R4 seed 참조·seed당 1개 상한 준수 | 테스트 |
-| AC-13 | `ranking_structure_sha256` == T 상수; `constants` ∈ grid | 테스트 |
+| AC-13 | `ranking_structure_sha256` == T2 상수(v1.4 재동결); `constants` ∈ grid | 테스트 |
 | AC-14 | 경로 origin당 패널티 최대 1회 | 테스트 |
 | AC-15 | 튜닝 로그 §8.3 자동 조건 | 테스트 |
 | AC-16 | 전체 오프라인 테스트 통과, 새 의존성 없음 | unittest |
@@ -338,7 +348,7 @@ Attestation 항목(readiness decision record에 컨트롤러가 기록, 자동 �
 
 ## 13. 위험과 완화
 
-- **seed 과적합**: 자유도는 grid 5개(전수 평가·결정적 선택) + R4 alias(상한). held_out 봉인이 검출.
+- **seed 과적합**: 자유도는 grid 6개(전수 평가·결정적 선택) + R4 alias(상한). held_out 봉인이 검출.
 - **생성기 편향(난이도)**: summary/tag 어휘로 만든 질의는 scorer 친화적일 수 있다. 완화: 연속 content 토큰 2개 복사 금지, reviewer 의미 검증. 남는 편향은 readiness에 명시.
 - **`search` 동사 = GET**: Jira `POST /search/jql`도 정답. `expected_top1_any`에 둘 다. 테이블 변경은 Round 2.
 - **upstream 변화**: 스냅샷 봉인으로 gate에서 분리. live 캐시 결과는 non-gating.

@@ -2,7 +2,9 @@
 
 Manual, run from the repo root after `python -m tools.atlassian_docs`:
 
-    python tests/fixtures/openapi/make_openapi_fixtures.py
+    python tests/fixtures/openapi/make_openapi_fixtures.py [--cache DIR]
+
+Round 1 fixtures are regenerated from the frozen snapshot (--cache ~/.atlassian_api_updater/round1-cache).
 
 Keeps only the listed paths plus the transitive closure of every local
 $ref they use. Output is sorted JSON so re-running yields identical files
@@ -27,6 +29,18 @@ SELECTIONS = {
         "/rest/api/3/search/jql",
         "/rest/api/3/expression/eval",            # deprecated operation
         "/rest/api/3/field/{fieldId}/context/defaultValue",  # deprecated + allOf-ish
+        # Round 1 competitors (spec §10.1): the real top-1 ops observed in §0.1 and their neighbours
+        "/rest/api/3/issue/{issueIdOrKey}/properties",
+        "/rest/api/3/issuetypescheme/{issueTypeSchemeId}",
+        "/rest/api/3/jql/parse",
+        "/rest/api/3/projectvalidate/validProjectKey",
+        "/rest/api/3/issue/{issueIdOrKey}/assignee",
+        "/rest/api/3/issue/{issueIdOrKey}/comment",
+        "/rest/api/3/project/{projectIdOrKey}",
+        "/rest/api/3/attachment/{id}",
+        "/rest/api/3/user",
+        "/rest/api/3/users/search",
+        "/rest/api/3/users",
     ],
     "jira-software": [
         "/rest/builds/0.1/bulk",                  # path-level parameters
@@ -36,12 +50,20 @@ SELECTIONS = {
         "/rest/agile/1.0/board/{boardId}/sprint",
         "/rest/agile/1.0/sprint",
         "/rest/agile/1.0/sprint/{sprintId}/issue",
+        "/rest/software/1.0/sprint/{sprintId}/issue",
+        "/rest/agile/1.0/board",
+        "/rest/agile/1.0/backlog/{boardId}/issue",
     ],
     "confluence": [
         "/pages",
         "/pages/{id}",
         "/attachments",                           # cursor pagination
         "/blogposts",                             # $ref requestBody
+        "/pages/{page-id}/properties/{property-id}",
+        "/pages/{page-id}/properties",
+        "/spaces/{id}/pages",
+        "/attachments/{id}",
+        "/pages/{id}/title",
     ],
 }
 
@@ -98,9 +120,17 @@ def trim(spec: dict, paths: list) -> dict:
     return out
 
 
-def main() -> int:
+def main(argv=None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    cache = CACHE
+    if "--cache" in argv:
+        i = argv.index("--cache")
+        if i + 1 >= len(argv) or argv[i + 1].startswith("--"):
+            print("usage: make_openapi_fixtures.py [--cache DIR]", file=sys.stderr)
+            return 2
+        cache = pathlib.Path(argv[i + 1]).expanduser()
     for source, paths in SELECTIONS.items():
-        src = CACHE / f"{source}.json"
+        src = cache / f"{source}.json"
         if not src.exists():
             print(f"[SKIP] {source}: {src} missing (run python -m tools.atlassian_docs)")
             continue

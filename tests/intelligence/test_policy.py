@@ -37,6 +37,26 @@ class TestAliases(unittest.TestCase):
         with self.assertRaises(ValueError):
             policy.load_aliases(self._write({"version": 1, "alias_damping": 0.5, "rule_damping": 1.0, "aliases": {}, "rules": [{"when_all": [], "add": ["x"]}]}))
 
+    def test_alias_notes_required_and_validated(self):
+        ph = {"origin": "phase2.5", "seed_query_id": None, "failure_classes": [], "evidence": "phase2.5 §6.1"}
+        base = {"version": 1, "alias_damping": 0.5, "rule_damping": 1.0, "aliases": {"fetch": ["get"]},
+                "rules": [{"when_all": ["issue", "key"], "add": ["getissue"]}]}
+        good = {**base, "notes": {"fetch": ph, "rule:0": ph}}
+        self.assertEqual(policy.load_aliases(self._write(good)).aliases["fetch"], ("get",))
+        r1 = {"origin": "round1", "seed_query_id": "s-015", "failure_classes": ["R4"], "evidence": "searchAndReconsileIssuesUsingJql"}
+        policy.load_aliases(self._write({**base, "notes": {"fetch": r1, "rule:0": ph}}))
+        bads = [base, {**base, "notes": {"fetch": ph}}, {**base, "notes": {"fetch": ph, "rule:0": ph, "rule:1": ph}},
+                {**base, "notes": {"fetch": ph, "rule:0": ph, "other": ph}},
+                {**base, "notes": {"fetch": {**r1, "seed_query_id": None}, "rule:0": ph}},
+                {**base, "notes": {"fetch": {**r1, "seed_query_id": "s-15"}, "rule:0": ph}},
+                {**base, "notes": {"fetch": {**r1, "failure_classes": ["R1"]}, "rule:0": ph}},
+                {**base, "notes": {"fetch": {**ph, "origin": "x"}, "rule:0": ph}},
+                {**base, "notes": {"fetch": "text", "rule:0": ph}}, {**base, "notes": []}]
+        for bad in bads:
+            with self.assertRaises(ValueError, msg=repr(bad)):
+                policy.load_aliases(self._write(bad))
+        self.assertIsNotNone(policy.load_aliases().sha256)
+
 
 class TestOverrides(unittest.TestCase):
     def test_bundled_file_has_four_operations(self):
@@ -112,3 +132,76 @@ class TestTranspilerVersionSync(unittest.TestCase):
     def test_policy_version_matches_transpiler(self):
         from tools.atlassian_docs.intelligence import oas_schema
         self.assertEqual(policy.POLICY_VERSIONS["oas_transpiler"], oas_schema.TRANSPILER_VERSION)
+
+
+class TestRankingPolicy(unittest.TestCase):
+    def _raw(self):
+        return json.loads((policy.DATA_DIR / "search_ranking.json").read_text(encoding="utf-8"))
+
+    def test_bundled_loads_and_hashes(self):
+        rp = policy.load_ranking()
+        self.assertEqual(rp.verb_methods["move"], frozenset({"PUT", "POST"})); self.assertIn("rest", rp.path_noise)
+        self.assertEqual(rp.product_hints["jira"], frozenset({"jira-platform", "jira-software"}))
+        self.assertEqual(len(policy.CONSTANT_KEYS), 6); self.assertEqual(policy.CONSTANT_KEYS[-1], "resource_match_bonus")
+        self.assertEqual(set(rp.constants), set(policy.CONSTANT_KEYS)); self.assertEqual(set(rp.baseline), set(policy.CONSTANT_KEYS)); self.assertEqual(len(rp.sha256), 64)
+        from tests.benchmarks.test_evaluator import RANKING_STRUCTURE_SHA256
+        self.assertEqual(rp.structure_sha256, RANKING_STRUCTURE_SHA256)
+        self.assertIs(policy.ranking(), policy.ranking())
+
+    def test_constants_change_only_full_hash(self):
+        raw = self._raw(); a = policy.load_ranking()
+        other = next(v for v in raw["tuning_grid"]["method_match_bonus"] if v != raw["constants"]["method_match_bonus"])
+        raw["constants"]["method_match_bonus"] = other          # any grid value that differs from the current one
+        b = self._from(raw)
+        self.assertNotEqual(a.sha256, b.sha256); self.assertEqual(a.structure_sha256, b.structure_sha256)
+
+    def _from(self, raw):
+        import tempfile, pathlib
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as fh:
+            json.dump(raw, fh); path = pathlib.Path(fh.name)
+        return policy.load_ranking(path)
+
+    def test_constants_outside_grid_rejected(self):
+        raw = self._raw(); raw["constants"]["path_unmatched_cap"] = 99
+        with self.assertRaises(ValueError):
+            self._from(raw)
+
+    def test_loader_contract_violations(self):
+        base = self._raw()
+        bad = [dict(base, version=0), dict(base, verb_methods={**base["verb_methods"], "Get": ["GET"]}),
+               dict(base, verb_methods={**base["verb_methods"], "get": ["GET", "GET"]}),
+               dict(base, verb_methods={**base["verb_methods"], "get": ["FETCH"]}),
+               dict(base, path_noise=base["path_noise"] + ["rest"]),
+               dict(base, product_hints={**base["product_hints"], "jira": ["nowhere"]}),
+               dict(base, product_hints={**base["product_hints"], "jira": []}),
+               dict(base, tuning_grid={k: v for k, v in base["tuning_grid"].items() if k != "product_hint_bonus"}),
+               dict(base, baseline={**base["baseline"], "path_unmatched_cap": 99}),
+               dict(base, constants={**base["constants"], "path_unmatched_cap": True}),
+               dict(base, constants={**base["constants"], "method_match_bonus": -1.0}),
+               dict(base, constants={k: v for k, v in base["constants"].items() if k != "resource_match_bonus"}),
+               dict(base, extra=1)]
+        for raw in bad:
+            with self.assertRaises(ValueError):
+                self._from(raw)
+
+    def test_returned_structures_are_immutable(self):
+        rp = policy.ranking()
+        with self.assertRaises(TypeError):
+            rp.verb_methods["x"] = frozenset()
+        with self.assertRaises(TypeError):
+            rp.constants["method_match_bonus"] = 9
+
+
+class TestFingerprintIncludesRanking(unittest.TestCase):
+    def test_versions_and_block(self):
+        self.assertEqual(policy.POLICY_VERSIONS["search"], 3)
+        blk = policy.policy_block("A", "B")
+        self.assertEqual(blk["ranking_sha256"], policy.ranking().sha256)
+        self.assertEqual(blk["ranking_structure_sha256"], policy.ranking().structure_sha256)
+
+    def test_fingerprint_sensitive_to_ranking(self):
+        from unittest import mock
+        a = policy.intelligence_fingerprint("reg", "A", "B")
+        fake = policy.RankingPolicy(**{**policy.ranking().__dict__, "sha256": "f" * 64})
+        with mock.patch.object(policy, "ranking", return_value=fake):
+            self.assertNotEqual(a, policy.intelligence_fingerprint("reg", "A", "B"))
