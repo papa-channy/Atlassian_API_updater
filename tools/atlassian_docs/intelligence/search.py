@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping, Optional
 
 from .. import sources
-from . import provenance, schemas
+from . import provenance, schemas, search_log
 
 STOPWORDS = frozenset("a an the to of for in on at and or with by from is are be this that".split())
 FIELD_WEIGHTS = {"operation_id": 5, "summary": 4, "tags": 3, "path": 3,
@@ -216,4 +216,6 @@ def search_operations(state, query: str, *, source=None, method=None, tag=None,
     payload["intelligence_fingerprint"] = policy.intelligence_fingerprint(
         state.registry.fingerprint, pol.sha256, ov.sha256)
     payload["intelligence_policy"] = policy.policy_block(pol.sha256, ov.sha256)
+    search_log.record(payload, {"source": source, "method": method, "tag": tag,
+                                 "include_deprecated": include_deprecated, "limit": limit})
     return provenance.with_provenance(payload, state, scope)
