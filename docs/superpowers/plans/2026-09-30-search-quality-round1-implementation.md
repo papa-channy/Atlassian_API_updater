@@ -38,7 +38,7 @@
 - Modify: `tests/benchmarks/search_queries.json`
 - Modify: `tests/benchmarks/evaluator.py`
 - Modify: `tests/benchmarks/test_evaluator.py`
-- Modify: `tests/intelligence/test_search.py` (`TestSeedBenchmark.test_seed_passes_on_fixtures` → evaluates `seed` and `regression_negative`; expected to FAIL on fixtures until Task 7 — mark with `@unittest.expectedFailure` in this task, removed in Task 7)
+- Modify: `tests/intelligence/test_search.py` (`TestSeedBenchmark.test_seed_passes_on_fixtures` → evaluates `seed` and `regression_negative`; cannot pass on fixtures until Task 7 — mark with `@unittest.skip("enabled in Round 1 Task 7")` in this task; Task 7 removes the decorator. `expectedFailure` is not used because an unexpected success would fail the suite mid-round.)
 - Modify: `tests/diag_search_queries.py` (iterate over the sets that exist and are not sealed; minimal change)
 
 **Interfaces:**
@@ -209,14 +209,14 @@ def evaluate(records, search_fn):
 
 - [ ] **Step 5: Update `TestSeedBenchmark` and the diag script**
 
-In `tests/intelligence/test_search.py::TestSeedBenchmark.test_seed_passes_on_fixtures`, evaluate `BENCH["seed"]` and `BENCH["regression_negative"]`; decorate with `@unittest.expectedFailure` and a comment `# Round 1 Task 7 removes this decorator once fixtures + scorer land`.
+In `tests/intelligence/test_search.py::TestSeedBenchmark.test_seed_passes_on_fixtures`, evaluate `BENCH["seed"]` and `BENCH["regression_negative"]`; decorate with `@unittest.skip("enabled in Round 1 Task 7")`.
 
 In `tests/diag_search_queries.py`, change the loop to `for name in ("seed", "regression_negative", "held_out", "negative"):` and, when `evaluate` returns `{"sealed": True, ...}`, print `[name] sealed (n records)` and continue. Nothing else changes in this task.
 
 - [ ] **Step 6: Run the full suite**
 
 Run: `python -m unittest discover -s tests -t .`  
-Expected: OK with 1 expected failure (seed benchmark), 328 + 6 new tests.
+Expected: OK with 1 skipped (seed benchmark), 328 + 6 new tests.
 
 - [ ] **Step 7: Commit A**
 
@@ -236,20 +236,20 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 - Modify: `tests/benchmarks/test_evaluator.py` (add `TestRankingTablesFrozen`)
 
 **Interfaces:**
-- Produces: the JSON exactly as spec §6.2 (keys `version`, `verb_methods`, `path_noise`, `product_hints`, `tuning_grid`, `constants`).
+- Produces: the JSON as spec §6.2 plus one extra frozen key `baseline` (a copy of the initial `constants`, spec §8.2's "초기값"; it is part of the structure hash so it can never drift). Keys: `version`, `verb_methods`, `path_noise`, `product_hints`, `tuning_grid`, `baseline`, `constants`.
 - Produces: `RANKING_STRUCTURE_SHA256` constant in `tests/benchmarks/test_evaluator.py` (computed in this task from the file; Task 5's loader must reproduce it).
 - No production Python changes in this task (AC-01: `policy.py` may not change before commit B).
 
 - [ ] **Step 1: Write the data file**
 
-Copy the JSON block from spec §6.2 verbatim into `tools/atlassian_docs/intelligence/data/search_ranking.json` (2-space indent, trailing newline).
+Copy the JSON block from spec §6.2 into `tools/atlassian_docs/intelligence/data/search_ranking.json` (2-space indent, trailing newline) and add `"baseline"` with exactly the same five values as `constants`. (Plan-level clarification of spec §8.2: the L1 distance is always measured from `baseline`, never from the current `constants`.)
 
 - [ ] **Step 2: Write the failing test** (append)
 
 ```python
 RANKING = pathlib.Path(__file__).resolve().parents[2] / "tools" / "atlassian_docs" / "intelligence" / "data" / "search_ranking.json"
 RANKING_STRUCTURE_SHA256 = "<fill in Step 3>"
-STRUCTURE_KEYS = ("verb_methods", "path_noise", "product_hints", "tuning_grid")
+STRUCTURE_KEYS = ("verb_methods", "path_noise", "product_hints", "tuning_grid", "baseline")
 
 
 def ranking_structure_sha256(raw: dict) -> str:
@@ -263,14 +263,14 @@ class TestRankingTablesFrozen(unittest.TestCase):
 
     def test_constants_inside_grid(self):
         raw = json.loads(RANKING.read_text(encoding="utf-8"))
-        self.assertEqual(set(raw["constants"]), set(raw["tuning_grid"]))
+        self.assertEqual(set(raw["constants"]), set(raw["tuning_grid"])); self.assertEqual(set(raw["baseline"]), set(raw["tuning_grid"]))
         for k, v in raw["constants"].items():
-            self.assertIn(v, raw["tuning_grid"][k], k)
+            self.assertIn(v, raw["tuning_grid"][k], k); self.assertIn(raw["baseline"][k], raw["tuning_grid"][k], k)
 ```
 
 - [ ] **Step 3: Compute the constant, fill it in, run**
 
-Run: `python -c "import json,pathlib; from tests.benchmarks import evaluator as ev; raw=json.load(open('tools/atlassian_docs/intelligence/data/search_ranking.json')); print(ev.canonical_sha256({k: raw[k] for k in ('verb_methods','path_noise','product_hints','tuning_grid')}))"`  
+Run: `python -c "import json,pathlib; from tests.benchmarks import evaluator as ev; raw=json.load(open('tools/atlassian_docs/intelligence/data/search_ranking.json')); print(ev.canonical_sha256({k: raw[k] for k in ('verb_methods','path_noise','product_hints','tuning_grid','baseline')}))"`  
 Paste the value into `RANKING_STRUCTURE_SHA256`. Run `python -m unittest tests.benchmarks.test_evaluator -v` → PASS.
 
 - [ ] **Step 4: Commit T**
@@ -286,9 +286,10 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 ```bash
 export ATLASSIAN_DOCS_ROUND1_CACHE=~/.atlassian_api_updater/round1-cache
-mkdir -p "$ATLASSIAN_DOCS_ROUND1_CACHE" && cp -R .atlassian-docs/. "$ATLASSIAN_DOCS_ROUND1_CACHE"/
+test -e "$ATLASSIAN_DOCS_ROUND1_CACHE" && { echo "refusing: snapshot dir exists"; exit 1; }
+tmp=$(mktemp -d) && cp -R .atlassian-docs/. "$tmp"/ && mkdir -p "$(dirname "$ATLASSIAN_DOCS_ROUND1_CACHE")" && mv "$tmp" "$ATLASSIAN_DOCS_ROUND1_CACHE"
 ```
-Record the snapshot's registry fingerprint and spec sha256 values (Task 3's `round1_seal.py catalog` prints them).
+Then verify: `python tests/benchmarks/round1_seal.py catalog --cache-dir "$ATLASSIAN_DOCS_ROUND1_CACHE" --out /tmp/x.json --internal-out /tmp/y.json` prints a registry fingerprint equal to the live cache's (compare with `python tests/diag_search_queries.py --sets seed | grep registry_fingerprint`). Record the fingerprint and per-source spec sha256 (they go into `round1_seal` at commit B). Task 3 must exist before this step can be verified; if Task 3 is not merged yet, verify after Task 3 and before generation.
 
 ---
 
@@ -299,9 +300,9 @@ Record the snapshot's registry fingerprint and spec sha256 values (Task 3's `rou
 - Create: `tests/benchmarks/test_round1_seal.py`
 
 **Interfaces:**
-- CLI: `python tests/benchmarks/round1_seal.py catalog --cache-dir DIR --out catalog.json` (writes `[{"key","source","method","summary","tags"}]` sorted by key, prints `registry_fingerprint` and per-source `spec_sha256`); `check --plain round1-sealed.json --bench tests/benchmarks/search_queries.json --catalog catalog.json` (machine rules of spec §5.4, exit 1 on any violation, prints each violation); `seal --plain ... --bench ... --cache-dir DIR` (writes sealed metadata + `round1_seal` into the bench file); `unseal --plain ... --bench ...` (replaces `held_out`/`negative` with the plaintext lists; refuses if hashes differ).
-- Library functions (used by tests and by Task 8): `load_catalog_from_cache(cache_dir) -> (records, registry_fingerprint, spec_sha256_by_source)`, `machine_check(plain, bench, catalog) -> list[str]` (violation messages), `seal_metadata(plain_section, round) -> dict`, `distribution(records) -> dict`.
-- Uses `tools.atlassian_docs.intelligence.registry`/`normalizer`/`storage` read-only to build the catalog from a cache dir (patch `storage.CACHE_DIR` for the call, restore after).
+- CLI: `python tests/benchmarks/round1_seal.py catalog --cache-dir DIR --out generator_catalog.json --internal-out internal_catalog.json`. The **generator catalog** contains only `key`, `source`, `method`, `summary`, `tags` (spec §5.4 — no `operation_id`, no `description`); the **internal catalog** (controller/checker/reviewer only) adds `operation_id` and `description`. Prints `registry_fingerprint` and per-source `spec_sha256`. `check --plain round1-sealed.json --bench tests/benchmarks/search_queries.json --internal-catalog internal_catalog.json` (machine rules of spec §5.4, exit 1 on any violation, prints each); `seal --plain ... --bench ... --cache-dir DIR` (refuses on any violation; writes sealed metadata + `round1_seal`); `unseal --plain ... --bench ...` (replaces `held_out`/`negative` with plaintext; refuses if hashes differ).
+- Library functions: `load_catalogs_from_cache(cache_dir) -> (generator_records, internal_records, registry_fingerprint, spec_sha256_by_source)`, `generator_view(internal_records) -> list` (drops `operation_id`/`description`), `machine_check(plain, bench, internal_catalog) -> list[str]` (violation messages, each prefixed by the record id), `distribution(records, section_name) -> dict` (held_out/seed: by `expected_top1_any[0]`; negative: by `forbidden_top1[0]` — the decoy's source/method; `product_named` counts records whose unigram set contains `jira` or `confluence`), `seal_metadata(records, round, section_name, internal_catalog) -> dict`.
+- Uses `tools.atlassian_docs.intelligence.registry`/`normalizer`/`storage` read-only to build the catalogs from a cache dir (patch `storage.CACHE_DIR` for the call in a `try/finally`, restore after).
 
 - [ ] **Step 1: Write failing tests**
 
@@ -312,8 +313,11 @@ import json, unittest
 from tests.benchmarks import round1_seal as rs
 
 CAT = [{"key": "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}", "source": "jira-platform", "method": "GET",
-        "summary": "Get issue", "tags": ["Issues"]},
-       {"key": "confluence:POST:/pages", "source": "confluence", "method": "POST", "summary": "Create page", "tags": ["Page"]}]
+        "operation_id": "getIssue", "summary": "Get issue", "tags": ["Issues"], "description": "Returns the details for an issue."},
+       {"key": "confluence:POST:/pages", "source": "confluence", "method": "POST", "operation_id": "createPage",
+        "summary": "Create page", "tags": ["Page"], "description": "Creates a page in the space."},
+       {"key": "jira-platform:DELETE:/rest/api/3/issue/{issueIdOrKey}", "source": "jira-platform", "method": "DELETE",
+        "operation_id": "deleteIssue", "summary": "Delete issue", "tags": ["Issues"], "description": "Deletes an issue."}]
 BENCH = {"seed": [{"id": "s-001", "query": "get issue by key", "expected_top1_any": [CAT[0]["key"]], "forbidden_top1": [],
                    "origin": "seed-r0", "failure_classes": [], "ambiguous": False}], "regression_negative": []}
 
@@ -323,51 +327,139 @@ def rec(i, q, key, **kw):
             "failure_classes": [], "ambiguous": False, **kw}
 
 
+def neg(i, q, key):
+    return {"id": f"n-{i:03d}", "query": q, "expected_top1_any": [], "forbidden_top1": [key], "origin": "negative-r1",
+            "failure_classes": [], "ambiguous": False}
+
+
+def valid_plain():
+    """16 held_out + 8 negative that satisfy every machine rule against CAT (three ops: GET/POST/DELETE)."""
+    hq = ["show me the ticket details", "open the confluence document", "bring up my ticket", "start a wiki document now",
+          "drop this ticket", "view ticket information please", "publish a brand new document", "throw away the ticket",
+          "look at a ticket", "compose a wiki entry", "read one ticket", "write a fresh document", "erase the ticket record",
+          "inspect ticket data", "author a document today", "see a jira ticket"]
+    keys = [CAT[0], CAT[1], CAT[0], CAT[1], CAT[2], CAT[0], CAT[1], CAT[2], CAT[0], CAT[1], CAT[0], CAT[1], CAT[2], CAT[0], CAT[1], CAT[0]]
+    # source: jira-platform 11, confluence 5 (rule 2 needs jira-software ≥ 4: CAT has none — the test catalog adds one below)
+    held = [rec(i + 1, q, k["key"]) for i, (q, k) in enumerate(zip(hq, keys))]
+    negs = [neg(i + 1, q, CAT[0]["key"]) for i, q in enumerate(["ticket", "issue type", "ticket status only", "document space",
+                                                                 "jira ticket", "confluence document", "ticket owner", "page tree"])]
+    return {"held_out": held, "negative": negs}
+
+
 class TestMachineCheck(unittest.TestCase):
-    def test_reuse_and_summary_copy_and_missing_key(self):
-        plain = {"held_out": [rec(1, "get issue by key", CAT[0]["key"]),            # exact reuse of a seed query
-                              rec(2, "make a create page now", CAT[1]["key"]),      # copies 2 consecutive summary tokens
-                              rec(3, "open a ticket", "jira-platform:POST:/nope")], # key not in catalog
-                 "negative": []}
-        msgs = rs.machine_check(plain, BENCH, CAT)
-        self.assertTrue(any("h-001" in m and "reuse" in m for m in msgs))
-        self.assertTrue(any("h-002" in m and "summary" in m for m in msgs))
-        self.assertTrue(any("h-003" in m and "catalog" in m for m in msgs))
+    """One failing test per machine rule of spec §5.4 (review finding P0-8)."""
+    def _msgs(self, mutate):
+        plain = valid_plain(); mutate(plain)
+        return rs.machine_check(plain, BENCH, CAT4)
 
-    def test_distribution_uses_first_expected_key(self):
-        d = rs.distribution([rec(1, "show me the ticket", CAT[0]["key"]), rec(2, "start new page", CAT[1]["key"], ambiguous=True)])
-        self.assertEqual(d["source"], {"jira-platform": 1, "confluence": 1}); self.assertEqual(d["method"], {"GET": 1, "POST": 1})
-        self.assertEqual(d["product_named"], 0)
+    def test_valid_plaintext_has_no_violations(self):
+        self.assertEqual(rs.machine_check(valid_plain(), BENCH, CAT4), [])
 
-    def test_seal_metadata_and_roundtrip(self):
+    def test_word_count_bounds(self):
+        self.assertTrue(any("h-001" in m and "words" in m for m in self._msgs(lambda p: p["held_out"][0].__setitem__("query", "ticket now"))))
+        self.assertTrue(any("h-001" in m and "words" in m for m in self._msgs(lambda p: p["held_out"][0].__setitem__("query", "a b c d e f g h ticket"))))
+
+    def test_operation_id_unigram_set_rejected(self):
+        self.assertTrue(any("h-001" in m and "operationId" in m for m in self._msgs(lambda p: p["held_out"][0].__setitem__("query", "get the issue"))))
+
+    def test_summary_two_consecutive_tokens_rejected(self):
+        self.assertTrue(any("h-002" in m and "summary" in m for m in self._msgs(lambda p: p["held_out"][1].__setitem__("query", "please create page today"))))
+
+    def test_reuse_against_seed_and_within_hidden(self):
+        self.assertTrue(any("h-001" in m and "reuse" in m for m in self._msgs(lambda p: p["held_out"][0].__setitem__("query", "get issue by key"))))
+        self.assertTrue(any("reuse" in m for m in self._msgs(lambda p: p["held_out"][1].__setitem__("query", p["held_out"][0]["query"]))))
+
+    def test_counts_and_distributions(self):
+        self.assertTrue(any("held_out" in m and "16" in m for m in self._msgs(lambda p: p["held_out"].pop())))
+        self.assertTrue(any("negative" in m and "8" in m for m in self._msgs(lambda p: p["negative"].pop())))
+        def all_confluence(p):
+            for r in p["held_out"]: r["expected_top1_any"] = [CAT[1]["key"]]
+        self.assertTrue(any("source" in m or "method" in m for m in self._msgs(all_confluence)))
+        def no_product(p):
+            for r in p["held_out"]: r["query"] = r["query"].replace("jira ", "").replace("confluence ", "")
+        self.assertTrue(any("product_named" in m for m in self._msgs(no_product)))
+
+    def test_negative_schema_and_unknown_keys(self):
+        self.assertTrue(any("n-001" in m for m in self._msgs(lambda p: p["negative"][0].__setitem__("expected_top1_any", [CAT[0]["key"]]))))
+        self.assertTrue(any("n-002" in m and "forbidden" in m for m in self._msgs(lambda p: p["negative"][1].__setitem__("forbidden_top1", []))))
+        self.assertTrue(any("h-003" in m and "catalog" in m for m in self._msgs(lambda p: p["held_out"][2].__setitem__("expected_top1_any", ["jira-platform:POST:/nope"]))))
+
+    def test_ambiguous_distribution_uses_first_expected_key(self):
+        d = rs.distribution([rec(1, "show me the ticket", CAT[0]["key"]), rec(2, "start new page", CAT[1]["key"], ambiguous=True, expected_top1_any=[CAT[1]["key"], CAT[0]["key"]])], "held_out")
+        self.assertEqual(d["source"], {"jira-platform": 1, "confluence": 1}); self.assertEqual(d["method"], {"GET": 1, "POST": 1}); self.assertEqual(d["product_named"], 0)
+        dn = rs.distribution([neg(1, "ticket", CAT[2]["key"])], "negative")
+        self.assertEqual(dn["method"], {"DELETE": 1})
+
+    def test_seal_metadata_contract(self):
         recs = [rec(1, "show me the ticket", CAT[0]["key"])]
-        meta = rs.seal_metadata(recs, 1)
-        self.assertEqual(meta["count"], 1); self.assertEqual(meta["sha256"], rs.canonical_sha256(recs)); self.assertTrue(meta["sealed"])
+        meta = rs.seal_metadata(recs, 1, "held_out", CAT4)
+        self.assertEqual(meta["count"], 1); self.assertEqual(meta["sha256"], rs.canonical_sha256(recs)); self.assertTrue(meta["sealed"]); self.assertEqual(meta["round"], 1)
+        self.assertIn("distribution", meta)
+
+    def test_generator_view_hides_operation_id_and_description(self):
+        for r in rs.generator_view(CAT4):
+            self.assertEqual(set(r), {"key", "source", "method", "summary", "tags"})
+
+
+CAT4 = CAT + [{"key": "jira-software:GET:/rest/agile/1.0/board", "source": "jira-software", "method": "GET", "operation_id": "getAllBoards",
+               "summary": "Get all boards", "tags": ["Board"], "description": "Returns all boards."}] * 1
 ```
+
+(`valid_plain()` must satisfy rule 2 exactly; the implementer adjusts the 16 queries/keys so that, against `CAT4`, source counts are jira-platform ≥ 6, jira-software ≥ 4, confluence ≥ 5 and method counts GET ≥ 4, POST ≥ 4, PUT ≥ 2, DELETE ≥ 2 — add a PUT op to `CAT4` for that. The point is one failing test per rule; the fixture may be reshaped, the assertions may not be weakened.)
 
 - [ ] **Step 2: Run to verify failure** — `python -m unittest tests.benchmarks.test_round1_seal -v` → ImportError.
 
 - [ ] **Step 3: Implement `round1_seal.py`**
 
-Rules to encode in `machine_check` (spec §5.4, machine-checkable only): (1) 3–7 words; unigram set ≠ any catalog operationId unigram set (derive operationId tokens from the last path segment? No — the catalog carries `key` only; add `operation_id` to catalog records and compare `unigram_set(operation_id)`); no 2 consecutive content tokens copied from the expected op's `summary` or any tag (compare consecutive token pairs of the query, STOPWORDS removed, against consecutive pairs of `unigram list` of summary/tags); (2) held_out count 16 and distributions per §5.4.2 (use `distribution()`); (3) negative count 8, `expected_top1_any == []`, `forbidden_top1` ≥ 1, all keys in catalog; (4) no query string / unigram-set reuse against `bench["seed"] + bench["regression_negative"]` and within the plaintext; (5) every expected/forbidden key ∈ catalog. `product_named` counts records whose unigram set contains `jira` or `confluence`. `seal_metadata` returns `{"sealed": True, "round": r, "count": n, "sha256": canonical_sha256(records), "distribution": distribution(records)}`. `seal` command also writes top-level `round1_seal = {"held_out_sha256", "negative_sha256", "registry_fingerprint", "spec_sha256"}` and leaves `seed`/`regression_negative` untouched; it refuses if any `machine_check` violation exists. `unseal` verifies hashes then replaces the two lists. Import `canonical_sha256`, `unigram_set`, `STOPWORDS` from `evaluator`. Keep the file under ~200 lines; write in chunks.
+Rules to encode in `machine_check` (spec §5.4, machine-checkable only; every message starts with the record id and names the rule with the words used by the tests: `words`, `operationId`, `summary`, `reuse`, `held_out`/`negative` count, `source`/`method`/`product_named`, `forbidden`, `catalog`): (1) 3–7 whitespace words; `unigram_set(query)` ≠ `unigram_set(operation_id)` of any internal-catalog op; no 2 consecutive content tokens (STOPWORDS removed, in order) shared between the query and the expected op's `summary` or any of its tags; (2) held_out count 16 and distributions per spec §5.4.2 computed by `distribution(records, "held_out")`; (3) negative count 8, `expected_top1_any == []`, `forbidden_top1` ≥ 1; (4) no query string / unigram-set reuse against `bench["seed"] + bench["regression_negative"]` and within the plaintext (both sets together); (5) every expected/forbidden key ∈ internal catalog; also `evaluator.check_schema` on both sections. `seal_metadata(records, round, section_name, internal_catalog)` returns `{"sealed": True, "round": r, "count": n, "sha256": canonical_sha256(records), "distribution": distribution(records, section_name)}`. `seal` writes both sections' metadata and top-level `round1_seal = {"held_out_sha256", "negative_sha256", "registry_fingerprint", "spec_sha256"}`, leaves `seed`/`regression_negative` untouched, refuses on any violation. `unseal` verifies hashes then replaces the two lists. Import `canonical_sha256`, `unigram_set`, `STOPWORDS`, `check_schema` from `evaluator`. Keep the file under ~250 lines; write in chunks.
 
-- [ ] **Step 4: Run** — `python -m unittest tests.benchmarks.test_round1_seal -v` → PASS; full suite OK.
+- [ ] **Step 4: Bundled-file integrity tests** (append to `tests/benchmarks/test_evaluator.py`; they run in every state of the file):
 
-- [ ] **Step 5: Commit**
+```python
+class TestSealIntegrity(unittest.TestCase):
+    def setUp(self):
+        self.b = json.loads(BENCH.read_text(encoding="utf-8"))
+
+    def test_sealed_or_plain_matches_round1_seal(self):
+        seal = self.b.get("round1_seal")
+        for sect in ("held_out", "negative"):
+            section = self.b[sect]
+            if ev.is_sealed(section):
+                self.assertEqual(section["count"], section["count"]); self.assertRegex(section["sha256"], r"^[0-9a-f]{64}$")
+                self.assertEqual(section["sha256"], seal[f"{sect}_sha256"])
+            elif section:                       # plaintext after commit D
+                self.assertIsNotNone(seal, "plaintext hidden sets require round1_seal")
+                self.assertEqual(ev.canonical_sha256(section), seal[f"{sect}_sha256"])
+            # empty list before commit B: nothing to check
+
+    def test_hidden_plaintext_machine_rules(self):
+        from tests.benchmarks import round1_seal as rs
+        if ev.is_sealed(self.b["held_out"]) or not self.b["held_out"]:
+            print("hidden sets sealed or absent: machine rules checked at commit D"); return
+        cache = os.environ.get("ATLASSIAN_DOCS_ROUND1_CACHE")
+        if not cache or not pathlib.Path(cache).exists():
+            self.skipTest("snapshot not available for catalog rules")
+        _, internal, _, _ = rs.load_catalogs_from_cache(pathlib.Path(cache))
+        self.assertEqual(rs.machine_check({"held_out": self.b["held_out"], "negative": self.b["negative"]}, self.b, internal), [])
+```
+
+- [ ] **Step 5: Run** — `python -m unittest tests.benchmarks.test_round1_seal tests.benchmarks.test_evaluator -v` → PASS; full suite OK.
+
+- [ ] **Step 6: Commit**
 
 ```bash
-git add tests/benchmarks/round1_seal.py tests/benchmarks/test_round1_seal.py
+git add tests/benchmarks/round1_seal.py tests/benchmarks/test_round1_seal.py tests/benchmarks/test_evaluator.py
 git commit -m "bench: Round 1 seal tooling (catalog, machine checks, seal/unseal)
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
-- [ ] **Step 6 [controller]: Generate, review, seal → commit B**
+- [ ] **Step 7 [controller]: Generate, review, seal → commit B**
 
-1. `python tests/benchmarks/round1_seal.py catalog --cache-dir "$ATLASSIAN_DOCS_ROUND1_CACHE" --out /tmp/round1-catalog.json`.
-2. Clean-context generation: open a **new** ChatGPT conversation (or a fresh subagent with an empty context) and provide only the catalog file and the spec §5.4 rules (copy the machine-checkable and reviewer-check rules; do not mention failures, signals, aliases or this repo). Ask for `held_out` (16) and `negative` (8) records in the §5.1 schema with ids `h-001..h-016`, `n-001..n-008`, `origin` `held_out-r1`/`negative-r1`, `failure_classes: []`. Save the prompt text and its sha256; save the output as `$ATLASSIAN_DOCS_SEALED_BENCH`.
-3. `round1_seal.py check ...` — on violations, re-request with only "item N rejected; generate a replacement satisfying the original rules". Count re-requests.
-4. Reviewer check (controller or a fresh reviewer subagent given only the plaintext + catalog summaries/descriptions; it must not call `search_operations`): semantic query↔op correspondence, `ambiguous` validity, negative decoy validity.
+1. `python tests/benchmarks/round1_seal.py catalog --cache-dir "$ATLASSIAN_DOCS_ROUND1_CACHE" --out /tmp/round1-generator-catalog.json --internal-out ~/.atlassian_api_updater/sealed/round1-internal-catalog.json`. Only the generator catalog ever leaves the controller's context.
+2. Clean-context generation: open a **new** ChatGPT conversation (or a fresh subagent with an empty context) and provide only the **generator** catalog file and the spec §5.4 rules (copy the machine-checkable and reviewer-check rules; do not mention failures, signals, aliases or this repo). Ask for `held_out` (16) and `negative` (8) records in the §5.1 schema with ids `h-001..h-016`, `n-001..n-008`, `origin` `held_out-r1`/`negative-r1`, `failure_classes: []`. Save the prompt text and its sha256; save the output as `$ATLASSIAN_DOCS_SEALED_BENCH`.
+3. `round1_seal.py check --plain ... --bench ... --internal-catalog ~/.atlassian_api_updater/sealed/round1-internal-catalog.json` — on violations, re-request with only "item N rejected; generate a replacement satisfying the original rules". Count re-requests.
+4. Reviewer check (controller or a fresh reviewer subagent given only the plaintext + the **internal** catalog, which carries `description`; it must not call `search_operations` and must not see the seed file): semantic query↔op correspondence, `ambiguous` validity, negative decoy validity.
 5. `round1_seal.py seal --plain "$ATLASSIAN_DOCS_SEALED_BENCH" --bench tests/benchmarks/search_queries.json --cache-dir "$ATLASSIAN_DOCS_ROUND1_CACHE"`; run the full suite; commit:
    ```bash
    git add tests/benchmarks/search_queries.json
@@ -387,7 +479,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 - Modify: `tools/atlassian_docs/intelligence/policy.py` (`_token_ok` uses the new singular rule; no other change yet)
 
 **Interfaces:**
-- Produces: `tokenize_unigrams(text) -> tuple[str, ...]`, `singular(t) -> str`, `token_forms(t) -> frozenset`, `expand_token_forms(tokens) -> frozenset`, `joined_query_forms(query) -> frozenset`; `tokenize(text)` kept as `expand_token_forms(tokenize_unigrams(text))` for existing callers; `_variants` removed (use `expand_token_forms`); `_query_tokens(query)` kept as `tokenize(query) | joined_query_forms(query)`.
+- Produces: `tokenize_unigrams(text) -> tuple[str, ...]`, `singular(t) -> str`, `token_forms(t) -> frozenset`, `expand_token_forms(tokens) -> frozenset`, `joined_query_forms(query) -> frozenset`; `tokenize(text)` kept as `expand_token_forms(tokenize_unigrams(text))` for existing callers; `_variants` removed. **`expand_query(query, pol)` changes**: `base = expand_token_forms(tokenize_unigrams(query))` (no joined forms), `direct`/`cond` form-expanded as before; joined forms never enter `QueryExpansion` (spec §6.1/§6.6). `_query_tokens(query)` stays only as the legacy helper `tokenize(query) | joined_query_forms(query)` (its existing tests keep passing) and is no longer used by `expand_query`.
 - Consumes: nothing new.
 
 - [ ] **Step 1: Failing tests** — replace `TestTokenize.test_plural_variants` and add:
@@ -414,6 +506,11 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
         self.assertEqual(search.joined_query_forms("IssueCreateMetadata get"), frozenset({"issuecreatemetadata"}))
         self.assertEqual(search.joined_query_forms("issue attachment"), frozenset())
         self.assertEqual(search._query_tokens("IssueCreateMetadata"), search.tokenize("IssueCreateMetadata") | {"issuecreatemetadata"})
+
+    def test_expansion_never_contains_joined_forms(self):
+        exp = search.expand_query("IssueCreateMetadata getIssue", policy.aliases())
+        self.assertNotIn("issuecreatemetadata", exp.all); self.assertNotIn("getissue", exp.all)
+        self.assertEqual(exp.base, frozenset({"issue", "create", "metadata", "get"}))
 ```
 
 - [ ] **Step 2: Run** — expected FAIL (`singular` etc. undefined; `statuse`).
@@ -482,9 +579,9 @@ def _query_tokens(query: str) -> frozenset:
     return tokenize(query) | joined_query_forms(query)
 ```
 
-Replace `_variants(x)` uses in `expand_query` with `expand_token_forms(x)`. In `policy._token_ok`, replace the manual plural check with `toks == frozenset({tok, search.singular(tok)})`.
+In `expand_query`: `base = expand_token_forms(tokenize_unigrams(query))`; replace `_variants(x)` with `expand_token_forms(x)`. `search_operations` keeps working in this task because `_score` still receives `exp` (joined forms temporarily drop out of lexical matching until Task 6 adds `lexical_base`; `test_exact_schema_name` relies on exact pinning, not on joined lexical tokens — verify, and if a Phase 2 test depends on joined lexical matching, keep it passing by passing `exp.base | joined_query_forms(query)` as the base set to `_score` in this task). In `policy._token_ok`, replace the manual plural check with `toks == frozenset({tok, search.singular(tok)})`.
 
-- [ ] **Step 4: Run full suite** — `python -m unittest discover -s tests -t .` → OK (1 expected failure remains). If any Phase 2 ranking test changes order because `statuse` no longer exists, inspect: it should not.
+- [ ] **Step 4: Run full suite** — `python -m unittest discover -s tests -t .` → OK (1 skipped remains). If any Phase 2 ranking test changes order because `statuse` no longer exists, inspect: it should not.
 
 - [ ] **Step 5: Commit**
 
@@ -505,7 +602,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 - Modify: `tests/intelligence/test_search.py` (`test_fields_and_fingerprint` expects version 3)
 
 **Interfaces:**
-- Produces: `RankingPolicy(version, verb_methods: Mapping[str, frozenset], path_noise: frozenset, product_hints: Mapping[str, frozenset], tuning_grid: Mapping[str, tuple], constants: Mapping[str, float|int], sha256, structure_sha256)`; `load_ranking(path=None) -> RankingPolicy`; `ranking()` lru_cache; `STRUCTURE_KEYS = ("verb_methods", "path_noise", "product_hints", "tuning_grid")`; `CONSTANT_KEYS = ("method_match_bonus", "method_mismatch_penalty", "path_unmatched_penalty", "path_unmatched_cap", "product_hint_bonus")`.
+- Produces: `RankingPolicy(version, verb_methods: Mapping[str, frozenset], path_noise: frozenset, product_hints: Mapping[str, frozenset], tuning_grid: Mapping[str, tuple], baseline: Mapping[str, float|int], constants: Mapping[str, float|int], sha256, structure_sha256)`; `load_ranking(path=None) -> RankingPolicy`; `ranking()` lru_cache; `STRUCTURE_KEYS = ("verb_methods", "path_noise", "product_hints", "tuning_grid", "baseline")`; `CONSTANT_KEYS = ("method_match_bonus", "method_mismatch_penalty", "path_unmatched_penalty", "path_unmatched_cap", "product_hint_bonus")`.
 - Changes: `intelligence_fingerprint(registry_fp, aliases_sha256, overrides_sha256)` blob becomes `[registry_fp, aliases_sha256, overrides_sha256 or "-", ranking().sha256, POLICY_VERSIONS json]`; `policy_block(...)` adds `ranking_sha256`, `ranking_structure_sha256`; `POLICY_VERSIONS = {"search": 3, "quirks": 1, "oas_transpiler": 1}`.
 - Consumed by Task 6 (`search._structural_signals`) and Task 7 (tuning script writes `constants`).
 
@@ -520,14 +617,15 @@ class TestRankingPolicy(unittest.TestCase):
         rp = policy.load_ranking()
         self.assertEqual(rp.verb_methods["move"], frozenset({"PUT", "POST"})); self.assertIn("rest", rp.path_noise)
         self.assertEqual(rp.product_hints["jira"], frozenset({"jira-platform", "jira-software"}))
-        self.assertEqual(set(rp.constants), set(policy.CONSTANT_KEYS)); self.assertEqual(len(rp.sha256), 64)
+        self.assertEqual(set(rp.constants), set(policy.CONSTANT_KEYS)); self.assertEqual(set(rp.baseline), set(policy.CONSTANT_KEYS)); self.assertEqual(len(rp.sha256), 64)
         from tests.benchmarks.test_evaluator import RANKING_STRUCTURE_SHA256
         self.assertEqual(rp.structure_sha256, RANKING_STRUCTURE_SHA256)
         self.assertIs(policy.ranking(), policy.ranking())
 
     def test_constants_change_only_full_hash(self):
         raw = self._raw(); a = policy.load_ranking()
-        raw["constants"]["method_match_bonus"] = 3.0
+        other = next(v for v in raw["tuning_grid"]["method_match_bonus"] if v != raw["constants"]["method_match_bonus"])
+        raw["constants"]["method_match_bonus"] = other          # any grid value that differs from the current one
         b = self._from(raw)
         self.assertNotEqual(a.sha256, b.sha256); self.assertEqual(a.structure_sha256, b.structure_sha256)
 
@@ -551,6 +649,7 @@ class TestRankingPolicy(unittest.TestCase):
                dict(base, product_hints={**base["product_hints"], "jira": ["nowhere"]}),
                dict(base, product_hints={**base["product_hints"], "jira": []}),
                dict(base, tuning_grid={k: v for k, v in base["tuning_grid"].items() if k != "product_hint_bonus"}),
+               dict(base, baseline={**base["baseline"], "path_unmatched_cap": 99}),
                dict(base, constants={**base["constants"], "path_unmatched_cap": True}),
                dict(base, constants={**base["constants"], "method_match_bonus": -1.0}),
                dict(base, extra=1)]
@@ -591,7 +690,7 @@ Add after `QuirkOverrides`:
 
 ```python
 _METHODS = frozenset({"GET", "POST", "PUT", "PATCH", "DELETE"})
-STRUCTURE_KEYS = ("verb_methods", "path_noise", "product_hints", "tuning_grid")
+STRUCTURE_KEYS = ("verb_methods", "path_noise", "product_hints", "tuning_grid", "baseline")
 CONSTANT_KEYS = ("method_match_bonus", "method_mismatch_penalty", "path_unmatched_penalty", "path_unmatched_cap", "product_hint_bonus")
 _WORD = re.compile(r"^[a-z]+$"); _NOISE = re.compile(r"^[a-z0-9]+$")
 
@@ -603,6 +702,7 @@ class RankingPolicy:
     path_noise: frozenset
     product_hints: Mapping[str, frozenset]
     tuning_grid: Mapping[str, tuple]
+    baseline: Mapping[str, float]
     constants: Mapping[str, float]
     sha256: str
     structure_sha256: str
@@ -620,7 +720,7 @@ def load_ranking(path: Optional[pathlib.Path] = None) -> RankingPolicy:
     from .. import sources
     raw = _read(path or DATA_DIR / "search_ranking.json")
     if not isinstance(raw, dict) or set(raw) != {"version", *STRUCTURE_KEYS, "constants"}:
-        raise ValueError("ranking policy must have exactly version, verb_methods, path_noise, product_hints, tuning_grid, constants")
+        raise ValueError("ranking policy must have exactly version, verb_methods, path_noise, product_hints, tuning_grid, baseline, constants")
     if not isinstance(raw["version"], int) or isinstance(raw["version"], bool) or raw["version"] < 1:
         raise ValueError("version must be an int >= 1")
     verbs = {}
@@ -636,23 +736,24 @@ def load_ranking(path: Optional[pathlib.Path] = None) -> RankingPolicy:
         if k is None or not _WORD.match(k) or not isinstance(v, list) or not v or len(set(v)) != len(v) or not set(v) <= set(sources.SOURCES):
             raise ValueError(f"invalid product_hints entry {k!r}")
         hints[k] = frozenset(v)
-    grid, consts = raw["tuning_grid"], raw["constants"]
-    if not isinstance(grid, dict) or not isinstance(consts, dict) or set(grid) != set(CONSTANT_KEYS) or set(consts) != set(CONSTANT_KEYS):
-        raise ValueError("tuning_grid and constants must both have exactly the five constant keys")
-    out_grid, out_consts = {}, {}
+    grid, consts, basel = raw["tuning_grid"], raw["constants"], raw["baseline"]
+    if not all(isinstance(d, dict) and set(d) == set(CONSTANT_KEYS) for d in (grid, consts, basel)):
+        raise ValueError("tuning_grid, baseline and constants must each have exactly the five constant keys")
+    out_grid, out_consts, out_base = {}, {}, {}
     for k in CONSTANT_KEYS:
         integer = k == "path_unmatched_cap"
         vals = grid[k]
         if not isinstance(vals, list) or not vals or len(set(vals)) != len(vals):
             raise ValueError(f"tuning_grid[{k}] must be a non-empty list without duplicates")
         out_grid[k] = tuple(_num(v, f"tuning_grid[{k}]", integer) for v in vals)
-        c = _num(consts[k], f"constants[{k}]", integer)
-        if c not in out_grid[k]:
-            raise ValueError(f"constants[{k}]={c} is outside its tuning grid")
-        out_consts[k] = c
+        for name, src, dst in (("constants", consts, out_consts), ("baseline", basel, out_base)):
+            c = _num(src[k], f"{name}[{k}]", integer)
+            if c not in out_grid[k]:
+                raise ValueError(f"{name}[{k}]={c} is outside its tuning grid")
+            dst[k] = c
     return RankingPolicy(raw["version"], MappingProxyType(verbs), frozenset(noise), MappingProxyType(hints),
-                         MappingProxyType(out_grid), MappingProxyType(out_consts), canonical_sha256(raw),
-                         canonical_sha256({k: raw[k] for k in STRUCTURE_KEYS}))
+                         MappingProxyType(out_grid), MappingProxyType(out_base), MappingProxyType(out_consts),
+                         canonical_sha256(raw), canonical_sha256({k: raw[k] for k in STRUCTURE_KEYS}))
 
 
 @functools.lru_cache(maxsize=1)
@@ -662,7 +763,7 @@ def ranking() -> RankingPolicy:
 
 Change `POLICY_VERSIONS["search"]` to 3; in `intelligence_fingerprint` insert `ranking().sha256` before the versions JSON; in `policy_block` add `"ranking_sha256": ranking().sha256, "ranking_structure_sha256": ranking().structure_sha256`.
 
-- [ ] **Step 4: Run full suite** → OK (expected failure remains). Also check `tests/test_layering.py` still passes (`from .. import sources` inside the function is fine).
+- [ ] **Step 4: Run full suite** → OK (1 skipped remains). Also check `tests/test_layering.py` still passes (`from .. import sources` inside the function is fine).
 
 - [ ] **Step 5: Commit**
 
@@ -709,28 +810,32 @@ class TestStructuralSignals(unittest.TestCase):
                                  search.path_tokens_for(path, self.rp.path_noise), source, method)
 
     def test_path_penalty_origin_once_and_cap(self):
+        c = self.rp.constants
         e = self._entry("/rest/api/3/issue/{k}/properties")
         val, sig = search._structural_signals(e, ("get", "issue"), frozenset({"get", "issue"}), self.rp)
-        self.assertEqual(sig["path_unmatched"], {"value": -1.0, "tokens": ["properties"]})
+        self.assertEqual(sig["path_unmatched"], {"value": -c["path_unmatched_penalty"], "tokens": ["properties"]})
         val2, sig2 = search._structural_signals(e, ("get", "property"), frozenset({"get", "property"}), self.rp)
         self.assertEqual(sig2["path_unmatched"]["value"], 0.0)                                    # plural matched via forms
-        deep = self._entry("/a/b/c/d/e")
+        deep = self._entry("/alpha/beta/gamma/delta/epsilon")                                     # 5 real origins (>= 2 chars)
+        self.assertEqual(len(deep.path_tokens), 5)
         _, sig3 = search._structural_signals(deep, ("zzz",), frozenset({"zzz"}), self.rp)
-        self.assertEqual(sig3["path_unmatched"]["value"], -self.rp.constants["path_unmatched_cap"] * self.rp.constants["path_unmatched_penalty"])
+        self.assertEqual(sig3["path_unmatched"]["value"], -c["path_unmatched_cap"] * c["path_unmatched_penalty"])
+        self.assertEqual(len(sig3["path_unmatched"]["tokens"]), 5)                                # tokens list is not capped, only the value
 
     def test_method_intent(self):
+        c = self.rp.constants
         e = self._entry("/x", method="POST")
-        self.assertEqual(search._structural_signals(e, ("add", "x"), frozenset({"add", "x"}), self.rp)[1]["method_intent"], {"value": 2.0, "allowed": ["POST"]})
-        self.assertEqual(search._structural_signals(e, ("get", "x"), frozenset({"get", "x"}), self.rp)[1]["method_intent"], {"value": -2.0, "allowed": ["GET"]})
+        self.assertEqual(search._structural_signals(e, ("add", "x"), frozenset({"add", "x"}), self.rp)[1]["method_intent"], {"value": c["method_match_bonus"], "allowed": ["POST"]})
+        self.assertEqual(search._structural_signals(e, ("get", "x"), frozenset({"get", "x"}), self.rp)[1]["method_intent"], {"value": -c["method_mismatch_penalty"], "allowed": ["GET"]})
         self.assertEqual(search._structural_signals(e, ("x",), frozenset({"x"}), self.rp)[1]["method_intent"], {"value": 0.0, "allowed": []})
         self.assertEqual(search._structural_signals(e, ("get", "delete", "x"), frozenset(), self.rp)[1]["method_intent"]["value"], 0.0)   # conflict
         self.assertEqual(search._structural_signals(e, ("move", "x"), frozenset(), self.rp)[1]["method_intent"]["allowed"], ["POST", "PUT"])
         patch = self._entry("/x", method="PATCH")
-        self.assertEqual(search._structural_signals(patch, ("update", "x"), frozenset(), self.rp)[1]["method_intent"]["value"], -2.0)  # review focus 1
+        self.assertEqual(search._structural_signals(patch, ("update", "x"), frozenset(), self.rp)[1]["method_intent"]["value"], -c["method_mismatch_penalty"])  # review focus 1
 
     def test_product_hint(self):
         j = self._entry("/x", source="jira-software"); c = self._entry("/x", source="confluence")
-        self.assertEqual(search._structural_signals(j, ("jira", "x"), frozenset(), self.rp)[1]["product_hint"], {"value": 3.0, "sources": ["jira-platform", "jira-software"]})
+        self.assertEqual(search._structural_signals(j, ("jira", "x"), frozenset(), self.rp)[1]["product_hint"], {"value": self.rp.constants["product_hint_bonus"], "sources": ["jira-platform", "jira-software"]})
         self.assertEqual(search._structural_signals(c, ("jira", "x"), frozenset(), self.rp)[1]["product_hint"]["value"], 0.0)
         self.assertEqual(search._structural_signals(c, ("x",), frozenset(), self.rp)[1]["product_hint"], {"value": 0.0, "sources": []})
 
@@ -760,19 +865,25 @@ class TestScoringAlgorithm(unittest.TestCase):
         self.assertEqual(set(out["intelligence_policy"]) >= {"ranking_sha256", "ranking_structure_sha256"}, True)
 ```
 
-Add a numeric end-to-end test using a hand-built state (two synthetic operations via `models.Operation` from a tiny inline OpenAPI dict normalized with `normalizer.normalize_openapi`): op A `GET /widgets` summary "List widgets", op B `GET /widgets/{id}/history` summary "Widget history", op C deprecated `GET /widgets/legacy`. Query `"list widgets"`: assert A.score == (5·0 + 4·2 [summary: list, widgets] + 3·1 [path: widgets] + method 0 + ALL_MATCH 2) + method_intent(+2, GET) − path 0 = exactly the computed number; B gets path penalty −1 (`history` unmatched); C gets `× 0.7`; then a query whose structural penalty exceeds lexical (`"get zzz"` against a 5-deep path with `zzz` only in description) yields no result (clamp → 0 → excluded). Write the expected numbers in the test after computing them once by hand; the numbers must not be derived by calling the scorer.
+Add a numeric end-to-end test (`TestScoringNumbers`) using a hand-built state (synthetic operations from a tiny inline OpenAPI dict normalized with `normalizer.normalize_openapi`, `source="jira-platform"`): op A `GET /widgets` summary "List widgets", op B `GET /widgets/{id}/history` summary "Widget history", op C deprecated `GET /widgets/legacy` summary "List widgets". **Patch the policy for the whole test class**: `mock.patch.object(policy, "ranking", return_value=<RankingPolicy built from a fixed dict with constants 2.0/2.0/1.0/3/3.0>)` so the numbers do not depend on Task 7's tuned values (also patch `policy.aliases` with an empty `AliasPolicy(0.5, 1.0, {}, (), "x")`). Query `"list widgets"`: A = summary 4·2 (`list`, `widgets`) + path 3·1 (`widgets`) + method-field 1·0 + ALL_MATCH 2 = 13, structural = +2 (GET) + 0 + 0 → **15.0**; B = summary 4·1 (`widgets` via `widget` forms — check the field's token forms; if `widget` does not match `widgets`, B's summary hit is 0 and the number changes accordingly: compute by hand once, write it down) + path 3·1, structural +2 −1 (`history`), no all-match; C = A's lexical 13 + 2 = 15 × 0.7 = **10.5**; a query `"get zzz"` against an op whose only `zzz` is in `description` (1·1 = 1 lexical) with a 5-deep unmatched path gives clamp(1 + 2 − 3) = 0 → excluded. Assert the exact floats, the order A > B > C, and `total_matches` == number of ops with `final > 0`. The numbers must be computed by hand in the test's comments, not by calling the scorer.
 
 Also add to `tests/test_layering.py`:
 
 ```python
     def test_ranking_constants_not_in_search_py(self):
+        """AC-05: inside _structural_signals every numeric literal is 0/1 (structure only) and every
+        bonus/penalty/cap/table is read through the RankingPolicy argument."""
         path = PKG / "intelligence" / "search.py"
         tree = ast.parse(path.read_text(encoding="utf-8"))
-        floats = {node.value for node in ast.walk(tree) if isinstance(node, ast.Constant) and isinstance(node.value, float)}
-        self.assertTrue(floats <= {0.0, 1.0, 0.7}, floats)      # DEPRECATED_FACTOR and the +1.0 pin are the only float literals
-        names = {node.id for node in ast.walk(tree) if isinstance(node, ast.Name)}
-        for forbidden in ("METHOD_INTENT", "PRODUCT_HINTS", "PATH_NOISE", "VERB_METHODS"):
-            self.assertNotIn(forbidden, names)
+        fn = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "_structural_signals")
+        nums = {n.value for n in ast.walk(fn) if isinstance(n, ast.Constant) and isinstance(n.value, (int, float)) and not isinstance(n.value, bool)}
+        self.assertTrue(nums <= {0, 1, 0.0, 1.0}, nums)
+        attrs = {n.attr for n in ast.walk(fn) if isinstance(n, ast.Attribute)}
+        self.assertTrue({"constants", "verb_methods", "path_noise", "product_hints"} - attrs <= {"path_noise"}, attrs)  # noise is applied at index build
+        subs = {n.slice.value for n in ast.walk(fn) if isinstance(n, ast.Subscript) and isinstance(n.slice, ast.Constant)}
+        self.assertTrue({"method_match_bonus", "method_mismatch_penalty", "path_unmatched_penalty", "path_unmatched_cap", "product_hint_bonus"} <= subs, subs)
+        module_names = {n.targets[0].id for n in tree.body if isinstance(n, ast.Assign) and isinstance(n.targets[0], ast.Name)}
+        self.assertFalse(any(k in module_names for k in ("VERB_METHODS", "PRODUCT_HINTS", "PATH_NOISE", "METHOD_INTENT")), module_names)
 ```
 
 - [ ] **Step 2: Run** → FAIL.
@@ -803,9 +914,9 @@ def _structural_signals(entry, query_unigrams, exp_all, rp):
     return mi["value"] + pu["value"] + ph["value"], {"method_intent": mi, "path_unmatched": pu, "product_hint": ph}
 ```
 
-`search_operations` per spec §6.6: `unigrams = tokenize_unigrams(query)`; `base = expand_token_forms(unigrams)`; `lexical_base = base | joined_query_forms(query)`; `exp = expand_query(query, pol)` (its `.base` stays `_query_tokens(query)` for alias/rule triggering; pass `lexical_base` explicitly to `_score`); all-match: `all(token_forms(q) & matched_base for q in unigrams)` where `matched_base` is the union of `lexical_base ∩ field` over fields; candidates only if `lexical > 0`; `final = max(lexical + structural, 0) × factor`; drop `final == 0`; sort `(-final, deprecated, key)`; `pinned_score = (max non-pinned final or 0.0) + 1.0`; `results = pinned + candidates`, then `[:limit]`; `exact_match = bool(pinned)`; `total_matches = len(pinned) + len(candidates)`. `_item(op, s, signals, match=None)`. Keep `query_tokens`/`alias_tokens`/`expanded_tokens` fields as today (from `exp`).
+`search_operations` per spec §6.6: `unigrams = tokenize_unigrams(query)`; `exp = expand_query(query, pol)` (Task 4: `exp.base` has no joined forms); `lexical_base = exp.base | joined_query_forms(query)`; `_score(entry, lexical_base, exp.direct, exp.cond, unigrams, pol) -> (lexical, matched_base)` where all-match is `all(token_forms(q) & matched_base for q in unigrams)` and `matched_base` is the union of `lexical_base ∩ field` over fields; structural from `_structural_signals(entry, unigrams, exp.all, rp)`; candidates only if `lexical > 0`; `final = max(lexical + structural, 0) × factor`; drop `final == 0`; sort `(-final, deprecated, key)`; `pinned_ops = exact_matches(...)`; `non_pinned = [c for c in candidates if c.key ∉ pinned_keys]`; `pinned_score = (max final of non_pinned or 0.0) + 1.0`; `results = pinned + non_pinned`, then `[:limit]`; `exact_match = bool(pinned)`; `total_matches = len(pinned) + len(non_pinned)` (no double count). `_item(op, s, signals, match=None)`. Keep `query_tokens`/`alias_tokens`/`expanded_tokens` fields as today (from `exp`).
 
-- [ ] **Step 4: Run full suite** — `python -m unittest discover -s tests -t .`. Phase 2 tests that legitimately change: `test_all_match_bonus_ignores_joined_forms` (adapt to the new `_score` signature: pass `lexical_base` and `unigrams`; the assertion intent — joined form absent from entry does not cancel the bonus — is unchanged); any ordering test whose new order the spec makes more correct must be updated and the reason recorded in the report (ledger). Expected failure on the seed benchmark may now pass or fail; leave the decorator until Task 7.
+- [ ] **Step 4: Run full suite** — `python -m unittest discover -s tests -t .`. Phase 2 tests that legitimately change: `test_all_match_bonus_ignores_joined_forms` (adapt to the new `_score` signature; the assertion intent — a joined form absent from the entry does not cancel the bonus — is unchanged); any ordering test whose new order the spec makes more correct must be updated and the reason recorded in the report (ledger). The seed benchmark test stays skipped until Task 7.
 
 - [ ] **Step 5: Commit**
 
@@ -827,11 +938,12 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 - Modify: `tools/atlassian_docs/intelligence/data/search_ranking.json` (`constants` only, written by the script)
 - Modify: `tools/atlassian_docs/intelligence/data/search_aliases.json` (`notes` for all entries; R4 additions only if needed)
 - Modify: `tools/atlassian_docs/intelligence/policy.py` (`load_aliases` validates `notes`)
-- Modify: `tests/intelligence/test_search.py` (remove `@expectedFailure`), `tests/benchmarks/test_evaluator.py` (`alias_notes_r4_only`, `tuning_log_adopted`), `tests/intelligence/test_policy.py` (notes validation)
+- Create: `tests/test_tune_search_ranking.py`
+- Modify: `tests/intelligence/test_search.py` (remove the `@skip`), `tests/benchmarks/test_evaluator.py` (`alias_notes_r4_only`, `tuning_log_adopted`, alias transition test), `tests/intelligence/test_policy.py` (notes validation)
 
 **Interfaces:**
 - `make_openapi_fixtures.py --cache DIR` (default `ROOT/.atlassian-docs`); SELECTIONS gain: jira-platform `/rest/api/3/issue/{issueIdOrKey}/properties`, `/rest/api/3/issuetypescheme/{issueTypeSchemeId}`, `/rest/api/3/jql/parse`, `/rest/api/3/projectvalidate/validProjectKey`, `/rest/api/3/issue/{issueIdOrKey}/assignee`, `/rest/api/3/issue/{issueIdOrKey}/comment`, `/rest/api/3/project/{projectIdOrKey}`, `/rest/api/3/attachment/{id}`, `/rest/api/3/user`, `/rest/api/3/users/search`, `/rest/api/3/users`; jira-software `/rest/software/1.0/sprint/{sprintId}/issue`, `/rest/agile/1.0/board`, `/rest/agile/1.0/backlog/{boardId}/issue`; confluence `/pages/{page-id}/properties/{property-id}`, `/pages/{page-id}/properties`, `/spaces/{id}/pages`, `/attachments/{id}`, `/pages/{id}/title`. (All verified present in the cache on 2026-09-30.)
-- `tests/tune_search_ranking.py --cache-dir DIR [--dry-run] [--note TEXT]`: loads bench `seed` + `regression_negative`, builds state from the cache dir (same fake `sync_all` as diag), evaluates **every** grid combination (constants injected by constructing a `RankingPolicy` copy with new `constants`/`sha256` and patching `policy.ranking` for the run; index is built once — `path_noise` is frozen so the index does not depend on constants), applies spec §8.2 selection, writes `constants` into `search_ranking.json` (unless `--dry-run`), appends one line to `tests/benchmarks/search-tuning-round1.jsonl` per spec §8.3, prints the selected tuple and pass counts, exit 0 if 22/22 and 7/7 else 1.
+- `tests/tune_search_ranking.py --cache-dir DIR [--dry-run] [--note TEXT] [--alias-change JSON]`: loads bench `seed` + `regression_negative`, builds state from the cache dir (same fake `sync_all` as diag), evaluates **every** grid combination (constants injected by constructing a `RankingPolicy` copy with new `constants`/`sha256` and patching `policy.ranking` for the run; the index is built once — `path_noise` is frozen so the index does not depend on constants), applies spec §8.2 selection via the pure function `select_candidate(results, baseline, grid) -> dict` (**baseline is `rp.baseline`, never the current constants**), writes `constants` into `search_ranking.json` (unless `--dry-run`), appends one line to `tests/benchmarks/search-tuning-round1.jsonl` per spec §8.3 with the extra fields `grid_size`, `passing_combos`, `baseline`, and — when `--alias-change` is given — `alias_change: {"seed_query_id", "policy_key", "before_pass", "after_pass"}` (the script computes `before_pass` by evaluating that seed query with the alias file as committed at HEAD and `after_pass` with the working-tree alias file; both at the selected constants), prints the selected tuple and pass counts, exit 0 if 22/22 and 7/7 else 1. Pure helpers: `grid_points(grid) -> list[dict]` (cartesian product, deterministic order), `l1_index_distance(point, baseline, grid) -> int`, `select_candidate(results, baseline, grid)` where `results` is `[(point, seed_pass, regression_pass)]`.
 - `search_aliases.json` gains top-level `notes` per spec §7 (`origin`, `seed_query_id`, `failure_classes`, `evidence`) for every alias word and `rule:<index>`; `load_aliases` requires `notes` to cover exactly the alias words and rule indices and validates the shape (`origin ∈ {"phase2.5","round1"}`; round1 entries need `seed_query_id` matching `^s-\d{3}$` and `"R4" ∈ failure_classes`).
 
 - [ ] **Step 1: Failing tests**
@@ -866,19 +978,70 @@ class TestAliasNotesAndTuningLog(unittest.TestCase):
             for k, v in l["selected"].items():
                 self.assertIn(v, raw["tuning_grid"][k])
             self.assertEqual(l["registry_fingerprint"], b["round1_seal"]["registry_fingerprint"])
+            self.assertEqual(l["baseline"], raw["baseline"])
+
+    def test_every_round1_alias_has_one_false_to_true_transition(self):
+        raw = json.loads(ALIASES.read_text(encoding="utf-8"))
+        lines = [json.loads(l) for l in TUNING_LOG.read_text(encoding="utf-8").splitlines() if l.strip()]
+        changes = [l["alias_change"] for l in lines if l.get("alias_change")]
+        for key, n in raw["notes"].items():
+            if n["origin"] != "round1":
+                continue
+            mine = [c for c in changes if c["policy_key"] == key]
+            self.assertEqual(len(mine), 1, key); self.assertEqual((mine[0]["before_pass"], mine[0]["after_pass"]), (False, True), key)
+            self.assertEqual(mine[0]["seed_query_id"], n["seed_query_id"])
+```
+
+`tests/test_tune_search_ranking.py` (new; tests the pure selector — review finding P0-6):
+
+```python
+import unittest
+from tests import tune_search_ranking as tune
+
+GRID = {"method_match_bonus": [1.0, 2.0, 3.0], "method_mismatch_penalty": [0.0, 1.0, 2.0, 3.0], "path_unmatched_penalty": [0.5, 1.0, 1.5, 2.0],
+        "path_unmatched_cap": [2, 3, 4], "product_hint_bonus": [2.0, 3.0, 4.0]}
+BASE = {"method_match_bonus": 2.0, "method_mismatch_penalty": 2.0, "path_unmatched_penalty": 1.0, "path_unmatched_cap": 3, "product_hint_bonus": 3.0}
+
+
+def pt(**over):
+    return {**BASE, **over}
+
+
+class TestSelector(unittest.TestCase):
+    def test_grid_cardinality_and_order(self):
+        pts = tune.grid_points(GRID)
+        self.assertEqual(len(pts), 432); self.assertEqual(pts, sorted(pts, key=lambda p: tuple(p[k] for k in tune.CONSTANT_KEYS)))
+
+    def test_perfect_beats_non_perfect(self):
+        res = [(pt(method_match_bonus=3.0), 22, 7), (BASE, 21, 7)]
+        self.assertEqual(tune.select_candidate(res, BASE, GRID), pt(method_match_bonus=3.0))
+
+    def test_l1_then_magnitude_then_lexicographic(self):
+        near, far = pt(product_hint_bonus=4.0), pt(method_match_bonus=1.0, path_unmatched_cap=4)
+        self.assertEqual(tune.select_candidate([(far, 22, 7), (near, 22, 7)], BASE, GRID), near)          # L1 1 < 2
+        a, b = pt(method_match_bonus=1.0), pt(method_match_bonus=3.0)                                       # both L1 = 1
+        self.assertEqual(tune.select_candidate([(b, 22, 7), (a, 22, 7)], BASE, GRID), a)                    # smaller magnitude sum
+        c, d = pt(method_mismatch_penalty=1.0), pt(path_unmatched_penalty=0.5)                              # L1 1, sums 7.0 vs 7.5
+        self.assertEqual(tune.select_candidate([(d, 22, 7), (c, 22, 7)], BASE, GRID), c)
+        e, f = pt(method_match_bonus=1.0, method_mismatch_penalty=3.0), pt(method_match_bonus=3.0, method_mismatch_penalty=1.0)  # equal L1 and sum
+        self.assertEqual(tune.select_candidate([(f, 22, 7), (e, 22, 7)], BASE, GRID), e)                    # 5-tuple lexicographic
+
+    def test_fallback_when_no_perfect(self):
+        res = [(pt(product_hint_bonus=4.0), 21, 6), (BASE, 21, 7), (pt(method_match_bonus=1.0), 20, 7)]
+        self.assertEqual(tune.select_candidate(res, BASE, GRID), BASE)                                     # seed max, then regression max
 ```
 
 `tests/intelligence/test_policy.py`: `test_alias_notes_required_and_validated` — loading a temp file without `notes`, with an unknown key in `notes`, or with `origin: "round1"` lacking `seed_query_id` raises `ValueError`; the bundled file loads.
 
-`tests/intelligence/test_search.py`: remove `@unittest.expectedFailure`.
+`tests/intelligence/test_search.py`: remove the `@unittest.skip` decorator.
 
 - [ ] **Step 2: Fixtures** — add `--cache` to the generator; run `python tests/fixtures/openapi/make_openapi_fixtures.py --cache "$ATLASSIAN_DOCS_ROUND1_CACHE"`; run twice and confirm identical output; run the full suite and fix tests that depended on fixture op counts (report each).
 
 - [ ] **Step 3: Alias notes + loader validation** — add `notes` for the 8 existing aliases and 3 rules (`origin: "phase2.5"`, `seed_query_id: null`, `failure_classes: []`, `evidence: "phase2.5 §6.1"`); implement validation in `load_aliases` (notes are excluded from nothing — `sha256` still hashes the whole raw file).
 
-- [ ] **Step 4: Tuning script** — write `tests/tune_search_ranking.py` (chunked); run `python tests/tune_search_ranking.py --cache-dir "$ATLASSIAN_DOCS_ROUND1_CACHE" --note "initial grid sweep"`. If the result is not 22/22 + 7/7, inspect the failing seed records: for those with `"R4" ∈ failure_classes` and still failing, add **one** alias or rule (spec §7 candidates: `jql → search` / `{jql} → searchandreconsileissuesusingjql, search`; `{issue, assignee} → assignissue`) with `origin: "round1"` notes, then re-run the script with `--note "alias:<word> for s-0xx (before: fail, after: ?)"`. Do not touch tables, grid, or any R1–R3 record via aliases. If 22/22 is still not reachable, stop and report `DONE_WITH_CONCERNS` with the failing top-5s; the controller rules.
+- [ ] **Step 4: Tuning script** — write `tests/tune_search_ranking.py` (chunked) and `tests/test_tune_search_ranking.py` first (TDD on the pure selector); run `python tests/tune_search_ranking.py --cache-dir "$ATLASSIAN_DOCS_ROUND1_CACHE" --note "initial grid sweep"`. If the result is not 22/22 + 7/7, inspect the failing seed records: for those with `"R4" ∈ failure_classes` and still failing at the selected constants, add **one** alias or rule (spec §7 candidates: `jql → search` / `{jql} → searchandreconsileissuesusingjql, search`; `{issue, assignee} → assignissue`) with `origin: "round1"` notes, then re-run with `--alias-change '{"seed_query_id": "s-015", "policy_key": "jql"}' --note "R4 alias for s-015"` so the log records `before_pass`/`after_pass`. Do not touch tables, grid, baseline, or any R1–R3 record via aliases. If 22/22 is still not reachable, stop and report `DONE_WITH_CONCERNS` with the failing top-5s; the controller rules.
 
-- [ ] **Step 5: Run the full suite** → OK, no expected failures, seed 22/22 and regression 7/7 on fixtures.
+- [ ] **Step 5: Run the full suite** → OK, nothing skipped, seed 22/22 and regression 7/7 on fixtures.
 
 - [ ] **Step 6: Commit** (one commit for fixtures + tests, one for the tuning script + adopted constants + aliases; both between B and C)
 
@@ -887,7 +1050,7 @@ git add tests/fixtures tests/intelligence tests/benchmarks/test_evaluator.py tes
 git commit -m "test: competitor fixtures from snapshot, alias notes schema, seed 22/22 on fixtures
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
-git add tests/tune_search_ranking.py tests/benchmarks/search-tuning-round1.jsonl tools/atlassian_docs/intelligence/data/search_ranking.json
+git add tests/tune_search_ranking.py tests/test_tune_search_ranking.py tests/benchmarks/search-tuning-round1.jsonl tools/atlassian_docs/intelligence/data/search_ranking.json
 git commit -m "search: grid-exhaustive deterministic tuning (Round 1 constants adopted)
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
@@ -900,15 +1063,16 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 **Files:**
 - Modify: `tests/diag_search_queries.py`
 - Modify: `tests/benchmarks/round1_seal.py` (add `evaluation_code_sha256()` helper per spec §5.7 — or place it in `evaluator.py`; choose `evaluator.py` so the hash covers itself)
-- Modify: `tests/benchmarks/test_evaluator.py` (`test_final_artifact` — skips with a printed reason when `tests/benchmarks/round1-final.json` is absent; when present, checks spec §5.8 (b),(c))
+- Modify: `tests/benchmarks/test_evaluator.py` (`test_final_artifact` — passes with a printed reason when `tests/benchmarks/round1-final.json` is absent; when present, checks spec §5.8 (b),(c); `test_policy_vocabulary_provenance` — every alias word, rule token, verb, hint token and noise token appears in seed query unigrams ∪ fixture operationId/path unigrams; docstring states this is provenance, not a seal proof)
+- Create: `tests/test_diag_search_queries.py`
 - Modify: `README.md`, `AGENTS.md`, `docs/superpowers/specs/2026-09-29-phase2.5-discovery-hardening-design.md` (§6 one line: "search policy version 3 is specified in the Round 1 spec"; §11.2 rule 5: `oneOf` → `anyOf`), `docs/phase3-readiness.md` (Round 1 section skeleton: decision record fields, state model per spec §11)
 
 **Interfaces:**
 - `diag_search_queries.py` options and output per spec §9: `--sets`, `--bench PATH`, `--cache-dir DIR`, `--json OUT`; seal check on start (exit 2 when `--bench` given and the loaded registry fingerprint/spec shas differ from `round1_seal`); JSON fields: sets, failures with top-5 `{key, score, signals}`, `git_commit`, `registry_fingerprint`, `intelligence_fingerprint`, `ranking_sha256`, `ranking_structure_sha256`, `alias_sha256`, `evaluation_code_sha256`, `sealed_sha256` (`{"held_out", "negative"}` when `--bench`), `spec_sha256`, `run_at`.
 - `evaluator.evaluation_code_sha256(root) -> str` over the four files sorted by path: `sha256(concat(path.encode() + b"\0" + raw_bytes + b"\0"))`.
 
-- [ ] **Step 1: Failing tests** — `test_evaluation_code_sha256_is_stable_and_path_sensitive` (hash of the repo files is 64 hex and equals a recomputation; renaming the root argument changes nothing because paths are relative to root); `test_diag_cli_sets_and_cache_dir` (run the script via `subprocess` with `--sets seed --cache-dir <a temp copy of the fixtures? no — use the fixture-based state>`: simplest is to give the script a `--fixtures` mode? Not in spec. Instead unit-test the internal functions: refactor `main()` into `run(args) -> dict` and test `run(["--sets", "seed", "--cache-dir", str(snapshot_or_skip)])` skipping when no cache dir is available; test the seal-mismatch branch by passing a fake `round1_seal`).
-- [ ] **Step 2: Implement** the script (chunked), keeping exit 0 for normal runs and exit 2 for seal mismatch.
+- [ ] **Step 1: Failing tests** — in `tests/benchmarks/test_evaluator.py`: `test_evaluation_code_sha256_is_stable_and_path_sensitive` (64 hex; equals a recomputation; changing one byte of a temp copy of one of the four files changes the hash; the hash is over paths relative to the root argument). In `tests/test_diag_search_queries.py` (**no skips** — review finding P0-11): build a temporary cache directory from the three fixture files (`tests/fixtures/openapi/<source>-openapi.json` copied to `<tmp>/<source>.json`) plus a `metadata.json` written the way `storage` expects (copy the shape from `tests/intelligence/test_manager.py::write_cache`); refactor `main()` into `run(argv) -> (exit_code, report)`; assert: `run(["--sets", "seed", "--cache-dir", tmp])` uses that directory (report `registry_fingerprint` equals the fingerprint of a registry built from the fixtures, and `storage.CACHE_DIR` is restored afterwards); with a bench file whose `round1_seal.registry_fingerprint` matches → exit 0; with a mismatching `round1_seal` and `--bench` given → exit 2 and no evaluation; `--bench` plaintext file is evaluated and `sealed_sha256` reported; `--json` writes the report with all spec §9 fields.
+- [ ] **Step 2: Implement** the script (chunked): `run(argv)` returns `(code, report)`; `main()` prints and exits; `--cache-dir` patches `storage.CACHE_DIR` in a `try/finally`; `--bench` reads a plaintext file and evaluates its `held_out`/`negative` only after the seal check passes; exit 0 normal, 2 on seal mismatch.
 - [ ] **Step 3: Docs** — README Phase 2.5 section: add "검색 품질 라운드 1" paragraph (signals, product hints, version 3, tuning script, sealed benchmark procedure, `--cache-dir`); AGENTS.md: one line — "`signals` explains why a result ranked; add a product word (`jira`/`confluence`) to disambiguate"; Phase 2.5 spec §6/§11.2 lines; readiness skeleton with the decision-record fields from commit B (controller fills values).
 - [ ] **Step 4: Run full suite; commit**
 
@@ -924,22 +1088,26 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ### Task 9 [controller]: Commit C — freeze
 
 - [ ] Run the full suite; run `python tests/diag_search_queries.py --sets seed,regression_negative --cache-dir "$ATLASSIAN_DOCS_ROUND1_CACHE"` → 22/22, 7/7 (this is the last non-gating run).
-- [ ] Compute `evaluation_code_sha256` (`python -c "from tests.benchmarks import evaluator as ev, pathlib; print(ev.evaluation_code_sha256(pathlib.Path('.')))"`), append "Round 1 frozen at <HEAD>" + the hash to `docs/phase3-readiness.md`, commit:
+- [ ] Create commit C as an **empty commit** so its SHA can be referenced later without self-reference (review finding P0-12):
   ```bash
-  git add docs/phase3-readiness.md
-  git commit -m "Round 1 freeze (commit C): scorer, policy data and evaluator frozen
+  git commit --allow-empty -m "Round 1 freeze (commit C): scorer, policy data and evaluator frozen
 
   Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+  C=$(git rev-parse HEAD)
+  python -c "from tests.benchmarks import evaluator as ev, pathlib; print(ev.evaluation_code_sha256(pathlib.Path('.')))"   # record for D
   ```
+  The C SHA and `evaluation_code_sha256` are written into `docs/phase3-readiness.md` in commit D, not in C.
 - [ ] Verify AC-01 interval rule: `git log --name-only T..B` and `C..HEAD` touch none of the mutable files.
 
 ### Task 10 [controller]: Commit D — unseal, final evaluation, readiness
 
 - [ ] From the commit-C checkout: `python tests/diag_search_queries.py --bench "$ATLASSIAN_DOCS_SEALED_BENCH" --cache-dir "$ATLASSIAN_DOCS_ROUND1_CACHE" --json tests/benchmarks/round1-final.json` — exactly once. Exit 2 means snapshot drift: stop and investigate; do not re-run against another cache.
 - [ ] `python tests/benchmarks/round1_seal.py unseal --plain "$ATLASSIAN_DOCS_SEALED_BENCH" --bench tests/benchmarks/search_queries.json`.
-- [ ] Run the full suite (now `test_final_artifact`, `sealed_or_plain`, `hidden_set_rules` run for real) → OK.
-- [ ] Fill the readiness 2nd-evaluation row and attestation fields; commit only `tests/benchmarks/search_queries.json`, `tests/benchmarks/round1-final.json`, `docs/phase3-readiness.md`:
+- [ ] Run the full suite with `ATLASSIAN_DOCS_ROUND1_CACHE` exported (now `test_final_artifact`, `test_sealed_or_plain_matches_round1_seal`, `test_hidden_plaintext_machine_rules` run against the real plaintext) → OK.
+- [ ] Fill the readiness 2nd-evaluation row (commit C SHA, `evaluation_code_sha256`, fingerprints, results, gate) and attestation fields; stage exactly the three whitelisted files and verify before committing:
   ```bash
+  git add tests/benchmarks/search_queries.json tests/benchmarks/round1-final.json docs/phase3-readiness.md
+  git diff --cached --name-only    # must list exactly those three paths
   git commit -m "Round 1 final evaluation (commit D): unseal held_out/negative, record gate result
 
   Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
@@ -974,3 +1142,4 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 - Type consistency: `IndexEntry(key, fields, path_tokens, source, method)` is introduced in Task 6 and used by the Task 6 tests; `registry.build_source_registry` (frozen) calls `search.build_index(ns.operations)` — signature kept. `_score` signature changes in Task 6; the only external caller is `test_all_match_bonus_ignores_joined_forms`, updated there.
 - Frozen-file check: Tasks 4–7 touch only `search.py`, `policy.py`, the two data files and tests; no frozen module is edited. `registry.py` needs no change because `build_index` keeps its signature and `IndexEntry` gains fields with values computed inside `build_index`.
 - Interval rule: Task 4 must start only after commit B exists (controller gate). Task 2 deliberately contains no `policy.py` change.
+- External review (ChatGPT, 2026-09-30) of this plan: 12 P0 + 6 P1 findings applied — generator/internal catalog split, `expand_query` joined-form contract, signal tests read constants from the policy and the numeric test patches a fixed policy, `/alpha/…` path fixture, persistent `baseline` in the frozen structure, pure `select_candidate` with tests, structured `alias_change` log records, one failing test per machine rule, `seal_metadata(records, round, section_name, catalog)` with negative distribution by `forbidden_top1[0]`, bundled-file seal/plaintext/provenance tests, no-skip diag `--cache-dir` tests on a temp fixture cache, empty commit C, `total_matches` without double count, stronger AST test, `@skip` instead of `expectedFailure`, refuse-if-exists snapshot copy, reviewer uses the internal catalog, explicit `git add` at D.
