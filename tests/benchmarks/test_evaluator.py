@@ -217,7 +217,7 @@ SPEC_R1 = ROOT / "docs" / "superpowers" / "specs" / "2026-09-30-search-quality-r
 # Words of the spec §6.2 tables (frozen at commit T, b3c2ba5, before the hidden sets were generated) that occur in
 # neither a seed query nor a fixture operationId/path. Exact equality below: a new uncovered word fails, and so does
 # a stale entry. Pending controller ruling (Task 8 report).
-PROVENANCE_EXCEPTIONS = frozenset({"epic", "find", "read", "rename", "show", "wiki"})
+PROVENANCE_EXCEPTIONS = frozenset({"epic", "find", "read", "rename"})
 
 
 class TestPolicyVocabularyProvenance(unittest.TestCase):
@@ -229,8 +229,7 @@ class TestPolicyVocabularyProvenance(unittest.TestCase):
         b = json.loads(BENCH.read_text(encoding="utf-8"))
         out = set(sources.SOURCES)
         for rec in b["seed"]:
-            if rec["origin"].endswith("-r0"):     # the Round-1 tuning seed; demoted r1 records (s-024..) came later
-                out |= ev.unigram_set(rec["query"])
+            out |= ev.unigram_set(rec["query"])   # every seed record (r0 + demoted r1) is Round 2 tuning vocabulary
         for name in sources.SOURCES:
             spec = json.loads((FIXTURES / f"{name}-openapi.json").read_text(encoding="utf-8"))
             for path, item in spec["paths"].items():

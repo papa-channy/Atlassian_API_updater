@@ -221,16 +221,13 @@ class TestExactMatch(unittest.TestCase):
         self.assertFalse(conf["exact_match"]); self.assertTrue(all("match" not in r for r in conf["results"]))
 
 
-R0_ORIGINS = frozenset({"seed-r0", "held_out-r0", "negative-r0"})
-
-
 class TestSeedBenchmark(unittest.TestCase):
     def test_seed_passes_on_fixtures(self):
         state = make_state("jira-platform", "jira-software", "confluence")
         fn = lambda q: [r["key"] for r in search.search_operations(state, q, limit=5)["results"]]
         # Only the Round-1 tuning set (r0 origins) targets fixture operations; demoted r1 records mostly do not.
-        seed = [r for r in BENCH["seed"] if r["origin"] in R0_ORIGINS]
-        neg = [r for r in BENCH["regression_negative"] if r["origin"] in R0_ORIGINS]
+        seed = [r for r in BENCH["seed"] if r["origin"].endswith("-r0")]
+        neg = [r for r in BENCH["regression_negative"] if r["origin"].endswith("-r0")]
         self.assertEqual((len(seed), len(neg)), (23, 6))
         res = evaluate(seed, fn)
         self.assertEqual(res["failed"], [], res)

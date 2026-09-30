@@ -15,9 +15,12 @@ def pt(**over):
 
 class TestSelector(unittest.TestCase):
     def test_totals_match_benchmark(self):
-        import json
-        b = json.loads(tune.BENCH_PATH.read_text(encoding="utf-8"))
-        self.assertEqual((S, R), (len(b["seed"]), len(b["regression_negative"])))
+        import json, pathlib
+        path = pathlib.Path(__file__).resolve().parent / "benchmarks" / "search_queries.json"
+        with path.open(encoding="utf-8") as fh:
+            b = json.load(fh)
+        self.assertEqual((tune.SEED_TOTAL, tune.REGRESSION_TOTAL), (39, 14))
+        self.assertEqual((tune.SEED_TOTAL, tune.REGRESSION_TOTAL), (len(b["seed"]), len(b["regression_negative"])))
 
     def test_grid_cardinality_and_order(self):
         pts = tune.grid_points(GRID)
