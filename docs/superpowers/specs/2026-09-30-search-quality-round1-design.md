@@ -273,7 +273,7 @@ exact_match = len(pinned_ops) > 0                             # limit로 잘려�
 ## 9. 진단 스크립트
 
 - 옵션: `--sets <list>`(기본: 봉인되지 않은 집합 전부), `--bench <path>`(봉인 해제 평문; 지정 시 `held_out`/`negative`는 그 파일에서), `--cache-dir <dir>`(기본 `storage.CACHE_DIR`; 지정 시 `storage.CACHE_DIR`를 런타임에 그 경로로 패치 — Phase 1 코드는 수정하지 않음), `--json <out>`.
-- 시작 시: 로드한 registry의 fingerprint와 source별 spec sha가 `search_queries.json`의 `round1_snapshot`과 같은지 검사. 다르면 `--sets`에 봉인 집합이 없을 때는 경고만, 있을 때는 exit 2.
+- 시작 시: 로드한 registry의 fingerprint와 source별 spec sha가 `search_queries.json`의 `round1_seal`과 같은지 검사. 다르면 `--sets`에 봉인 집합이 없을 때는 경고만, 있을 때는 exit 2.
 - 출력: 집합별 정답률, 실패별 top-5(key, score, signals), `git_commit`, `registry_fingerprint`, `intelligence_fingerprint`, `ranking_sha256`, `ranking_structure_sha256`, `alias_sha256`, `evaluation_code_sha256`, `sealed_sha256`(`--bench` 시), source별 spec sha, `run_at`.
 - 벤치마크 파일을 편집하지 않는다.
 
