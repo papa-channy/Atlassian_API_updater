@@ -266,8 +266,12 @@ class TestFinalArtifact(unittest.TestCase):
         self.assertEqual(art["spec_sha256"], seal["spec_sha256"])
         self.assertEqual(art["evaluation_code_sha256"], ev.evaluation_code_sha256(ROOT))
         for sect in ("held_out", "negative"):
-            self.assertIn(sect, art["sets"])
-            if ev.is_sealed(b[sect]):
-                continue
+            self.assertIsInstance(b[sect], list, f"{sect} must be plaintext once the final artifact exists")
+            self.assertTrue(b[sect], sect)
             want = "held_out-r1" if sect == "held_out" else "negative-r1"
-            self.assertEqual({r["origin"] for r in b[sect]}, {want}, sect)   # r1 only, hence no r0 record
+            self.assertEqual({r["origin"] for r in b[sect]}, {want}, sect)
+            self.assertFalse([r for r in b[sect] if r["origin"].endswith("-r0")], sect)
+            res = art["sets"][sect]
+            self.assertNotIn("sealed", res, sect)
+            self.assertTrue({"passed", "failed", "total"} <= set(res), sect)
+            self.assertEqual(res["total"], len(b[sect]), sect)

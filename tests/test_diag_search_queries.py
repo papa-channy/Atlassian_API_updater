@@ -49,6 +49,7 @@ class TestDiagScript(unittest.TestCase):
         cls.bench = json.loads(diag.BENCH.read_text(encoding="utf-8"))
         cls.good_bench = cls.write_bench("good.json", cls.fp, cls.spec_sha)
         cls.bad_bench = cls.write_bench("bad.json", "0" * 64, cls.spec_sha)
+        cls.bad_spec_bench = cls.write_bench("bad_spec.json", cls.fp, {**cls.spec_sha, "confluence": "f" * 64})
         seed, reg = cls.bench["seed"], cls.bench["regression_negative"]
         cls.plain = {"held_out": [{**seed[i], "id": f"h-00{i + 1}", "origin": "held_out-r1"} for i in range(2)],
                      "negative": [{**reg[0], "id": "n-001", "origin": "negative-r1"}]}
@@ -88,10 +89,24 @@ class TestDiagScript(unittest.TestCase):
         code, rep = self.run_diag("--bench-file", str(self.bad_bench), "--sets", "seed")
         self.assertEqual(code, 0); self.assertFalse(rep["seal_match"]); self.assertIn("seed", rep["sets"])
 
-    def test_seal_mismatch_with_bench_exits_two_without_evaluation(self):
-        code, rep = self.run_diag("--bench-file", str(self.bad_bench), "--bench", str(self.plain_path))
+    def assert_refused(self, bench_file, *extra):
+        out = self.tmp / "refused.json"
+        with mock.patch.object(ev, "evaluate", side_effect=AssertionError("evaluate called")) as spy:
+            code, rep = self.run_diag("--bench-file", str(bench_file), "--bench", str(self.plain_path),
+                                      "--json", str(out), *extra)
+        spy.assert_not_called()
         self.assertEqual(code, 2); self.assertEqual(rep["sets"], {}); self.assertFalse(rep["seal_match"])
-        self.assertNotIn("sealed_sha256", rep)
+        self.assertNotIn("sealed_sha256", rep); self.assertFalse(out.exists())
+
+    def test_seal_mismatch_with_bench_exits_two_without_evaluation(self):
+        self.assert_refused(self.bad_bench)
+
+    def test_seal_mismatch_with_bench_refuses_even_for_unsealed_sets_only(self):
+        self.assert_refused(self.bad_bench, "--sets", "seed")
+
+    def test_spec_sha_mismatch_alone_refuses(self):
+        self.assert_refused(self.bad_spec_bench)
+        self.assert_refused(self.bad_spec_bench, "--sets", "seed")
 
     def test_plaintext_bench_is_evaluated_and_hashed(self):
         code, rep = self.run_diag("--bench-file", str(self.good_bench), "--bench", str(self.plain_path))

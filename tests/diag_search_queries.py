@@ -8,7 +8,7 @@
 --bench-file  benchmark metadata file (default tests/benchmarks/search_queries.json; read-only).
 --sets        comma list; default every set that is not sealed.
 On start the loaded registry fingerprint and per-source spec sha256 are compared with `round1_seal`: a mismatch
-only warns, unless a hidden set (held_out/negative) is requested, then nothing is evaluated and the exit code is 2.
+only warns, unless --bench is given or a hidden set (held_out/negative) is requested; then nothing is evaluated and the exit code is 2.
 Exit 0 otherwise (the numbers are for docs/phase3-readiness.md). The benchmark file is never edited.
 """
 import argparse
@@ -115,7 +115,7 @@ def _evaluate(state, bench, sections, sets, plain):
     if not report["seal_match"]:
         print(f"WARNING: snapshot differs from round1_seal (registry {fp} vs {seal.get('registry_fingerprint')}; "
               f"spec {spec_sha} vs {seal.get('spec_sha256')})", file=sys.stderr)
-        if any(n in HIDDEN_SETS for n in sets):
+        if plain is not None or any(n in HIDDEN_SETS for n in sets):
             print("error: hidden sets requested on a snapshot that does not match round1_seal; nothing evaluated",
                   file=sys.stderr)
             return 2, report
