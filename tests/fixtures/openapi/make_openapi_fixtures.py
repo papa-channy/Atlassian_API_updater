@@ -22,6 +22,7 @@ SELECTIONS = {
         "/rest/api/3/issue",
         "/rest/api/3/issue/{issueIdOrKey}",
         "/rest/api/3/issue/{issueIdOrKey}/attachments",
+        "/rest/api/3/issue/{issueIdOrKey}/transitions",
         "/rest/api/3/issue/createmeta",
         "/rest/api/3/search/jql",
         "/rest/api/3/expression/eval",            # deprecated operation
@@ -30,6 +31,7 @@ SELECTIONS = {
     "jira-software": [
         "/rest/builds/0.1/bulk",                  # path-level parameters
         "/rest/agile/1.0/backlog/issue",
+        "/rest/agile/1.0/issue/{issueIdOrKey}",
         "/rest/agile/1.0/board/{boardId}/backlog",
         "/rest/agile/1.0/board/{boardId}/sprint",
         "/rest/agile/1.0/sprint",

@@ -2672,6 +2672,29 @@
         },
         "type": "object"
       },
+      "Transitions": {
+        "additionalProperties": false,
+        "description": "List of issue transitions.",
+        "properties": {
+          "expand": {
+            "description": "Expand options that include additional transitions details in the response.",
+            "readOnly": true,
+            "type": "string",
+            "xml": {
+              "attribute": true
+            }
+          },
+          "transitions": {
+            "description": "List of issue transitions.",
+            "items": {
+              "$ref": "#/components/schemas/IssueTransition"
+            },
+            "readOnly": true,
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
       "UpdatedProjectCategory": {
         "additionalProperties": false,
         "description": "A project category.",
@@ -4365,6 +4388,277 @@
               "write:attachment:jira",
               "read:attachment:jira",
               "read:avatar:jira"
+            ],
+            "state": "Beta"
+          }
+        ]
+      }
+    },
+    "/rest/api/3/issue/{issueIdOrKey}/transitions": {
+      "get": {
+        "deprecated": false,
+        "description": "Returns either all transitions or a transition that can be performed by the user on an issue, based on the issue's status.\n\nNote, if a request is made for a transition that does not exist or cannot be performed on the issue, given its status, the response will return any empty transitions list.\n\nThis operation can be accessed anonymously.\n\n**[Permissions](#permissions) required: A list or transition is returned only when the user has:**\n\n *  *Browse projects* [project permission](https://confluence.atlassian.com/x/yodKLg) for the project that the issue is in.\n *  If [issue-level security](https://confluence.atlassian.com/x/J4lKLg) is configured, issue-level security permission to view the issue.\n\nHowever, if the user does not have the *Transition issues* [ project permission](https://confluence.atlassian.com/x/yodKLg) the response will not list any transitions.",
+        "operationId": "getTransitions",
+        "parameters": [
+          {
+            "description": "The ID or key of the issue.",
+            "in": "path",
+            "name": "issueIdOrKey",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Use [expand](#expansion) to include additional information about transitions in the response. This parameter accepts `transitions.fields`, which returns information about the fields in the transition screen for each transition. Fields hidden from the screen are not returned. Use this information to populate the `fields` and `update` fields in [Transition issue](#api-rest-api-3-issue-issueIdOrKey-transitions-post).",
+            "in": "query",
+            "name": "expand",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "The ID of the transition.",
+            "in": "query",
+            "name": "transitionId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Whether transitions with the condition *Hide From User Condition* are included in the response. Available to Connect and Forge app users with *Administer Jira* [global permission](https://confluence.atlassian.com/x/x4dKLg) and Forge apps acting on behalf of users with *Administer Jira* [global permission](https://confluence.atlassian.com/x/x4dKLg).",
+            "in": "query",
+            "name": "skipRemoteOnlyCondition",
+            "schema": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Whether details of transitions that fail a condition are included in the response",
+            "in": "query",
+            "name": "includeUnavailableTransitions",
+            "schema": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Whether the transitions are sorted by ops-bar sequence value first then category order (Todo, In Progress, Done) or only by ops-bar sequence value.",
+            "in": "query",
+            "name": "sortByOpsBarAndStatus",
+            "schema": {
+              "default": false,
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": "{\"transitions\":[{\"fields\":{\"summary\":{\"allowedValues\":[\"red\",\"blue\"],\"defaultValue\":\"red\",\"hasDefaultValue\":false,\"key\":\"field_key\",\"name\":\"My Multi Select\",\"operations\":[\"set\",\"add\"],\"required\":false,\"schema\":{\"custom\":\"com.atlassian.jira.plugin.system.customfieldtypes:multiselect\",\"customId\":10001,\"items\":\"option\",\"type\":\"array\"}}},\"hasScreen\":false,\"id\":\"2\",\"isAvailable\":true,\"isConditional\":false,\"isGlobal\":false,\"isInitial\":false,\"name\":\"Close Issue\",\"to\":{\"description\":\"The issue is currently being worked on.\",\"iconUrl\":\"https://your-domain.atlassian.net/images/icons/progress.gif\",\"id\":\"10000\",\"name\":\"In Progress\",\"self\":\"https://your-domain.atlassian.net/rest/api/3/status/10000\",\"statusCategory\":{\"colorName\":\"yellow\",\"id\":1,\"key\":\"in-flight\",\"name\":\"In Progress\",\"self\":\"https://your-domain.atlassian.net/rest/api/3/statuscategory/1\"}}},{\"fields\":{\"summary\":{\"allowedValues\":[\"red\",\"blue\"],\"defaultValue\":\"red\",\"hasDefaultValue\":false,\"key\":\"field_key\",\"name\":\"My Multi Select\",\"operations\":[\"set\",\"add\"],\"required\":false,\"schema\":{\"custom\":\"com.atlassian.jira.plugin.system.customfieldtypes:multiselect\",\"customId\":10001,\"items\":\"option\",\"type\":\"array\"}},\"colour\":{\"allowedValues\":[\"red\",\"blue\"],\"defaultValue\":\"red\",\"hasDefaultValue\":false,\"key\":\"field_key\",\"name\":\"My Multi Select\",\"operations\":[\"set\",\"add\"],\"required\":false,\"schema\":{\"custom\":\"com.atlassian.jira.plugin.system.customfieldtypes:multiselect\",\"customId\":10001,\"items\":\"option\",\"type\":\"array\"}}},\"hasScreen\":true,\"id\":\"711\",\"name\":\"QA Review\",\"to\":{\"description\":\"The issue is closed.\",\"iconUrl\":\"https://your-domain.atlassian.net/images/icons/closed.gif\",\"id\":\"5\",\"name\":\"Closed\",\"self\":\"https://your-domain.atlassian.net/rest/api/3/status/5\",\"statusCategory\":{\"colorName\":\"green\",\"id\":9,\"key\":\"completed\",\"self\":\"https://your-domain.atlassian.net/rest/api/3/statuscategory/9\"}}}]}",
+                "schema": {
+                  "$ref": "#/components/schemas/Transitions"
+                }
+              }
+            },
+            "description": "Returned if the request is successful."
+          },
+          "401": {
+            "description": "Returned if the authentication credentials are incorrect or missing."
+          },
+          "404": {
+            "description": "Returned if the issue is not found or the user does not have permission to view it."
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          },
+          {
+            "OAuth2": [
+              "read:jira-work"
+            ]
+          },
+          {}
+        ],
+        "summary": "Get transitions",
+        "tags": [
+          "Issues"
+        ],
+        "x-atlassian-connect-scope": "READ",
+        "x-atlassian-data-security-policy": [
+          {
+            "app-access-rule-exempt": false
+          }
+        ],
+        "x-atlassian-oauth2-scopes": [
+          {
+            "scheme": "OAuth2",
+            "scopes": [
+              "read:jira-work"
+            ],
+            "state": "Current"
+          },
+          {
+            "scheme": "OAuth2",
+            "scopes": [
+              "read:issue.transition:jira",
+              "read:status:jira",
+              "read:field-configuration:jira"
+            ],
+            "state": "Beta"
+          }
+        ]
+      },
+      "post": {
+        "deprecated": false,
+        "description": "Performs an issue transition and, if the transition has a screen, updates the fields from the transition screen.\n\nsortByCategory To update the fields on the transition screen, specify the fields in the `fields` or `update` parameters in the request body. Get details about the fields using [ Get transitions](#api-rest-api-3-issue-issueIdOrKey-transitions-get) with the `transitions.fields` expand.\n\nThis operation can be accessed anonymously.\n\n**[Permissions](#permissions) required:**\n\n *  *Browse projects* and *Transition issues* [project permission](https://confluence.atlassian.com/x/yodKLg) for the project that the issue is in.\n *  If [issue-level security](https://confluence.atlassian.com/x/J4lKLg) is configured, issue-level security permission to view the issue.",
+        "operationId": "doTransition",
+        "parameters": [
+          {
+            "description": "The ID or key of the issue.",
+            "in": "path",
+            "name": "issueIdOrKey",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "fields": {
+                  "assignee": {
+                    "name": "bob"
+                  },
+                  "resolution": {
+                    "name": "Fixed"
+                  }
+                },
+                "historyMetadata": {
+                  "activityDescription": "Complete order processing",
+                  "actor": {
+                    "avatarUrl": "http://mysystem/avatar/tony.jpg",
+                    "displayName": "Tony",
+                    "id": "tony",
+                    "type": "mysystem-user",
+                    "url": "http://mysystem/users/tony"
+                  },
+                  "cause": {
+                    "id": "myevent",
+                    "type": "mysystem-event"
+                  },
+                  "description": "From the order testing process",
+                  "extraData": {
+                    "Iteration": "10a",
+                    "Step": "4"
+                  },
+                  "generator": {
+                    "id": "mysystem-1",
+                    "type": "mysystem-application"
+                  },
+                  "type": "myplugin:type"
+                },
+                "transition": {
+                  "id": "5"
+                },
+                "update": {
+                  "comment": [
+                    {
+                      "add": {
+                        "body": {
+                          "content": [
+                            {
+                              "content": [
+                                {
+                                  "text": "Bug has been fixed",
+                                  "type": "text"
+                                }
+                              ],
+                              "type": "paragraph"
+                            }
+                          ],
+                          "type": "doc",
+                          "version": 1
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              "schema": {
+                "$ref": "#/components/schemas/IssueUpdateDetails"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Returned if the request is successful."
+          },
+          "400": {
+            "description": "Returned if:\n\n *  no transition is specified.\n *  the user does not have permission to transition the issue.\n *  a field that isn't included on the transition screen is defined in `fields` or `update`.\n *  a field is specified in both `fields` and `update`.\n *  the request is invalid for any other reason."
+          },
+          "401": {
+            "description": "Returned if the authentication credentials are incorrect or missing."
+          },
+          "404": {
+            "description": "Returned if the issue is not found or the user does not have permission to view it."
+          },
+          "409": {
+            "description": "Returned if the issue could not be updated due to a conflicting update."
+          },
+          "413": {
+            "description": "Returned if a per-issue limit has been breached for one of the following fields:\n\n *  comments\n *  worklogs\n *  attachments\n *  issue links\n *  remote issue links"
+          },
+          "422": {
+            "description": "Returned if a configuration problem prevents the creation of the issue."
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          },
+          {
+            "OAuth2": [
+              "write:jira-work"
+            ]
+          },
+          {}
+        ],
+        "summary": "Transition issue",
+        "tags": [
+          "Issues"
+        ],
+        "x-atlassian-connect-scope": "WRITE",
+        "x-atlassian-data-security-policy": [
+          {
+            "app-access-rule-exempt": false
+          }
+        ],
+        "x-atlassian-oauth2-scopes": [
+          {
+            "scheme": "OAuth2",
+            "scopes": [
+              "write:jira-work"
+            ],
+            "state": "Current"
+          },
+          {
+            "scheme": "OAuth2",
+            "scopes": [
+              "write:issue:jira",
+              "write:issue.property:jira"
             ],
             "state": "Beta"
           }
