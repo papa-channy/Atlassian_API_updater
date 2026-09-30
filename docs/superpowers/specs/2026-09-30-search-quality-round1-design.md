@@ -73,7 +73,7 @@ Phase 2.5 계획 단계에서 추가된 alias `change→update`, `post→add`, `
 | `tools/atlassian_docs/intelligence/policy.py` | `RankingPolicy`, `ranking()`, `load_ranking`, fingerprint 인자 추가, `POLICY_VERSIONS["search"]=3` |
 | `tools/atlassian_docs/intelligence/search.py` | `_structural_signals`, `_score` 확장, `signals` 응답 |
 | `tests/intelligence/test_search.py`, `test_policy.py` | 신호·로더·fingerprint 테스트 |
-| `tests/fixtures/openapi/make_openapi_fixtures.py` + 생성물 | seed 19건 커버 경로 추가 |
+| `tests/fixtures/openapi/make_openapi_fixtures.py` + 생성물 | seed 18건 커버 경로 추가 |
 | `tests/diag_search_queries.py` | `--sets`, `signals`/`ranking_sha256` 출력 |
 | `docs/phase3-readiness.md` | 2차 평가 행 |
 | `docs/superpowers/specs/2026-09-29-phase2.5-discovery-hardening-design.md` | §6 참조 한 줄, §11.2 `oneOf→anyOf` 규칙 5 추가 |
