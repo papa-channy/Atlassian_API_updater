@@ -6,6 +6,7 @@ Builds the registry once from a copy of the frozen snapshot DIR, evaluates every
 `seed` and `regression_negative` sets (constants injected by patching policy.ranking with a RankingPolicy copy),
 selects one point with select_candidate (baseline = the frozen `baseline`, never the current constants),
 writes ONLY `constants` into search_ranking.json (unless --dry-run) and appends one line to the tuning log.
+A fallback (non-perfect) selection is logged with adopted:false and never written (controller ruling).
 Exit 0 when the selected point passes every seed and regression_negative record, 1 otherwise, 2 on setup errors.
 """
 import argparse
@@ -94,8 +95,8 @@ def write_constants(point, path=RANKING_PATH) -> None:
     """Rewrite ONLY the `constants` object; verify the frozen structure hash is unchanged, else restore."""
     original = path.read_text(encoding="utf-8")
     before = policy.load_ranking(path)
-    body = ", ".join(f'"{k}": {json.dumps(point[k])}' for k in CONSTANT_KEYS[:2]) + ",\n    " + \
-        ", ".join(f'"{k}": {json.dumps(point[k])}' for k in CONSTANT_KEYS[2:])
+    rows = (CONSTANT_KEYS[:2], CONSTANT_KEYS[2:5], CONSTANT_KEYS[5:])          # the frozen file's layout
+    body = ",\n    ".join(", ".join(f'"{k}": {json.dumps(point[k])}' for k in row) for row in rows if row)
     text, n = re.subn(r'"constants": \{[^}]*\}', lambda _m: '"constants": {\n    ' + body + "\n  }", original)
     if n != 1:
         raise SystemExit("could not locate a single 'constants' object in search_ranking.json")
@@ -207,10 +208,10 @@ def _finish(args, rp, aliases, fp, results, selected, seed_res, reg_res, change)
             "grid_size": len(results), "baseline": dict(rp.baseline), "selected": selected,
             "passing_combos": sum(1 for _, s, r in results if s == SEED_TOTAL and r == REGRESSION_TOTAL),
             "seed": f"{seed_res['passed']}/{SEED_TOTAL}", "regression_negative": f"{reg_res['passed']}/{REGRESSION_TOTAL}",
-            "seed_shortfall": not perfect, "adopted": not args.dry_run, "note": note}
+            "seed_shortfall": not perfect, "adopted": perfect and not args.dry_run, "note": note}
     if change:
         line["alias_change"] = change
-    if not args.dry_run:
+    if line["adopted"]:                  # a non-perfect (fallback) selection is logged but never adopted
         write_constants(selected)
     _append_log(line)
     print(json.dumps({k: line[k] for k in ("selected", "seed", "regression_negative", "passing_combos", "grid_size",
