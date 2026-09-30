@@ -67,6 +67,28 @@ class TestFindReadOnly(unittest.TestCase):
         self.assertEqual(oas.find_readonly_values({"items": "not-a-list"}, paths), [])
 
 
+class TestReadOnlyUnderMapOrNot(unittest.TestCase):
+    """I2: readOnly beneath additionalProperties / not has no addressable body path -> nothing recorded."""
+
+    def test_additional_properties_readonly_not_recorded_but_stripped(self):
+        t = oas.oas30_to_draft7({"type": "object", "properties": {"name": {"type": "string"}},
+                                 "additionalProperties": {"type": "object", "required": ["id"],
+                                                          "properties": {"id": {"type": "string", "readOnly": True}}}})
+        self.assertEqual(t.readonly_paths, ())
+        ap = t.schema["additionalProperties"]
+        self.assertNotIn("readOnly", ap["properties"]["id"]); self.assertEqual(ap["required"], [])
+        # no false readonly_property_present: neither the root key nor the map value is flagged
+        self.assertEqual(oas.find_readonly_values({"id": "x", "k": {"id": "y"}}, t.readonly_paths), [])
+
+    def test_not_readonly_not_recorded_but_transpiled(self):
+        t = oas.oas30_to_draft7({"type": "object", "not": {"properties": {"id": {"type": "string", "readOnly": True,
+                                                                                 "nullable": True}}}})
+        self.assertEqual(t.readonly_paths, ())
+        sub = t.schema["not"]["properties"]["id"]
+        self.assertNotIn("readOnly", sub); self.assertEqual(sub["type"], ["string", "null"])
+        self.assertEqual(oas.find_readonly_values({"id": "x"}, t.readonly_paths), [])
+
+
 class TestOneOfToAnyOf(unittest.TestCase):
     def test_oneof_becomes_anyof_including_nested(self):
         s = {"type": "object", "oneOf": [{"type": "object"}, {"type": "string"}],

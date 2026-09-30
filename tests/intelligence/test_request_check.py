@@ -190,3 +190,28 @@ class TestFallbackReasons(unittest.TestCase):
         self.assertEqual(amb["body_check_reason"], "no_body_schema")
         undeclared = rc.check_request(self.state, "edge:GET:/things/{thingId}", path_params={"thingId": "1"}, query={"limit": "1"}, body={"id": "x"})
         self.assertEqual(undeclared["body_check_reason"], "no_body_schema")
+
+
+class TestCredentialHeaderPresence(unittest.TestCase):
+    """I3: a supplied credential header counts as present for `required`; its value never appears."""
+    KEY = "jira-software:POST:/rest/builds/0.1/bulk"
+    BODY = {"builds": [{"pipelineId": "p", "buildNumber": 1, "displayName": "d", "url": "https://x", "state": "successful",
+                        "lastUpdated": "2026-01-01T00:00:00Z", "updateSequenceNumber": 1, "description": "d",
+                        "label": "l", "issueKeys": ["A-1"]}]}
+
+    @classmethod
+    def setUpClass(cls):
+        cls.state = make_state("jira-platform", "jira-software")
+
+    def test_present_credential_header_satisfies_required(self):
+        import json
+        out = rc.check_request(self.state, self.KEY, headers={"authorization": "JWT SECRETVAL9f3a"}, body=self.BODY,
+                               content_type="application/json")
+        self.assertNotIn(("header.Authorization", "required"), _rules(out))
+        self.assertTrue(out["compatible"], out)
+        self.assertIn("credential_header_ignored", [w["rule"] for w in out["warnings"]])
+        self.assertNotIn("SECRETVAL9f3a", json.dumps(out))
+
+    def test_absent_credential_header_still_missing(self):
+        out = rc.check_request(self.state, self.KEY, body=self.BODY, content_type="application/json")
+        self.assertIn(("header.Authorization", "required"), _rules(out)); self.assertFalse(out["compatible"])

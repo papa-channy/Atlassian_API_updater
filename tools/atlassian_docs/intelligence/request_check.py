@@ -195,9 +195,10 @@ def check_request(state, key: str, *, path_params=None, query=None, headers=None
     cred = credential_header_names(comps)
     path_params, query, headers = path_params or {}, query or {}, headers or {}
     errors, warnings = [], []
-    hdr = {}
+    hdr, cred_present = {}, set()
     for k, v in headers.items():
-        if k.lower() in cred:   # never echo the value
+        if k.lower() in cred:   # never echo the value; presence alone still satisfies `required`
+            cred_present.add(k.lower())
             warnings.append({"location": f"header.{k}", "rule": "credential_header_ignored",
                              "message": "credential headers are out of scope and were ignored"})
         else:
@@ -215,6 +216,11 @@ def check_request(state, key: str, *, path_params=None, query=None, headers=None
         lookup = p.name.lower() if loc == "header" else p.name
         declared.get(loc, set()).add(lookup)
         present = lookup in source_map
+        if loc == "header" and lookup in cred:
+            # credential header: value was dropped, so only presence is checked (no type/enum)
+            if p.required and lookup not in cred_present:
+                errors.append({"location": f"{loc}.{p.name}", "rule": "required", "message": f"required {loc} parameter is missing"})
+            continue
         if p.required and not present:
             errors.append({"location": f"{loc}.{p.name}", "rule": "required", "message": f"required {loc} parameter is missing"})
             continue

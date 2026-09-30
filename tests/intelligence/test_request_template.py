@@ -139,3 +139,25 @@ class TestQuirksInTemplate(unittest.TestCase):
     def test_policy_fields_present(self):
         out = rt.build_request_template(self.state, ATTACH)
         self.assertEqual(len(out["intelligence_fingerprint"]), 64); self.assertIn("overrides_sha256", out["intelligence_policy"])
+
+
+class TestCredentialHeaderPresence(unittest.TestCase):
+    """I3: a supplied credential header is not listed in missing_required; its value never appears."""
+    KEY = "jira-software:POST:/rest/builds/0.1/bulk"
+
+    @classmethod
+    def setUpClass(cls):
+        cls.state = make_state("jira-platform", "jira-software")
+
+    def test_present_credential_header_not_missing(self):
+        import json
+        out = rt.build_request_template(self.state, self.KEY, {"headers": {"AUTHORIZATION": "JWT SECRETVAL9f3a"}})
+        self.assertNotIn("Authorization", out["missing_required"])
+        self.assertTrue(out["headers"]["Authorization"]["effective_required"])
+        self.assertNotIn("value", out["headers"]["Authorization"])
+        self.assertIn("credential_header_dropped", out["notes"])
+        self.assertNotIn("SECRETVAL9f3a", json.dumps(out))
+
+    def test_absent_credential_header_missing(self):
+        out = rt.build_request_template(self.state, self.KEY, {})
+        self.assertIn("Authorization", out["missing_required"])

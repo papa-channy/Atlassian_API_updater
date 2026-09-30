@@ -58,10 +58,12 @@ def build_request_template(state, key: str, values: Optional[dict] = None) -> di
 
     path_params, query, headers, cookies = {}, {}, {}, {}
     header_lookup = {k.lower(): (k, v) for k, v in given_headers.items()}
+    cred_given = set()   # credential headers the caller supplied: value dropped, presence still counts
     for k in list(header_lookup):
         if k in cred:
             notes.append("credential_header_dropped")
             header_lookup.pop(k)
+            cred_given.add(k)
     used_headers = set()
     q = quirks.for_operation(op)
     qmap = {h.name.lower(): h for h in q.headers}
@@ -79,7 +81,7 @@ def build_request_template(state, key: str, values: Optional[dict] = None) -> di
             if hit:
                 used_headers.add(low)
             headers[p.name] = _header_entry(p, hit[1] if hit else None, hit is not None, qmap.pop(low, None), low in cred)
-            if headers[p.name]["effective_required"] and hit is None:
+            if headers[p.name]["effective_required"] and hit is None and low not in cred_given:
                 missing.append(p.name)
             continue
         else:

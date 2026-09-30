@@ -57,7 +57,12 @@ def _walk(node: dict, path: tuple, paths: list) -> dict:
     out.pop("readOnly", None)
     for key in _SCHEMA_KEYS:
         if isinstance(out.get(key), dict):
-            out[key] = _walk(out[key], path + ((key,) if key == "items" else ()), paths)
+            if key == "items":
+                out[key] = _walk(out[key], path + (key,), paths)
+            else:
+                # additionalProperties / not: still stripped and transpiled, but readOnly beneath them has no
+                # addressable body path (map values / negated schema) -> record nothing (throwaway list)
+                out[key] = _walk(out[key], path, [])
     for key in _LIST_KEYS:
         if isinstance(out.get(key), list):
             out[key] = [_walk(p, path, paths) if isinstance(p, dict) else p for p in out[key]]
