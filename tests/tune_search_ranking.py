@@ -35,7 +35,7 @@ RANKING_PATH = policy.DATA_DIR / "search_ranking.json"
 ALIASES_PATH = policy.DATA_DIR / "search_aliases.json"
 ALIASES_REL = "tools/atlassian_docs/intelligence/data/search_aliases.json"
 CONSTANT_KEYS = policy.CONSTANT_KEYS
-MAGNITUDE_KEYS = ("method_match_bonus", "method_mismatch_penalty", "path_unmatched_penalty", "product_hint_bonus")
+MAGNITUDE_KEYS = tuple(k for k in CONSTANT_KEYS if k != "path_unmatched_cap")   # every bonus/penalty (spec §8.2 (3))
 _BENCH = json.loads(BENCH_PATH.read_text(encoding="utf-8"))
 SEED_TOTAL, REGRESSION_TOTAL = len(_BENCH["seed"]), len(_BENCH["regression_negative"])
 SOURCES = ("jira-platform", "jira-software", "confluence")
@@ -55,7 +55,7 @@ def l1_index_distance(point, baseline, grid) -> int:
 
 def select_candidate(results, baseline, grid, seed_total=SEED_TOTAL, regression_total=REGRESSION_TOTAL) -> dict:
     """spec §8.2: (1) perfect points only, else max seed then max regression; (2) min L1 grid-index distance to
-    baseline; (3) min magnitude sum; (4) lexicographic 5-tuple."""
+    baseline; (3) min magnitude sum; (4) lexicographic 6-tuple."""
     if not results:
         raise ValueError("no results to select from")
     pool = [p for p, s, r in results if s == seed_total and r == regression_total]

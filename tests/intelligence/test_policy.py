@@ -142,6 +142,7 @@ class TestRankingPolicy(unittest.TestCase):
         rp = policy.load_ranking()
         self.assertEqual(rp.verb_methods["move"], frozenset({"PUT", "POST"})); self.assertIn("rest", rp.path_noise)
         self.assertEqual(rp.product_hints["jira"], frozenset({"jira-platform", "jira-software"}))
+        self.assertEqual(len(policy.CONSTANT_KEYS), 6); self.assertEqual(policy.CONSTANT_KEYS[-1], "resource_match_bonus")
         self.assertEqual(set(rp.constants), set(policy.CONSTANT_KEYS)); self.assertEqual(set(rp.baseline), set(policy.CONSTANT_KEYS)); self.assertEqual(len(rp.sha256), 64)
         from tests.benchmarks.test_evaluator import RANKING_STRUCTURE_SHA256
         self.assertEqual(rp.structure_sha256, RANKING_STRUCTURE_SHA256)
@@ -177,6 +178,7 @@ class TestRankingPolicy(unittest.TestCase):
                dict(base, baseline={**base["baseline"], "path_unmatched_cap": 99}),
                dict(base, constants={**base["constants"], "path_unmatched_cap": True}),
                dict(base, constants={**base["constants"], "method_match_bonus": -1.0}),
+               dict(base, constants={k: v for k, v in base["constants"].items() if k != "resource_match_bonus"}),
                dict(base, extra=1)]
         for raw in bad:
             with self.assertRaises(ValueError):

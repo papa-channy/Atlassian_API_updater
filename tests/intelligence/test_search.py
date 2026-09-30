@@ -96,8 +96,9 @@ class TestSearchOperations(unittest.TestCase):
 
     def test_exact_schema_name(self):
         self.assertEqual(self._keys(query="MultipartFile")[0], "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/attachments")
-        # getCreateIssueMeta is deprecated in the real spec (x0.7), so only top-2 is pinned
-        self.assertIn("jira-platform:GET:/rest/api/3/issue/createmeta", self._keys(query="IssueCreateMetadata")[:2])
+        # getCreateIssueMeta is deprecated in the real spec (x0.7); since v1.4 §6.5b the three /issue ops whose terminal
+        # segment "issue" is in the query gain resource_match_bonus and outrank it (25.9 vs 43/27/26), so top-4 is pinned
+        self.assertIn("jira-platform:GET:/rest/api/3/issue/createmeta", self._keys(query="IssueCreateMetadata")[:4])
 
     def test_query_tokens_includes_joined_word_and_empty_for_stopwords(self):
         self.assertIn("issuecreatemetadata", search._query_tokens("IssueCreateMetadata"))
@@ -252,7 +253,25 @@ class TestStructuralSignals(unittest.TestCase):
 
     def _entry(self, path, method="GET", source="jira-platform"):
         return search.IndexEntry(f"{source}:{method}:{path}", {f: frozenset() for f in search.FIELD_WEIGHTS},
-                                 search.path_tokens_for(path, self.rp.path_noise), source, method)
+                                 search.path_tokens_for(path, self.rp.path_noise), source, method, search.terminal_tokens_for(path))
+
+    def test_terminal_tokens_for(self):
+        self.assertEqual(search.terminal_tokens_for("/widget/{id}/history"), ("history",))
+        self.assertEqual(search.terminal_tokens_for("/issue/{k}"), ("issue",))
+        self.assertEqual(search.terminal_tokens_for("/rest/api/3"), ())                          # last literal segment "3" is all digits -> dropped
+        self.assertEqual(search.terminal_tokens_for("/issueTypeScheme/{id}"), ("issue", "type", "scheme"))
+
+    def test_resource_match(self):
+        bonus = self.rp.constants["resource_match_bonus"]
+        q = ("get", "issue", "key"); ex = frozenset(q)
+        rm = lambda path, uq, e: search._structural_signals(self._entry(path), uq, e, self.rp)[1]["resource_match"]
+        self.assertEqual(rm("/rest/api/3/issue/{k}", q, ex), {"value": bonus, "tokens": ["issue"]})
+        self.assertEqual(rm("/rest/api/3/issue/{k}/properties", q, ex), {"value": 0.0, "tokens": ["properties"]})
+        pq = ("get", "project", "key")
+        self.assertEqual(rm("/rest/api/3/projectvalidate/validProjectKey", pq, frozenset(pq)), {"value": 0.0, "tokens": ["valid", "project", "key"]})
+        uq = ("update", "page", "content")
+        self.assertEqual(rm("/pages/{id}", uq, frozenset(uq)), {"value": bonus, "tokens": ["pages"]})   # plural via forms
+        self.assertEqual(rm("/rest/api/3", q, ex), {"value": 0.0, "tokens": []})
 
     def test_path_penalty_origin_once_and_cap(self):
         c = self.rp.constants
@@ -308,15 +327,15 @@ class TestScoringAlgorithm(unittest.TestCase):
         state = make_state("jira-platform")
         out = search.search_operations(state, "createIssue")
         pinned = out["results"][0]
-        self.assertEqual(pinned["signals"], {"method_intent": {"value": 0.0, "allowed": []}, "path_unmatched": {"value": 0.0, "tokens": []}, "product_hint": {"value": 0.0, "sources": []}})
+        self.assertEqual(pinned["signals"], {"method_intent": {"value": 0.0, "allowed": []}, "path_unmatched": {"value": 0.0, "tokens": []}, "product_hint": {"value": 0.0, "sources": []}, "resource_match": {"value": 0.0, "tokens": []}})
         other = out["results"][1]
-        self.assertEqual(set(other["signals"]), {"method_intent", "path_unmatched", "product_hint"})
+        self.assertEqual(set(other["signals"]), {"method_intent", "path_unmatched", "product_hint", "resource_match"})
         self.assertLessEqual({"ranking_sha256", "ranking_structure_sha256"}, set(out["intelligence_policy"]))
 
 
 class TestScoringNumbers(unittest.TestCase):
     """spec §6.6 end to end with hand-computed numbers. FIELD_WEIGHTS: operation_id 5, summary 4, tags 3, path 3,
-    schema_names 2, method 1, description 1; ALL_MATCH_BONUS 2; DEPRECATED_FACTOR 0.7. Fixed policy 2/2/1/3/3, no aliases."""
+    schema_names 2, method 1, description 1; ALL_MATCH_BONUS 2; DEPRECATED_FACTOR 0.7. Fixed policy 2/2/1/3/3/10, no aliases."""
     SPEC = {"openapi": "3.0.1", "info": {"title": "num", "version": "1"}, "paths": {
         "/widget": {"get": {"operationId": "listWidget", "summary": "List widget", "tags": ["Widget"], "responses": {"200": {"description": "ok"}}}},
         "/widget/{id}/history": {"get": {"operationId": "getWidgetHistory", "summary": "Widget history", "tags": ["Widget"],
@@ -334,7 +353,7 @@ class TestScoringNumbers(unittest.TestCase):
         from tests.intelligence.helpers import state_from_source_registries
         from tools.atlassian_docs.intelligence import normalizer, registry
         raw = json.loads((policy.DATA_DIR / "search_ranking.json").read_text(encoding="utf-8"))
-        raw["constants"] = {"method_match_bonus": 2.0, "method_mismatch_penalty": 2.0, "path_unmatched_penalty": 1.0, "path_unmatched_cap": 3, "product_hint_bonus": 3.0}
+        raw["constants"] = {"method_match_bonus": 2.0, "method_mismatch_penalty": 2.0, "path_unmatched_penalty": 1.0, "path_unmatched_cap": 3, "product_hint_bonus": 3.0, "resource_match_bonus": 10.0}
         with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as fh:
             json.dump(raw, fh)
         try:
@@ -350,16 +369,17 @@ class TestScoringNumbers(unittest.TestCase):
     def test_list_widget_numbers(self):
         out = search.search_operations(self.state, "list widget")
         scores = {r["operation_id"]: r["score"] for r in out["results"]}
-        # A listWidget:       opid 5*2 + summary 4*2 + tags 3*1 + path 3*1 = 24, all-match +2 = 26; +2 GET, path unmatched 0 -> 28.0
-        # C listWidgetLegacy: opid 5*2 + summary 8 + tags 3 + path 3 ({widget, legacy}) = 24, +2 = 26; +2 GET, -1 (legacy) = 27 * 0.7 = 18.9
-        # B getWidgetHistory: opid 5*1 + summary 4*1 + tags 3 + path 3 = 15, no all-match ("list" unmatched); +2 GET, -1 (history) = 16.0
-        self.assertEqual(scores, {"listWidget": 28.0, "listWidgetLegacy": 18.9, "getWidgetHistory": 16.0})
+        # A listWidget:       opid 5*2 + summary 4*2 + tags 3*1 + path 3*1 = 24, all-match +2 = 26; +2 GET, path unmatched 0 -> 28.0; terminal "widget" matched +10 -> 38.0
+        # C listWidgetLegacy: opid 5*2 + summary 8 + tags 3 + path 3 ({widget, legacy}) = 24, +2 = 26; +2 GET, -1 (legacy) = 27 * 0.7 = 18.9 (terminal "legacy" unmatched)
+        # B getWidgetHistory: opid 5*1 + summary 4*1 + tags 3 + path 3 = 15, no all-match ("list" unmatched); +2 GET, -1 (history) = 16.0 (terminal "history" unmatched)
+        self.assertEqual(scores, {"listWidget": 38.0, "listWidgetLegacy": 18.9, "getWidgetHistory": 16.0})
         self.assertEqual([r["operation_id"] for r in out["results"]], ["listWidget", "listWidgetLegacy", "getWidgetHistory"])
         self.assertEqual(out["total_matches"], 3)
         b = out["results"][2]["signals"]
-        self.assertEqual(b, {"method_intent": {"value": 2.0, "allowed": ["GET"]}, "path_unmatched": {"value": -1.0, "tokens": ["history"]}, "product_hint": {"value": 0.0, "sources": []}})
+        self.assertEqual(b, {"method_intent": {"value": 2.0, "allowed": ["GET"]}, "path_unmatched": {"value": -1.0, "tokens": ["history"]}, "product_hint": {"value": 0.0, "sources": []},
+                             "resource_match": {"value": 0.0, "tokens": ["history"]}})
 
     def test_negative_subtotal_is_clamped_and_excluded(self):
         out = search.search_operations(self.state, "zzz")
-        # nothingHere: description 1*1 = 1, all-match +2 = 3; no verb -> 0; 5 unmatched origins capped 3 * 1.0 = -3 -> clamp 0 -> excluded
+        # nothingHere: description 1*1 = 1, all-match +2 = 3; no verb -> 0; 5 unmatched origins capped 3 * 1.0 = -3 -> clamp 0 -> excluded (terminal "epsilon" unmatched)
         self.assertEqual(out["results"], []); self.assertEqual(out["total_matches"], 0); self.assertNotIn("error", out)

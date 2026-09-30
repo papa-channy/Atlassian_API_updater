@@ -102,6 +102,6 @@ class TestLayering(unittest.TestCase):
         attrs = {n.attr for n in ast.walk(fn) if isinstance(n, ast.Attribute)}
         self.assertTrue({"constants", "verb_methods", "path_noise", "product_hints"} - attrs <= {"path_noise"}, attrs)  # noise is applied at index build
         subs = {n.slice.value for n in ast.walk(fn) if isinstance(n, ast.Subscript) and isinstance(n.slice, ast.Constant)}
-        self.assertTrue({"method_match_bonus", "method_mismatch_penalty", "path_unmatched_penalty", "path_unmatched_cap", "product_hint_bonus"} <= subs, subs)
+        self.assertTrue({"method_match_bonus", "method_mismatch_penalty", "path_unmatched_penalty", "path_unmatched_cap", "product_hint_bonus", "resource_match_bonus"} <= subs, subs)
         module_names = {n.targets[0].id for n in tree.body if isinstance(n, ast.Assign) and isinstance(n.targets[0], ast.Name)}
         self.assertFalse(any(k in module_names for k in ("VERB_METHODS", "PRODUCT_HINTS", "PATH_NOISE", "METHOD_INTENT")), module_names)

@@ -76,6 +76,7 @@ class IndexEntry:
     path_tokens: tuple          # of PathToken
     source: str
     method: str                 # upper-case HTTP method
+    terminal_tokens: tuple = () # of str: origins of the last literal path segment (spec §6.5b)
 
 
 def path_tokens_for(path: Optional[str], noise) -> tuple:
@@ -89,6 +90,15 @@ def path_tokens_for(path: Optional[str], noise) -> tuple:
                 continue
             seen.add(tok); out.append(PathToken(tok, token_forms(tok)))
     return tuple(out)
+
+
+def terminal_tokens_for(path: Optional[str]) -> tuple:
+    """Last literal (non-{param}) path segment -> unigram origins minus all-digit tokens; noise is kept (spec §6.5b)."""
+    for seg in reversed((path or "").split("/")):
+        if not seg or (seg.startswith("{") and seg.endswith("}")):
+            continue
+        return tuple(t for t in tokenize_unigrams(seg) if not t.isdigit())
+    return ()
 
 
 @dataclass(frozen=True)
@@ -127,7 +137,8 @@ def build_index(operations: tuple) -> SearchIndex:
             "method": frozenset({op.method.lower()}),
             "description": tokenize((op.description or "")[:DESCRIPTION_INDEX_CHARS]),
         }
-        entries.append(IndexEntry(op.key, fields, path_tokens_for(op.path, noise), op.source, op.method.upper()))
+        entries.append(IndexEntry(op.key, fields, path_tokens_for(op.path, noise), op.source, op.method.upper(),
+                                  terminal_tokens_for(op.path)))
     return SearchIndex(tuple(entries))
 
 
@@ -201,7 +212,8 @@ def _score(entry, lexical_base: frozenset, direct: frozenset, cond: frozenset, b
 
 
 def _structural_signals(entry, query_unigrams: tuple, exp_all: frozenset, rp):
-    """method intent + path specificity + product hint (spec §6.3-§6.5); every number comes from rp."""
+    """method intent + path specificity + product hint + terminal resource match (spec §6.3-§6.5b);
+    every number comes from rp."""
     c = rp.constants
     verbs = [t for t in query_unigrams if t in rp.verb_methods]
     allowed = None
@@ -219,7 +231,11 @@ def _structural_signals(entry, query_unigrams: tuple, exp_all: frozenset, rp):
     for t in query_unigrams:
         hinted |= rp.product_hints.get(t, frozenset())
     ph = {"value": c["product_hint_bonus"] if entry.source in hinted else 0.0, "sources": sorted(hinted)}
-    return mi["value"] + pu["value"] + ph["value"], {"method_intent": mi, "path_unmatched": pu, "product_hint": ph}
+    term = entry.terminal_tokens
+    matched = bool(term) and all(token_forms(t) & exp_all for t in term)
+    rm = {"value": c["resource_match_bonus"] if matched else 0.0, "tokens": list(term)}
+    return mi["value"] + pu["value"] + ph["value"] + rm["value"], \
+        {"method_intent": mi, "path_unmatched": pu, "product_hint": ph, "resource_match": rm}
 
 
 def _passes(op, method, tag, include_deprecated) -> bool:
@@ -254,7 +270,8 @@ def _zero_signals() -> dict:
     """Signals of a pinned exact match: all zero / empty (spec §6.7). Fresh dict per item."""
     return {"method_intent": {"value": 0.0, "allowed": []},
             "path_unmatched": {"value": 0.0, "tokens": []},
-            "product_hint": {"value": 0.0, "sources": []}}
+            "product_hint": {"value": 0.0, "sources": []},
+            "resource_match": {"value": 0.0, "tokens": []}}
 
 
 def _item(op, s, signals, match=None) -> dict:
