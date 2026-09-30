@@ -41,6 +41,7 @@
     {"id": "rn-005", "query": "read issue comments", "expected_top1_any": [], "forbidden_top1": ["jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/comment"], "origin": "negative-r0", "failure_classes": [], "ambiguous": false},
     {"id": "rn-006", "query": "remove page", "expected_top1_any": [], "forbidden_top1": ["confluence:PUT:/pages/{id}"], "origin": "negative-r0", "failure_classes": [], "ambiguous": false}
   ],
-  "held_out": [],
-  "negative": []
+  "held_out": {"sealed": true, "round": 1, "count": 16, "sha256": "606535e10663bc7ab7eb2a16a8044f9a5f9e4aa326eb082193c6a1233553e568", "distribution": {"source": {"confluence": 5, "jira-platform": 7, "jira-software": 4}, "method": {"DELETE": 4, "GET": 5, "POST": 4, "PUT": 3}, "product_named": 4}},
+  "negative": {"sealed": true, "round": 1, "count": 8, "sha256": "17313ddaf16080c0b2a9e9729f80c0313fccc9b8020cf51888f48a272aa3a1d4", "distribution": {"source": {"confluence": 2, "jira-platform": 5, "jira-software": 1}, "method": {"GET": 6, "POST": 1, "PUT": 1}, "product_named": 2}},
+  "round1_seal": {"held_out_sha256": "606535e10663bc7ab7eb2a16a8044f9a5f9e4aa326eb082193c6a1233553e568", "negative_sha256": "17313ddaf16080c0b2a9e9729f80c0313fccc9b8020cf51888f48a272aa3a1d4", "held_out_distribution": {"source": {"confluence": 5, "jira-platform": 7, "jira-software": 4}, "method": {"DELETE": 4, "GET": 5, "POST": 4, "PUT": 3}, "product_named": 4}, "negative_distribution": {"source": {"confluence": 2, "jira-platform": 5, "jira-software": 1}, "method": {"GET": 6, "POST": 1, "PUT": 1}, "product_named": 2}, "registry_fingerprint": "a13ba026ab6b6a3f19845a3aaa694a1e98427220fdbdc74bb711c316730a793f", "spec_sha256": {"confluence": "e4de6c1134a19d8717a309dbb7285a525ae31a9e3c733d046e9e144741f6e313", "jira-platform": "2aa6ef12fca713d5b7fc10042e458439ccb3e20eab5d86fd82323f56783f7ab1", "jira-software": "cb7e24b331ad9b31944fa9a588f70d4ea60d74d1dfb52d39a59770230b79207a"}}
 }
