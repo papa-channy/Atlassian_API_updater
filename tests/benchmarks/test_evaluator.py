@@ -54,7 +54,7 @@ class TestSchemaAndSemantics(unittest.TestCase):
         for sect in ("seed", "regression_negative", "held_out", "negative"):
             if not ev.is_sealed(b[sect]):
                 ev.check_schema(sect, b[sect])
-        self.assertEqual(len(b["seed"]), 22); self.assertEqual(len(b["regression_negative"]), 7)
+        self.assertEqual(len(b["seed"]), 23); self.assertEqual(len(b["regression_negative"]), 6)
 
     def test_no_query_reuse_across_sets(self):
         b = json.loads(BENCH.read_text(encoding="utf-8"))

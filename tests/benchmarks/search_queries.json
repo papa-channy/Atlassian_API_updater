@@ -29,7 +29,8 @@
 ,
     {"id": "s-020", "query": "update page title", "expected_top1_any": ["confluence:PUT:/pages/{id}", "confluence:PUT:/pages/{id}/title"], "forbidden_top1": [], "origin": "held_out-r0", "failure_classes": [], "ambiguous": false},
     {"id": "s-021", "query": "move issue to backlog", "expected_top1_any": ["jira-software:POST:/rest/agile/1.0/backlog/issue", "jira-software:POST:/rest/agile/1.0/backlog/{boardId}/issue"], "forbidden_top1": [], "origin": "held_out-r0", "failure_classes": [], "ambiguous": false},
-    {"id": "s-022", "query": "update issue summary", "expected_top1_any": ["jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}"], "forbidden_top1": [], "origin": "negative-r0", "failure_classes": ["R1"], "ambiguous": false}
+    {"id": "s-022", "query": "update issue summary", "expected_top1_any": ["jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}"], "forbidden_top1": [], "origin": "negative-r0", "failure_classes": ["R1"], "ambiguous": false},
+    {"id": "s-023", "query": "get transitions", "expected_top1_any": ["jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/transitions"], "forbidden_top1": [], "origin": "negative-r0", "failure_classes": [], "ambiguous": false}
   ],
   "regression_negative": [
     {"id": "rn-001", "query": "get issue status", "expected_top1_any": [], "forbidden_top1": ["jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/transitions", "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/transitions"], "origin": "negative-r0", "failure_classes": [], "ambiguous": false, "note": "status query must not surface transition APIs"},
@@ -37,9 +38,8 @@
     {"id": "rn-003", "query": "list users", "expected_top1_any": [], "forbidden_top1": ["jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}/assignee"], "origin": "negative-r0", "failure_classes": [], "ambiguous": false}
 ,
     {"id": "rn-004", "query": "get page property", "expected_top1_any": [], "forbidden_top1": ["confluence:PUT:/pages/{id}"], "origin": "negative-r0", "failure_classes": [], "ambiguous": false},
-    {"id": "rn-005", "query": "get transitions", "expected_top1_any": [], "forbidden_top1": ["jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/transitions"], "origin": "negative-r0", "failure_classes": [], "ambiguous": false},
-    {"id": "rn-006", "query": "read issue comments", "expected_top1_any": [], "forbidden_top1": ["jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/comment"], "origin": "negative-r0", "failure_classes": [], "ambiguous": false},
-    {"id": "rn-007", "query": "remove page", "expected_top1_any": [], "forbidden_top1": ["confluence:PUT:/pages/{id}"], "origin": "negative-r0", "failure_classes": [], "ambiguous": false}
+    {"id": "rn-005", "query": "read issue comments", "expected_top1_any": [], "forbidden_top1": ["jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/comment"], "origin": "negative-r0", "failure_classes": [], "ambiguous": false},
+    {"id": "rn-006", "query": "remove page", "expected_top1_any": [], "forbidden_top1": ["confluence:PUT:/pages/{id}"], "origin": "negative-r0", "failure_classes": [], "ambiguous": false}
   ],
   "held_out": [],
   "negative": []
