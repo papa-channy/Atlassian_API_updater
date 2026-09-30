@@ -185,6 +185,29 @@ class TestRankingPolicy(unittest.TestCase):
             with self.assertRaises(ValueError):
                 self._from(raw)
 
+    def test_malformed_list_elements_raise_value_error(self):
+        """Non-string / nested list elements and newline-suffixed keys raise ValueError, never TypeError."""
+        base = self._raw()
+        bad = [dict(base, verb_methods={**base["verb_methods"], "get\n": ["GET"]}),              # "$" would accept
+               dict(base, product_hints={**base["product_hints"], "jira\n": ["confluence"]}),
+               dict(base, path_noise=base["path_noise"] + ["api\n"]),
+               dict(base, verb_methods={**base["verb_methods"], "get": ["GET", 1]}),             # non-string element
+               dict(base, product_hints={**base["product_hints"], "jira": [7]}),
+               dict(base, path_noise=base["path_noise"] + [3]),
+               dict(base, verb_methods={**base["verb_methods"], "get": [["GET"]]}),              # nested list element
+               dict(base, product_hints={**base["product_hints"], "jira": [["jira-platform"]]}),
+               dict(base, path_noise=base["path_noise"] + [["x"]]),
+               dict(base, tuning_grid={**base["tuning_grid"], "method_match_bonus": [[1.0], 2.0]}),
+               dict(base, tuning_grid={**base["tuning_grid"], "method_match_bonus": [{"a": 1}]})]
+        for i, raw in enumerate(bad):
+            with self.subTest(case=i), self.assertRaises(ValueError):
+                self._from(raw)
+
+    def test_constant_keys_message_counts_keys(self):
+        base = self._raw()
+        with self.assertRaisesRegex(ValueError, f"{len(policy.CONSTANT_KEYS)} constant keys"):
+            self._from(dict(base, baseline={k: v for k, v in base["baseline"].items() if k != "resource_match_bonus"}))
+
     def test_returned_structures_are_immutable(self):
         rp = policy.ranking()
         with self.assertRaises(TypeError):
