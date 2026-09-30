@@ -301,7 +301,7 @@ Then verify: `python tests/benchmarks/round1_seal.py catalog --cache-dir "$ATLAS
 
 **Interfaces:**
 - CLI: `python tests/benchmarks/round1_seal.py catalog --cache-dir DIR --out generator_catalog.json --internal-out internal_catalog.json`. The **generator catalog** contains only `key`, `source`, `method`, `summary`, `tags` (spec §5.4 — no `operation_id`, no `description`); the **internal catalog** (controller/checker/reviewer only) adds `operation_id` and `description`. Prints `registry_fingerprint` and per-source `spec_sha256`. `check --plain round1-sealed.json --bench tests/benchmarks/search_queries.json --internal-catalog internal_catalog.json` (machine rules of spec §5.4, exit 1 on any violation, prints each); `seal --plain ... --bench ... --cache-dir DIR` (refuses on any violation; writes sealed metadata + `round1_seal`); `unseal --plain ... --bench ...` (replaces `held_out`/`negative` with plaintext; refuses if hashes differ).
-- Library functions: `load_catalogs_from_cache(cache_dir) -> (generator_records, internal_records, registry_fingerprint, spec_sha256_by_source)`, `generator_view(internal_records) -> list` (drops `operation_id`/`description`), `machine_check(plain, bench, internal_catalog) -> list[str]` (violation messages, each prefixed by the record id), `distribution(records, section_name) -> dict` (held_out/seed: by `expected_top1_any[0]`; negative: by `forbidden_top1[0]` — the decoy's source/method; `product_named` counts records whose unigram set contains `jira` or `confluence`), `seal_metadata(records, round, section_name, internal_catalog) -> dict`.
+- Library functions: `load_catalogs_from_cache(cache_dir) -> (generator_records, internal_records, registry_fingerprint, spec_sha256_by_source)`, `generator_view(internal_records) -> list` (drops `operation_id`/`description`), `machine_check(plain, bench, internal_catalog) -> list[str]` (violation messages, each prefixed by the record id), `distribution(records, section_name) -> dict` (held_out/seed: by `expected_top1_any[0]`; negative: by `forbidden_top1[0]` — the decoy's source/method; source/method are parsed from the canonical key, no catalog needed; `product_named` counts records whose unigram set contains `jira` or `confluence`), `seal_metadata(records, round, section_name) -> dict`.
 - Uses `tools.atlassian_docs.intelligence.registry`/`normalizer`/`storage` read-only to build the catalogs from a cache dir (patch `storage.CACHE_DIR` for the call in a `try/finally`, restore after).
 
 - [ ] **Step 1: Write failing tests**
@@ -312,13 +312,26 @@ Then verify: `python tests/benchmarks/round1_seal.py catalog --cache-dir "$ATLAS
 import json, unittest
 from tests.benchmarks import round1_seal as rs
 
-CAT = [{"key": "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}", "source": "jira-platform", "method": "GET",
-        "operation_id": "getIssue", "summary": "Get issue", "tags": ["Issues"], "description": "Returns the details for an issue."},
-       {"key": "confluence:POST:/pages", "source": "confluence", "method": "POST", "operation_id": "createPage",
-        "summary": "Create page", "tags": ["Page"], "description": "Creates a page in the space."},
-       {"key": "jira-platform:DELETE:/rest/api/3/issue/{issueIdOrKey}", "source": "jira-platform", "method": "DELETE",
-        "operation_id": "deleteIssue", "summary": "Delete issue", "tags": ["Issues"], "description": "Deletes an issue."}]
-BENCH = {"seed": [{"id": "s-001", "query": "get issue by key", "expected_top1_any": [CAT[0]["key"]], "forbidden_top1": [],
+CAT = [  # A..H: 8 synthetic ops covering jira-platform / jira-software / confluence and GET/POST/PUT/DELETE
+    {"key": "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}", "source": "jira-platform", "method": "GET",
+     "operation_id": "getIssue", "summary": "Get issue", "tags": ["Issues"], "description": "Returns the details for an issue."},
+    {"key": "confluence:POST:/pages", "source": "confluence", "method": "POST",
+     "operation_id": "createPage", "summary": "Create page", "tags": ["Page"], "description": "Creates a page in the space."},
+    {"key": "jira-platform:DELETE:/rest/api/3/issue/{issueIdOrKey}", "source": "jira-platform", "method": "DELETE",
+     "operation_id": "deleteIssue", "summary": "Delete issue", "tags": ["Issues"], "description": "Deletes an issue."},
+    {"key": "jira-software:GET:/rest/agile/1.0/board", "source": "jira-software", "method": "GET",
+     "operation_id": "getAllBoards", "summary": "Get all boards", "tags": ["Board"], "description": "Returns all boards."},
+    {"key": "jira-software:PUT:/rest/agile/1.0/sprint/{sprintId}", "source": "jira-software", "method": "PUT",
+     "operation_id": "updateSprint", "summary": "Update sprint", "tags": ["Sprint"], "description": "Performs a full update of a sprint."},
+    {"key": "jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}/assignee", "source": "jira-platform", "method": "PUT",
+     "operation_id": "assignIssue", "summary": "Assign issue", "tags": ["Issues"], "description": "Assigns an issue to a user."},
+    {"key": "confluence:GET:/pages/{id}", "source": "confluence", "method": "GET",
+     "operation_id": "getPageById", "summary": "Get page by id", "tags": ["Page"], "description": "Returns a specific page."},
+    {"key": "jira-software:POST:/rest/agile/1.0/sprint", "source": "jira-software", "method": "POST",
+     "operation_id": "createSprint", "summary": "Create sprint", "tags": ["Sprint"], "description": "Creates a future sprint."},
+]
+A, B, C, D, E, F, G, H = (c["key"] for c in CAT)
+BENCH = {"seed": [{"id": "s-001", "query": "get issue by key", "expected_top1_any": [A], "forbidden_top1": [],
                    "origin": "seed-r0", "failure_classes": [], "ambiguous": False}], "regression_negative": []}
 
 
@@ -333,16 +346,19 @@ def neg(i, q, key):
 
 
 def valid_plain():
-    """16 held_out + 8 negative that satisfy every machine rule against CAT (three ops: GET/POST/DELETE)."""
-    hq = ["show me the ticket details", "open the confluence document", "bring up my ticket", "start a wiki document now",
-          "drop this ticket", "view ticket information please", "publish a brand new document", "throw away the ticket",
-          "look at a ticket", "compose a wiki entry", "read one ticket", "write a fresh document", "erase the ticket record",
-          "inspect ticket data", "author a document today", "see a jira ticket"]
-    keys = [CAT[0], CAT[1], CAT[0], CAT[1], CAT[2], CAT[0], CAT[1], CAT[2], CAT[0], CAT[1], CAT[0], CAT[1], CAT[2], CAT[0], CAT[1], CAT[0]]
-    # source: jira-platform 11, confluence 5 (rule 2 needs jira-software ≥ 4: CAT has none — the test catalog adds one below)
-    held = [rec(i + 1, q, k["key"]) for i, (q, k) in enumerate(zip(hq, keys))]
-    negs = [neg(i + 1, q, CAT[0]["key"]) for i, q in enumerate(["ticket", "issue type", "ticket status only", "document space",
-                                                                 "jira ticket", "confluence document", "ticket owner", "page tree"])]
+    """16 held_out + 8 negative satisfying every machine rule against CAT.
+    Sources: jira-platform 6 (h1,3,6,9,11,16), jira-software 5 (h4,5,8,12,14), confluence 5 (h2,7,10,13,15).
+    Methods: GET 7, POST 5, PUT 2 (h5,h6), DELETE 2 (h3,h11). Product-named: h4,h5,h7,h16 (4); unnamed 12.
+    Every query is 3-7 words, never equals an operationId unigram set, never copies 2 consecutive summary/tag tokens."""
+    held = [rec(1, "show me the ticket details", A), rec(2, "publish a brand new document", B), rec(3, "throw away the ticket", C),
+            rec(4, "list every jira board", D), rec(5, "rename the current jira sprint", E), rec(6, "hand the ticket to someone", F),
+            rec(7, "open the confluence document", G), rec(8, "kick off a fresh sprint", H), rec(9, "bring up my ticket", A),
+            rec(10, "write a fresh wiki entry", B), rec(11, "erase the ticket record", C), rec(12, "which agile boards exist", D),
+            rec(13, "author a document today", B), rec(14, "start another sprint now", H), rec(15, "read one wiki document", G),
+            rec(16, "see a jira ticket", A)]
+    negs = [neg(1, "ticket status field values", A), neg(2, "issue type scheme entries", C), neg(3, "document space overview", G),
+            neg(4, "jira ticket owner list", F), neg(5, "confluence document tree", B), neg(6, "sprint board settings", D),
+            neg(7, "ticket record archive", C), neg(8, "page tree layout", G)]
     return {"held_out": held, "negative": negs}
 
 
@@ -350,68 +366,72 @@ class TestMachineCheck(unittest.TestCase):
     """One failing test per machine rule of spec §5.4 (review finding P0-8)."""
     def _msgs(self, mutate):
         plain = valid_plain(); mutate(plain)
-        return rs.machine_check(plain, BENCH, CAT4)
+        return rs.machine_check(plain, BENCH, CAT)
 
     def test_valid_plaintext_has_no_violations(self):
-        self.assertEqual(rs.machine_check(valid_plain(), BENCH, CAT4), [])
+        self.assertEqual(rs.machine_check(valid_plain(), BENCH, CAT), [])
 
     def test_word_count_bounds(self):
         self.assertTrue(any("h-001" in m and "words" in m for m in self._msgs(lambda p: p["held_out"][0].__setitem__("query", "ticket now"))))
         self.assertTrue(any("h-001" in m and "words" in m for m in self._msgs(lambda p: p["held_out"][0].__setitem__("query", "a b c d e f g h ticket"))))
+        self.assertTrue(any("n-001" in m and "words" in m for m in self._msgs(lambda p: p["negative"][0].__setitem__("query", "ticket"))))
 
     def test_operation_id_unigram_set_rejected(self):
         self.assertTrue(any("h-001" in m and "operationId" in m for m in self._msgs(lambda p: p["held_out"][0].__setitem__("query", "get the issue"))))
 
     def test_summary_two_consecutive_tokens_rejected(self):
         self.assertTrue(any("h-002" in m and "summary" in m for m in self._msgs(lambda p: p["held_out"][1].__setitem__("query", "please create page today"))))
+        self.assertTrue(any("h-004" in m and "summary" in m for m in self._msgs(lambda p: p["held_out"][3].__setitem__("query", "get all boards please"))))
 
     def test_reuse_against_seed_and_within_hidden(self):
         self.assertTrue(any("h-001" in m and "reuse" in m for m in self._msgs(lambda p: p["held_out"][0].__setitem__("query", "get issue by key"))))
         self.assertTrue(any("reuse" in m for m in self._msgs(lambda p: p["held_out"][1].__setitem__("query", p["held_out"][0]["query"]))))
+        self.assertTrue(any("reuse" in m for m in self._msgs(lambda p: p["negative"][0].__setitem__("query", "details the ticket show me"))))  # same unigram set as h-001
 
     def test_counts_and_distributions(self):
         self.assertTrue(any("held_out" in m and "16" in m for m in self._msgs(lambda p: p["held_out"].pop())))
         self.assertTrue(any("negative" in m and "8" in m for m in self._msgs(lambda p: p["negative"].pop())))
         def all_confluence(p):
-            for r in p["held_out"]: r["expected_top1_any"] = [CAT[1]["key"]]
-        self.assertTrue(any("source" in m or "method" in m for m in self._msgs(all_confluence)))
+            for r in p["held_out"]: r["expected_top1_any"] = [B]
+        self.assertTrue(any("source" in m for m in self._msgs(all_confluence)))
+        def no_put(p):
+            p["held_out"][4]["expected_top1_any"] = [H]; p["held_out"][5]["expected_top1_any"] = [A]
+        self.assertTrue(any("method" in m for m in self._msgs(no_put)))
         def no_product(p):
-            for r in p["held_out"]: r["query"] = r["query"].replace("jira ", "").replace("confluence ", "")
+            for r in p["held_out"]: r["query"] = r["query"].replace("jira ", "big ").replace("confluence ", "team ")
         self.assertTrue(any("product_named" in m for m in self._msgs(no_product)))
 
     def test_negative_schema_and_unknown_keys(self):
-        self.assertTrue(any("n-001" in m for m in self._msgs(lambda p: p["negative"][0].__setitem__("expected_top1_any", [CAT[0]["key"]]))))
+        self.assertTrue(any("n-001" in m for m in self._msgs(lambda p: p["negative"][0].__setitem__("expected_top1_any", [A]))))
         self.assertTrue(any("n-002" in m and "forbidden" in m for m in self._msgs(lambda p: p["negative"][1].__setitem__("forbidden_top1", []))))
         self.assertTrue(any("h-003" in m and "catalog" in m for m in self._msgs(lambda p: p["held_out"][2].__setitem__("expected_top1_any", ["jira-platform:POST:/nope"]))))
+        self.assertTrue(any("n-003" in m and "catalog" in m for m in self._msgs(lambda p: p["negative"][2].__setitem__("forbidden_top1", ["confluence:GET:/nope"]))))
 
     def test_ambiguous_distribution_uses_first_expected_key(self):
-        d = rs.distribution([rec(1, "show me the ticket", CAT[0]["key"]), rec(2, "start new page", CAT[1]["key"], ambiguous=True, expected_top1_any=[CAT[1]["key"], CAT[0]["key"]])], "held_out")
+        d = rs.distribution([rec(1, "show me the ticket", A), rec(2, "start new page", B, ambiguous=True, expected_top1_any=[B, A])], "held_out")
         self.assertEqual(d["source"], {"jira-platform": 1, "confluence": 1}); self.assertEqual(d["method"], {"GET": 1, "POST": 1}); self.assertEqual(d["product_named"], 0)
-        dn = rs.distribution([neg(1, "ticket", CAT[2]["key"])], "negative")
-        self.assertEqual(dn["method"], {"DELETE": 1})
+        dn = rs.distribution([neg(1, "ticket record archive", C)], "negative")
+        self.assertEqual(dn["source"], {"jira-platform": 1}); self.assertEqual(dn["method"], {"DELETE": 1})
 
     def test_seal_metadata_contract(self):
-        recs = [rec(1, "show me the ticket", CAT[0]["key"])]
-        meta = rs.seal_metadata(recs, 1, "held_out", CAT4)
-        self.assertEqual(meta["count"], 1); self.assertEqual(meta["sha256"], rs.canonical_sha256(recs)); self.assertTrue(meta["sealed"]); self.assertEqual(meta["round"], 1)
-        self.assertIn("distribution", meta)
+        recs = valid_plain()["held_out"]
+        meta = rs.seal_metadata(recs, 1, "held_out")
+        self.assertEqual(meta["count"], 16); self.assertEqual(meta["sha256"], rs.canonical_sha256(recs)); self.assertTrue(meta["sealed"]); self.assertEqual(meta["round"], 1)
+        self.assertEqual(meta["distribution"], rs.distribution(recs, "held_out"))
 
     def test_generator_view_hides_operation_id_and_description(self):
-        for r in rs.generator_view(CAT4):
+        for r in rs.generator_view(CAT):
             self.assertEqual(set(r), {"key", "source", "method", "summary", "tags"})
-
-
-CAT4 = CAT + [{"key": "jira-software:GET:/rest/agile/1.0/board", "source": "jira-software", "method": "GET", "operation_id": "getAllBoards",
-               "summary": "Get all boards", "tags": ["Board"], "description": "Returns all boards."}] * 1
 ```
 
-(`valid_plain()` must satisfy rule 2 exactly; the implementer adjusts the 16 queries/keys so that, against `CAT4`, source counts are jira-platform ≥ 6, jira-software ≥ 4, confluence ≥ 5 and method counts GET ≥ 4, POST ≥ 4, PUT ≥ 2, DELETE ≥ 2 — add a PUT op to `CAT4` for that. The point is one failing test per rule; the fixture may be reshaped, the assertions may not be weakened.)
+(`distribution()` needs no catalog: `source` and `method` are parsed from the canonical key `source:METHOD:path`.)
+
 
 - [ ] **Step 2: Run to verify failure** — `python -m unittest tests.benchmarks.test_round1_seal -v` → ImportError.
 
 - [ ] **Step 3: Implement `round1_seal.py`**
 
-Rules to encode in `machine_check` (spec §5.4, machine-checkable only; every message starts with the record id and names the rule with the words used by the tests: `words`, `operationId`, `summary`, `reuse`, `held_out`/`negative` count, `source`/`method`/`product_named`, `forbidden`, `catalog`): (1) 3–7 whitespace words; `unigram_set(query)` ≠ `unigram_set(operation_id)` of any internal-catalog op; no 2 consecutive content tokens (STOPWORDS removed, in order) shared between the query and the expected op's `summary` or any of its tags; (2) held_out count 16 and distributions per spec §5.4.2 computed by `distribution(records, "held_out")`; (3) negative count 8, `expected_top1_any == []`, `forbidden_top1` ≥ 1; (4) no query string / unigram-set reuse against `bench["seed"] + bench["regression_negative"]` and within the plaintext (both sets together); (5) every expected/forbidden key ∈ internal catalog; also `evaluator.check_schema` on both sections. `seal_metadata(records, round, section_name, internal_catalog)` returns `{"sealed": True, "round": r, "count": n, "sha256": canonical_sha256(records), "distribution": distribution(records, section_name)}`. `seal` writes both sections' metadata and top-level `round1_seal = {"held_out_sha256", "negative_sha256", "registry_fingerprint", "spec_sha256"}`, leaves `seed`/`regression_negative` untouched, refuses on any violation. `unseal` verifies hashes then replaces the two lists. Import `canonical_sha256`, `unigram_set`, `STOPWORDS`, `check_schema` from `evaluator`. Keep the file under ~250 lines; write in chunks.
+Rules to encode in `machine_check` (spec §5.4, machine-checkable only; every message starts with the record id and names the rule with the words used by the tests: `words`, `operationId`, `summary`, `reuse`, `held_out`/`negative` count, `source`/`method`/`product_named`, `forbidden`, `catalog`): (1) 3–7 whitespace words; `unigram_set(query)` ≠ `unigram_set(operation_id)` of any internal-catalog op; no 2 consecutive content tokens (STOPWORDS removed, in order) shared between the query and the expected op's `summary` or any of its tags; (2) held_out count 16 and distributions per spec §5.4.2 computed by `distribution(records, "held_out")`; (3) negative count 8, `expected_top1_any == []`, `forbidden_top1` ≥ 1; (4) no query string / unigram-set reuse against `bench["seed"] + bench["regression_negative"]` and within the plaintext (both sets together); (5) every expected/forbidden key ∈ internal catalog; also `evaluator.check_schema` on both sections. `seal_metadata(records, round, section_name)` returns `{"sealed": True, "round": r, "count": n, "sha256": canonical_sha256(records), "distribution": distribution(records, section_name)}`. `seal` writes both sections' metadata and top-level `round1_seal = {"held_out_sha256", "negative_sha256", "held_out_distribution", "negative_distribution", "registry_fingerprint", "spec_sha256"}` (the two distributions are kept permanently so the plaintext can be re-checked after commit D), leaves `seed`/`regression_negative` untouched, refuses on any violation. `unseal` verifies hashes then replaces the two lists. Import `canonical_sha256`, `unigram_set`, `STOPWORDS`, `check_schema` from `evaluator`. Keep the file under ~250 lines; write in chunks.
 
 - [ ] **Step 4: Bundled-file integrity tests** (append to `tests/benchmarks/test_evaluator.py`; they run in every state of the file):
 
@@ -424,12 +444,17 @@ class TestSealIntegrity(unittest.TestCase):
         seal = self.b.get("round1_seal")
         for sect in ("held_out", "negative"):
             section = self.b[sect]
+            expected_count = 16 if sect == "held_out" else 8
             if ev.is_sealed(section):
-                self.assertEqual(section["count"], section["count"]); self.assertRegex(section["sha256"], r"^[0-9a-f]{64}$")
-                self.assertEqual(section["sha256"], seal[f"{sect}_sha256"])
+                self.assertEqual(section["count"], expected_count); self.assertEqual(section["round"], 1)
+                self.assertRegex(section["sha256"], r"^[0-9a-f]{64}$"); self.assertEqual(section["sha256"], seal[f"{sect}_sha256"])
+                self.assertEqual(section["distribution"], seal[f"{sect}_distribution"])
             elif section:                       # plaintext after commit D
+                from tests.benchmarks import round1_seal as rs
                 self.assertIsNotNone(seal, "plaintext hidden sets require round1_seal")
+                self.assertEqual(len(section), expected_count)
                 self.assertEqual(ev.canonical_sha256(section), seal[f"{sect}_sha256"])
+                self.assertEqual(rs.distribution(section, sect), seal[f"{sect}_distribution"])
             # empty list before commit B: nothing to check
 
     def test_hidden_plaintext_machine_rules(self):
@@ -782,9 +807,10 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 - Modify: `tools/atlassian_docs/intelligence/search.py`
 - Modify: `tests/intelligence/test_search.py`
 - Modify: `tests/test_layering.py` (AST test for AC-05)
+- Modify: `tests/intelligence/helpers.py` (`state_from_source_registries`)
 
 **Interfaces:**
-- Produces: `PathToken(origin: str, forms: frozenset)`; `IndexEntry` gains `path_tokens: tuple` and `source: str`, `method: str`; `path_tokens_for(path, noise) -> tuple[PathToken]`; `_structural_signals(entry, query_unigrams: tuple, exp_all: frozenset, rp) -> (float, dict)`; `_score(entry, exp, lexical_base, bonus_tokens, deprecated, pol)` returns lexical only; `search_operations` implements spec §6.6 verbatim; result items gain `signals`; `intelligence_policy` carries ranking hashes (from Task 5).
+- Produces: `PathToken(origin: str, forms: frozenset)`; `IndexEntry` gains `path_tokens: tuple` and `source: str`, `method: str`; `path_tokens_for(path, noise) -> tuple[PathToken]`; `_structural_signals(entry, query_unigrams: tuple, exp_all: frozenset, rp) -> (float, dict)`; **the one and only** `_score(entry, lexical_base: frozenset, direct: frozenset, cond: frozenset, bonus_tokens: tuple, pol) -> tuple[float, frozenset]` returning `(lexical_including_all_match_bonus, matched_base)`; the deprecated factor is applied in `search_operations` (§6.6), not in `_score`; `search_operations` implements spec §6.6 verbatim; result items gain `signals`; `intelligence_policy` carries ranking hashes (from Task 5).
 - Consumes: `policy.ranking()`; `tokenize_unigrams`, `token_forms`, `expand_token_forms`, `joined_query_forms` (Task 4).
 - `build_index(operations, noise)`: `registry.py` is frozen and calls `build_index(operations)` positionally — keep the one-argument signature and read `policy.ranking().path_noise` lazily inside `build_index` via a local import (`from . import policy`), same pattern as `search_operations`.
 
@@ -852,8 +878,11 @@ class TestScoringAlgorithm(unittest.TestCase):
 
     def test_limit_truncates_pinned_and_keeps_exact_flag(self):                                    # review focus 4
         state = make_state("jira-platform", "jira-software")
+        full = search.search_operations(state, "getIssue", limit=10)
+        self.assertEqual(sum(1 for r in full["results"] if "match" in r), 2)                       # two pinned ops really exist
         out = search.search_operations(state, "getIssue", limit=1)
         self.assertEqual(len(out["results"]), 1); self.assertTrue(out["exact_match"]); self.assertIn("match", out["results"][0])
+        self.assertEqual(out["results"][0]["key"], full["results"][0]["key"])                      # key order: jira-platform first
 
     def test_signals_shape_and_exact_zero(self):
         state = make_state("jira-platform")
@@ -865,7 +894,61 @@ class TestScoringAlgorithm(unittest.TestCase):
         self.assertEqual(set(out["intelligence_policy"]) >= {"ranking_sha256", "ranking_structure_sha256"}, True)
 ```
 
-Add a numeric end-to-end test (`TestScoringNumbers`) using a hand-built state (synthetic operations from a tiny inline OpenAPI dict normalized with `normalizer.normalize_openapi`, `source="jira-platform"`): op A `GET /widgets` summary "List widgets", op B `GET /widgets/{id}/history` summary "Widget history", op C deprecated `GET /widgets/legacy` summary "List widgets". **Patch the policy for the whole test class**: `mock.patch.object(policy, "ranking", return_value=<RankingPolicy built from a fixed dict with constants 2.0/2.0/1.0/3/3.0>)` so the numbers do not depend on Task 7's tuned values (also patch `policy.aliases` with an empty `AliasPolicy(0.5, 1.0, {}, (), "x")`). Query `"list widgets"`: A = summary 4·2 (`list`, `widgets`) + path 3·1 (`widgets`) + method-field 1·0 + ALL_MATCH 2 = 13, structural = +2 (GET) + 0 + 0 → **15.0**; B = summary 4·1 (`widgets` via `widget` forms — check the field's token forms; if `widget` does not match `widgets`, B's summary hit is 0 and the number changes accordingly: compute by hand once, write it down) + path 3·1, structural +2 −1 (`history`), no all-match; C = A's lexical 13 + 2 = 15 × 0.7 = **10.5**; a query `"get zzz"` against an op whose only `zzz` is in `description` (1·1 = 1 lexical) with a 5-deep unmatched path gives clamp(1 + 2 − 3) = 0 → excluded. Assert the exact floats, the order A > B > C, and `total_matches` == number of ops with `final > 0`. The numbers must be computed by hand in the test's comments, not by calling the scorer.
+Add a numeric end-to-end test (`TestScoringNumbers`, review finding P0-4: singular-only vocabulary so form expansion adds nothing; all numbers fixed here):
+
+```python
+class TestScoringNumbers(unittest.TestCase):
+    """spec §6.6 end to end with hand-computed numbers. FIELD_WEIGHTS: operation_id 5, summary 4, tags 3, path 3,
+    schema_names 2, method 1, description 1; ALL_MATCH_BONUS 2; DEPRECATED_FACTOR 0.7. Fixed policy 2/2/1/3/3, no aliases."""
+    SPEC = {"openapi": "3.0.1", "info": {"title": "num", "version": "1"}, "paths": {
+        "/widget": {"get": {"operationId": "listWidget", "summary": "List widget", "tags": ["Widget"], "responses": {"200": {"description": "ok"}}}},
+        "/widget/{id}/history": {"get": {"operationId": "getWidgetHistory", "summary": "Widget history", "tags": ["Widget"],
+                                         "parameters": [{"name": "id", "in": "path", "required": True, "schema": {"type": "string"}}],
+                                         "responses": {"200": {"description": "ok"}}}},
+        "/widget/legacy": {"get": {"operationId": "listWidgetLegacy", "summary": "List widget", "tags": ["Widget"], "deprecated": True,
+                                   "responses": {"200": {"description": "ok"}}}},
+        "/alpha/beta/gamma/delta/epsilon": {"get": {"operationId": "nothingHere", "summary": "Nothing here", "description": "zzz",
+                                                    "responses": {"200": {"description": "ok"}}}}}}
+
+    @classmethod
+    def setUpClass(cls):
+        import pathlib, tempfile
+        from unittest import mock
+        from tests.intelligence.helpers import state_from_source_registries
+        from tools.atlassian_docs.intelligence import normalizer, registry
+        raw = json.loads((policy.DATA_DIR / "search_ranking.json").read_text(encoding="utf-8"))
+        raw["constants"] = {"method_match_bonus": 2.0, "method_mismatch_penalty": 2.0, "path_unmatched_penalty": 1.0, "path_unmatched_cap": 3, "product_hint_bonus": 3.0}
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as fh:
+            json.dump(raw, fh)
+        fixed = policy.load_ranking(pathlib.Path(fh.name))
+        cls._p1 = mock.patch.object(policy, "ranking", return_value=fixed); cls._p1.start()
+        cls._p2 = mock.patch.object(policy, "aliases", return_value=policy.AliasPolicy(0.5, 1.0, {}, (), "x")); cls._p2.start()
+        ns = normalizer.normalize_openapi("jira-platform", cls.SPEC)
+        cls.state = state_from_source_registries({"jira-platform": registry.build_source_registry(ns, "0" * 64)})
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._p1.stop(); cls._p2.stop()
+
+    def test_list_widget_numbers(self):
+        out = search.search_operations(self.state, "list widget")
+        scores = {r["operation_id"]: r["score"] for r in out["results"]}
+        # A listWidget:       opid 5*2 + summary 4*2 + tags 3*1 + path 3*1 = 24, all-match +2 = 26; +2 GET, path unmatched 0 -> 28.0
+        # C listWidgetLegacy: opid 5*2 + summary 8 + tags 3 + path 3 ({widget, legacy}) = 24, +2 = 26; +2 GET, -1 (legacy) = 27 * 0.7 = 18.9
+        # B getWidgetHistory: opid 5*1 + summary 4*1 + tags 3 + path 3 = 15, no all-match ("list" unmatched); +2 GET, -1 (history) = 16.0
+        self.assertEqual(scores, {"listWidget": 28.0, "listWidgetLegacy": 18.9, "getWidgetHistory": 16.0})
+        self.assertEqual([r["operation_id"] for r in out["results"]], ["listWidget", "listWidgetLegacy", "getWidgetHistory"])
+        self.assertEqual(out["total_matches"], 3)
+        b = out["results"][2]["signals"]
+        self.assertEqual(b, {"method_intent": {"value": 2.0, "allowed": ["GET"]}, "path_unmatched": {"value": -1.0, "tokens": ["history"]}, "product_hint": {"value": 0.0, "sources": []}})
+
+    def test_negative_subtotal_is_clamped_and_excluded(self):
+        out = search.search_operations(self.state, "zzz")
+        # nothingHere: description 1*1 = 1, all-match +2 = 3; no verb -> 0; 5 unmatched origins capped 3 * 1.0 = -3 -> clamp 0 -> excluded
+        self.assertEqual(out["results"], []); self.assertEqual(out["total_matches"], 0); self.assertNotIn("error", out)
+```
+
+`state_from_source_registries(srcs: dict[str, SourceRegistry])` is a small helper added to `tests/intelligence/helpers.py` (build `registry.build_registry(srcs, ...)` plus fresh provenance exactly as `make_state` does); `make_state` is refactored to call it. Index facts the numbers rely on: `tags` → `tokenize("Widget")` = `{widget}`; `schema_names` empty (no schemas declared); `path` field of `/widget/{id}/history` = `{widget, id, history}` (`id` is not a stopword but the query never contains it); `path_tokens` = `[widget, history]` (`{id}` is a parameter segment).
 
 Also add to `tests/test_layering.py`:
 
@@ -916,7 +999,7 @@ def _structural_signals(entry, query_unigrams, exp_all, rp):
 
 `search_operations` per spec §6.6: `unigrams = tokenize_unigrams(query)`; `exp = expand_query(query, pol)` (Task 4: `exp.base` has no joined forms); `lexical_base = exp.base | joined_query_forms(query)`; `_score(entry, lexical_base, exp.direct, exp.cond, unigrams, pol) -> (lexical, matched_base)` where all-match is `all(token_forms(q) & matched_base for q in unigrams)` and `matched_base` is the union of `lexical_base ∩ field` over fields; structural from `_structural_signals(entry, unigrams, exp.all, rp)`; candidates only if `lexical > 0`; `final = max(lexical + structural, 0) × factor`; drop `final == 0`; sort `(-final, deprecated, key)`; `pinned_ops = exact_matches(...)`; `non_pinned = [c for c in candidates if c.key ∉ pinned_keys]`; `pinned_score = (max final of non_pinned or 0.0) + 1.0`; `results = pinned + non_pinned`, then `[:limit]`; `exact_match = bool(pinned)`; `total_matches = len(pinned) + len(non_pinned)` (no double count). `_item(op, s, signals, match=None)`. Keep `query_tokens`/`alias_tokens`/`expanded_tokens` fields as today (from `exp`).
 
-- [ ] **Step 4: Run full suite** — `python -m unittest discover -s tests -t .`. Phase 2 tests that legitimately change: `test_all_match_bonus_ignores_joined_forms` (adapt to the new `_score` signature; the assertion intent — a joined form absent from the entry does not cancel the bonus — is unchanged); any ordering test whose new order the spec makes more correct must be updated and the reason recorded in the report (ledger). The seed benchmark test stays skipped until Task 7.
+- [ ] **Step 4: Run full suite** — `python -m unittest discover -s tests -t .`. Phase 2 tests that legitimately change: `test_all_match_bonus_ignores_joined_forms` (adapt to `_score(entry, lexical_base, frozenset(), frozenset(), tokenize_unigrams(q), pol)[0]`; the assertion intent — a joined form absent from the entry does not cancel the bonus — is unchanged); any ordering test whose new order the spec makes more correct must be updated and the reason recorded in the report (ledger). The seed benchmark test stays skipped until Task 7.
 
 - [ ] **Step 5: Commit**
 
@@ -1139,7 +1222,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ## Self-review notes
 
 - Placeholder scan: the only intentionally deferred literal is `RANKING_STRUCTURE_SHA256 = "<fill in Step 3>"` in Task 2, filled inside the same task before commit.
-- Type consistency: `IndexEntry(key, fields, path_tokens, source, method)` is introduced in Task 6 and used by the Task 6 tests; `registry.build_source_registry` (frozen) calls `search.build_index(ns.operations)` — signature kept. `_score` signature changes in Task 6; the only external caller is `test_all_match_bonus_ignores_joined_forms`, updated there.
+- Type consistency: `IndexEntry(key, fields, path_tokens, source, method)` is introduced in Task 6 and used by the Task 6 tests; `registry.build_source_registry` (frozen) calls `search.build_index(ns.operations)` — signature kept. `_score(entry, lexical_base, direct, cond, bonus_tokens, pol) -> (lexical, matched_base)` is the single signature used in Task 6's Interfaces, implementation and tests; the only external caller is `test_all_match_bonus_ignores_joined_forms`, updated there. `policy._token_ok` may call `search.singular` directly: `policy` already imports `search` at module level and `search` imports `policy` only inside functions, so no import cycle is introduced.
 - Frozen-file check: Tasks 4–7 touch only `search.py`, `policy.py`, the two data files and tests; no frozen module is edited. `registry.py` needs no change because `build_index` keeps its signature and `IndexEntry` gains fields with values computed inside `build_index`.
 - Interval rule: Task 4 must start only after commit B exists (controller gate). Task 2 deliberately contains no `policy.py` change.
 - External review (ChatGPT, 2026-09-30) of this plan: 12 P0 + 6 P1 findings applied — generator/internal catalog split, `expand_query` joined-form contract, signal tests read constants from the policy and the numeric test patches a fixed policy, `/alpha/…` path fixture, persistent `baseline` in the frozen structure, pure `select_candidate` with tests, structured `alias_change` log records, one failing test per machine rule, `seal_metadata(records, round, section_name, catalog)` with negative distribution by `forbidden_top1[0]`, bundled-file seal/plaintext/provenance tests, no-skip diag `--cache-dir` tests on a temp fixture cache, empty commit C, `total_matches` without double count, stronger AST test, `@skip` instead of `expectedFailure`, refuse-if-exists snapshot copy, reviewer uses the internal catalog, explicit `git add` at D.
