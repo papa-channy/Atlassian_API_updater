@@ -54,3 +54,15 @@ class TestLayering(unittest.TestCase):
                 if imp.startswith(allowed_prefixes) or top in sys.stdlib_module_names:
                     continue
                 self.fail(f"{path.name} imports non-stdlib module {imp}")
+
+    def test_header_constants_defined_once(self):
+        import ast as _ast
+        hits = []
+        for path in _py_files(PKG):
+            tree = _ast.parse(path.read_text(encoding="utf-8"))
+            for node in _ast.walk(tree):
+                if isinstance(node, _ast.Assign):
+                    for t in node.targets:
+                        if isinstance(t, _ast.Name) and t.id in ("TRANSPORT_HEADERS", "CREDENTIAL_HEADERS"):
+                            hits.append((path.name, t.id))
+        self.assertEqual(sorted(hits), [("headers.py", "CREDENTIAL_HEADERS"), ("headers.py", "TRANSPORT_HEADERS")])

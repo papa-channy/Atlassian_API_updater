@@ -1,5 +1,6 @@
 """SDK-independent tool handlers. server.py binds these to the MCP SDK (spec §17)."""
 import json
+import sys
 from typing import Any
 
 from ..intelligence import inspect as insp
@@ -67,4 +68,5 @@ def run_tool(manager, name: str, arguments: dict) -> dict:
     try:
         return guard_size(_dispatch(manager, name, arguments or {}))
     except Exception as exc:  # noqa: BLE001 - the server process must never die on a tool error
-        return provenance.error_response("internal_error", f"{type(exc).__name__}: {exc}")
+        print(f"[internal_error] {type(exc).__name__}: {exc}", file=sys.stderr)
+        return provenance.error_response("internal_error", type(exc).__name__)

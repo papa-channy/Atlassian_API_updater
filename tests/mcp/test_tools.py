@@ -83,6 +83,7 @@ class TestRunTool(unittest.TestCase):
         with mock.patch("tools.atlassian_docs.mcp.tools.search.search_operations", side_effect=RuntimeError("kaboom")):
             out = tools.run_tool(self.m, "search_operations", {"query": "x"})
         self.assertEqual(out["error"]["code"], "internal_error")
+        self.assertEqual(out["error"]["message"], "RuntimeError")
 
     def test_size_guard(self):
         big = {"blob": "x" * (tools.MAX_RESULT_BYTES + 1)}

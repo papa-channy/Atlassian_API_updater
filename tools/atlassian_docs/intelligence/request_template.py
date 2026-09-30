@@ -5,9 +5,7 @@ from typing import Any, Optional
 
 from . import inspect as insp
 from . import provenance
-
-CREDENTIAL_HEADERS = frozenset({"authorization", "cookie"})
-TRANSPORT_HEADERS = frozenset({"content-type", "accept", "content-length", "host", "user-agent"})
+from .headers import TRANSPORT_HEADERS, credential_header_names
 
 
 def media_type(value: str) -> str:
@@ -32,6 +30,7 @@ def build_request_template(state, key: str, values: Optional[dict] = None) -> di
     if err:
         return err
     op_dict = op.to_dict()
+    cred = credential_header_names(state.registry.sources[op.source])
     given_path = values.get("path_params") or {}
     given_query = values.get("query") or {}
     given_headers = values.get("headers") or {}
@@ -43,7 +42,7 @@ def build_request_template(state, key: str, values: Optional[dict] = None) -> di
     path_params, query, headers, cookies = {}, {}, {}, {}
     header_lookup = {k.lower(): (k, v) for k, v in given_headers.items()}
     for k in list(header_lookup):
-        if k in CREDENTIAL_HEADERS:
+        if k in cred:
             notes.append("credential_header_dropped")
             header_lookup.pop(k)
     used_headers = set()

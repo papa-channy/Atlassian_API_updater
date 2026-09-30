@@ -4,13 +4,13 @@ from typing import Any, Optional
 
 from . import inspect as insp
 from . import provenance, schemas
-from .request_template import CREDENTIAL_HEADERS, media_type
+from .headers import TRANSPORT_HEADERS, credential_header_names
+from .request_template import media_type
 
 MISSING = object()
 CHECKED_RULES = ("required", "type", "enum", "body_required", "content_type", "body_root_type",
                  "body_required_properties", "body_property_type", "body_property_enum", "body_unknown_property",
                  "body_not_declared")
-TRANSPORT_HEADERS = frozenset({"content-type", "accept", "content-length", "host", "user-agent"})
 NOT_CHECKED = ("oneOf/anyOf", "pattern", "format", "minimum/maximum", "minLength/maxLength",
                "nested objects beyond depth 2", "cookie parameters", "conflicting allOf properties")
 _INT = re.compile(r"^-?\d+$")
@@ -99,11 +99,12 @@ def check_request(state, key: str, *, path_params=None, query=None, headers=None
     if err:
         return err
     comps = state.registry.sources[op.source]
+    cred = credential_header_names(comps)
     path_params, query, headers = path_params or {}, query or {}, headers or {}
     errors, warnings = [], []
     hdr = {}
     for k, v in headers.items():
-        if k.lower() in CREDENTIAL_HEADERS:   # never echo the value
+        if k.lower() in cred:   # never echo the value
             warnings.append({"location": f"header.{k}", "rule": "credential_header_ignored",
                              "message": "credential headers are out of scope and were ignored"})
         else:
@@ -137,7 +138,7 @@ def check_request(state, key: str, *, path_params=None, query=None, headers=None
             warnings.append({"location": f"query.{name}", "rule": "unknown_parameter", "message": "not declared in the specification"})
     for name in headers:
         low = name.lower()
-        if low not in declared["header"] and low not in TRANSPORT_HEADERS and low not in CREDENTIAL_HEADERS:
+        if low not in declared["header"] and low not in TRANSPORT_HEADERS and low not in cred:
             warnings.append({"location": f"header.{name}", "rule": "unknown_parameter", "message": "not declared in the specification"})
 
     body_schema = None
