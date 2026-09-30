@@ -42,4 +42,5 @@ only means the fixed rule set found no error. The server never calls Jira/Conflu
 produces server URLs or credentials. Without the MCP SDK, fall back to the Phase 1 CLI and the cached files.
 
 - Prefer the `key` from an exact identifier search (operationId or canonical key, no spaces) — that result is pinned first.
+- Each `search_operations` result's `signals` explains why it ranked; add a product word (`jira`/`confluence`) to the query to disambiguate between products.
 - If `check_request` returns `body_check: "structural"`, the body was not fully validated (see `body_check_reason`); template headers with `effective_required: true` (including spec-external quirk headers) must be sent.

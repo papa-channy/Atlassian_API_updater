@@ -172,3 +172,102 @@ class TestAliasNotesAndTuningLog(unittest.TestCase):
             mine = [c for c in changes if c["policy_key"] == key]
             self.assertEqual(len(mine), 1, key); self.assertEqual((mine[0]["before_pass"], mine[0]["after_pass"]), (False, True), key)
             self.assertEqual(mine[0]["seed_query_id"], n["seed_query_id"])
+
+
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+EVAL_CODE_FILES = ("tests/benchmarks/evaluator.py", "tests/benchmarks/test_evaluator.py",
+                   "tests/diag_search_queries.py", "tests/tune_search_ranking.py")
+
+
+class TestEvaluationCodeSha256(unittest.TestCase):
+    def test_evaluation_code_sha256_is_stable_and_path_sensitive(self):
+        import hashlib, shutil, tempfile
+        h = ev.evaluation_code_sha256(ROOT)
+        self.assertRegex(h, r"^[0-9a-f]{64}$"); self.assertEqual(h, ev.evaluation_code_sha256(ROOT))
+        blob = b"".join(p.encode() + b"\0" + (ROOT / p).read_bytes() + b"\0" for p in sorted(EVAL_CODE_FILES))
+        self.assertEqual(h, hashlib.sha256(blob).hexdigest())
+        self.assertEqual(tuple(sorted(EVAL_CODE_FILES)), ev.EVALUATION_CODE_FILES)
+        with tempfile.TemporaryDirectory() as td:
+            tmp = pathlib.Path(td)
+            for p in EVAL_CODE_FILES:
+                (tmp / p).parent.mkdir(parents=True, exist_ok=True); shutil.copyfile(ROOT / p, tmp / p)
+            self.assertEqual(ev.evaluation_code_sha256(tmp), h)      # relative paths: root location is irrelevant
+            target = tmp / EVAL_CODE_FILES[2]
+            raw = bytearray(target.read_bytes()); raw[0] ^= 1; target.write_bytes(bytes(raw))
+            self.assertNotEqual(ev.evaluation_code_sha256(tmp), h)
+
+
+FIXTURES = ROOT / "tests" / "fixtures" / "openapi"
+SPEC_R1 = ROOT / "docs" / "superpowers" / "specs" / "2026-09-30-search-quality-round1-design.md"
+# Words of the spec §6.2 tables (frozen at commit T, b3c2ba5, before the hidden sets were generated) that occur in
+# neither a seed query nor a fixture operationId/path. Exact equality below: a new uncovered word fails, and so does
+# a stale entry. Pending controller ruling (Task 8 report).
+PROVENANCE_EXCEPTIONS = frozenset({"epic", "find", "read", "rename", "show", "wiki"})
+
+
+class TestPolicyVocabularyProvenance(unittest.TestCase):
+    """Word-provenance check only (spec §7): every policy word comes from a seed query, a fixture operationId/path,
+    or a source name. It is NOT a seal proof — it cannot show that no hidden query influenced the policy."""
+
+    def allowed(self):
+        from tools.atlassian_docs import sources
+        b = json.loads(BENCH.read_text(encoding="utf-8"))
+        out = set(sources.SOURCES)
+        for rec in b["seed"]:
+            out |= ev.unigram_set(rec["query"])
+        for name in sources.SOURCES:
+            spec = json.loads((FIXTURES / f"{name}-openapi.json").read_text(encoding="utf-8"))
+            for path, item in spec["paths"].items():
+                out |= ev.unigram_set(path)
+                for op in item.values():
+                    if isinstance(op, dict) and isinstance(op.get("operationId"), str):
+                        out |= ev.unigram_set(op["operationId"]); out.add(op["operationId"].lower())
+        return out
+
+    def policy_words(self):
+        rk = json.loads(RANKING.read_text(encoding="utf-8")); al = json.loads(ALIASES.read_text(encoding="utf-8"))
+        words = set(rk["verb_methods"]) | set(rk["product_hints"]) | set(rk["path_noise"])
+        for k, v in al["aliases"].items():
+            words |= {k, *v}
+        for rule in al["rules"]:
+            words |= set(rule["when_all"]) | set(rule["add"])
+        return words
+
+    def test_policy_vocabulary_provenance(self):
+        uncovered = self.policy_words() - self.allowed()
+        self.assertEqual(uncovered, set(PROVENANCE_EXCEPTIONS), sorted(uncovered))
+        spec_text = SPEC_R1.read_text(encoding="utf-8")
+        for w in PROVENANCE_EXCEPTIONS:
+            self.assertIn(f'"{w}"', spec_text, w)
+
+
+FINAL = pathlib.Path(__file__).resolve().parent / "round1-final.json"
+REPORT_FIELDS = ("sets", "failures", "git_commit", "registry_fingerprint", "intelligence_fingerprint", "ranking_sha256",
+                 "ranking_structure_sha256", "alias_sha256", "evaluation_code_sha256", "sealed_sha256", "spec_sha256", "run_at")
+
+
+class TestFinalArtifact(unittest.TestCase):
+    """spec §5.8 (b),(c) / AC-10. `git_commit == C` and `evaluation_code_sha256 == the C record` are compared by the
+    controller at D against docs/phase3-readiness.md; here the hash is recomputed over the checked-out tree."""
+
+    def test_final_artifact(self):
+        found = sorted(FINAL.parent.glob("round1-final*.json"))
+        if not FINAL.exists():
+            self.assertEqual(found, [])
+            print("round1-final.json absent: final artifact checked at commit D"); return
+        self.assertEqual(found, [FINAL], "exactly one final artifact")
+        art = json.loads(FINAL.read_text(encoding="utf-8")); b = json.loads(BENCH.read_text(encoding="utf-8"))
+        seal = b["round1_seal"]
+        for k in REPORT_FIELDS:
+            self.assertIn(k, art)
+        self.assertRegex(art["git_commit"], r"^[0-9a-f]{40}$")
+        self.assertEqual(art["sealed_sha256"], {"held_out": seal["held_out_sha256"], "negative": seal["negative_sha256"]})
+        self.assertEqual(art["registry_fingerprint"], seal["registry_fingerprint"])
+        self.assertEqual(art["spec_sha256"], seal["spec_sha256"])
+        self.assertEqual(art["evaluation_code_sha256"], ev.evaluation_code_sha256(ROOT))
+        for sect in ("held_out", "negative"):
+            self.assertIn(sect, art["sets"])
+            if ev.is_sealed(b[sect]):
+                continue
+            want = "held_out-r1" if sect == "held_out" else "negative-r1"
+            self.assertEqual({r["origin"] for r in b[sect]}, {want}, sect)   # r1 only, hence no r0 record

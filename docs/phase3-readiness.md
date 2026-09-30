@@ -110,6 +110,38 @@ Phase 3 전에 form 계열 media type(`multipart/*`, `application/x-www-form-url
 | 생성 결과(평문) sha256 | `e6cf5c9c5f9acbaa13b22ff3983c130d4bc27f96e0c1e4b1d433fd4bd002f68f` (repo 밖 보관) |
 | 재요청 | 3회 (semantic reviewer 거부 h-008, n-004; 분포 위반 h-008) — 피드백은 "item N rejected; generate a replacement satisfying the original rules"만 |
 | 커밋 B (봉인) | `b0cfee2a4866b8e64598f75201152ab658266b50` — held_out 16 sha256 `606535e1…`, negative 8 sha256 `17313dda…` (`round1_seal` 참조) |
-| 커밋 C / D | (미정) |
+| 커밋 T2 (v1.4 재동결) | `26005e4` — `ranking_structure_sha256 = 6b3e79ca4d184b16793fc7fc6c7003733bd2081e35d951af21703c2c407a4de2` (`resource_match_bonus` 추가) |
+| 커밋 C (freeze) | (컨트롤러 기록: "Round 1 frozen at <sha>") |
+| `evaluation_code_sha256` (C) | (컨트롤러 기록; `tests/benchmarks/evaluator.py::evaluation_code_sha256`, spec §5.7) |
+| 커밋 D (봉인 해제·최종 평가) | (컨트롤러 기록) |
 
 Attestation(컨트롤러): 봉인 평문 경로는 어떤 구현·튜닝 서브에이전트에도 전달하지 않았다. machine check 0 violation. 의미 검증은 seed 파일과 scorer를 보지 않은 별도 reviewer가 수행.
+
+### Round 1 상태 모델 (spec v1.4 §11) — 값은 컨트롤러가 C/D에서 기록
+
+- **Round 1 DoD**: AC-01..AC-16 자동 항목 통과 + 아래 attestation 기록 + 커밋 D 존재 → "Round 1 completed"
+  (gate 결과와 무관). 상태: (미정)
+- **Discovery gate** (spec §5.9): 봉인 held_out 16건 중 ≥ 15 통과, 봉인 negative 8건 실패 0
+  (`regression_negative`는 gate 제외). 판정: (미정 — `passed` / `failed`; 실패 시 "Round 1 completed, gate failed → Round 2")
+
+#### 평가 기록 2차 행 (최종 평가, `tests/benchmarks/round1-final.json`)
+
+| 항목 | 값 |
+|---|---|
+| 날짜 | (미정) |
+| 커밋 A / T / B / T2 / C / D | `d15f760` / `b3c2ba5` / `b0cfee2` / `26005e4` / (미정) / (미정) |
+| `evaluation_code_sha256` | (미정) |
+| `round1_seal` | held_out `606535e1…`, negative `17313dda…`, registry `a13ba026…`, spec sha (위 스냅샷 행) |
+| `registry_fingerprint` / `intelligence_fingerprint` | (미정) |
+| `ranking_sha256` / `ranking_structure_sha256` / `alias_sha256` | (미정) |
+| seed 23 / regression_negative 6 | (미정) |
+| held_out 16 / negative 8 | (미정) |
+| gate 판정 | (미정) |
+
+#### Attestation (컨트롤러 서명 항목)
+
+- 생성 프롬프트 sha256 / 생성 결과 sha256: 위 decision record 표.
+- 재요청 횟수와 피드백 형식 준수: 위 decision record 표.
+- 최종 평가 1회 실행: (미정)
+- 튜닝 로그 완전성 (`tests/benchmarks/search-tuning-round1.jsonl`): (미정)
+- 서브에이전트에 봉인 평문 경로 미노출: (미정 — C/D 시점 재확인)

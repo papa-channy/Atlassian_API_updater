@@ -1,6 +1,6 @@
 """Shared benchmark evaluator (Round 1 spec §5.1): one record schema, sealed-section awareness.
 Deliberately stdlib-only and independent of tools/ so its hash (evaluation_code_sha256) is meaningful."""
-import hashlib, json, re
+import hashlib, json, pathlib, re
 
 STOPWORDS = frozenset("a an the to of for in on at and or with by from is are be this that".split())
 _CAMEL_1 = re.compile(r"([a-z0-9])([A-Z])"); _CAMEL_2 = re.compile(r"([A-Z]{2,})([A-Z][a-z])"); _SPLIT = re.compile(r"[^a-z0-9]+")
@@ -68,3 +68,16 @@ def evaluate(records, search_fn):
             failed.append({"id": rec.get("id"), "query": rec["query"], "top1": top1,
                            "expected_top1_any": expected, "forbidden_top1": forbidden})
     return {"passed": len(records) - len(failed), "failed": failed, "total": len(records)}
+
+
+EVALUATION_CODE_FILES = tuple(sorted(("tests/benchmarks/evaluator.py", "tests/benchmarks/test_evaluator.py",
+                                      "tests/diag_search_queries.py", "tests/tune_search_ranking.py")))
+
+
+def evaluation_code_sha256(root) -> str:
+    """spec §5.7: sha256 over path + NUL + raw bytes + NUL for the four evaluation files, sorted by relative path."""
+    root = pathlib.Path(root)
+    h = hashlib.sha256()
+    for rel in EVALUATION_CODE_FILES:
+        h.update(rel.encode() + b"\0" + (root / rel).read_bytes() + b"\0")
+    return h.hexdigest()
