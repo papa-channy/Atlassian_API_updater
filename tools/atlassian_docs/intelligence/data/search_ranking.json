@@ -17,14 +17,17 @@
   "tuning_grid": {
     "method_match_bonus": [1.0, 2.0, 3.0], "method_mismatch_penalty": [0.0, 1.0, 2.0, 3.0],
     "path_unmatched_penalty": [0.5, 1.0, 1.5, 2.0], "path_unmatched_cap": [2, 3, 4],
-    "product_hint_bonus": [2.0, 3.0, 4.0]
+    "product_hint_bonus": [2.0, 3.0, 4.0],
+    "resource_match_bonus": [6.0, 8.0, 10.0, 12.0]
   },
   "baseline": {
     "method_match_bonus": 2.0, "method_mismatch_penalty": 2.0,
-    "path_unmatched_penalty": 1.0, "path_unmatched_cap": 3, "product_hint_bonus": 3.0
+    "path_unmatched_penalty": 1.0, "path_unmatched_cap": 3, "product_hint_bonus": 3.0,
+    "resource_match_bonus": 10.0
   },
   "constants": {
     "method_match_bonus": 2.0, "method_mismatch_penalty": 2.0,
-    "path_unmatched_penalty": 1.0, "path_unmatched_cap": 3, "product_hint_bonus": 3.0
+    "path_unmatched_penalty": 1.0, "path_unmatched_cap": 3, "product_hint_bonus": 3.0,
+    "resource_match_bonus": 10.0
   }
 }

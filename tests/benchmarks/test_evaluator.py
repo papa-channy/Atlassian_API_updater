@@ -77,7 +77,7 @@ class TestSchemaAndSemantics(unittest.TestCase):
 
 
 RANKING = pathlib.Path(__file__).resolve().parents[2] / "tools" / "atlassian_docs" / "intelligence" / "data" / "search_ranking.json"
-RANKING_STRUCTURE_SHA256 = "8bcd33bb905e3d4946218f05d0edcebe9df6c30060d9de567e88157c820dcf9f"
+RANKING_STRUCTURE_SHA256 = "6b3e79ca4d184b16793fc7fc6c7003733bd2081e35d951af21703c2c407a4de2"
 STRUCTURE_KEYS = ("verb_methods", "path_noise", "product_hints", "tuning_grid", "baseline")
 
 
@@ -155,7 +155,10 @@ class TestAliasNotesAndTuningLog(unittest.TestCase):
             for k, v in l["selected"].items():
                 self.assertIn(v, raw["tuning_grid"][k])
             self.assertEqual(l["registry_fingerprint"], b["round1_seal"]["registry_fingerprint"])
-            self.assertEqual(l["baseline"], raw["baseline"])
+            if l["ranking_structure_sha256"] == RANKING_STRUCTURE_SHA256:
+                self.assertEqual(l["baseline"], raw["baseline"])
+            else:   # pre-T2 run (spec v1.4 §0.4): logged under the 5-key table; its recorded axes must be unchanged
+                self.assertEqual(l["baseline"], {k: raw["baseline"][k] for k in l["baseline"]})
         adopted = [l for l in lines if l.get("adopted")]
         if not adopted:
             self.skipTest("Round 1: seed shortfall pending controller ruling")
