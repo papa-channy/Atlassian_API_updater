@@ -65,7 +65,7 @@ AI 에이전트가 이 도구를 어떻게 써야 하는지는 [`AGENTS.md`](./A
 ## 현재 상태
 
 - ✅ 스펙(v1.2) → 구현 계획(6개 TDD 태스크) → Subagent-Driven Development로 구현 → 태스크별 리뷰 6/6 통과 → 전체 브랜치 최종 리뷰 및 수정 → `main` 머지 및 `origin` push 완료.
-- ✅ 오프라인 유닛 테스트 전부 통과 — Phase 1 67개 포함 전체 328개 (Phase 2.5 브랜치 기준, `python -m unittest discover -s tests -t .`; `python -S`로 선택 의존성 없이 실행하면 18개 skip). Phase 2에서 `intelligence/`(정규화·레지스트리·검색·요청 검증)와 `mcp/`(MCP 서버) 모듈이 추가되었다 (아래 Phase 2 절 참고).
+- ✅ 오프라인 유닛 테스트 전부 통과 — Phase 1 67개 포함 전체 401개 (`python -m unittest discover -s tests -t .`; `python -S`로 선택 의존성 없이 실행하면 18개 skip). Phase 2에서 `intelligence/`(정규화·레지스트리·검색·요청 검증)와 `mcp/`(MCP 서버) 모듈이 추가되었다 (아래 Phase 2 절 참고).
 - ✅ 실제 Atlassian 사이트 대상 live smoke test(`tests/live_smoke.py`, 수동 실행) 통과 — jira-platform `v3`, jira-software `(버전 없음)`, confluence `v2` 확인.
 
 ### 알려진 후속 과제 (머지는 막지 않음)
@@ -265,6 +265,9 @@ negative 8을 repo 밖 평문으로 두고 sha256·분포만 `round1_seal`에 �
 C(scorer·정책·평가기 freeze, `evaluation_code_sha256` 기록) → D(봉인 해제, 최종 평가 1회). 기록은
 [docs/phase3-readiness.md](docs/phase3-readiness.md).
 
+Round 1 결과: Discovery gate 실패 (held_out 4/16, negative 5/8) → Round 2 필요; 판정 기록은
+[docs/phase3-readiness.md](docs/phase3-readiness.md#search-quality-round-1--decision-record-2026-09-30) 참고.
+
 **검색 벤치마크 진단 (수동, 오프라인)**
 
 ```bash
@@ -273,6 +276,7 @@ python tests/diag_search_queries.py --bench <평문> --cache-dir <스냅샷> --j
 ```
 
 `--cache-dir`는 스냅샷의 임시 복사본으로 `storage.CACHE_DIR`를 패치한다(기본은 `.atlassian-docs/`). 시작 시 registry
-fingerprint·spec sha를 `round1_seal`과 비교해 다르면 경고하고, held_out/negative를 요청했으면 평가 없이 exit 2.
+fingerprint·spec sha를 `round1_seal`과 비교해 다르면 경고하고, 그 상태에서 held_out/negative를 요청했거나 `--bench`가
+주어졌으면 평가 없이 exit 2.
 실패마다 top-5(key, score, signals)와 `git_commit`·fingerprint·`evaluation_code_sha256`·`sealed_sha256`을 보고한다.
 벤치마크 파일은 수정하지 않는다.

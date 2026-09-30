@@ -50,7 +50,7 @@ Phase 2.5 계획 단계에서 추가된 alias `change→update`, `post→add`, `
 ### 2.1 포함
 1. 벤치마크 재편: 관찰된 held_out 12 + negative 8 → `seed`/`regression_negative`. 새 `held_out` 16, 새 `negative` 8 생성·봉인.
 2. `search_ranking.json`, 로더, `POLICY_VERSIONS["search"] = 3`, tokenizer 계약 3종과 보수적 단수화.
-3. 세 구조 신호, 응답 `signals`.
+3. 네 구조 신호, 응답 `signals`.
 4. alias/rule 보강(R4 전용, 상한 있음).
 5. 커밋 A/T/B/C/D 절차, 스냅샷 봉인, grid 전수 튜닝 스크립트와 로그.
 6. 진단 스크립트 확장, 무결성 테스트, readiness 2차 행, Phase 2.5 스펙 보정 한 줄(§11.2 `oneOf→anyOf`).
@@ -283,7 +283,7 @@ exact_match = len(pinned_ops) > 0                             # limit로 잘려�
 - 스크립트는 선택된 조합을 `search_ranking.json`의 `constants`에 기록하고 로그를 남긴다. 사람이 숫자를 손으로 고르지 않는다.
 
 ### 8.3 튜닝 로그 `tests/benchmarks/search-tuning-round1.jsonl`
-- 한 실행당 한 줄: `{"run_at", "git_commit", "registry_fingerprint", "alias_sha256", "ranking_structure_sha256", "grid_size", "passing_combos", "selected": {...5개}, "seed": "n/22", "regression_negative": "n/7", "adopted": bool, "note"}`. alias 변경 후 재실행은 `note`에 `alias:<word> for <seed_query_id> (before: fail, after: pass)`.
+- 한 실행당 한 줄: `{"run_at", "git_commit", "registry_fingerprint", "alias_sha256", "ranking_structure_sha256", "grid_size", "passing_combos", "selected": {...6개}, "seed": "n/23", "regression_negative": "n/6", "adopted": bool, "note"}`. alias 변경 후 재실행은 `note`에 `alias:<word> for <seed_query_id> (before: fail, after: pass)`.
 - 자동 AC(AC-15): `adopted: true`인 줄이 정확히 하나, 그 `selected` == 현재 `constants`, 모든 줄의 `selected`가 grid 안, `registry_fingerprint`가 `round1_seal.registry_fingerprint`와 같음. "모든 실험을 기록했다"는 attestation.
 
 ## 9. 진단 스크립트
@@ -348,7 +348,7 @@ Attestation 항목(readiness decision record에 컨트롤러가 기록, 자동 �
 
 ## 13. 위험과 완화
 
-- **seed 과적합**: 자유도는 grid 5개(전수 평가·결정적 선택) + R4 alias(상한). held_out 봉인이 검출.
+- **seed 과적합**: 자유도는 grid 6개(전수 평가·결정적 선택) + R4 alias(상한). held_out 봉인이 검출.
 - **생성기 편향(난이도)**: summary/tag 어휘로 만든 질의는 scorer 친화적일 수 있다. 완화: 연속 content 토큰 2개 복사 금지, reviewer 의미 검증. 남는 편향은 readiness에 명시.
 - **`search` 동사 = GET**: Jira `POST /search/jql`도 정답. `expected_top1_any`에 둘 다. 테이블 변경은 Round 2.
 - **upstream 변화**: 스냅샷 봉인으로 gate에서 분리. live 캐시 결과는 non-gating.

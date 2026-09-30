@@ -99,7 +99,7 @@ Phase 3 전에 form 계열 media type(`multipart/*`, `application/x-www-form-url
 
 ## Search Quality Round 1 — decision record (2026-09-30)
 
-스펙: `docs/superpowers/specs/2026-09-30-search-quality-round1-design.md` v1.3. 절차 A→T→B→C→D.
+스펙: `docs/superpowers/specs/2026-09-30-search-quality-round1-design.md` v1.4. 절차 A→T→B→T2→C→D (T2: v1.4 재동결, 커밋 B 이후 C 이전).
 
 | 항목 | 값 |
 |---|---|
@@ -111,40 +111,34 @@ Phase 3 전에 form 계열 media type(`multipart/*`, `application/x-www-form-url
 | 재요청 | 3회 (semantic reviewer 거부 h-008, n-004; 분포 위반 h-008) — 피드백은 "item N rejected; generate a replacement satisfying the original rules"만 |
 | 커밋 B (봉인) | `b0cfee2a4866b8e64598f75201152ab658266b50` — held_out 16 sha256 `606535e1…`, negative 8 sha256 `17313dda…` (`round1_seal` 참조) |
 | 커밋 T2 (v1.4 재동결) | `26005e4` — `ranking_structure_sha256 = 6b3e79ca4d184b16793fc7fc6c7003733bd2081e35d951af21703c2c407a4de2` (`resource_match_bonus` 추가) |
-| 커밋 C (freeze) | (컨트롤러 기록: "Round 1 frozen at <sha>") |
-| `evaluation_code_sha256` (C) | (컨트롤러 기록; `tests/benchmarks/evaluator.py::evaluation_code_sha256`, spec §5.7) |
-| 커밋 D (봉인 해제·최종 평가) | (컨트롤러 기록) |
+| 커밋 C (freeze) | `d862e011aaf9711b585201479e886264ed197e52` |
+| `evaluation_code_sha256` (C) | `48381df69f6f37cb5f4c43ff4951c41671c26e2793e25b2147dd737a6b7cee88` (`tests/benchmarks/evaluator.py::evaluation_code_sha256`, spec §5.7) |
+| 커밋 D (봉인 해제·최종 평가) | `ff173120d53de0faa0a17ba188b56903b3a25283` |
 
 Attestation(컨트롤러): 봉인 평문 경로는 어떤 구현·튜닝 서브에이전트에도 전달하지 않았다. machine check 0 violation. 의미 검증은 seed 파일과 scorer를 보지 않은 별도 reviewer가 수행.
 
-### Round 1 상태 모델 (spec v1.4 §11) — 값은 컨트롤러가 C/D에서 기록
+### Round 1 상태 모델 (spec v1.4 §11)
 
 - **Round 1 DoD**: AC-01..AC-16 자동 항목 통과 + 아래 attestation 기록 + 커밋 D 존재 → "Round 1 completed"
-  (gate 결과와 무관). 상태: (미정)
+  (gate 결과와 무관). 상태: **completed** (커밋 D `ff173120d…`; attestation은 아래 "Attestation (컨트롤러)" 참고).
 - **Discovery gate** (spec §5.9): 봉인 held_out 16건 중 ≥ 15 통과, 봉인 negative 8건 실패 0
-  (`regression_negative`는 gate 제외). 판정: (미정 — `passed` / `failed`; 실패 시 "Round 1 completed, gate failed → Round 2")
+  (`regression_negative`는 gate 제외). 판정: **failed** (held_out 4/16, negative 5/8) → "Round 1 completed, gate failed → Round 2".
+  상세는 아래 "Round 1 2차 평가 (커밋 D…)" 참고.
 
 #### 평가 기록 2차 행 (최종 평가, `tests/benchmarks/round1-final.json`)
 
-| 항목 | 값 |
-|---|---|
-| 날짜 | (미정) |
-| 커밋 A / T / B / T2 / C / D | `d15f760` / `b3c2ba5` / `b0cfee2` / `26005e4` / (미정) / (미정) |
-| `evaluation_code_sha256` | (미정) |
-| `round1_seal` | held_out `606535e1…`, negative `17313dda…`, registry `a13ba026…`, spec sha (위 스냅샷 행) |
-| `registry_fingerprint` / `intelligence_fingerprint` | (미정) |
-| `ranking_sha256` / `ranking_structure_sha256` / `alias_sha256` | (미정) |
-| seed 23 / regression_negative 6 | (미정) |
-| held_out 16 / negative 8 | (미정) |
-| gate 판정 | (미정) |
+값은 아래 "Round 1 2차 평가 (커밋 D, 2026-09-30T12:50:39Z…)" 표와 동일하다 (날짜, 커밋 A/T/B/T2/C/D,
+`evaluation_code_sha256`, `round1_seal`, registry/intelligence fingerprint, ranking/ranking_structure/alias sha,
+seed 23/23, regression_negative 6/6, held_out 4/16, negative 5/8, gate failed) — 중복 기입에 의한 불일치를 피하기 위해
+그 섹션을 단일 출처로 삼는다.
 
 #### Attestation (컨트롤러 서명 항목)
 
 - 생성 프롬프트 sha256 / 생성 결과 sha256: 위 decision record 표.
 - 재요청 횟수와 피드백 형식 준수: 위 decision record 표.
-- 최종 평가 1회 실행: (미정)
-- 튜닝 로그 완전성 (`tests/benchmarks/search-tuning-round1.jsonl`): (미정)
-- 서브에이전트에 봉인 평문 경로 미노출: (미정 — C/D 시점 재확인)
+- 최종 평가 1회 실행 / 튜닝 로그 완전성 / 서브에이전트에 봉인 평문 경로 미노출: 아래 "Round 1 2차 평가 (커밋 D…)" 섹션의
+  "Attestation (컨트롤러)"에 기록 (커밋 C 체크아웃, 스냅샷 캐시로 정확히 1회 실행·재튜닝 없음; 튜닝 로그는 모든 실행을 기록;
+  봉인 평문 경로는 서브에이전트에 미노출).
 
 ### Round 1 2차 평가 (커밋 D, 2026-09-30T12:50:39Z, 커밋 C 체크아웃, 스냅샷 캐시, 단 1회)
 
@@ -192,14 +186,23 @@ Attestation(컨트롤러): 봉인 평문 경로는 어떤 구현·튜닝 서브�
 - **R6 하위 리소스 개념어 부재**: `feedback→comment`, `time entries→worklog`, `files attached→attachments`, `starred→favourite`, `release→version`, `iteration→sprint`, `workspace→space`, `uploaded file→attachment`가 어휘로 연결되지 않아 터미널 리소스 보너스가 **기본 리소스**(`issue`, `pages`)에 붙는다(h-001, h-006, h-007, h-015, h-016). 터미널 리소스 보너스는 R1을 고쳤지만 질의가 하위 리소스를 다른 단어로 부를 때는 역효과다.
 - **R7 완전 무매칭**: h-009는 어휘 히트가 0이라 결과가 없다.
 - **negative**: 명사만 있는 질의에서 유인 오답이 실제로 1위로 온다(n-004, n-006, n-008) — 구조 신호는 명사형 질의를 구별하지 못한다.
+- **schema-name 순위 하락**: 질의 `IssueCreateMetadata`에서 deprecated된 createmeta op가 2위에서 4위로 밀렸다.
+  `issue` 토큰을 포함한 질의에서 `/issue` 하위 경로들이 resource-match 보너스(+10)를 받기 때문이다. `test_exact_schema_name`은
+  고정 상수에 pinned되어 있다. Round 2는 joined-form/schema-name 질의를 구조 신호에서 면제할지 결정해야 한다.
+- **resource-match 보너스 쏠림**: 실패한 top-1 15건 중 10건이 `resource_match = +10`을 받았다.
+- **Round 2 carry-forward (테스트)**: `TestFinalArtifact`(test_evaluator.py:253-277)는 `evaluation_code_sha256`을 HEAD
+  트리와 비교하고 평문 r1 섹션 존재를 요구하며, `RANKING_STRUCTURE_SHA256`(test_evaluator.py:80)은 하드코딩된 값이고,
+  diag default-sets 테스트(`tests/test_diag_search_queries.py`)는 번들 벤치가 평문이라고 가정한다. Round 2는 이 값들을
+  커밋 C 기준 해시와 비교하도록 바꾸고, 재봉인 전에 테스트를 상태 독립적으로 만들어야 한다.
 
 #### Attestation (컨트롤러)
 
 - 최종 평가는 커밋 C 체크아웃에서 스냅샷 캐시로 정확히 1회 실행했고, 결과와 무관하게 재튜닝하지 않았다.
 - 봉인 평문 경로(`$ATLASSIAN_DOCS_SEALED_BENCH`)는 어떤 구현·튜닝 서브에이전트에도 전달하지 않았다. 스냅샷 경로는 공유했다.
 - 생성 프롬프트 sha256 `14a03d33…`, 평문 sha256 `e6cf5c9c…`, 재요청 3회(피드백은 "item N rejected; generate a replacement satisfying the original rules"만).
-- 튜닝 로그(`tests/benchmarks/search-tuning-round1.jsonl`)의 모든 실행이 기록되어 있다(dry-run 1회는 초기 스크립트 결함으로 기록됨; 이후 dry-run은 기록하지 않음).
-- **v1.4 설계 변경(터미널 리소스 보너스, 커밋 T2)은 봉인 이후에 이루어졌다.** 유도 근거는 seed 실패 s-005/s-006/s-019/s-022/s-011의 top-5 분석뿐이며, 봉인 집합의 어떤 질의도 설계나 튜닝에 사용하지 않았다. 다만 컨트롤러는 의미 검증 단계에서 평문을 열람했으므로 독립성 근거는 "절차상" 수준이다.
+- 튜닝 로그(`tests/benchmarks/search-tuning-round1.jsonl`)의 모든 실행이 기록되어 있다(dry-run 1회는 초기 스크립트 결함으로 기록됨; 이후 dry-run은 기록하지 않음). 채택된(adopted) 튜닝 로그 라인(4번째 줄, git_commit `d876188`)은 `bench_sha256`/`dirty` 필드가 추가되기 전(`26aced2`) 기록이며, 그 실행 당시 s-008 벤치마크 수정이 아직 커밋되지 않은 트리에서 돌았다(이후 `34948d8`에서 상수와 함께 커밋됨).
+- 의미 검증(semantic review)은 내부 카탈로그만 제공받은 새 reviewer 서브에이전트가 수행했고, 컨트롤러는 그 검증 단계와 커밋 D 시점 모두에서 봉인 평문을 열람했다.
+- **v1.4 설계 변경(터미널 리소스 보너스, 커밋 T2)은 봉인 이후에 이루어졌다.** 유도 근거는 seed 실패 s-005/s-006/s-019/s-022/s-011의 top-5 분석뿐이며, 봉인 집합의 어떤 질의도 설계나 튜닝에 사용하지 않았다. 다만 컨트롤러는 의미 검증 단계와 D 시점에 평문을 열람했으므로 독립성 근거는 "절차상" 수준이다.
 
 #### 커밋 D 직후 발견된 테스트 결함
 
