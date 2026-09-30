@@ -144,8 +144,9 @@ class TestRankingPolicy(unittest.TestCase):
         self.assertEqual(rp.product_hints["jira"], frozenset({"jira-platform", "jira-software"}))
         self.assertEqual(len(policy.CONSTANT_KEYS), 6); self.assertEqual(policy.CONSTANT_KEYS[-1], "resource_match_bonus")
         self.assertEqual(set(rp.constants), set(policy.CONSTANT_KEYS)); self.assertEqual(set(rp.baseline), set(policy.CONSTANT_KEYS)); self.assertEqual(len(rp.sha256), 64)
-        from tests.benchmarks.test_evaluator import RANKING_STRUCTURE_SHA256
-        self.assertEqual(rp.structure_sha256, RANKING_STRUCTURE_SHA256)
+        import json, pathlib
+        freeze = pathlib.Path(__file__).resolve().parents[1] / "benchmarks" / "round_freeze.json"
+        self.assertEqual(rp.structure_sha256, json.loads(freeze.read_text(encoding="utf-8"))["structure_sha256"])
         self.assertIs(policy.ranking(), policy.ranking())
 
     def test_constants_change_only_full_hash(self):
