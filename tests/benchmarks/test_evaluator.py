@@ -160,8 +160,6 @@ class TestAliasNotesAndTuningLog(unittest.TestCase):
             else:   # pre-T2 run (spec v1.4 §0.4): logged under the 5-key table; its recorded axes must be unchanged
                 self.assertEqual(l["baseline"], {k: raw["baseline"][k] for k in l["baseline"]})
         adopted = [l for l in lines if l.get("adopted")]
-        if not adopted:
-            self.skipTest("Round 1: seed shortfall pending controller ruling")
         self.assertEqual(len(adopted), 1); self.assertEqual(adopted[0]["selected"], raw["constants"])
 
     def test_every_round1_alias_has_one_false_to_true_transition(self):

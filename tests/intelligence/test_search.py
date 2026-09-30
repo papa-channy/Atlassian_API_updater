@@ -97,8 +97,16 @@ class TestSearchOperations(unittest.TestCase):
     def test_exact_schema_name(self):
         self.assertEqual(self._keys(query="MultipartFile")[0], "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/attachments")
         # getCreateIssueMeta is deprecated in the real spec (x0.7); since v1.4 §6.5b the three /issue ops whose terminal
-        # segment "issue" is in the query gain resource_match_bonus and outrank it (25.9 vs 43/27/26), so top-4 is pinned
-        self.assertIn("jira-platform:GET:/rest/api/3/issue/createmeta", self._keys(query="IssueCreateMetadata")[:4])
+        # segment "issue" is in the query gain resource_match_bonus and outrank it (25.9 vs 43/27/26), so top-4 is pinned.
+        # Fixed constants (2/2/1/3/3/10) so this assertion does not depend on the adopted tuning result (spec v1.4 §6.5b).
+        import dataclasses
+        from types import MappingProxyType
+        from unittest import mock
+        fixed = dataclasses.replace(policy.load_ranking(), constants=MappingProxyType(
+            {"method_match_bonus": 2.0, "method_mismatch_penalty": 2.0, "path_unmatched_penalty": 1.0,
+             "path_unmatched_cap": 3, "product_hint_bonus": 3.0, "resource_match_bonus": 10.0}), sha256="fixed-for-test")
+        with mock.patch.object(policy, "ranking", return_value=fixed):
+            self.assertIn("jira-platform:GET:/rest/api/3/issue/createmeta", self._keys(query="IssueCreateMetadata")[:4])
 
     def test_query_tokens_includes_joined_word_and_empty_for_stopwords(self):
         self.assertIn("issuecreatemetadata", search._query_tokens("IssueCreateMetadata"))
@@ -214,7 +222,6 @@ class TestExactMatch(unittest.TestCase):
 
 
 class TestSeedBenchmark(unittest.TestCase):
-    @unittest.skip("Round 1: seed shortfall pending controller ruling")
     def test_seed_passes_on_fixtures(self):
         state = make_state("jira-platform", "jira-software", "confluence")
         fn = lambda q: [r["key"] for r in search.search_operations(state, q, limit=5)["results"]]
