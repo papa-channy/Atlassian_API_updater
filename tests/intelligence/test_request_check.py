@@ -119,3 +119,42 @@ class TestFinalReviewFixes(unittest.TestCase):
         self.assertEqual(sum(1 for w in out["warnings"] if w["rule"] == "credential_header_ignored"), 1)
         self.assertNotIn("Basic x", repr(out))
         self.assertIn(("body.name", "body_required_properties"), _rules(out))
+
+
+ATTACH = "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/attachments"
+
+
+class TestQuirksInCheck(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.state = make_state("jira-platform", "edge-cases", source_map={"edge-cases": "edge"})
+
+    def test_required_literal_missing_and_mismatch(self):
+        out = rc.check_request(self.state, ATTACH, path_params={"issueIdOrKey": "A-1"}, body=[{}], content_type="multipart/form-data")
+        self.assertIn(("header.X-Atlassian-Token", "required"), _rules(out))
+        err = next(e for e in out["errors"] if e["rule"] == "required" and e["location"] == "header.X-Atlassian-Token")
+        self.assertEqual(err["origin"], "quirk:override")
+        bad = rc.check_request(self.state, ATTACH, path_params={"issueIdOrKey": "A-1"}, body=[{}], content_type="multipart/form-data", headers={"X-Atlassian-Token": "yes-check"})
+        self.assertIn(("header.X-Atlassian-Token", "quirk_value_mismatch"), _rules(bad)); self.assertFalse(bad["compatible"])
+
+    def test_quirk_header_case_insensitive(self):
+        out = rc.check_request(self.state, ATTACH, path_params={"issueIdOrKey": "A-1"}, body=[{}], content_type="multipart/form-data", headers={"x-atlassian-token": "no-check"})
+        self.assertNotIn(("header.X-Atlassian-Token", "required"), _rules(out)); self.assertTrue(out["compatible"])
+        self.assertIn("quirk_headers", out["checked"]); self.assertEqual(out["quirks"]["applied"][0]["name"], "X-Atlassian-Token")
+
+    def test_multipart_hint_warning(self):
+        out = rc.check_request(self.state, ATTACH, path_params={"issueIdOrKey": "A-1"}, body={"other": 1}, content_type="multipart/form-data", headers={"X-Atlassian-Token": "no-check"})
+        self.assertIn(("body.file", "multipart_field_missing"), _rules(out, "warnings"))
+
+    def test_advisory_when_no_override(self):
+        from unittest import mock
+        from tools.atlassian_docs.intelligence import policy
+        empty = policy.QuirkOverrides({}, None)
+        with mock.patch("tools.atlassian_docs.intelligence.quirks.policy.overrides", return_value=empty), \
+             mock.patch("tools.atlassian_docs.intelligence.request_check.policy.overrides", return_value=empty):
+            out = rc.check_request(self.state, ATTACH, path_params={"issueIdOrKey": "A-1"}, body=[{}], content_type="multipart/form-data")
+        self.assertIn(("header.X-Atlassian-Token", "advisory_header_missing"), _rules(out, "warnings")); self.assertTrue(out["compatible"])
+
+    def test_structural_fields_present(self):
+        out = rc.check_request(self.state, CREATE, path_params={"thingId": "1"}, body={"name": "n"}, content_type="application/json")
+        self.assertEqual(out["body_check"], "structural"); self.assertEqual(len(out["intelligence_fingerprint"]), 64)

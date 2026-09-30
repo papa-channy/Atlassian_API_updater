@@ -3,14 +3,14 @@ import re
 from typing import Any, Optional
 
 from . import inspect as insp
-from . import provenance, schemas
+from . import policy, provenance, quirks, schemas
 from .headers import TRANSPORT_HEADERS, credential_header_names
 from .request_template import media_type
 
 MISSING = object()
 CHECKED_RULES = ("required", "type", "enum", "body_required", "content_type", "body_root_type",
                  "body_required_properties", "body_property_type", "body_property_enum", "body_unknown_property",
-                 "body_not_declared")
+                 "body_not_declared", "quirk_headers")
 NOT_CHECKED = ("oneOf/anyOf", "pattern", "format", "minimum/maximum", "minLength/maxLength",
                "nested objects beyond depth 2", "cookie parameters", "conflicting allOf properties")
 _INT = re.compile(r"^-?\d+$")
@@ -133,6 +133,22 @@ def check_request(state, key: str, *, path_params=None, query=None, headers=None
             errors.append({"location": f"{loc}.{p.name}", "rule": "type", "message": f"expected {p.schema.get('type')}"})
         elif _enum_ok(value, p.schema) is False:
             errors.append({"location": f"{loc}.{p.name}", "rule": "enum", "message": f"must be one of {p.schema['enum']}"})
+    q = quirks.for_operation(op)
+    for h in q.headers:
+        low = h.name.lower()
+        declared["header"].add(low)
+        present = low in hdr
+        matches = None if not present or h.value is None else (str(hdr[low]) == h.value)
+        err, warn = quirks.outcome(h, present, matches)
+        loc = f"header.{h.name}"
+        if err == "required":
+            errors.append({"location": loc, "rule": "required", "origin": h.origin, "message": "required header (spec-external quirk) is missing"})
+        elif err == "quirk_value_mismatch":
+            errors.append({"location": loc, "rule": "quirk_value_mismatch", "origin": h.origin, "message": f"expected literal value {h.value!r}"})
+        if warn == "advisory_header_missing":
+            warnings.append({"location": loc, "rule": "advisory_header_missing", "origin": h.origin, "message": "header mentioned in the official description is absent"})
+        elif warn == "quirk_value_mismatch":
+            warnings.append({"location": loc, "rule": "quirk_value_mismatch", "origin": h.origin, "message": f"observed value is {h.value!r}"})
     for name in query:
         if name not in declared["query"]:
             warnings.append({"location": f"query.{name}", "rule": "unknown_parameter", "message": "not declared in the specification"})
@@ -192,6 +208,18 @@ def check_request(state, key: str, *, path_params=None, query=None, headers=None
                     elif _enum_ok(value, sub) is False:
                         errors.append({"location": f"body.{name}", "rule": "body_property_enum", "message": f"must be one of {sub['enum']}"})
 
+    if isinstance(body, dict):
+        for f in q.request_hints.get("multipart_fields", []):
+            if isinstance(f, dict) and f.get("required") and f.get("name") not in body:
+                warnings.append({"location": f"body.{f['name']}", "rule": "multipart_field_missing",
+                                 "message": "multipart form field expected by request hints is absent"})
+
     out = {"compatible": not errors, "errors": errors, "warnings": warnings,
-           "checked": list(CHECKED_RULES), "not_checked": list(NOT_CHECKED)}
+           "checked": list(CHECKED_RULES), "not_checked": list(NOT_CHECKED),
+           "body_check": "structural", "body_check_reason": "structural_only",
+           "quirks": {"applied": [h.to_dict() for h in q.headers], "suppressed": list(q.suppressed),
+                      "request_hints": q.request_hints, "notes": list(q.notes)}}
+    al_sha, ov_sha = policy.aliases().sha256, policy.overrides().sha256
+    out["intelligence_fingerprint"] = policy.intelligence_fingerprint(state.registry.fingerprint, al_sha, ov_sha)
+    out["intelligence_policy"] = policy.policy_block(al_sha, ov_sha)
     return provenance.with_provenance(out, state, [op.source])
