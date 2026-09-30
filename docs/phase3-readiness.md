@@ -145,3 +145,62 @@ Attestation(컨트롤러): 봉인 평문 경로는 어떤 구현·튜닝 서브�
 - 최종 평가 1회 실행: (미정)
 - 튜닝 로그 완전성 (`tests/benchmarks/search-tuning-round1.jsonl`): (미정)
 - 서브에이전트에 봉인 평문 경로 미노출: (미정 — C/D 시점 재확인)
+
+### Round 1 2차 평가 (커밋 D, 2026-09-30T12:50:39Z, 커밋 C 체크아웃, 스냅샷 캐시, 단 1회)
+
+| 항목 | 값 |
+|---|---|
+| git_commit (C) | `d862e011aaf9711b585201479e886264ed197e52` |
+| registry_fingerprint | `a13ba026ab6b6a3f19845a3aaa694a1e98427220fdbdc74bb711c316730a793f` (= round1_seal) |
+| intelligence_fingerprint | `f3c071c4d952f9144eb0cdbfdad5072b042c528a29c625b1289b4f85516adbe0` |
+| ranking_sha256 / ranking_structure_sha256 | `e70cacb5…eda7df` / `6b3e79ca…4de2` (T2) |
+| alias_sha256 | `c430e961…55be3` |
+| evaluation_code_sha256 | `48381df6…cee88` (= C 기록) |
+| sealed_sha256 | held_out `606535e1…`, negative `17313dda…` (= round1_seal) |
+| seed / regression_negative | 23/23 / 6/6 |
+| **held_out (봉인)** | **4/16** (기준 ≥ 15) |
+| **negative (봉인)** | **5/8** (기준 실패 0) |
+| **Discovery gate** | **failed** |
+| Round 1 DoD | completed (AC 자동 항목 통과, 커밋 D 존재; 아래 attestation) |
+| 상태 | **Round 1 completed, gate failed → Round 2 필요** |
+
+결과 artifact: `tests/benchmarks/round1-final.json`. 이번 라운드에서 재튜닝 커밋은 없다(§5.8).
+
+#### held_out/negative 실패 목록 (이제 관찰된 집합 — 다음 라운드에서 §5.2와 같이 강등)
+
+| id | 질의 | 실제 top-1 | 기대/금지 |
+|---|---|---|---|
+| h-001 | leave feedback on this jira ticket | POST /rest/api/3/issue | POST …/issue/{k}/comment |
+| h-003 | revise project configuration details | GET …/project/{k}/roledetails | PUT …/project/{k} |
+| h-004 | show my starred searches | GET …/workflows/search | GET …/filter/favourite |
+| h-005 | publish a new project release | GET …/project/{k} | POST …/version |
+| h-006 | discard this uploaded ticket file | GET …/issue/{k} | DELETE …/attachment/{id} |
+| h-007 | show time entries for ticket | GET …/issue/{k} | GET …/issue/{k}/worklog |
+| h-008 | set up a jira planning board | PUT …/board/{id}/properties/{key} | POST …/board |
+| h-009 | revise dates for this iteration | (결과 없음) | PUT …/sprint/{id} |
+| h-013 | rewrite this wiki blog entry | GET /blogposts | PUT /blogposts/{id} |
+| h-014 | trash this confluence wiki page | GET /pages | DELETE /pages/{id} |
+| h-015 | show files attached to this page | GET /pages | GET /pages/{id}/attachments |
+| h-016 | browse pages inside this workspace | GET /pages | GET /spaces/{id}/pages |
+| n-004 | confluence label printer | GET /labels (금지) | — |
+| n-006 | site access emails | POST /user/access/check-access-by-email (금지) | — |
+| n-008 | filter owner jira | PUT …/filter/{id}/owner (금지) | — |
+
+#### 원인 분류 (Round 2 입력; 튜닝 근거가 아니라 기록)
+
+- **R5 동사 어휘 부재**: `leave feedback`, `revise`, `discard`, `rewrite`, `trash`, `publish`, `browse`, `set up`이 `verb_methods`에 없어 메서드 의도가 0이고, 같은 리소스의 GET/POST/PUT/DELETE가 동점(h-001, h-005, h-006, h-013, h-014).
+- **R6 하위 리소스 개념어 부재**: `feedback→comment`, `time entries→worklog`, `files attached→attachments`, `starred→favourite`, `release→version`, `iteration→sprint`, `workspace→space`, `uploaded file→attachment`가 어휘로 연결되지 않아 터미널 리소스 보너스가 **기본 리소스**(`issue`, `pages`)에 붙는다(h-001, h-006, h-007, h-015, h-016). 터미널 리소스 보너스는 R1을 고쳤지만 질의가 하위 리소스를 다른 단어로 부를 때는 역효과다.
+- **R7 완전 무매칭**: h-009는 어휘 히트가 0이라 결과가 없다.
+- **negative**: 명사만 있는 질의에서 유인 오답이 실제로 1위로 온다(n-004, n-006, n-008) — 구조 신호는 명사형 질의를 구별하지 못한다.
+
+#### Attestation (컨트롤러)
+
+- 최종 평가는 커밋 C 체크아웃에서 스냅샷 캐시로 정확히 1회 실행했고, 결과와 무관하게 재튜닝하지 않았다.
+- 봉인 평문 경로(`$ATLASSIAN_DOCS_SEALED_BENCH`)는 어떤 구현·튜닝 서브에이전트에도 전달하지 않았다. 스냅샷 경로는 공유했다.
+- 생성 프롬프트 sha256 `14a03d33…`, 평문 sha256 `e6cf5c9c…`, 재요청 3회(피드백은 "item N rejected; generate a replacement satisfying the original rules"만).
+- 튜닝 로그(`tests/benchmarks/search-tuning-round1.jsonl`)의 모든 실행이 기록되어 있다(dry-run 1회는 초기 스크립트 결함으로 기록됨; 이후 dry-run은 기록하지 않음).
+- **v1.4 설계 변경(터미널 리소스 보너스, 커밋 T2)은 봉인 이후에 이루어졌다.** 유도 근거는 seed 실패 s-005/s-006/s-019/s-022/s-011의 top-5 분석뿐이며, 봉인 집합의 어떤 질의도 설계나 튜닝에 사용하지 않았다. 다만 컨트롤러는 의미 검증 단계에서 평문을 열람했으므로 독립성 근거는 "절차상" 수준이다.
+
+#### 커밋 D 직후 발견된 테스트 결함
+
+`tests/test_diag_search_queries.py::test_default_sets_skip_sealed_sections`는 번들 벤치마크 파일이 봉인 상태라고 가정해 D 이후 실패한다(테스트 자체가 파일 상태에 의존). C..D whitelist상 D에서는 테스트 코드를 고칠 수 없으므로, D 다음 커밋에서 임시 봉인 벤치를 만들어 검사하도록 고친다.

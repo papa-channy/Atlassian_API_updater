@@ -1,0 +1,2225 @@
+{
+  "run_at": "2026-09-30T12:50:39Z",
+  "git_commit": "d862e011aaf9711b585201479e886264ed197e52",
+  "git_dirty": false,
+  "registry_fingerprint": "a13ba026ab6b6a3f19845a3aaa694a1e98427220fdbdc74bb711c316730a793f",
+  "intelligence_fingerprint": "f3c071c4d952f9144eb0cdbfdad5072b042c528a29c625b1289b4f85516adbe0",
+  "ranking_sha256": "e70cacb53005a99f6e10cb71da70915570e4ee7633775576c14948d8c9eda7df",
+  "ranking_structure_sha256": "6b3e79ca4d184b16793fc7fc6c7003733bd2081e35d951af21703c2c407a4de2",
+  "alias_sha256": "c430e96177612510b94427fa80c1f98c2e6cb1b0e20872a4505964f5df055be3",
+  "evaluation_code_sha256": "48381df69f6f37cb5f4c43ff4951c41671c26e2793e25b2147dd737a6b7cee88",
+  "spec_sha256": {
+    "jira-platform": "2aa6ef12fca713d5b7fc10042e458439ccb3e20eab5d86fd82323f56783f7ab1",
+    "jira-software": "cb7e24b331ad9b31944fa9a588f70d4ea60d74d1dfb52d39a59770230b79207a",
+    "confluence": "e4de6c1134a19d8717a309dbb7285a525ae31a9e3c733d046e9e144741f6e313"
+  },
+  "seal_match": true,
+  "sets": {
+    "seed": {
+      "passed": 23,
+      "failed": [],
+      "total": 23
+    },
+    "regression_negative": {
+      "passed": 6,
+      "failed": [],
+      "total": 6
+    },
+    "held_out": {
+      "passed": 4,
+      "failed": [
+        {
+          "id": "h-001",
+          "query": "leave feedback on this jira ticket",
+          "top1": "jira-platform:POST:/rest/api/3/issue",
+          "expected_top1_any": [
+            "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/comment"
+          ],
+          "forbidden_top1": []
+        },
+        {
+          "id": "h-003",
+          "query": "revise project configuration details",
+          "top1": "jira-platform:GET:/rest/api/3/project/{projectIdOrKey}/roledetails",
+          "expected_top1_any": [
+            "jira-platform:PUT:/rest/api/3/project/{projectIdOrKey}"
+          ],
+          "forbidden_top1": []
+        },
+        {
+          "id": "h-004",
+          "query": "show my starred searches",
+          "top1": "jira-platform:GET:/rest/api/3/workflows/search",
+          "expected_top1_any": [
+            "jira-platform:GET:/rest/api/3/filter/favourite"
+          ],
+          "forbidden_top1": []
+        },
+        {
+          "id": "h-005",
+          "query": "publish a new project release",
+          "top1": "jira-platform:GET:/rest/api/3/project/{projectIdOrKey}",
+          "expected_top1_any": [
+            "jira-platform:POST:/rest/api/3/version"
+          ],
+          "forbidden_top1": []
+        },
+        {
+          "id": "h-006",
+          "query": "discard this uploaded ticket file",
+          "top1": "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}",
+          "expected_top1_any": [
+            "jira-platform:DELETE:/rest/api/3/attachment/{id}"
+          ],
+          "forbidden_top1": []
+        },
+        {
+          "id": "h-007",
+          "query": "show time entries for ticket",
+          "top1": "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}",
+          "expected_top1_any": [
+            "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/worklog"
+          ],
+          "forbidden_top1": []
+        },
+        {
+          "id": "h-008",
+          "query": "set up a jira planning board",
+          "top1": "jira-software:PUT:/rest/agile/1.0/board/{boardId}/properties/{propertyKey}",
+          "expected_top1_any": [
+            "jira-software:POST:/rest/agile/1.0/board"
+          ],
+          "forbidden_top1": []
+        },
+        {
+          "id": "h-009",
+          "query": "revise dates for this iteration",
+          "top1": null,
+          "expected_top1_any": [
+            "jira-software:PUT:/rest/agile/1.0/sprint/{sprintId}"
+          ],
+          "forbidden_top1": []
+        },
+        {
+          "id": "h-013",
+          "query": "rewrite this wiki blog entry",
+          "top1": "confluence:GET:/blogposts",
+          "expected_top1_any": [
+            "confluence:PUT:/blogposts/{id}"
+          ],
+          "forbidden_top1": []
+        },
+        {
+          "id": "h-014",
+          "query": "trash this confluence wiki page",
+          "top1": "confluence:GET:/pages",
+          "expected_top1_any": [
+            "confluence:DELETE:/pages/{id}"
+          ],
+          "forbidden_top1": []
+        },
+        {
+          "id": "h-015",
+          "query": "show files attached to this page",
+          "top1": "confluence:GET:/pages",
+          "expected_top1_any": [
+            "confluence:GET:/pages/{id}/attachments"
+          ],
+          "forbidden_top1": []
+        },
+        {
+          "id": "h-016",
+          "query": "browse pages inside this workspace",
+          "top1": "confluence:GET:/pages",
+          "expected_top1_any": [
+            "confluence:GET:/spaces/{id}/pages"
+          ],
+          "forbidden_top1": []
+        }
+      ],
+      "total": 16
+    },
+    "negative": {
+      "passed": 5,
+      "failed": [
+        {
+          "id": "n-004",
+          "query": "confluence label printer",
+          "top1": "confluence:GET:/labels",
+          "expected_top1_any": [],
+          "forbidden_top1": [
+            "confluence:GET:/labels"
+          ]
+        },
+        {
+          "id": "n-006",
+          "query": "site access emails",
+          "top1": "confluence:POST:/user/access/check-access-by-email",
+          "expected_top1_any": [],
+          "forbidden_top1": [
+            "confluence:POST:/user/access/check-access-by-email"
+          ]
+        },
+        {
+          "id": "n-008",
+          "query": "filter owner jira",
+          "top1": "jira-platform:PUT:/rest/api/3/filter/{id}/owner",
+          "expected_top1_any": [],
+          "forbidden_top1": [
+            "jira-platform:PUT:/rest/api/3/filter/{id}/owner"
+          ]
+        }
+      ],
+      "total": 8
+    }
+  },
+  "failures": [
+    {
+      "set": "held_out",
+      "id": "h-001",
+      "query": "leave feedback on this jira ticket",
+      "top1": "jira-platform:POST:/rest/api/3/issue",
+      "expected_top1_any": [
+        "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/comment"
+      ],
+      "forbidden_top1": [],
+      "top5": [
+        {
+          "key": "jira-platform:POST:/rest/api/3/issue",
+          "score": 23.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 3.0,
+              "sources": [
+                "jira-platform",
+                "jira-software"
+              ]
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "issue"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}",
+          "score": 22.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 3.0,
+              "sources": [
+                "jira-platform",
+                "jira-software"
+              ]
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "issue"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}",
+          "score": 22.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 3.0,
+              "sources": [
+                "jira-platform",
+                "jira-software"
+              ]
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "issue"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-platform:DELETE:/rest/api/3/field/{fieldKey}/option/{optionId}/issue",
+          "score": 21.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": -2.0,
+              "tokens": [
+                "field",
+                "option"
+              ]
+            },
+            "product_hint": {
+              "value": 3.0,
+              "sources": [
+                "jira-platform",
+                "jira-software"
+              ]
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "issue"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-platform:DELETE:/rest/api/3/issue/{issueIdOrKey}",
+          "score": 21.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 3.0,
+              "sources": [
+                "jira-platform",
+                "jira-software"
+              ]
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "issue"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "set": "held_out",
+      "id": "h-003",
+      "query": "revise project configuration details",
+      "top1": "jira-platform:GET:/rest/api/3/project/{projectIdOrKey}/roledetails",
+      "expected_top1_any": [
+        "jira-platform:PUT:/rest/api/3/project/{projectIdOrKey}"
+      ],
+      "forbidden_top1": [],
+      "top5": [
+        {
+          "key": "jira-platform:GET:/rest/api/3/project/{projectIdOrKey}/roledetails",
+          "score": 41.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": -1.0,
+              "tokens": [
+                "roledetails"
+              ]
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 0.0,
+              "tokens": [
+                "roledetails"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-platform:PUT:/rest/api/3/project/{projectIdOrKey}",
+          "score": 34.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "project"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-platform:POST:/rest/api/3/project",
+          "score": 32.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "project"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-platform:GET:/rest/api/3/project/{projectIdOrKey}",
+          "score": 30.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "project"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-platform:GET:/rest/api/3/issuetypescreenscheme/{issueTypeScreenSchemeId}/project",
+          "score": 28.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": -1.0,
+              "tokens": [
+                "issuetypescreenscheme"
+              ]
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "project"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "set": "held_out",
+      "id": "h-004",
+      "query": "show my starred searches",
+      "top1": "jira-platform:GET:/rest/api/3/workflows/search",
+      "expected_top1_any": [
+        "jira-platform:GET:/rest/api/3/filter/favourite"
+      ],
+      "forbidden_top1": [],
+      "top5": [
+        {
+          "key": "jira-platform:GET:/rest/api/3/workflows/search",
+          "score": 25.0,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "GET"
+              ]
+            },
+            "path_unmatched": {
+              "value": -1.0,
+              "tokens": [
+                "workflows"
+              ]
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "search"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-platform:GET:/rest/api/3/issuesecurityschemes/search",
+          "score": 24.0,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "GET"
+              ]
+            },
+            "path_unmatched": {
+              "value": -1.0,
+              "tokens": [
+                "issuesecurityschemes"
+              ]
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "search"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-platform:GET:/rest/api/3/statuses/search",
+          "score": 24.0,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "GET"
+              ]
+            },
+            "path_unmatched": {
+              "value": -1.0,
+              "tokens": [
+                "statuses"
+              ]
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "search"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-platform:GET:/rest/api/3/filter/my",
+          "score": 23.0,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "GET"
+              ]
+            },
+            "path_unmatched": {
+              "value": -1.0,
+              "tokens": [
+                "filter"
+              ]
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "my"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-platform:GET:/rest/api/3/priority/search",
+          "score": 23.0,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "GET"
+              ]
+            },
+            "path_unmatched": {
+              "value": -1.0,
+              "tokens": [
+                "priority"
+              ]
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "search"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "set": "held_out",
+      "id": "h-005",
+      "query": "publish a new project release",
+      "top1": "jira-platform:GET:/rest/api/3/project/{projectIdOrKey}",
+      "expected_top1_any": [
+        "jira-platform:POST:/rest/api/3/version"
+      ],
+      "forbidden_top1": [],
+      "top5": [
+        {
+          "key": "jira-platform:GET:/rest/api/3/project/{projectIdOrKey}",
+          "score": 28.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "project"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-platform:POST:/rest/api/3/project",
+          "score": 28.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "project"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-platform:PUT:/rest/api/3/project/{projectIdOrKey}",
+          "score": 28.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "project"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-platform:PUT:/rest/api/3/workflowscheme/project",
+          "score": 27.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": -1.0,
+              "tokens": [
+                "workflowscheme"
+              ]
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "project"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-platform:DELETE:/rest/api/3/project/{projectIdOrKey}",
+          "score": 26.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "project"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "set": "held_out",
+      "id": "h-006",
+      "query": "discard this uploaded ticket file",
+      "top1": "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}",
+      "expected_top1_any": [
+        "jira-platform:DELETE:/rest/api/3/attachment/{id}"
+      ],
+      "forbidden_top1": [],
+      "top5": [
+        {
+          "key": "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}",
+          "score": 19.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "issue"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-platform:POST:/rest/api/3/issue",
+          "score": 19.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "issue"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}",
+          "score": 19.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "issue"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-platform:DELETE:/rest/api/3/issue/{issueIdOrKey}",
+          "score": 18.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "issue"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-software:GET:/rest/agile/1.0/issue/{issueIdOrKey}",
+          "score": 18.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "issue"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "set": "held_out",
+      "id": "h-007",
+      "query": "show time entries for ticket",
+      "top1": "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}",
+      "expected_top1_any": [
+        "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/worklog"
+      ],
+      "forbidden_top1": [],
+      "top5": [
+        {
+          "key": "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}",
+          "score": 21.0,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "GET"
+              ]
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "issue"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-software:GET:/rest/agile/1.0/issue/{issueIdOrKey}",
+          "score": 20.0,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "GET"
+              ]
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "issue"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-software:GET:/rest/software/1.0/board/{boardId}/issue",
+          "score": 18.5,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "GET"
+              ]
+            },
+            "path_unmatched": {
+              "value": -1.0,
+              "tokens": [
+                "board"
+              ]
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "issue"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-software:GET:/rest/software/1.0/epic/{epicIdOrKey}/issue",
+          "score": 18.5,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "GET"
+              ]
+            },
+            "path_unmatched": {
+              "value": -1.0,
+              "tokens": [
+                "epic"
+              ]
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "issue"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-software:GET:/rest/software/1.0/sprint/{sprintId}/issue",
+          "score": 18.5,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "GET"
+              ]
+            },
+            "path_unmatched": {
+              "value": -1.0,
+              "tokens": [
+                "sprint"
+              ]
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "issue"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "set": "held_out",
+      "id": "h-008",
+      "query": "set up a jira planning board",
+      "top1": "jira-software:PUT:/rest/agile/1.0/board/{boardId}/properties/{propertyKey}",
+      "expected_top1_any": [
+        "jira-software:POST:/rest/agile/1.0/board"
+      ],
+      "forbidden_top1": [],
+      "top5": [
+        {
+          "key": "jira-software:PUT:/rest/agile/1.0/board/{boardId}/properties/{propertyKey}",
+          "score": 30.0,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "PUT"
+              ]
+            },
+            "path_unmatched": {
+              "value": -1.0,
+              "tokens": [
+                "properties"
+              ]
+            },
+            "product_hint": {
+              "value": 3.0,
+              "sources": [
+                "jira-platform",
+                "jira-software"
+              ]
+            },
+            "resource_match": {
+              "value": 0.0,
+              "tokens": [
+                "properties"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-software:GET:/rest/agile/1.0/board",
+          "score": 28.0,
+          "signals": {
+            "method_intent": {
+              "value": -2.0,
+              "allowed": [
+                "PUT"
+              ]
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 3.0,
+              "sources": [
+                "jira-platform",
+                "jira-software"
+              ]
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "board"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-software:POST:/rest/agile/1.0/board",
+          "score": 28.0,
+          "signals": {
+            "method_intent": {
+              "value": -2.0,
+              "allowed": [
+                "PUT"
+              ]
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 3.0,
+              "sources": [
+                "jira-platform",
+                "jira-software"
+              ]
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "board"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-software:DELETE:/rest/agile/1.0/board/{boardId}",
+          "score": 27.0,
+          "signals": {
+            "method_intent": {
+              "value": -2.0,
+              "allowed": [
+                "PUT"
+              ]
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 3.0,
+              "sources": [
+                "jira-platform",
+                "jira-software"
+              ]
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "board"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-software:GET:/rest/agile/1.0/board/{boardId}",
+          "score": 27.0,
+          "signals": {
+            "method_intent": {
+              "value": -2.0,
+              "allowed": [
+                "PUT"
+              ]
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 3.0,
+              "sources": [
+                "jira-platform",
+                "jira-software"
+              ]
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "board"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "set": "held_out",
+      "id": "h-009",
+      "query": "revise dates for this iteration",
+      "top1": null,
+      "expected_top1_any": [
+        "jira-software:PUT:/rest/agile/1.0/sprint/{sprintId}"
+      ],
+      "forbidden_top1": [],
+      "top5": []
+    },
+    {
+      "set": "held_out",
+      "id": "h-013",
+      "query": "rewrite this wiki blog entry",
+      "top1": "confluence:GET:/blogposts",
+      "expected_top1_any": [
+        "confluence:PUT:/blogposts/{id}"
+      ],
+      "forbidden_top1": [],
+      "top5": [
+        {
+          "key": "confluence:GET:/blogposts",
+          "score": 17.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": -1.0,
+              "tokens": [
+                "blogposts"
+              ]
+            },
+            "product_hint": {
+              "value": 3.0,
+              "sources": [
+                "confluence"
+              ]
+            },
+            "resource_match": {
+              "value": 0.0,
+              "tokens": [
+                "blogposts"
+              ]
+            }
+          }
+        },
+        {
+          "key": "confluence:GET:/blogposts/{id}",
+          "score": 17.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": -1.0,
+              "tokens": [
+                "blogposts"
+              ]
+            },
+            "product_hint": {
+              "value": 3.0,
+              "sources": [
+                "confluence"
+              ]
+            },
+            "resource_match": {
+              "value": 0.0,
+              "tokens": [
+                "blogposts"
+              ]
+            }
+          }
+        },
+        {
+          "key": "confluence:POST:/blogposts",
+          "score": 17.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": -1.0,
+              "tokens": [
+                "blogposts"
+              ]
+            },
+            "product_hint": {
+              "value": 3.0,
+              "sources": [
+                "confluence"
+              ]
+            },
+            "resource_match": {
+              "value": 0.0,
+              "tokens": [
+                "blogposts"
+              ]
+            }
+          }
+        },
+        {
+          "key": "confluence:PUT:/blogposts/{id}",
+          "score": 17.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": -1.0,
+              "tokens": [
+                "blogposts"
+              ]
+            },
+            "product_hint": {
+              "value": 3.0,
+              "sources": [
+                "confluence"
+              ]
+            },
+            "resource_match": {
+              "value": 0.0,
+              "tokens": [
+                "blogposts"
+              ]
+            }
+          }
+        },
+        {
+          "key": "confluence:GET:/spaces/{id}/blogposts",
+          "score": 16.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": -2.0,
+              "tokens": [
+                "blogposts",
+                "spaces"
+              ]
+            },
+            "product_hint": {
+              "value": 3.0,
+              "sources": [
+                "confluence"
+              ]
+            },
+            "resource_match": {
+              "value": 0.0,
+              "tokens": [
+                "blogposts"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "set": "held_out",
+      "id": "h-014",
+      "query": "trash this confluence wiki page",
+      "top1": "confluence:GET:/pages",
+      "expected_top1_any": [
+        "confluence:DELETE:/pages/{id}"
+      ],
+      "forbidden_top1": [],
+      "top5": [
+        {
+          "key": "confluence:GET:/pages",
+          "score": 32.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 3.0,
+              "sources": [
+                "confluence"
+              ]
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "pages"
+              ]
+            }
+          }
+        },
+        {
+          "key": "confluence:GET:/pages/{id}",
+          "score": 32.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 3.0,
+              "sources": [
+                "confluence"
+              ]
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "pages"
+              ]
+            }
+          }
+        },
+        {
+          "key": "confluence:POST:/pages",
+          "score": 32.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 3.0,
+              "sources": [
+                "confluence"
+              ]
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "pages"
+              ]
+            }
+          }
+        },
+        {
+          "key": "confluence:PUT:/pages/{id}",
+          "score": 32.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 3.0,
+              "sources": [
+                "confluence"
+              ]
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "pages"
+              ]
+            }
+          }
+        },
+        {
+          "key": "confluence:DELETE:/pages/{id}",
+          "score": 31.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 3.0,
+              "sources": [
+                "confluence"
+              ]
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "pages"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "set": "held_out",
+      "id": "h-015",
+      "query": "show files attached to this page",
+      "top1": "confluence:GET:/pages",
+      "expected_top1_any": [
+        "confluence:GET:/pages/{id}/attachments"
+      ],
+      "forbidden_top1": [],
+      "top5": [
+        {
+          "key": "confluence:GET:/pages",
+          "score": 30.0,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "GET"
+              ]
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "pages"
+              ]
+            }
+          }
+        },
+        {
+          "key": "confluence:GET:/pages/{id}",
+          "score": 30.0,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "GET"
+              ]
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "pages"
+              ]
+            }
+          }
+        },
+        {
+          "key": "confluence:GET:/labels/{id}/pages",
+          "score": 29.0,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "GET"
+              ]
+            },
+            "path_unmatched": {
+              "value": -1.0,
+              "tokens": [
+                "labels"
+              ]
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "pages"
+              ]
+            }
+          }
+        },
+        {
+          "key": "confluence:GET:/spaces/{id}/pages",
+          "score": 29.0,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "GET"
+              ]
+            },
+            "path_unmatched": {
+              "value": -1.0,
+              "tokens": [
+                "spaces"
+              ]
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "pages"
+              ]
+            }
+          }
+        },
+        {
+          "key": "confluence:POST:/pages",
+          "score": 26.0,
+          "signals": {
+            "method_intent": {
+              "value": -2.0,
+              "allowed": [
+                "GET"
+              ]
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "pages"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "set": "held_out",
+      "id": "h-016",
+      "query": "browse pages inside this workspace",
+      "top1": "confluence:GET:/pages",
+      "expected_top1_any": [
+        "confluence:GET:/spaces/{id}/pages"
+      ],
+      "forbidden_top1": [],
+      "top5": [
+        {
+          "key": "confluence:GET:/pages",
+          "score": 41.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "pages"
+              ]
+            }
+          }
+        },
+        {
+          "key": "confluence:GET:/labels/{id}/pages",
+          "score": 40.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": -1.0,
+              "tokens": [
+                "labels"
+              ]
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "pages"
+              ]
+            }
+          }
+        },
+        {
+          "key": "confluence:GET:/spaces/{id}/pages",
+          "score": 40.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": -1.0,
+              "tokens": [
+                "spaces"
+              ]
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "pages"
+              ]
+            }
+          }
+        },
+        {
+          "key": "confluence:POST:/pages",
+          "score": 32.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "pages"
+              ]
+            }
+          }
+        },
+        {
+          "key": "confluence:PUT:/pages/{id}",
+          "score": 32.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "pages"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "set": "negative",
+      "id": "n-004",
+      "query": "confluence label printer",
+      "top1": "confluence:GET:/labels",
+      "expected_top1_any": [],
+      "forbidden_top1": [
+        "confluence:GET:/labels"
+      ],
+      "top5": [
+        {
+          "key": "confluence:GET:/labels",
+          "score": 32.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 3.0,
+              "sources": [
+                "confluence"
+              ]
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "labels"
+              ]
+            }
+          }
+        },
+        {
+          "key": "confluence:GET:/attachments/{id}/labels",
+          "score": 31.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": -1.0,
+              "tokens": [
+                "attachments"
+              ]
+            },
+            "product_hint": {
+              "value": 3.0,
+              "sources": [
+                "confluence"
+              ]
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "labels"
+              ]
+            }
+          }
+        },
+        {
+          "key": "confluence:GET:/blogposts/{id}/labels",
+          "score": 31.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": -1.0,
+              "tokens": [
+                "blogposts"
+              ]
+            },
+            "product_hint": {
+              "value": 3.0,
+              "sources": [
+                "confluence"
+              ]
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "labels"
+              ]
+            }
+          }
+        },
+        {
+          "key": "confluence:GET:/pages/{id}/labels",
+          "score": 31.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": -1.0,
+              "tokens": [
+                "pages"
+              ]
+            },
+            "product_hint": {
+              "value": 3.0,
+              "sources": [
+                "confluence"
+              ]
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "labels"
+              ]
+            }
+          }
+        },
+        {
+          "key": "confluence:GET:/spaces/{id}/labels",
+          "score": 31.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": -1.0,
+              "tokens": [
+                "spaces"
+              ]
+            },
+            "product_hint": {
+              "value": 3.0,
+              "sources": [
+                "confluence"
+              ]
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "labels"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "set": "negative",
+      "id": "n-006",
+      "query": "site access emails",
+      "top1": "confluence:POST:/user/access/check-access-by-email",
+      "expected_top1_any": [],
+      "forbidden_top1": [
+        "confluence:POST:/user/access/check-access-by-email"
+      ],
+      "top5": [
+        {
+          "key": "confluence:POST:/user/access/check-access-by-email",
+          "score": 36.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": -2.0,
+              "tokens": [
+                "check",
+                "user"
+              ]
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 0.0,
+              "tokens": [
+                "check",
+                "access",
+                "email"
+              ]
+            }
+          }
+        },
+        {
+          "key": "confluence:POST:/user/access/invite-by-email",
+          "score": 27.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": -2.0,
+              "tokens": [
+                "invite",
+                "user"
+              ]
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 0.0,
+              "tokens": [
+                "invite",
+                "email"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-platform:GET:/rest/api/3/project/{projectId}/email",
+          "score": 27.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": -1.0,
+              "tokens": [
+                "project"
+              ]
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "email"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-platform:PUT:/rest/api/3/project/{projectId}/email",
+          "score": 27.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": -1.0,
+              "tokens": [
+                "project"
+              ]
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "email"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-platform:GET:/rest/api/3/user/email",
+          "score": 25.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": -1.0,
+              "tokens": [
+                "user"
+              ]
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "email"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "set": "negative",
+      "id": "n-008",
+      "query": "filter owner jira",
+      "top1": "jira-platform:PUT:/rest/api/3/filter/{id}/owner",
+      "expected_top1_any": [],
+      "forbidden_top1": [
+        "jira-platform:PUT:/rest/api/3/filter/{id}/owner"
+      ],
+      "top5": [
+        {
+          "key": "jira-platform:PUT:/rest/api/3/filter/{id}/owner",
+          "score": 49.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 3.0,
+              "sources": [
+                "jira-platform",
+                "jira-software"
+              ]
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "owner"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-platform:POST:/rest/api/3/filter",
+          "score": 32.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 3.0,
+              "sources": [
+                "jira-platform",
+                "jira-software"
+              ]
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "filter"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-platform:PUT:/rest/api/3/filter/{id}",
+          "score": 32.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 3.0,
+              "sources": [
+                "jira-platform",
+                "jira-software"
+              ]
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "filter"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-platform:GET:/rest/api/3/filter/{id}",
+          "score": 31.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 3.0,
+              "sources": [
+                "jira-platform",
+                "jira-software"
+              ]
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "filter"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-platform:DELETE:/rest/api/3/filter/{id}",
+          "score": 30.0,
+          "signals": {
+            "method_intent": {
+              "value": 0.0,
+              "allowed": []
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 3.0,
+              "sources": [
+                "jira-platform",
+                "jira-software"
+              ]
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "filter"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "sealed_sha256": {
+    "held_out": "606535e10663bc7ab7eb2a16a8044f9a5f9e4aa326eb082193c6a1233553e568",
+    "negative": "17313ddaf16080c0b2a9e9729f80c0313fccc9b8020cf51888f48a272aa3a1d4"
+  }
+}
