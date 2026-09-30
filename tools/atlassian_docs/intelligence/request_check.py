@@ -139,16 +139,16 @@ def check_request(state, key: str, *, path_params=None, query=None, headers=None
         declared["header"].add(low)
         present = low in hdr
         matches = None if not present or h.value is None else (str(hdr[low]) == h.value)
-        err, warn = quirks.outcome(h, present, matches)
+        q_err, q_warn = quirks.outcome(h, present, matches)
         loc = f"header.{h.name}"
-        if err == "required":
+        if q_err == "required":
             errors.append({"location": loc, "rule": "required", "origin": h.origin, "message": "required header (spec-external quirk) is missing"})
-        elif err == "quirk_value_mismatch":
+        elif q_err == "quirk_value_mismatch":
             errors.append({"location": loc, "rule": "quirk_value_mismatch", "origin": h.origin, "message": f"expected literal value {h.value!r}"})
-        if warn == "advisory_header_missing":
+        if q_warn == "advisory_header_missing":
             warnings.append({"location": loc, "rule": "advisory_header_missing", "origin": h.origin, "message": "header mentioned in the official description is absent"})
-        elif warn == "quirk_value_mismatch":
-            warnings.append({"location": loc, "rule": "quirk_value_mismatch", "origin": h.origin, "message": f"observed value is {h.value!r}"})
+        elif q_warn == "quirk_value_mismatch":
+            warnings.append({"location": loc, "rule": "quirk_value_mismatch", "origin": h.origin, "message": f"expected value {h.value!r} (from {h.origin})"})
     for name in query:
         if name not in declared["query"]:
             warnings.append({"location": f"query.{name}", "rule": "unknown_parameter", "message": "not declared in the specification"})
