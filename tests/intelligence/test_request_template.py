@@ -116,11 +116,15 @@ class TestQuirksInTemplate(unittest.TestCase):
         self.assertNotIn("X-Atlassian-Token", out["missing_required"]); self.assertEqual(out["headers"]["X-Atlassian-Token"]["value"], "no-check")
 
     def test_spec_declared_header_has_spec_origin(self):
-        out = rt.build_request_template(self.state, "jira-software:POST:/rest/builds/0.1/bulk") if "jira-software" in self.state.registry.sources else None
-        if out is None:
-            self.skipTest("jira-software fixture not loaded in this state")
-        any_hdr = next(iter(out["headers"].values()))
-        self.assertEqual(any_hdr["origins"], ["spec"]); self.assertEqual(any_hdr["required"], any_hdr["declared_required"])
+        state = make_state("jira-platform", "jira-software")
+        out = rt.build_request_template(state, "jira-software:POST:/rest/builds/0.1/bulk",
+                                        {"headers": {"Authorization": "JWT secret-token"}})
+        h = out["headers"]["Authorization"]
+        self.assertEqual(h["origins"], ["spec"]); self.assertEqual(h["required"], h["declared_required"])
+        self.assertTrue(h["declared_required"]); self.assertEqual(h["effective_required_origins"], ["spec"])
+        self.assertIsNone(h["enforcement"]); self.assertIsNone(h["note"])
+        self.assertNotIn("value", h)
+        self.assertNotIn("secret-token", repr(out))
 
     def test_advisory_only_when_no_override(self):
         from unittest import mock
