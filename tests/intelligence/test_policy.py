@@ -74,3 +74,41 @@ class TestFingerprint(unittest.TestCase):
         self.assertNotEqual(a, policy.intelligence_fingerprint("reg", "A", None))
         self.assertEqual(a, policy.intelligence_fingerprint("reg", "A", "B"))
         self.assertEqual(policy.policy_block("A", "B")["versions"], policy.POLICY_VERSIONS)
+
+
+class TestMalformedPolicyData(unittest.TestCase):
+    """M4: malformed data raises ValueError (never AttributeError); overrides may not name credential headers."""
+
+    def _raw(self, name, obj):
+        d = tempfile.mkdtemp(); path = pathlib.Path(d) / name
+        path.write_text(json.dumps(obj), encoding="utf-8"); return path
+
+    def test_aliases_malformed_shapes(self):
+        base = {"alias_damping": 0.5, "rule_damping": 1.0}
+        for bad in ([], {**base, "aliases": ["x"]}, {**base, "aliases": {}, "rules": "x"},
+                    {**base, "aliases": {}, "rules": ["not-a-dict"]}):
+            with self.assertRaises(ValueError, msg=repr(bad)):
+                policy.load_aliases(self._raw("a.json", bad))
+
+    def test_overrides_malformed_shapes(self):
+        good = {"name": "X-Foo", "action": "set", "value": "1"}
+        for bad in ([], {"operations": ["x"]}, {"operations": {"x:GET:/a": {"headers": ["not-a-dict"]}}},
+                    {"operations": {"x:GET:/a": {"headers": good}}},
+                    {"operations": {"x:GET:/a": {"headers": [good], "notes": "abc"}}},
+                    {"operations": {"x:GET:/a": {"headers": [{**good, "note": 5}]}}},
+                    {"operations": {"x:GET:/a": {"request_hints": {"multipart_fields": [
+                        {"name": "file", "kind": "file", "required": "yes"}]}}}}):
+            with self.assertRaises(ValueError, msg=repr(bad)):
+                policy.load_quirk_overrides(self._raw("q.json", bad))
+
+    def test_overrides_reject_credential_header_names(self):
+        for name in ("Authorization", "x-api-key", "COOKIE"):
+            for h in ({"name": name, "action": "set", "value": "v"}, {"name": name, "action": "suppress"}):
+                with self.assertRaises(ValueError, msg=repr(h)):
+                    policy.load_quirk_overrides(self._raw("q.json", {"operations": {"x:GET:/a": {"headers": [h]}}}))
+
+
+class TestTranspilerVersionSync(unittest.TestCase):
+    def test_policy_version_matches_transpiler(self):
+        from tools.atlassian_docs.intelligence import oas_schema
+        self.assertEqual(policy.POLICY_VERSIONS["oas_transpiler"], oas_schema.TRANSPILER_VERSION)

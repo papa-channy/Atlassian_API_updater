@@ -7,7 +7,8 @@ from typing import Any, Optional
 from . import policy
 
 MINED_HEADERS = ("X-Atlassian-Token",)
-_MINE = re.compile(r"`?(X-Atlassian-Token)\s*:\s*([A-Za-z0-9_-]+)`?")
+_MINED_CANON = {n.lower(): n for n in MINED_HEADERS}   # header identity is always name.lower() (spec §9.1)
+_MINE = re.compile(r"`?(X-Atlassian-Token)\s*:\s*([A-Za-z0-9_-]+)`?", re.I)
 _CANDIDATE = re.compile(r"\b(X-[A-Za-z0-9-]{2,})\b")
 
 
@@ -49,9 +50,9 @@ def mine(op: Any) -> tuple:
     text = op.description or ""
     out, seen = [], set()
     for name, value in _MINE.findall(text):
-        if name in MINED_HEADERS and name.lower() not in seen:
+        if name.lower() in _MINED_CANON and name.lower() not in seen:
             seen.add(name.lower())
-            out.append(HeaderQuirk(name, value, "advisory", "observed", "quirk:description", None))
+            out.append(HeaderQuirk(_MINED_CANON[name.lower()], value, "advisory", "observed", "quirk:description", None))
     return tuple(out)
 
 
@@ -84,7 +85,7 @@ def header_candidates(registry: Any) -> tuple:
     for name in registry.list_sources():
         for op in registry.sources[name].operations:
             for header in sorted(set(_CANDIDATE.findall(op.description or ""))):
-                if header not in MINED_HEADERS:
+                if header.lower() not in _MINED_CANON:
                     out.append({"key": op.key, "header": header})
     return tuple(out)
 

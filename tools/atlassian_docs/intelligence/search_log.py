@@ -25,7 +25,8 @@ def _append(path: pathlib.Path, line: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists() and path.stat().st_size >= ROTATE_BYTES:
         os.replace(path, path.with_name(path.name + ".prev"))
-    with path.open("a", encoding="utf-8") as handle:
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)   # raw queries: owner-only, like the cache
+    with os.fdopen(fd, "a", encoding="utf-8") as handle:
         handle.write(line + "\n")
 
 

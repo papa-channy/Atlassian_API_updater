@@ -24,6 +24,15 @@ class TestMining(unittest.TestCase):
     def test_value_less_mention_is_not_mined(self):
         self.assertEqual(quirks.mine(_op("x:GET:/a", "set X-Atlassian-Token when uploading")), ())
 
+    def test_mining_is_case_insensitive_with_canonical_name(self):
+        hq = quirks.mine(_op("x:POST:/a", "send `x-atlassian-token: no-check` and X-ATLASSIAN-TOKEN: nocheck"))
+        self.assertEqual([(h.name, h.value) for h in hq], [("X-Atlassian-Token", "no-check")])
+
+    def test_candidates_exclude_mined_header_case_insensitively(self):
+        op = _op("x:POST:/a", "uses x-atlassian-token and X-Other-Thing")
+        reg = SimpleNamespace(list_sources=lambda: ["s"], sources={"s": SimpleNamespace(operations=[op])})
+        self.assertEqual([c["header"] for c in quirks.header_candidates(reg)], ["X-Other-Thing"])
+
     def test_candidates_scan(self):
         state = make_state("jira-platform")
         cands = quirks.header_candidates(state.registry)

@@ -41,3 +41,19 @@ class TestSearchLog(unittest.TestCase):
             search.search_operations(self.state, "create issue")
             search.search_operations(self.state, "create issue")
         self.assertTrue((search_log.log_path().parent / "search_log.jsonl.prev").exists())
+
+
+class TestSearchLogMode(unittest.TestCase):
+    """M8: the log holds raw user queries -> created owner-only (0600), like the cache's last-good files."""
+
+    @unittest.skipIf(os.name != "posix", "POSIX file modes only")
+    def test_log_file_created_0600(self):
+        import stat
+        with tempfile.TemporaryDirectory() as d:
+            path = pathlib.Path(d) / "intelligence" / "search_log.jsonl"
+            old = os.umask(0o022)
+            try:
+                search_log._append(path, "{}")
+            finally:
+                os.umask(old)
+            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)

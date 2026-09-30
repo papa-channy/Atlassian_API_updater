@@ -9,6 +9,7 @@ from types import MappingProxyType
 from typing import Mapping, Optional
 
 from . import search
+from .headers import CREDENTIAL_HEADERS
 
 POLICY_VERSIONS = {"search": 2, "quirks": 1, "oas_transpiler": 1}
 DATA_DIR = pathlib.Path(__file__).resolve().parent / "data"
@@ -55,6 +56,9 @@ class AliasPolicy:
 
 def load_aliases(path: Optional[pathlib.Path] = None) -> AliasPolicy:
     raw = _read(path or DATA_DIR / "search_aliases.json")
+    if not isinstance(raw, dict) or not isinstance(raw.get("aliases") or {}, dict) \
+            or not isinstance(raw.get("rules") or [], list):
+        raise ValueError("alias policy must be an object with an 'aliases' object and a 'rules' list")
     for k in ("alias_damping", "rule_damping"):
         v = raw.get(k)
         if not isinstance(v, (int, float)) or isinstance(v, bool) or not 0 <= v <= 1:
@@ -66,6 +70,8 @@ def load_aliases(path: Optional[pathlib.Path] = None) -> AliasPolicy:
         aliases[key] = tuple(vals)
     rules = []
     for r in raw.get("rules") or []:
+        if not isinstance(r, dict):
+            raise ValueError(f"invalid rule {r!r}")
         when, add = r.get("when_all"), r.get("add")
         if not isinstance(when, list) or not when or not isinstance(add, list) or not add \
                 or not all(_token_ok(t) for t in when + add):
@@ -103,17 +109,27 @@ def load_quirk_overrides(path: Optional[pathlib.Path] = None) -> QuirkOverrides:
     if not path.exists():
         return QuirkOverrides(MappingProxyType({}), None)
     raw = _read(path)
+    if not isinstance(raw, dict) or not isinstance(raw.get("operations") or {}, dict):
+        raise ValueError("quirk overrides must be an object with an 'operations' object")
     ops = {}
     for key, entry in (raw.get("operations") or {}).items():
         if not _KEY.match(key) or not isinstance(entry, dict):
             raise ValueError(f"invalid override key {key!r}")
         seen: dict = {}
         headers = []
+        if not isinstance(entry.get("headers") or [], list):
+            raise ValueError(f"headers must be a list in {key}")
         for h in entry.get("headers") or []:
+            if not isinstance(h, dict):
+                raise ValueError(f"invalid header override in {key}: {h!r}")
             name, action = h.get("name"), h.get("action", "set")
             if not isinstance(name, str) or not name or action not in _ACTIONS:
                 raise ValueError(f"invalid header override in {key}: {h!r}")
             low = name.lower()
+            if low in CREDENTIAL_HEADERS:   # a quirk must never inject a credential header (spec §14)
+                raise ValueError(f"credential header {name!r} not allowed in overrides ({key})")
+            if h.get("note") is not None and not isinstance(h.get("note"), str):
+                raise ValueError(f"header note must be a string in {key}")
             if low in seen:
                 raise ValueError(f"duplicate or conflicting header {name!r} in {key}")
             seen[low] = action
@@ -130,10 +146,16 @@ def load_quirk_overrides(path: Optional[pathlib.Path] = None) -> QuirkOverrides:
         hints = entry.get("request_hints") or {}
         if not isinstance(hints, dict):
             raise ValueError(f"request_hints must be an object in {key}")
+        if not isinstance(hints.get("multipart_fields", []), list):
+            raise ValueError(f"multipart_fields must be a list in {key}")
         for f in hints.get("multipart_fields", []):
-            if not isinstance(f, dict) or not isinstance(f.get("name"), str) or f.get("kind") not in ("file", "text"):
+            if not isinstance(f, dict) or not isinstance(f.get("name"), str) or f.get("kind") not in ("file", "text") \
+                    or not isinstance(f.get("required", False), bool):
                 raise ValueError(f"invalid multipart field in {key}: {f!r}")
-        ops[key] = OverrideEntry(tuple(headers), json.loads(json.dumps(hints)), tuple(entry.get("notes") or []))
+        notes = entry.get("notes") or []
+        if not isinstance(notes, list) or not all(isinstance(n, str) for n in notes):
+            raise ValueError(f"notes must be a list of strings in {key}")
+        ops[key] = OverrideEntry(tuple(headers), json.loads(json.dumps(hints)), tuple(notes))
     return QuirkOverrides(MappingProxyType(ops), canonical_sha256(raw))
 
 
