@@ -27,9 +27,12 @@ def main() -> int:
               "registry_fingerprint": state.registry.fingerprint,
               "intelligence_fingerprint": policy.intelligence_fingerprint(state.registry.fingerprint, policy.aliases().sha256, policy.overrides().sha256),
               "spec_sha256": {n: p.active_spec_sha256 for n, p in state.provenance.items()}, "sets": {}}
-    for name in ("seed", "held_out", "negative"):
+    for name in ("seed", "regression_negative", "held_out", "negative"):
         res = evaluate(bench[name], fn)
         report["sets"][name] = res
+        if res.get("sealed"):
+            print(f"[{name:9}] sealed ({res['count']} records)")
+            continue
         print(f"[{name:9}] {res['passed']}/{res['total']}")
         for f in res["failed"]:
             print(f"    FAIL {f['query']!r}: top1={f['top1']} expected={f['expected_top1_any']} forbidden={f['forbidden_top1']}")

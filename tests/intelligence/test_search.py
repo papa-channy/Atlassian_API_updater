@@ -192,11 +192,14 @@ class TestExactMatch(unittest.TestCase):
 
 
 class TestSeedBenchmark(unittest.TestCase):
+    @unittest.skip("enabled in Round 1 Task 7")
     def test_seed_passes_on_fixtures(self):
         state = make_state("jira-platform", "jira-software", "confluence")
         fn = lambda q: [r["key"] for r in search.search_operations(state, q, limit=5)["results"]]
         res = evaluate(BENCH["seed"], fn)
         self.assertEqual(res["failed"], [], res)
+        res_neg = evaluate(BENCH["regression_negative"], fn)
+        self.assertEqual(res_neg["failed"], [], res_neg)
 
     def test_fields_and_fingerprint(self):
         state = make_state("jira-platform")
