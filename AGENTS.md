@@ -40,3 +40,6 @@ Tools: `search_operations` → `get_operation` → `get_schema` → `build_reque
 is `stale`, the answer comes from the last good spec (`active_*` fields say which). `check_request.compatible`
 only means the fixed rule set found no error. The server never calls Jira/Confluence APIs and never
 produces server URLs or credentials. Without the MCP SDK, fall back to the Phase 1 CLI and the cached files.
+
+- Prefer the `key` from an exact identifier search (operationId or canonical key, no spaces) — that result is pinned first.
+- If `check_request` returns `body_check: "structural"`, the body was not fully validated (see `body_check_reason`); template headers with `effective_required: true` (including spec-external quirk headers) must be sent.

@@ -165,8 +165,88 @@ MCP 서버는 백그라운드 데몬 없이, 각 조회 tool 호출 시 `ensure_
 ### 오프라인 테스트
 
 ```bash
-python -m unittest discover -s tests -t .     # Phase 1 + Phase 2 전체, 네트워크 호출 없음 (sync는 fake 주입)
+python -m unittest discover -s tests -t .     # Phase 1 + Phase 2(.5) 전체, 네트워크 호출 없음 (sync는 fake 주입)
 python tests/live_mcp_smoke.py                 # 수동, 네트워크 필요 — 실제 3개 source normalize 확인 (진단용, gate 아님)
 ```
 
 `mcp` SDK가 설치되지 않은 환경에서는 `tests/mcp/test_server.py`가 skip되고 나머지는 그대로 통과한다.
+
+### Phase 2.5: Discovery hardening
+
+설계: [spec v1.2](docs/superpowers/specs/2026-09-29-phase2.5-discovery-hardening-design.md) ·
+구현 계획: [plan](docs/superpowers/plans/2026-09-30-phase2.5-discovery-hardening-implementation.md) ·
+Phase 3 판정 기록: [docs/phase3-readiness.md](docs/phase3-readiness.md)
+
+**식별자 정확 일치 + alias 확장 (`search_operations`)**
+
+- 질의가 내부 공백 없는 operationId(대소문자 구분 우선, 그다음 대소문자 무시)이거나 canonical key
+  (`jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}`)이면 그 operation을 1위로 고정(pin)한다. 고정된 결과에는
+  `match` 필드가 붙고 응답의 `exact_match`가 `true`다. `"get issue"`처럼 공백이 있는 질의는 고정하지 않는다.
+- 질의 토큰은 `intelligence/data/search_aliases.json`의 alias(질의→스펙 방향)로 확장된다. 응답에서
+  `query_tokens`(원 토큰), `alias_tokens`(alias로 추가된 토큰), `expanded_tokens`(합계)가 분리되어 나온다.
+  alias 토큰은 감쇠 가중치를 받고, 전 토큰 일치 보너스는 원 토큰에만 적용된다.
+- 응답에 `intelligence_fingerprint`(registry + alias·override 데이터 + 정책 버전의 해시)와 `intelligence_policy`(alias·override sha256과 `POLICY_VERSIONS`)가 포함된다.
+
+**검색 질의 로그 (opt-in, 로컬 전용)**
+
+- 환경변수 `ATLASSIAN_DOCS_SEARCH_LOG`가 `1`/`true`/`yes`일 때만 `.atlassian-docs/intelligence/search_log.jsonl`에
+  질의·필터·토큰·상위 3개 결과(key, score)·fingerprint를 한 줄씩 기록한다. 기본은 비활성이며 비활성이면 파일을 만들지 않는다.
+- 질의는 2,048자로 절단되고 제어문자는 정규화된다. 파일이 5 MiB에 이르면 `search_log.jsonl.prev`로 회전한다. 기록 실패(OSError)는 무시된다.
+- 개인정보: 로그는 로컬 파일로만 남고 어디로도 전송되지 않는다. 질의에 비밀값을 넣지 말 것. Phase 3 판정의
+  Runtime stability 축(§18)은 이 로그를 켠 상태의 실사용 기록을 전제로 한다.
+
+**Operation quirks (스펙 밖 요청 요구사항)**
+
+- `intelligence/data/operation_quirks.json`의 curated override와 description mining(advisory 전용)으로
+  스펙에 없는 요구사항을 보강한다. 예: addAttachment의 `X-Atlassian-Token: no-check`.
+- `build_request_template`의 헤더 항목: `declared_required`(스펙), `effective_required`(스펙 ∪ required quirk),
+  `origins`, `effective_required_origins`, `enforcement`, `note`, 필요 시 `value`; 기존 `required`는 호환용으로 유지.
+  `effective_required: true`이면 `missing_required`에 포함된다.
+- quirk 블록은 tool마다 다르다: `build_request_template.quirks = {applied, advisories, suppressed, request_hints}`,
+  `check_request.quirks = {applied, suppressed, request_hints, notes}`. `request_hints.multipart_fields`가 있으면
+  해당 필드가 없는 본문에 `multipart_field_missing` warning이 붙는다.
+
+**본문 검증 (`check_request`, 선택적 jsonschema)**
+
+```bash
+pip install -r requirements-validate.txt   # jsonschema>=4.18,<5 (없어도 동작, 구조 검사로 fallback)
+```
+
+- `body_check`는 `"jsonschema"`(OAS 3.0 스키마를 draft-7로 변환해 전체 검증) 또는 `"structural"`(Phase 2 규칙)이다.
+  jsonschema 경로는 **OAS 3.0 스펙에만** 적용된다.
+- `"structural"`일 때 `body_check_reason`이 이유를 말한다: `oas31_not_supported`, `jsonschema_not_installed`,
+  `schema_not_fully_resolvable`, `schema_transpile_failed`, `jsonschema_schema_error`, `jsonschema_runtime_error`,
+  `structural_only`, `no_body`, `no_body_schema`. 이 경우 본문은 완전히 검증된 것이 아니다.
+- 응답에 `validation_engine`과 `validation_fingerprint`(intelligence fingerprint + engine·version·transpiler version의 해시)가 포함된다.
+- 변환 규칙: `nullable`, boolean `exclusiveMinimum/Maximum`, `readOnly`(required에서 제거 후
+  `readonly_property_present` warning), OAS 전용 키 제거, 그리고 `oneOf`는 `anyOf`로 취급한다(Atlassian union은
+  가지가 겹치므로).
+- 알려진 한계: `oneOf`의 배타성은 검사하지 않는다. `additionalProperties`/`not` 값 스키마 아래의 `readOnly`는
+  본문에서 검출하지 않는다. 오류 메시지는 제출값을 되풀이하지 않으므로 `anyOf`/`pattern` 실패는
+  "violates <validator>" 같은 일반 문구로 나온다.
+
+**MCP `check_request(..., body_present)`**
+
+MCP SDK는 "body 생략"과 "JSON null"을 둘 다 `None`으로 전달하므로 `body_present`로 구분한다:
+`false` → 본문 없음(`body`가 주어졌으면 무시하고 `body_ignored` warning), `true` → `body`를 그대로 사용
+(`null`이면 명시적 JSON null), 생략 → Phase 2 동작.
+
+**`get_api_status` 추가 필드**
+
+`intelligence_fingerprint`, `intelligence_policy`, `capabilities.validation`(`validation_engine`과 동일),
+`diagnostics.orphaned_override_keys`(registry에 없는 override key), `diagnostics.header_candidates`
+(description에 언급됐지만 mining 허용 목록 밖인 `X-*` 헤더 `{key, header}`, 자동 적용 없음), `refresh.search_log_enabled`.
+
+**기타**
+
+- 스펙 gate에서 거부된 캐시만 있는 source는 메타데이터가 TTL 이내면 매 호출마다 다시 sync하지 않는다.
+- 자격증명 헤더 값(정적·동적 apiKey 헤더)은 template/check 결과, 오류 메시지, 검색 로그, MCP `internal_error`에 나타나지 않는다.
+
+**검색 벤치마크 진단 (수동, 오프라인)**
+
+```bash
+python tests/diag_search_queries.py [--json out.json]   # 실제 캐시로 seed/held_out/negative 평가, 벤치마크 파일은 수정하지 않음
+```
+
+결과와 fingerprint는 [docs/phase3-readiness.md](docs/phase3-readiness.md)에 기록한다. held_out·negative 집합과
+alias 데이터는 동결되어 있으며, 실패 질의 반영은 spec §7.3 승격 절차로만 한다.
