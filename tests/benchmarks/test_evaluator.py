@@ -74,3 +74,24 @@ class TestSchemaAndSemantics(unittest.TestCase):
         sealed = {"sealed": True, "round": 1, "count": 16, "sha256": "0" * 64, "distribution": {}}
         self.assertTrue(ev.is_sealed(sealed)); self.assertFalse(ev.is_sealed([]))
         self.assertEqual(ev.evaluate(sealed, lambda q: []), {"sealed": True, "count": 16})
+
+
+RANKING = pathlib.Path(__file__).resolve().parents[2] / "tools" / "atlassian_docs" / "intelligence" / "data" / "search_ranking.json"
+RANKING_STRUCTURE_SHA256 = "8bcd33bb905e3d4946218f05d0edcebe9df6c30060d9de567e88157c820dcf9f"
+STRUCTURE_KEYS = ("verb_methods", "path_noise", "product_hints", "tuning_grid", "baseline")
+
+
+def ranking_structure_sha256(raw: dict) -> str:
+    return ev.canonical_sha256({k: raw[k] for k in STRUCTURE_KEYS})
+
+
+class TestRankingTablesFrozen(unittest.TestCase):
+    def test_structure_hash_matches_commit_t(self):
+        raw = json.loads(RANKING.read_text(encoding="utf-8"))
+        self.assertEqual(ranking_structure_sha256(raw), RANKING_STRUCTURE_SHA256)
+
+    def test_constants_inside_grid(self):
+        raw = json.loads(RANKING.read_text(encoding="utf-8"))
+        self.assertEqual(set(raw["constants"]), set(raw["tuning_grid"])); self.assertEqual(set(raw["baseline"]), set(raw["tuning_grid"]))
+        for k, v in raw["constants"].items():
+            self.assertIn(v, raw["tuning_grid"][k], k); self.assertIn(raw["baseline"][k], raw["tuning_grid"][k], k)
