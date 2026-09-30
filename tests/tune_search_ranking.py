@@ -5,8 +5,9 @@
 Builds the registry once from a copy of the frozen snapshot DIR, evaluates every tuning_grid point on the
 `seed` and `regression_negative` sets (constants injected by patching policy.ranking with a RankingPolicy copy),
 selects one point with select_candidate (baseline = the frozen `baseline`, never the current constants),
-writes ONLY `constants` into search_ranking.json (unless --dry-run) and appends one line to the tuning log.
+writes ONLY `constants` into search_ranking.json and appends one line to the tuning log (neither with --dry-run).
 A fallback (non-perfect) selection is logged with adopted:false and never written (controller ruling).
+--dry-run has no side effects: nothing is written; the would-be log line is printed.
 Exit 0 when the selected point passes every seed and regression_negative record, 1 otherwise, 2 on setup errors.
 """
 import argparse
@@ -65,6 +66,26 @@ def select_candidate(results, baseline, grid, seed_total=SEED_TOTAL, regression_
         pool = [p for p, s, r in results if (s, r) == best]
     return dict(min(pool, key=lambda p: (l1_index_distance(p, baseline, grid), sum(p[k] for k in MAGNITUDE_KEYS),
                                           tuple(p[k] for k in CONSTANT_KEYS))))
+
+
+def plan_effects(dry_run: bool, perfect: bool) -> dict:
+    """--dry-run has no side effects; a normal run always logs, but writes constants only for a perfect pick."""
+    return {"write_constants": perfect and not dry_run, "append_log": not dry_run}
+
+
+LOG_REL = "tests/benchmarks/search-tuning-round1.jsonl"
+
+
+def dirty_paths(porcelain: str) -> list:
+    """Tracked paths with uncommitted changes (git status --porcelain), excluding untracked files and the log."""
+    out = set()
+    for row in porcelain.splitlines():
+        if len(row) < 4 or row.startswith("??"):
+            continue
+        path = row[3:].split(" -> ")[-1].strip().strip('"')
+        if path != LOG_REL:
+            out.add(path)
+    return sorted(out)
 
 
 # ---- evaluation against the snapshot ----
@@ -208,12 +229,20 @@ def _finish(args, rp, aliases, fp, results, selected, seed_res, reg_res, change)
             "grid_size": len(results), "baseline": dict(rp.baseline), "selected": selected,
             "passing_combos": sum(1 for _, s, r in results if s == SEED_TOTAL and r == REGRESSION_TOTAL),
             "seed": f"{seed_res['passed']}/{SEED_TOTAL}", "regression_negative": f"{reg_res['passed']}/{REGRESSION_TOTAL}",
-            "seed_shortfall": not perfect, "adopted": perfect and not args.dry_run, "note": note}
+            "seed_shortfall": not perfect, "note": note,
+            "bench_sha256": policy.canonical_sha256(_BENCH),
+            "dirty": dirty_paths(_git("status", "--porcelain", "--untracked-files=no"))}
     if change:
         line["alias_change"] = change
-    if line["adopted"]:                  # a non-perfect (fallback) selection is logged but never adopted
+    effects = plan_effects(args.dry_run, perfect)
+    line["adopted"] = effects["write_constants"]   # a non-perfect (fallback) selection is never adopted
+    if effects["write_constants"]:
         write_constants(selected)
-    _append_log(line)
+    if effects["append_log"]:
+        _append_log(line)
+    else:
+        print("dry run: nothing written; would-be log line:")
+        print(json.dumps(line, ensure_ascii=False, sort_keys=True))
     print(json.dumps({k: line[k] for k in ("selected", "seed", "regression_negative", "passing_combos", "grid_size",
                                            "adopted", "note")}, ensure_ascii=False))
     return 0 if perfect else 1

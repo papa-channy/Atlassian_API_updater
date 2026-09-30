@@ -1,5 +1,6 @@
 import unittest
 from tests import tune_search_ranking as tune
+from tools.atlassian_docs.intelligence import policy
 
 GRID = {"method_match_bonus": [1.0, 2.0, 3.0], "method_mismatch_penalty": [0.0, 1.0, 2.0, 3.0], "path_unmatched_penalty": [0.5, 1.0, 1.5, 2.0],
         "path_unmatched_cap": [2, 3, 4], "product_hint_bonus": [2.0, 3.0, 4.0],
@@ -19,6 +20,7 @@ class TestSelector(unittest.TestCase):
     def test_grid_cardinality_and_order(self):
         pts = tune.grid_points(GRID)
         self.assertEqual(len(pts), 1728); self.assertEqual(pts, sorted(pts, key=lambda p: tuple(p[k] for k in tune.CONSTANT_KEYS)))
+        self.assertEqual(len(tune.grid_points(policy.load_ranking().tuning_grid)), 1728)   # the loaded (frozen) grid
 
     def test_l1_index_distance(self):
         self.assertEqual(tune.l1_index_distance(BASE, BASE, GRID), 0)
@@ -45,3 +47,16 @@ class TestSelector(unittest.TestCase):
     def test_fallback_when_no_perfect(self):
         res = [(pt(product_hint_bonus=4.0), S - 2, R - 1), (BASE, S - 2, R), (pt(method_match_bonus=1.0), S - 3, R)]
         self.assertEqual(tune.select_candidate(res, BASE, GRID), BASE)                                 # seed max, then regression max
+
+
+class TestEffects(unittest.TestCase):
+    def test_plan_effects(self):
+        self.assertEqual(tune.plan_effects(dry_run=True, perfect=True), {"write_constants": False, "append_log": False})
+        self.assertEqual(tune.plan_effects(dry_run=True, perfect=False), {"write_constants": False, "append_log": False})
+        self.assertEqual(tune.plan_effects(dry_run=False, perfect=True), {"write_constants": True, "append_log": True})
+        self.assertEqual(tune.plan_effects(dry_run=False, perfect=False), {"write_constants": False, "append_log": True})
+
+    def test_dirty_paths_excludes_log_and_untracked(self):
+        porcelain = (" M tools/a.py\nM  tests/b.py\n?? scratch.txt\n M tests/benchmarks/search-tuning-round1.jsonl\n"
+                     "R  old.py -> new.py\n")
+        self.assertEqual(tune.dirty_paths(porcelain), ["new.py", "tests/b.py", "tools/a.py"])

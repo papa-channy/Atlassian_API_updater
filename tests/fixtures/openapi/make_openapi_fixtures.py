@@ -122,7 +122,13 @@ def trim(spec: dict, paths: list) -> dict:
 
 def main(argv=None) -> int:
     argv = sys.argv[1:] if argv is None else argv
-    cache = pathlib.Path(argv[argv.index("--cache") + 1]).expanduser() if "--cache" in argv else CACHE
+    cache = CACHE
+    if "--cache" in argv:
+        i = argv.index("--cache")
+        if i + 1 >= len(argv) or argv[i + 1].startswith("--"):
+            print("usage: make_openapi_fixtures.py [--cache DIR]", file=sys.stderr)
+            return 2
+        cache = pathlib.Path(argv[i + 1]).expanduser()
     for source, paths in SELECTIONS.items():
         src = cache / f"{source}.json"
         if not src.exists():
