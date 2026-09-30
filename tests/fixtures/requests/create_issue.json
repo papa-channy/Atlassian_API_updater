@@ -7,6 +7,6 @@
   "sanitized": true,
   "body": {"fields": {"project": {"key": "PROJ"}, "summary": "Main order flow broken", "issuetype": {"name": "Task"},
            "description": {"type": "doc", "version": 1, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Order entry fails when selecting supplier."}]}]}}},
-  "negative_body": {"fields": {"project": "PROJ", "summary": "x", "issuetype": {"name": "Task"}}},
-  "negative_expect_location": "body.fields.project"
+  "negative_body": {"fields": {"project": {"key": "PROJ"}, "summary": "x", "issuetype": {"name": "Task"}}, "transition": {"id": 42}},
+  "negative_expect_location": "body.transition.id"
 }

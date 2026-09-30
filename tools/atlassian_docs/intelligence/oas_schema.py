@@ -61,6 +61,13 @@ def _walk(node: dict, path: tuple, paths: list) -> dict:
     for key in _LIST_KEYS:
         if isinstance(out.get(key), list):
             out[key] = [_walk(p, path, paths) if isinstance(p, dict) else p for p in out[key]]
+    # rule 5: Atlassian unions overlap (non-exclusive); an advisory check prefers false negatives -> oneOf becomes anyOf
+    if "oneOf" in out:
+        branches = out.pop("oneOf")
+        if "anyOf" in out:
+            out["allOf"] = list(out.get("allOf") or []) + [{"anyOf": branches}]
+        else:
+            out["anyOf"] = branches
     return out
 
 

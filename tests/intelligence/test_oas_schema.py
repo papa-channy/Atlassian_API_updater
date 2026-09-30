@@ -65,3 +65,19 @@ class TestFindReadOnly(unittest.TestCase):
         body = {"id": "x", "items": [{"ref": "a"}, {"other": 1}, {"ref": "b"}]}
         self.assertEqual(oas.find_readonly_values(body, paths), ["body.id", "body.items[0].ref", "body.items[2].ref"])
         self.assertEqual(oas.find_readonly_values({"items": "not-a-list"}, paths), [])
+
+
+class TestOneOfToAnyOf(unittest.TestCase):
+    def test_oneof_becomes_anyof_including_nested(self):
+        s = {"type": "object", "oneOf": [{"type": "object"}, {"type": "string"}],
+             "properties": {"body": {"oneOf": [{"properties": {"a": {"type": "string", "nullable": True}}}, {"type": "object"}]}}}
+        out = oas.oas30_to_draft7(s).schema
+        self.assertNotIn("oneOf", out); self.assertEqual(out["anyOf"], [{"type": "object"}, {"type": "string"}])
+        body = out["properties"]["body"]
+        self.assertNotIn("oneOf", body); self.assertEqual(len(body["anyOf"]), 2)
+        self.assertEqual(body["anyOf"][0]["properties"]["a"]["type"], ["string", "null"])   # branches still transpiled
+
+    def test_oneof_alongside_existing_anyof_keeps_both_constraints(self):
+        out = oas.oas30_to_draft7({"anyOf": [{"type": "string"}], "oneOf": [{"minLength": 1}]}).schema
+        self.assertEqual(out["anyOf"], [{"type": "string"}])
+        self.assertEqual(out["allOf"], [{"anyOf": [{"minLength": 1}]}])

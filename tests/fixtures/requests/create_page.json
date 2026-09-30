@@ -6,6 +6,6 @@
   "captured_on": "2026-09-30",
   "sanitized": true,
   "body": {"spaceId": "123456", "status": "current", "title": "Release notes", "body": {"representation": "storage", "value": "<p>Hello</p>"}},
-  "negative_body": {"spaceId": "123456", "status": "current", "title": "Release notes", "body": {"representation": "storage", "value": 42}},
-  "negative_expect_location": "body.body.value"
+  "negative_body": {"spaceId": "123456", "status": "current", "title": 42, "body": {"representation": "storage", "value": "<p>Hello</p>"}},
+  "negative_expect_location": "body.title"
 }
