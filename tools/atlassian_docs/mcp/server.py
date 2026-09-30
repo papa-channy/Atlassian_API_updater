@@ -33,7 +33,9 @@ def create_server(manager) -> MCPServer:
         return CallToolResult(content=[TextContent(type="text", text=_text(payload))], is_error="error" in payload)
 
     @mcp.tool(name="search_operations", description="Weighted English ASCII lexical search over official Jira/Confluence OpenAPI operations "
-              "(operationId, summary, tags, path, schema names, description). Filters: source, method, tag, include_deprecated, limit (<=50). " + PROVENANCE_NOTE)
+              "(operationId, summary, tags, path, schema names, description). An exact canonical key or operationId (case-insensitive fallback) "
+              "pins that operation to the top (`exact_match`); curated aliases expand the query (`alias_tokens`). "
+              "Filters: source, method, tag, include_deprecated, limit (<=50). " + PROVENANCE_NOTE)
     async def search_operations(query: str, source: Optional[str] = None, method: Optional[str] = None, tag: Optional[str] = None,
                                 include_deprecated: bool = True, limit: int = 10) -> CallToolResult:
         return await _run("search_operations", {"query": query, "source": source, "method": method, "tag": tag,
@@ -54,21 +56,28 @@ def create_server(manager) -> MCPServer:
         return await _run("get_schema", {"source": source, "name": name, "max_depth": max_depth, "max_nodes": max_nodes})
 
     @mcp.tool(name="build_request_template", description="HTTP request template (method, path, params, content type, body schema, security). "
+              "Known quirk headers are added with `origins` and `effective_required`; `quirks` reports applied/suppressed quirks "
+              "and `request_hints` carries non-header guidance (e.g. multipart part names). "
               "No server URL and no Authorization/Cookie values are ever produced. " + PROVENANCE_NOTE)
     async def build_request_template(key: str, values: Optional[dict] = None) -> CallToolResult:
         return await _run("build_request_template", {"key": key, "values": values})
 
     @mcp.tool(name="check_request", description="Structural check of a planned request against the spec. `compatible` means no error "
               "was found by the fixed rule set listed in `checked`; it does NOT mean the request satisfies every OpenAPI rule (see `not_checked`). "
-              "Omit `body` (or pass null) to mean 'no body'. " + PROVENANCE_NOTE)
+              "Omit `body` (or pass null) to mean 'no body'. Set body_present=false to mean 'no body' even if body is given "
+              "(a `body_ignored` warning is added), body_present=true with body=null for an explicit JSON null. " + PROVENANCE_NOTE)
     async def check_request(key: str, path_params: Optional[dict] = None, query: Optional[dict] = None, headers: Optional[dict] = None,
-                            body: Optional[object] = None, content_type: Optional[str] = None) -> CallToolResult:
+                            body: Optional[object] = None, content_type: Optional[str] = None,
+                            body_present: Optional[bool] = None) -> CallToolResult:
         args = {"key": key, "path_params": path_params, "query": query, "headers": headers, "content_type": content_type}
+        if body_present is not None:  # disambiguates omitted vs JSON null, which the SDK collapses to None (spec §12)
+            args["body_present"] = body_present
         if body is not None:  # the SDK maps both "omitted" and JSON null to None; only a non-null body reaches run_tool
             args["body"] = body
         return await _run("check_request", args)
 
-    @mcp.tool(name="get_api_status", description="Registry fingerprint, per-source provenance and refresh/backoff state. Never triggers a refresh.")
+    @mcp.tool(name="get_api_status", description="Registry and intelligence fingerprints, policy versions, per-source provenance, refresh/backoff state, "
+              "validation capabilities and diagnostics (orphaned override keys, header candidates). Never triggers a refresh.")
     async def get_api_status() -> CallToolResult:
         return await _run("get_api_status", {})
 
