@@ -65,7 +65,7 @@ AI 에이전트가 이 도구를 어떻게 써야 하는지는 [`AGENTS.md`](./A
 ## 현재 상태
 
 - ✅ 스펙(v1.2) → 구현 계획(6개 TDD 태스크) → Subagent-Driven Development로 구현 → 태스크별 리뷰 6/6 통과 → 전체 브랜치 최종 리뷰 및 수정 → `main` 머지 및 `origin` push 완료.
-- ✅ 오프라인 유닛 테스트 전부 통과 — Phase 1 67개 포함 전체 230개 (`python -m unittest discover -s tests -t .`). Phase 2에서 `intelligence/`(정규화·레지스트리·검색·요청 검증)와 `mcp/`(MCP 서버) 모듈이 추가되었다 (아래 Phase 2 절 참고).
+- ✅ 오프라인 유닛 테스트 전부 통과 — Phase 1 67개 포함 전체 328개 (Phase 2.5 브랜치 기준, `python -m unittest discover -s tests -t .`; `python -S`로 선택 의존성 없이 실행하면 18개 skip). Phase 2에서 `intelligence/`(정규화·레지스트리·검색·요청 검증)와 `mcp/`(MCP 서버) 모듈이 추가되었다 (아래 Phase 2 절 참고).
 - ✅ 실제 Atlassian 사이트 대상 live smoke test(`tests/live_smoke.py`, 수동 실행) 통과 — jira-platform `v3`, jira-software `(버전 없음)`, confluence `v2` 확인.
 
 ### 알려진 후속 과제 (머지는 막지 않음)
@@ -169,7 +169,8 @@ python -m unittest discover -s tests -t .     # Phase 1 + Phase 2(.5) 전체, �
 python tests/live_mcp_smoke.py                 # 수동, 네트워크 필요 — 실제 3개 source normalize 확인 (진단용, gate 아님)
 ```
 
-`mcp` SDK가 설치되지 않은 환경에서는 `tests/mcp/test_server.py`가 skip되고 나머지는 그대로 통과한다.
+`mcp` SDK가 설치되지 않은 환경에서는 `tests/mcp/test_server.py`가 skip되고, `jsonschema`(`requirements-validate.txt`)가
+없으면 jsonschema 본문 검증 테스트가 skip된다. 나머지는 그대로 통과한다.
 
 ### Phase 2.5: Discovery hardening
 
@@ -201,7 +202,8 @@ Phase 3 판정 기록: [docs/phase3-readiness.md](docs/phase3-readiness.md)
   스펙에 없는 요구사항을 보강한다. 예: addAttachment의 `X-Atlassian-Token: no-check`.
 - `build_request_template`의 헤더 항목: `declared_required`(스펙), `effective_required`(스펙 ∪ required quirk),
   `origins`, `effective_required_origins`, `enforcement`, `note`, 필요 시 `value`; 기존 `required`는 호환용으로 유지.
-  `effective_required: true`이면 `missing_required`에 포함된다.
+  `effective_required: true`이면 `missing_required`에 포함된다. 단, 호출자가 credential 헤더(`Authorization` 등)를
+  넘기면 값은 버려지지만 "존재"로 간주되어 `missing_required`/`required` 오류에서 빠진다(없으면 여전히 missing).
 - quirk 블록은 tool마다 다르다: `build_request_template.quirks = {applied, advisories, suppressed, request_hints}`,
   `check_request.quirks = {applied, suppressed, request_hints, notes}`. `request_hints.multipart_fields`가 있으면
   해당 필드가 없는 본문에 `multipart_field_missing` warning이 붙는다.
@@ -216,13 +218,15 @@ pip install -r requirements-validate.txt   # jsonschema>=4.18,<5 (없어도 동�
   jsonschema 경로는 **OAS 3.0 스펙에만** 적용된다.
 - `"structural"`일 때 `body_check_reason`이 이유를 말한다: `oas31_not_supported`, `jsonschema_not_installed`,
   `schema_not_fully_resolvable`, `schema_transpile_failed`, `jsonschema_schema_error`, `jsonschema_runtime_error`,
-  `structural_only`, `no_body`, `no_body_schema`. 이 경우 본문은 완전히 검증된 것이 아니다.
+  `no_body`, `no_body_schema`. 이 경우 본문은 완전히 검증된 것이 아니다.
 - 응답에 `validation_engine`과 `validation_fingerprint`(intelligence fingerprint + engine·version·transpiler version의 해시)가 포함된다.
 - 변환 규칙: `nullable`, boolean `exclusiveMinimum/Maximum`, `readOnly`(required에서 제거 후
   `readonly_property_present` warning), OAS 전용 키 제거, 그리고 `oneOf`는 `anyOf`로 취급한다(Atlassian union은
   가지가 겹치므로).
 - 알려진 한계: `oneOf`의 배타성은 검사하지 않는다. `additionalProperties`/`not` 값 스키마 아래의 `readOnly`는
-  본문에서 검출하지 않는다. 오류 메시지는 제출값을 되풀이하지 않으므로 `anyOf`/`pattern` 실패는
+  (키는 제거되지만 경로를 기록하지 않으므로) 본문에서 검출하지 않고 경고도 내지 않는다.
+  multipart 스키마가 `type: array`인 operation(예: addAttachment)은 dict 본문으로 jsonschema 경로를 통과할 수 없다
+  (multipart hint는 dict 본문을 요구) — Phase 3 사전 과제로 보류. 오류 메시지는 제출값을 되풀이하지 않으므로 `anyOf`/`pattern` 실패는
   "violates <validator>" 같은 일반 문구로 나온다.
 
 **MCP `check_request(..., body_present)`**
