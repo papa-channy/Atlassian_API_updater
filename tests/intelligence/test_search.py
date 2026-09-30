@@ -226,7 +226,7 @@ class TestSeedBenchmark(unittest.TestCase):
         out = search.search_operations(state, "fetch issue")
         self.assertIn("get", out["alias_tokens"]); self.assertIn("fetch", out["query_tokens"])
         self.assertEqual(set(out["expanded_tokens"]), set(out["query_tokens"]) | set(out["alias_tokens"]))
-        self.assertEqual(len(out["intelligence_fingerprint"]), 64); self.assertEqual(out["intelligence_policy"]["versions"]["search"], 2)
+        self.assertEqual(len(out["intelligence_fingerprint"]), 64); self.assertEqual(out["intelligence_policy"]["versions"]["search"], 3)
 
     def test_alias_damped_and_bonus_on_base_only(self):
         state = make_state("jira-platform")
