@@ -22,7 +22,8 @@ class TestTemplate(unittest.TestCase):
         self.assertIn("server URL and Authorization are out of scope for Phase 2", out["notes"])
 
     def test_path_substitution_encodes(self):
-        out = rt.build_request_template(self.state, ATT, {"path_params": {"issueIdOrKey": "AB C/1"}, "body": [{"file": "x"}]})
+        out = rt.build_request_template(self.state, ATT, {"path_params": {"issueIdOrKey": "AB C/1"}, "body": [{"file": "x"}],
+                                        "headers": {"X-Atlassian-Token": "no-check"}})
         self.assertEqual(out["path"], "/rest/api/3/issue/AB%20C%2F1/attachments")
         self.assertEqual(out["missing_required"], []); self.assertEqual(out["body"], [{"file": "x"}])
 
@@ -91,3 +92,46 @@ class TestTransportHeaders(unittest.TestCase):
     def test_content_type_with_parameters_selects_base_type(self):
         out = rt.build_request_template(self.state, CREATE, {"content_type": "application/json; charset=utf-8"})
         self.assertEqual(out["selected_content_type"], "application/json"); self.assertEqual(out["errors"], [])
+
+
+ATTACH = "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/attachments"
+
+
+class TestQuirksInTemplate(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.state = make_state("jira-platform", "edge-cases", source_map={"edge-cases": "edge"})
+
+    def test_override_header_required_and_missing(self):
+        out = rt.build_request_template(self.state, ATTACH, {"path_params": {"issueIdOrKey": "A-1"}, "body": [{}]})
+        h = out["headers"]["X-Atlassian-Token"]
+        self.assertFalse(h["declared_required"]); self.assertTrue(h["effective_required"])
+        self.assertEqual(h["origins"], ["quirk:override"]); self.assertEqual(h["effective_required_origins"], ["quirk:override"])
+        self.assertEqual(h["value"], "no-check"); self.assertIn("X-Atlassian-Token", out["missing_required"])
+        self.assertEqual(out["request_hints"]["multipart_fields"][0]["name"], "file")
+        self.assertEqual(out["quirks"]["applied"][0]["name"], "X-Atlassian-Token")
+
+    def test_caller_value_satisfies_case_insensitively(self):
+        out = rt.build_request_template(self.state, ATTACH, {"path_params": {"issueIdOrKey": "A-1"}, "body": [{}], "headers": {"x-atlassian-token": "no-check"}})
+        self.assertNotIn("X-Atlassian-Token", out["missing_required"]); self.assertEqual(out["headers"]["X-Atlassian-Token"]["value"], "no-check")
+
+    def test_spec_declared_header_has_spec_origin(self):
+        out = rt.build_request_template(self.state, "jira-software:POST:/rest/builds/0.1/bulk") if "jira-software" in self.state.registry.sources else None
+        if out is None:
+            self.skipTest("jira-software fixture not loaded in this state")
+        any_hdr = next(iter(out["headers"].values()))
+        self.assertEqual(any_hdr["origins"], ["spec"]); self.assertEqual(any_hdr["required"], any_hdr["declared_required"])
+
+    def test_advisory_only_when_no_override(self):
+        from unittest import mock
+        from tools.atlassian_docs.intelligence import policy
+        empty = policy.QuirkOverrides({}, None)
+        with mock.patch("tools.atlassian_docs.intelligence.quirks.policy.overrides", return_value=empty), \
+             mock.patch("tools.atlassian_docs.intelligence.request_template.policy.overrides", return_value=empty):
+            out = rt.build_request_template(self.state, ATTACH, {"path_params": {"issueIdOrKey": "A-1"}, "body": [{}]})
+        self.assertNotIn("X-Atlassian-Token", out["missing_required"])
+        self.assertEqual(out["advisories"][0]["name"], "X-Atlassian-Token"); self.assertEqual(out["advisories"][0]["origin"], "quirk:description")
+
+    def test_policy_fields_present(self):
+        out = rt.build_request_template(self.state, ATTACH)
+        self.assertEqual(len(out["intelligence_fingerprint"]), 64); self.assertIn("overrides_sha256", out["intelligence_policy"])
