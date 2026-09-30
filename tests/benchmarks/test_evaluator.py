@@ -54,7 +54,13 @@ class TestSchemaAndSemantics(unittest.TestCase):
         for sect in ("seed", "regression_negative", "held_out", "negative"):
             if not ev.is_sealed(b[sect]):
                 ev.check_schema(sect, b[sect])
-        self.assertEqual(len(b["seed"]), 23); self.assertEqual(len(b["regression_negative"]), 6)
+        self.assertEqual(len(b["seed"]), 39); self.assertEqual(len(b["regression_negative"]), 14)
+        # Round 1 hidden sets were observed at commit D and demoted before Round 2 (s-024..s-039, rn-007..rn-014)
+        self.assertEqual([r["id"] for r in b["seed"][23:]], [f"s-{i:03d}" for i in range(24, 40)])
+        self.assertEqual({r["origin"] for r in b["seed"][23:]}, {"held_out-r1"})
+        self.assertEqual([r["id"] for r in b["regression_negative"][6:]], [f"rn-{i:03d}" for i in range(7, 15)])
+        self.assertEqual({r["origin"] for r in b["regression_negative"][6:]}, {"negative-r1"})
+        self.assertEqual((b["held_out"], b["negative"]), ([], []))
 
     def test_no_query_reuse_across_sets(self):
         b = json.loads(BENCH.read_text(encoding="utf-8"))
