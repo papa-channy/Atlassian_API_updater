@@ -20,11 +20,16 @@ def build_source_registry_from_fixture(name: str, source: str | None = None):
 
 def make_state(*fixture_names, source_map=None):
     """ActiveState over fixtures with 'fresh' provenance; for testing intelligence functions."""
+    source_map = source_map or {}
+    srcs = {source_map.get(n, n): build_source_registry_from_fixture(n, source_map.get(n)) for n in fixture_names}
+    return state_from_source_registries(srcs)
+
+
+def state_from_source_registries(srcs: dict):
+    """ActiveState over prebuilt SourceRegistry objects with 'fresh' provenance."""
     import datetime
     from tools.atlassian_docs import sync
     from tools.atlassian_docs.intelligence import models, provenance, registry
-    source_map = source_map or {}
-    srcs = {source_map.get(n, n): build_source_registry_from_fixture(n, source_map.get(n)) for n in fixture_names}
     reg = registry.build_registry(srcs, "2026-09-28T00:00:00Z")
     now = datetime.datetime(2026, 9, 28, 1, 0, tzinfo=datetime.timezone.utc)
     obs = {}

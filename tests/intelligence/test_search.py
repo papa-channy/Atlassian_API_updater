@@ -116,12 +116,13 @@ class TestSearchOperations(unittest.TestCase):
         entry = types.SimpleNamespace(fields=fields)
         q = "issue attachment"
         pol = policy.AliasPolicy(0.5, 1.0, {}, (), "x")
-        exp = lambda text: search.QueryExpansion(search._query_tokens(text), frozenset(), frozenset())
-        with_bonus = search._score(entry, exp(q), False, search.tokenize(q), pol)
+        score = lambda text: search._score(entry, search._query_tokens(text), frozenset(), frozenset(),
+                                           search.tokenize_unigrams(text), pol)[0]
+        with_bonus = score(q)
         self.assertEqual(with_bonus, 2 * search.FIELD_WEIGHTS[first] + search.ALL_MATCH_BONUS)
         q2 = "IssueAttachment"   # joined token absent from the entry must not cancel the bonus
         self.assertIn("issueattachment", search._query_tokens(q2))
-        self.assertEqual(search._score(entry, exp(q2), False, search.tokenize(q2), pol), with_bonus)
+        self.assertEqual(score(q2), with_bonus)
 
     def test_source_filter(self):
         self.assertTrue(all(k.startswith("confluence:") for k in self._keys(query="issue page", source="confluence")))
@@ -233,3 +234,132 @@ class TestSeedBenchmark(unittest.TestCase):
         with_alias = search.search_operations(state, "fetch issue")["results"][0]["score"]
         plain = search.search_operations(state, "get issue")["results"][0]["score"]
         self.assertLess(with_alias, plain)   # damped alias contributes less than the real token
+
+
+class TestStructuralSignals(unittest.TestCase):
+    def setUp(self):
+        self.rp = policy.ranking()
+
+    def test_path_tokens_model(self):
+        toks = search.path_tokens_for("/rest/api/3/issue/{issueIdOrKey}/properties", self.rp.path_noise)
+        self.assertEqual([t.origin for t in toks], ["issue", "properties"])
+        self.assertEqual(toks[1].forms, frozenset({"properties", "property"}))
+        self.assertEqual(search.path_tokens_for("/rest/api/3", self.rp.path_noise), ())          # review focus 2
+        dup = search.path_tokens_for("/issue/{id}/issue", self.rp.path_noise)
+        self.assertEqual([t.origin for t in dup], ["issue"])                                       # duplicate segment once
+        camel = search.path_tokens_for("/issueTypeScheme", self.rp.path_noise)
+        self.assertEqual([t.origin for t in camel], ["issue", "type", "scheme"])                  # unigrams, no joined form
+
+    def _entry(self, path, method="GET", source="jira-platform"):
+        return search.IndexEntry(f"{source}:{method}:{path}", {f: frozenset() for f in search.FIELD_WEIGHTS},
+                                 search.path_tokens_for(path, self.rp.path_noise), source, method)
+
+    def test_path_penalty_origin_once_and_cap(self):
+        c = self.rp.constants
+        e = self._entry("/rest/api/3/issue/{k}/properties")
+        val, sig = search._structural_signals(e, ("get", "issue"), frozenset({"get", "issue"}), self.rp)
+        self.assertEqual(sig["path_unmatched"], {"value": -c["path_unmatched_penalty"], "tokens": ["properties"]})
+        # brief had ("get", "property"): origin "issue" is then unmatched (-1.0); "issue" added so only the plural case is tested
+        val2, sig2 = search._structural_signals(e, ("get", "issue", "property"), frozenset({"get", "issue", "property"}), self.rp)
+        self.assertEqual(sig2["path_unmatched"], {"value": 0.0, "tokens": []})                  # plural matched via forms
+        deep = self._entry("/alpha/beta/gamma/delta/epsilon")                                     # 5 real origins (>= 2 chars)
+        self.assertEqual(len(deep.path_tokens), 5)
+        _, sig3 = search._structural_signals(deep, ("zzz",), frozenset({"zzz"}), self.rp)
+        self.assertEqual(sig3["path_unmatched"]["value"], -c["path_unmatched_cap"] * c["path_unmatched_penalty"])
+        self.assertEqual(len(sig3["path_unmatched"]["tokens"]), 5)                                # tokens list is not capped, only the value
+
+    def test_method_intent(self):
+        c = self.rp.constants
+        e = self._entry("/x", method="POST")
+        self.assertEqual(search._structural_signals(e, ("add", "x"), frozenset({"add", "x"}), self.rp)[1]["method_intent"], {"value": c["method_match_bonus"], "allowed": ["POST"]})
+        self.assertEqual(search._structural_signals(e, ("get", "x"), frozenset({"get", "x"}), self.rp)[1]["method_intent"], {"value": -c["method_mismatch_penalty"], "allowed": ["GET"]})
+        self.assertEqual(search._structural_signals(e, ("x",), frozenset({"x"}), self.rp)[1]["method_intent"], {"value": 0.0, "allowed": []})
+        self.assertEqual(search._structural_signals(e, ("get", "delete", "x"), frozenset(), self.rp)[1]["method_intent"]["value"], 0.0)   # conflict
+        self.assertEqual(search._structural_signals(e, ("move", "x"), frozenset(), self.rp)[1]["method_intent"]["allowed"], ["POST", "PUT"])
+        patch = self._entry("/x", method="PATCH")
+        self.assertEqual(search._structural_signals(patch, ("update", "x"), frozenset(), self.rp)[1]["method_intent"]["value"], -c["method_mismatch_penalty"])  # review focus 1
+
+    def test_product_hint(self):
+        j = self._entry("/x", source="jira-software"); c = self._entry("/x", source="confluence")
+        self.assertEqual(search._structural_signals(j, ("jira", "x"), frozenset(), self.rp)[1]["product_hint"], {"value": self.rp.constants["product_hint_bonus"], "sources": ["jira-platform", "jira-software"]})
+        self.assertEqual(search._structural_signals(c, ("jira", "x"), frozenset(), self.rp)[1]["product_hint"]["value"], 0.0)
+        self.assertEqual(search._structural_signals(c, ("x",), frozenset(), self.rp)[1]["product_hint"], {"value": 0.0, "sources": []})
+
+
+class TestScoringAlgorithm(unittest.TestCase):
+    """End-to-end numbers on a synthetic state (spec §6.6, AC-07)."""
+    @classmethod
+    def setUpClass(cls):
+        cls.state = make_state("edge-cases", source_map={"edge-cases": "edge"})   # small, deterministic
+
+    def test_hint_only_query_has_no_candidates(self):                                            # review focus 3
+        out = search.search_operations(self.state, "jira")
+        self.assertTrue(out.get("error") == "empty_query" or out["results"] == [])
+
+    def test_limit_truncates_pinned_and_keeps_exact_flag(self):                                    # review focus 4
+        state = make_state("jira-platform", "jira-software")
+        full = search.search_operations(state, "getIssue", limit=10)
+        self.assertEqual(sum(1 for r in full["results"] if "match" in r), 2)                       # two pinned ops really exist
+        out = search.search_operations(state, "getIssue", limit=1)
+        self.assertEqual(len(out["results"]), 1); self.assertTrue(out["exact_match"]); self.assertIn("match", out["results"][0])
+        self.assertEqual(out["results"][0]["key"], full["results"][0]["key"])                      # key order: jira-platform first
+
+    def test_signals_shape_and_exact_zero(self):
+        state = make_state("jira-platform")
+        out = search.search_operations(state, "createIssue")
+        pinned = out["results"][0]
+        self.assertEqual(pinned["signals"], {"method_intent": {"value": 0.0, "allowed": []}, "path_unmatched": {"value": 0.0, "tokens": []}, "product_hint": {"value": 0.0, "sources": []}})
+        other = out["results"][1]
+        self.assertEqual(set(other["signals"]), {"method_intent", "path_unmatched", "product_hint"})
+        self.assertEqual(set(out["intelligence_policy"]) >= {"ranking_sha256", "ranking_structure_sha256"}, True)
+
+
+class TestScoringNumbers(unittest.TestCase):
+    """spec §6.6 end to end with hand-computed numbers. FIELD_WEIGHTS: operation_id 5, summary 4, tags 3, path 3,
+    schema_names 2, method 1, description 1; ALL_MATCH_BONUS 2; DEPRECATED_FACTOR 0.7. Fixed policy 2/2/1/3/3, no aliases."""
+    SPEC = {"openapi": "3.0.1", "info": {"title": "num", "version": "1"}, "paths": {
+        "/widget": {"get": {"operationId": "listWidget", "summary": "List widget", "tags": ["Widget"], "responses": {"200": {"description": "ok"}}}},
+        "/widget/{id}/history": {"get": {"operationId": "getWidgetHistory", "summary": "Widget history", "tags": ["Widget"],
+                                         "parameters": [{"name": "id", "in": "path", "required": True, "schema": {"type": "string"}}],
+                                         "responses": {"200": {"description": "ok"}}}},
+        "/widget/legacy": {"get": {"operationId": "listWidgetLegacy", "summary": "List widget", "tags": ["Widget"], "deprecated": True,
+                                   "responses": {"200": {"description": "ok"}}}},
+        "/alpha/beta/gamma/delta/epsilon": {"get": {"operationId": "nothingHere", "summary": "Nothing here", "description": "zzz",
+                                                    "responses": {"200": {"description": "ok"}}}}}}
+
+    @classmethod
+    def setUpClass(cls):
+        import pathlib, tempfile
+        from unittest import mock
+        from tests.intelligence.helpers import state_from_source_registries
+        from tools.atlassian_docs.intelligence import normalizer, registry
+        raw = json.loads((policy.DATA_DIR / "search_ranking.json").read_text(encoding="utf-8"))
+        raw["constants"] = {"method_match_bonus": 2.0, "method_mismatch_penalty": 2.0, "path_unmatched_penalty": 1.0, "path_unmatched_cap": 3, "product_hint_bonus": 3.0}
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as fh:
+            json.dump(raw, fh)
+        fixed = policy.load_ranking(pathlib.Path(fh.name))
+        cls._p1 = mock.patch.object(policy, "ranking", return_value=fixed); cls._p1.start()
+        cls._p2 = mock.patch.object(policy, "aliases", return_value=policy.AliasPolicy(0.5, 1.0, {}, (), "x")); cls._p2.start()
+        ns = normalizer.normalize_openapi("jira-platform", cls.SPEC)
+        cls.state = state_from_source_registries({"jira-platform": registry.build_source_registry(ns, "0" * 64)})
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._p1.stop(); cls._p2.stop()
+
+    def test_list_widget_numbers(self):
+        out = search.search_operations(self.state, "list widget")
+        scores = {r["operation_id"]: r["score"] for r in out["results"]}
+        # A listWidget:       opid 5*2 + summary 4*2 + tags 3*1 + path 3*1 = 24, all-match +2 = 26; +2 GET, path unmatched 0 -> 28.0
+        # C listWidgetLegacy: opid 5*2 + summary 8 + tags 3 + path 3 ({widget, legacy}) = 24, +2 = 26; +2 GET, -1 (legacy) = 27 * 0.7 = 18.9
+        # B getWidgetHistory: opid 5*1 + summary 4*1 + tags 3 + path 3 = 15, no all-match ("list" unmatched); +2 GET, -1 (history) = 16.0
+        self.assertEqual(scores, {"listWidget": 28.0, "listWidgetLegacy": 18.9, "getWidgetHistory": 16.0})
+        self.assertEqual([r["operation_id"] for r in out["results"]], ["listWidget", "listWidgetLegacy", "getWidgetHistory"])
+        self.assertEqual(out["total_matches"], 3)
+        b = out["results"][2]["signals"]
+        self.assertEqual(b, {"method_intent": {"value": 2.0, "allowed": ["GET"]}, "path_unmatched": {"value": -1.0, "tokens": ["history"]}, "product_hint": {"value": 0.0, "sources": []}})
+
+    def test_negative_subtotal_is_clamped_and_excluded(self):
+        out = search.search_operations(self.state, "zzz")
+        # nothingHere: description 1*1 = 1, all-match +2 = 3; no verb -> 0; 5 unmatched origins capped 3 * 1.0 = -3 -> clamp 0 -> excluded
+        self.assertEqual(out["results"], []); self.assertEqual(out["total_matches"], 0); self.assertNotIn("error", out)

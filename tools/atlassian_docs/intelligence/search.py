@@ -63,9 +63,32 @@ def tokenize(text: Optional[str]) -> frozenset:
 
 
 @dataclass(frozen=True)
+class PathToken:
+    """One distinct non-noise path unigram (origin) and its singular/plural forms (spec §6.4)."""
+    origin: str
+    forms: frozenset
+
+
+@dataclass(frozen=True)
 class IndexEntry:
     key: str
     fields: Mapping[str, frozenset]
+    path_tokens: tuple          # of PathToken
+    source: str
+    method: str                 # upper-case HTTP method
+
+
+def path_tokens_for(path: Optional[str], noise) -> tuple:
+    """Literal (non-{param}) path segments -> unigrams, minus noise, each origin once, in path order."""
+    out, seen = [], set()
+    for seg in (path or "").split("/"):
+        if not seg or (seg.startswith("{") and seg.endswith("}")):
+            continue
+        for tok in tokenize_unigrams(seg):
+            if tok in noise or tok in seen:
+                continue
+            seen.add(tok); out.append(PathToken(tok, token_forms(tok)))
+    return tuple(out)
 
 
 @dataclass(frozen=True)
@@ -91,6 +114,8 @@ def _schema_names(op: Any) -> frozenset:
 
 
 def build_index(operations: tuple) -> SearchIndex:
+    from . import policy  # local import: policy imports search at module level
+    noise = policy.ranking().path_noise
     entries = []
     for op in operations:
         fields = {
@@ -102,7 +127,7 @@ def build_index(operations: tuple) -> SearchIndex:
             "method": frozenset({op.method.lower()}),
             "description": tokenize((op.description or "")[:DESCRIPTION_INDEX_CHARS]),
         }
-        entries.append(IndexEntry(op.key, fields))
+        entries.append(IndexEntry(op.key, fields, path_tokens_for(op.path, noise), op.source, op.method.upper()))
     return SearchIndex(tuple(entries))
 
 
@@ -157,19 +182,44 @@ def expand_query(query: str, pol) -> QueryExpansion:
     return QueryExpansion(frozenset(base), frozenset(direct), frozenset(cond))
 
 
-def _score(entry: IndexEntry, exp: QueryExpansion, deprecated: bool, bonus_tokens: frozenset, pol) -> float:
-    """bonus_tokens (tokenize(query), no joined forms) decide the all-match bonus, counted over base hits only."""
+def _score(entry, lexical_base: frozenset, direct: frozenset, cond: frozenset, bonus_tokens: tuple, pol):
+    """Lexical score of one entry (spec §6.6), all-match bonus included; returns (lexical, matched_base).
+    bonus_tokens are the query unigrams: each must hit matched_base in some singular/plural form.
+    Joined forms can add score but never cancel the bonus. Deprecation is applied by the caller."""
     ad, rd = pol.alias_damping, pol.rule_damping
-    score = 0.0
+    lexical = 0.0
     matched = set()
     for field, weight in FIELD_WEIGHTS.items():
         f = entry.fields[field]
-        hb, hd, hc = exp.base & f, exp.direct & f, exp.cond & f
-        score += weight * (len(hb) + ad * len(hd) + rd * len(hc))
+        hb = lexical_base & f
+        lexical += weight * (len(hb) + ad * len(direct & f) + rd * len(cond & f))
         matched |= hb
-    if score and bonus_tokens and bonus_tokens <= matched:
-        score += ALL_MATCH_BONUS
-    return score * DEPRECATED_FACTOR if deprecated else score
+    matched_base = frozenset(matched)
+    if lexical and bonus_tokens and all(token_forms(q) & matched_base for q in bonus_tokens):
+        lexical += ALL_MATCH_BONUS
+    return lexical, matched_base
+
+
+def _structural_signals(entry, query_unigrams: tuple, exp_all: frozenset, rp):
+    """method intent + path specificity + product hint (spec §6.3-§6.5); every number comes from rp."""
+    c = rp.constants
+    verbs = [t for t in query_unigrams if t in rp.verb_methods]
+    allowed = None
+    for v in verbs:
+        allowed = rp.verb_methods[v] if allowed is None else (allowed & rp.verb_methods[v])
+    if not allowed:
+        mi = {"value": 0.0, "allowed": []}
+    elif entry.method in allowed:
+        mi = {"value": c["method_match_bonus"], "allowed": sorted(allowed)}
+    else:
+        mi = {"value": 0.0 - c["method_mismatch_penalty"], "allowed": sorted(allowed)}   # 0.0 - x: never -0.0
+    unmatched = sorted(pt.origin for pt in entry.path_tokens if not (pt.forms & exp_all))
+    pu = {"value": 0.0 - min(len(unmatched), c["path_unmatched_cap"]) * c["path_unmatched_penalty"], "tokens": unmatched}
+    hinted = set()
+    for t in query_unigrams:
+        hinted |= rp.product_hints.get(t, frozenset())
+    ph = {"value": c["product_hint_bonus"] if entry.source in hinted else 0.0, "sources": sorted(hinted)}
+    return mi["value"] + pu["value"] + ph["value"], {"method_intent": mi, "path_unmatched": pu, "product_hint": ph}
 
 
 def _passes(op, method, tag, include_deprecated) -> bool:
@@ -200,10 +250,17 @@ def exact_matches(state, query: str, scope, method=None, tag=None, include_depre
     return out
 
 
-def _item(op, s, match=None) -> dict:
+def _zero_signals() -> dict:
+    """Signals of a pinned exact match: all zero / empty (spec §6.7). Fresh dict per item."""
+    return {"method_intent": {"value": 0.0, "allowed": []},
+            "path_unmatched": {"value": 0.0, "tokens": []},
+            "product_hint": {"value": 0.0, "sources": []}}
+
+
+def _item(op, s, signals, match=None) -> dict:
     d = {"key": op.key, "source": op.source, "operation_id": op.operation_id, "method": op.method,
          "path": op.path, "summary": op.summary, "tags": list(op.tags), "deprecated": op.deprecated,
-         "experimental": op.experimental, "score": round(s, 3)}
+         "experimental": op.experimental, "score": round(s, 3), "signals": signals}
     if match:
         d["match"] = match
     return d
@@ -216,33 +273,38 @@ def search_operations(state, query: str, *, source=None, method=None, tag=None,
         return provenance.error_response("invalid_argument", f"limit must be 1..{MAX_LIMIT}")
     if source is not None and source not in sources.SOURCES:
         return provenance.error_response("invalid_argument", f"unknown source {source!r}")
-    pol = policy.aliases()
-    exp = expand_query(query, pol)
-    # Phase 2.5 lexical behaviour: joined identifier forms (e.g. "issuecreatemetadata") still
-    # match the index's exact-name tokens, but never appear in QueryExpansion itself (spec §6.1).
-    exp_lex = QueryExpansion(exp.base | joined_query_forms(query), exp.direct, exp.cond)
-    bonus_tokens = tokenize(query)
+    pol, rp = policy.aliases(), policy.ranking()
+    unigrams = tokenize_unigrams(query)
+    exp = expand_query(query, pol)                       # exp.base: unigram forms only (spec §6.1)
+    lexical_base = exp.base | joined_query_forms(query)  # Phase 2.5 exact-name matching kept (spec §6.6)
     scope = [source] if source else sorted(sources.SOURCES)
     pinned = exact_matches(state, query, scope, method, tag, include_deprecated)
     pinned_keys = {op.key for op, _ in pinned}
     if not exp.base and not pinned:
         return provenance.error_response("empty_query", "query has no searchable tokens")
-    scored = []
+    candidates = []
     for name in scope:
         sr = state.registry.sources.get(name)
         if sr is None:
             continue
         for entry in sr.search_index.entries:
             op = sr.operations_by_key[entry.key]
-            if op.key in pinned_keys or not _passes(op, method, tag, include_deprecated):
+            if not _passes(op, method, tag, include_deprecated):
                 continue
-            s = _score(entry, exp_lex, op.deprecated, bonus_tokens, pol)
-            if s > 0:
-                scored.append((s, op))
-    scored.sort(key=lambda item: (-item[0], item[1].deprecated, item[1].source, item[1].key))
-    top = (scored[0][0] if scored else 0.0) + 1.0
-    results = [_item(op, top, kind) for op, kind in pinned] + [_item(op, s) for s, op in scored]
-    payload = {"query": query, "results": results[:limit], "total_matches": len(pinned) + len(scored),
+            lexical, _ = _score(entry, lexical_base, exp.direct, exp.cond, unigrams, pol)
+            if lexical <= 0:
+                continue
+            structural, signals = _structural_signals(entry, unigrams, exp.all, rp)
+            final = max(lexical + structural, 0.0) * (DEPRECATED_FACTOR if op.deprecated else 1.0)
+            if final == 0.0:
+                continue
+            candidates.append((final, op, signals))
+    candidates.sort(key=lambda c: (-c[0], c[1].deprecated, c[1].key))
+    non_pinned = [c for c in candidates if c[1].key not in pinned_keys]
+    pinned_score = (non_pinned[0][0] if non_pinned else 0.0) + 1.0
+    results = [_item(op, pinned_score, _zero_signals(), kind) for op, kind in pinned] + \
+              [_item(op, final, signals) for final, op, signals in non_pinned]
+    payload = {"query": query, "results": results[:limit], "total_matches": len(pinned) + len(non_pinned),
                "exact_match": bool(pinned), "query_tokens": sorted(exp.base),
                "alias_tokens": sorted(exp.direct | exp.cond), "expanded_tokens": sorted(exp.all)}
     ov = policy.overrides()
