@@ -1,220 +1,274 @@
 # Search Quality Round 2 — Technical Specification
 
-**문서 버전:** v1.0
+**문서 버전:** v1.1
 **기준일:** 2026-10-02
 **선행 구현:** Search Quality Round 1 (spec v1.4, 게이트 실패: held_out 4/16, negative 5/8) + Round 2 pre-work (`main` 95b8de0: 관찰 집합 강등, 라운드 비의존 테스트, 로더 보정). 오프라인 테스트 405개.
 **목적:** Round 1 절차(A→T→B→C→D)를 **어휘만 바꿔** 반복하고, 봉인된 새 held_out 16 / negative 8에서 Discovery 게이트(≥ 15/16, 0/8)를 충족한다.
-**설계 원칙:** Vocabulary before structure / Inventory, not instances / Pre-register, then budget / Same seal, same gate / Round-independent tooling
+**설계 원칙:** Vocabulary before structure / Inventories, not instances / Pre-register, then budget / Roles separated by what they have seen / Same seal, same gate / Round-independent tooling
 
 ---
 
 ## 0. 배경
 
-### 0.1 Round 1 실패 분석 (artifact `tests/benchmarks/round1-final.json`, 지금은 seed s-024..s-039 / regression rn-007..rn-014)
+### 0.1 Round 1 실패 분석 (artifact `tests/benchmarks/round1-final.json`; 해당 레코드는 지금 seed s-024..s-039 / regression rn-007..rn-014)
 
 | 사실 | 수치 |
 |---|---|
-| held_out 실패 12건 중 질의에 동사 테이블 단어가 없는 것 | 9건 (`leave feedback`, `revise`×2, `publish`, `discard`, `rewrite`, `trash`, `browse`, `browse`) |
+| held_out 실패 12건 중 질의에 동사 테이블 단어가 없는 것 | 9건 (`leave feedback`, `revise`×2, `publish`, `discard`, `rewrite`, `trash`, `browse`) |
 | 동사가 있으나 오판 | `set up`(PUT 전용이라 createBoard POST 불일치) 1건 |
-| 질의 개념어가 카탈로그 어휘(operationId·summary·tags·key)에 **전무** | `feedback`, `release`, `iteration`, `file/files`, `starred` (0회), `workspace`(7회, 다른 뜻) |
+| 질의 개념어가 카탈로그 어휘(operationId·summary·tags·key)에 **전무** | `feedback`, `release`, `iteration`, `file/files`, `starred` (0회); `workspace`는 7회 있으나 다른 뜻(Linked Workspaces) |
 | 정답 op의 어휘 | `comment` 82, `worklog` 23, `attachment` 50, `favourite` 3, `version` 47, `sprint` 35, `space` 87 |
-| 터미널 리소스 보너스(+10)가 기본 리소스에 붙은 실패 | 15건 중 10건 — 대부분 위 어휘 단절의 결과(`feedback→comment`가 이어지면 보너스가 `/issue/{k}/comment`로 이동) |
-| 결과 없음 | `revise dates for this iteration` 1건 (어휘 히트 0) |
+| 터미널 리소스 보너스(+10)가 기본 리소스에 붙은 실패 | 15건 중 10건 — 대부분 위 어휘 단절의 결과 |
+| 결과 없음 | `revise dates for this iteration` 1건 |
 | negative 실패 3건 | 명사형 질의에서 유인 오답이 실제 1위 |
 
-결론: Round 1 구조 신호는 R1(하위 리소스 과잉 매칭)을 해결했고(seed 23/23), Round 2 병목은 어휘 두 층이다. (1) 동사 테이블 커버리지, (2) 질의 개념어 → 스펙 어휘.
+결론: Round 1 구조 신호는 R1을 해결했고(seed 23/23), Round 2 병목은 어휘 세 층이다: (1) 동사 커버리지, (2) 사용자 개념어 → 스펙 개념어(일반), (3) 특정 seed가 드러낸 개념어 단절(개별).
 
-### 0.2 실패 클래스 추가
+### 0.2 실패 클래스 추가 (T에서 기계적으로 부여, §5.2)
 
-| 클래스 | 정의 | 해결 수단 |
-|---|---|---|
-| R5 동사 부재 | 질의의 unigram 중 `verb_methods` 키가 없거나, 있어도 허용 메서드가 정답 메서드를 포함하지 않음 | 동사 인벤토리(§6) — 커밋 T에서 동결 |
-| R6 개념어 단절 | 질의의 unigram이 카탈로그 어휘·동사·기존 alias 어디에도 없음 | 사전 등록된 개념 alias(§7) — B..C에서 예산 내 추가 |
+| 클래스 | 정의(기계적) |
+|---|---|
+| R5 동사 부재/오판 | 질의 unigram 중 `verb_methods` 키가 없거나, 교집합 허용 메서드가 정답 op의 메서드를 포함하지 않음 |
+| R6 개념어 단절 | 질의 unigram 중 하나 이상이 정답 op 어휘(§7.1 정의)·동사·기존 alias·제품 힌트·기능어 어디에도 없음 |
 
-Round 1의 R1–R4 정의는 그대로다.
+R1–R4 정의는 Round 1 그대로.
 
 ### 0.3 결정 이력
 
 - 2026-10-01 사용자: 범위 = 어휘만(스코어러·게이트 무변경); 동사는 일반 영어 인벤토리, 개념 alias는 seed 근거만; 접근안 B(절차 반복 + alias 예산·사전 등록).
+- 2026-10-02 외부 검수 1차(v1.0→v1.1): `commit_T` 자기참조 제거; 후보 추출을 전역 카탈로그 어휘가 아닌 **정답 op 어휘 기준**으로; T 전 seed 실현성 검사로 `leave feedback` 류의 도달 가능성 보장; alias 예산 우회 차단(1 alias = 1 타깃, 규칙은 후보어 + 문맥 1개 → 타깃 1개); hidden을 본 컨트롤러와 B..C 튜닝 주체의 역할 분리 명문화; 다의어 동사는 메서드 상위집합; 기능어 목록 최소화; 타깃에 summary 포함; R5/R6 기계 분류; Round 1 섹션 해시 AC; negative 규칙 machine/reviewer 분리 — 전부 반영. **사용자 결정**: 검수자 권고에 따라 **일반 개념 동의어 인벤토리(§7.0)**를 T 전에 clean context로 생성·동결(동사 인벤토리와 같은 위상).
 
 ---
 
 ## 1. 목표
 
-> 동사 인벤토리와 alias 후보 목록을 **hidden set 생성 전에** 동결하고, B..C 구간에서는 후보 목록 안의 alias만 예산 내로 추가하며, 상수는 grid 전수 재선택한 뒤, 얼린 커밋에서 봉인 집합을 한 번만 측정한다. 스코어러 코드와 게이트 정의는 바꾸지 않는다.
+> 동사 인벤토리, 일반 개념 사전, seed 유래 alias 후보 목록을 **hidden set 생성 전에** 동결하고, B..C 구간에서는 후보 목록 안의 alias만 예산 내로(1 alias = 1 타깃) 추가하며, 상수는 grid 전수 재선택한 뒤, 얼린 커밋에서 봉인 집합을 한 번만 측정한다. 스코어러 코드와 게이트 정의는 바꾸지 않는다. hidden을 본 주체는 B..C의 정책 선택에 관여하지 않는다.
 
 ## 2. 범위
 
 ### 2.1 포함
-1. `verb_methods` 인벤토리 교체(§6), `round_freeze.json` round 2 항목, 스냅샷 재복사.
-2. `alias_candidates.json` 생성 도구와 동결(§7.1).
-3. 봉인·진단·튜닝 도구의 라운드 일반화(§8).
-4. 새 hidden set 생성·봉인(§5), B..C 튜닝(상수 grid + 후보 alias), C/D, readiness Round 2 섹션.
+1. `verb_methods` 인벤토리 교체(§6) + seed 실현성 검사.
+2. 일반 개념 사전 `concept_lexicon.json`(§7.0) — clean-context 생성, 기계 검사, T 동결.
+3. seed 유래 alias 후보 목록 `alias_candidates.json`(§7.1) — 결정적 생성, T 동결; R5/R6 기계 분류.
+4. 봉인·진단·튜닝 도구의 라운드 일반화(§8); `policy.py`의 alias notes `origin` 허용값 확장(§8, 유일한 production 변경).
+5. 새 hidden set 생성·봉인(§5), B..C 튜닝(상수 grid + 후보 alias), C/D, readiness Round 2 섹션.
 
 ### 2.2 제외
-`search.py`/`policy.py` 변경, `POLICY_VERSIONS` bump(스코어링 의미 불변), 게이트 수치·hidden set 크기 변경, 검색 로그 처리, 픽스처에 r1 정답 op 추가.
+`search.py` 변경, `policy.py`의 notes-origin 규칙 외 변경, `POLICY_VERSIONS` bump, 게이트 수치·hidden set 크기 변경, 검색 로그 처리, 픽스처에 r1 정답 op 추가.
 
 ## 3. 설계 원칙
 
 1. **Vocabulary before structure.** R5/R6은 어휘로 고친다; 구조 신호는 Round 1 그대로.
-2. **Inventory, not instances.** 동사는 질의와 무관한 일반 인벤토리에서 오고 T에서 통째로 동결한다.
-3. **Pre-register, then budget.** 개념 alias는 seed 39건에서 기계적으로 추출한 후보 목록(T에서 동결) 안에서만, 라운드당 ≤ 15, seed당 1개.
-4. **Same seal, same gate.** 생성 규칙·봉인·평가 1회·게이트는 Round 1 spec §5/§5.9와 동일.
-5. **Round-independent tooling.** 도구와 테스트는 `round_freeze.json`의 현재 라운드를 읽고, 이전 라운드 artifact를 깨뜨리지 않는다.
+2. **Inventories, not instances.** 동사 인벤토리와 개념 사전은 특정 질의와 무관하게 만들어 T에서 통째로 동결한다.
+3. **Pre-register, then budget.** seed 유래 alias는 T에서 동결된 후보 목록 안에서만, 1 alias = 1 타깃, 라운드당 ≤ 15, seed당 1개.
+4. **Roles separated by what they have seen.** hidden 평문을 본 주체(seal/review controller)는 B 이후 정책 선택에 관여하지 않는다(§5.6).
+5. **Same seal, same gate.** 생성 규칙·봉인·평가 1회·게이트는 Round 1 §5/§5.9와 동일.
+6. **Round-independent tooling.** 도구와 테스트는 `round_freeze.json`의 현재 라운드를 읽고 이전 라운드 artifact를 깨뜨리지 않는다.
 
 ## 4. 파일 구조
 
 | 파일 | 변경 |
 |---|---|
-| `tools/atlassian_docs/intelligence/data/search_ranking.json` | `verb_methods` 교체(T); `constants`만 B..C에서 변경 |
+| `tools/atlassian_docs/intelligence/data/search_ranking.json` | T: `verb_methods` 교체; B..C: `constants`만 |
+| `tools/atlassian_docs/intelligence/data/search_aliases.json` | T: 개념 사전 항목 병합(§7.0, `origin: "lexicon-r2"`); B..C: round2 alias/rule + notes |
 | `tools/atlassian_docs/intelligence/data/alias_candidates.json` | 신규(T): §7.1 |
-| `tools/atlassian_docs/intelligence/data/search_aliases.json` | B..C: round2 alias/rule + notes |
-| `tests/benchmarks/round_freeze.json` | 리스트로 확장; round 2 항목 |
-| `tests/benchmarks/round_seal.py` | `round1_seal.py` 이름 변경 + `--round N`; 키 `round{N}_seal` |
-| `tests/benchmarks/alias_candidates_tool.py` | 신규: 후보 목록 결정적 생성 |
-| `tests/tune_search_ranking.py` | `--alias-change` 후보·예산 검사, 로그에 `round` |
+| `tools/atlassian_docs/intelligence/policy.py` | T 전(housekeeping 커밋 H): `_NOTE_ORIGINS` → 정규식 `^(phase2\.5|round\d+|lexicon-r\d+)$`; `round\d+` 항목은 `seed_query_id`+`candidate_word`+R-class 필수, `lexicon-r\d+` 항목은 `seed_query_id: null` |
+| `tests/benchmarks/round_freeze.json` | 리스트; round 2 항목 = `{"round": 2, "structure_sha256", "alias_candidates_sha256", "concept_lexicon_sha256", "verb_inventory_sha256"}` (**`commit_T` 없음** — T SHA는 readiness/B 메타에 기록) |
+| `tests/benchmarks/round_seal.py` | `round1_seal.py` 이름 변경 + `--round N` |
+| `tests/benchmarks/alias_candidates_tool.py` | 신규: 후보 목록·R5/R6 분류·개념 토큰 목록 생성 |
+| `tests/benchmarks/concept_lexicon_check.py` | 신규: 개념 사전 기계 검사·정규화 |
+| `tests/tune_search_ranking.py` | `--alias-change` 후보·예산·형태 검사, 로그에 `round` |
 | `tests/diag_search_queries.py` | seal 키·artifact 이름을 라운드에서 유도 |
-| `tests/benchmarks/search_queries.json` | B: `held_out`/`negative` 봉인 메타 + `round2_seal`; D: 평문 |
-| `tests/benchmarks/round2-final.json` | D |
-| `tests/benchmarks/search-tuning-round2.jsonl` | 튜닝 로그(라운드별 파일) |
-| `tests/benchmarks/test_evaluator.py`, `tests/intelligence/test_policy.py`, `tests/test_diag_search_queries.py`, `tests/test_tune_search_ranking.py` | §10 |
+| `tests/benchmarks/search_queries.json` | T: seed `failure_classes` 기계 분류 기록; B: 봉인 메타 + `round2_seal`; D: 평문 |
+| `tests/benchmarks/round2-final.json`, `search-tuning-round2.jsonl` | D / B..C |
+| `tests/benchmarks/test_evaluator.py`, `tests/intelligence/test_policy.py`, `tests/intelligence/test_search.py`, `tests/test_diag_search_queries.py`, `tests/test_tune_search_ranking.py` | §10 |
 | `docs/phase3-readiness.md` | Round 2 섹션 |
-| `README.md`, `AGENTS.md` | 동사 인벤토리·alias 후보 한 단락 |
+| `README.md`, `AGENTS.md` | 한 단락 |
 
-불변(baseline `95b8de0`, AC-09): Round 1 spec §4의 불변 목록 전체 **+ `tools/atlassian_docs/intelligence/search.py`, `policy.py`**, `operation_quirks.json`, `tests/benchmarks/round1-final.json`, `search-tuning-round1.jsonl`, `round1_seal`(bench 안), `docs/phase3-readiness.md`의 Round 1 섹션.
+불변(baseline `95b8de0`, AC-09): Round 1 spec §4 불변 목록 + `search.py`, `operation_quirks.json`, `tests/benchmarks/round1-final.json`, `search-tuning-round1.jsonl`, bench 안 `round1_seal` 객체, readiness의 Round 1 섹션(마커 `## Search Quality Round 1 — decision record` 부터 다음 `## ` 전까지의 canonical 텍스트 해시를 pre-work 상태에서 고정). `policy.py`는 커밋 H 이후 불변.
 
-가변 구간 규칙(AC-01): `search_aliases.json`과 `search_ranking.json`의 `constants`는 B..C에서만; `search_ranking.json`의 테이블과 `alias_candidates.json`은 T에서만.
+가변 구간 규칙(AC-01): `search_aliases.json`(round2 항목)과 `search_ranking.json.constants`는 B..C에서만; `verb_methods`, `alias_candidates.json`, `concept_lexicon` 병합분, `failure_classes` 분류는 T에서만; `policy.py`는 H에서만.
 
-## 5. 벤치마크 절차 (Round 1 spec §5 재사용, 차이만)
+## 5. 벤치마크 절차 (커밋 순서 H → T → B → C → D)
 
-- **A**: 이미 완료(pre-work 95b8de0). seed 39(r0 23 + r1 16), regression 14(r0 6 + r1 8), hidden 비어 있음. 이번 라운드의 seed 실패에는 `failure_classes`에 R5/R6(필요 시 R1–R4)을 기록한다(튜닝 중 분류, alias 허용 판정용).
-- **T**: `search_ranking.json` `verb_methods` 교체 + `alias_candidates.json` 커밋 + `round_freeze.json` round 2 항목(`commit_T`, `structure_sha256`, `alias_candidates_sha256`). **T 직후 스냅샷 재복사**(`$ATLASSIAN_DOCS_ROUND2_CACHE`, 기본 `~/.atlassian_api_updater/round2-cache/`; 존재하면 거부; fingerprint 기록). Round 1 스냅샷은 아카이브에 남긴다.
-- **생성(clean context)**: Round 1 §5.4의 규칙 그대로 + 추가 규칙 (negative): 질의가 카탈로그 op의 summary 또는 마지막 경로 세그먼트를 **그대로 명사구로 옮긴 것**(예 `page history`, `label printer`처럼 결과적으로 정답이 존재하는 것)은 거부. reviewer-check 항목: "이 질의에 정답 op가 존재하면 negative가 아니다". 생성기에는 Round 1 hidden 질의도 제공하지 않는다(재사용은 machine check가 잡음 — seed 39건과 중복 금지는 자동).
-- **B**: `round_seal.py seal --round 2` → `round2_seal` 키(형식은 `round1_seal`과 동일: 두 sha, 두 distribution, registry fingerprint, spec sha).
-- **B..C**: §7.2 규칙으로 alias 추가, `tune_search_ranking.py` grid 전수 재실행(baseline은 Round 1 T2의 baseline 그대로 — 테이블 변경은 동사뿐이고 상수 grid·baseline은 유지).
-- **C**: 빈 커밋; `evaluation_code_sha256` 대상 파일에 `tests/benchmarks/round_seal.py`, `tests/benchmarks/alias_candidates_tool.py`를 추가(6개 파일).
-- **D**: `diag --bench <sealed> --cache-dir <round2-cache> --json tests/benchmarks/round2-final.json` 1회; unseal; readiness. C..D whitelist = `search_queries.json`, `round2-final.json`, `docs/phase3-readiness.md`.
-- **게이트**: held_out ≥ 15/16, negative 0/8. artifact에 보조 지표 `held_out_top3`(top-3 안에 정답이 있는 비율)를 기록만 한다.
+### 5.1 커밋 H (housekeeping, T 전)
+`policy.py` notes-origin 규칙 확장(§4) + 라운드 일반화 도구(§8) + 테스트. 어휘·벤치마크 무변경.
 
-## 6. 동사 인벤토리 (`verb_methods`, 커밋 T에서 동결)
+### 5.2 커밋 T (동결)
+1. `search_ranking.json` `verb_methods` ← §6 인벤토리.
+2. **seed 실현성 검사**(`alias_candidates_tool.py --feasibility`): seed 39건 각각에 대해, 질의 unigram ∩ 인벤토리의 허용 메서드 교집합이 (a) 공집합(의도 0)이거나 (b) 정답 op 메서드를 포함해야 한다. 위반(허용 집합이 정답 메서드를 배제)이 있으면 그 동사를 상위집합으로 넓혀 재실행 — **이 조정은 T 전에 끝나고 인벤토리와 함께 동결된다.** 결과(통과 목록)는 readiness에 기록.
+3. 개념 사전 병합: `concept_lexicon.json` 항목을 `search_aliases.json.aliases`에 병합(`notes[word] = {"origin": "lexicon-r2", "seed_query_id": null, "failure_classes": [], "evidence": "concept lexicon r2"}`). 충돌(이미 있는 alias 키)은 기존 항목 우선, 사전 항목은 버림(기록).
+4. `alias_candidates.json` 생성(§7.1) — 사전 병합 **후**에 실행(사전이 이미 잇는 토큰은 후보에서 자연히 빠진다).
+5. seed `failure_classes` 기계 분류(R5/R6)를 bench에 기록(§0.2). 기존 R1–R4 표기는 유지하고 R5/R6를 추가.
+6. `round_freeze.json` round 2 항목(해시 4개).
+7. T 직후 스냅샷 재복사(`$ATLASSIAN_DOCS_ROUND2_CACHE`, 기본 `~/.atlassian_api_updater/round2-cache/`; 존재 시 거부). fingerprint·T SHA를 readiness에 기록.
 
-규칙: 한 동사는 한 메서드 집합에만; 질의에 동사가 여럿이면 교집합, 공집합이면 0(Round 1 §6.3 불변). 메서드를 결정하지 않는 동사(`leave, hand, give, put, take, bring, keep, draft, manage, handle, work, do, use`)는 **넣지 않는다**.
+### 5.3 생성 (clean context, Round 1 §5.4 규칙)
+- 생성기에는 generator catalog + 규칙만. Round 1 hidden 질의·seed·사전·실패 목록은 주지 않는다.
+- negative 규칙 분리:
+  - **machine**: 질의의 정규화 unigram 열이 어떤 op의 summary 또는 마지막 리터럴 세그먼트의 unigram 열과 **완전히 같으면** 거부(토큰 정규화 후 exact phrase).
+  - **reviewer**: "이 질의에 정답 op가 존재하면 negative가 아니다"; 유인 오답이 실제로 오답인지.
+- machine check 0 violation → reviewer check → 재요청은 최소 피드백.
+
+### 5.4 커밋 B (봉인)
+`round_seal.py seal --round 2` → `round2_seal`(형식 Round 1과 동일). readiness에 T SHA, B SHA, 생성 프롬프트/결과 sha, 재요청 횟수 기록.
+
+### 5.5 B..C (튜닝)
+- 튜닝 주체(tuning worker)는 §5.6의 역할 규칙을 따른다.
+- 상수: `tune_search_ranking.py` grid 전수 재실행(baseline·grid 불변).
+- alias: §7.2 규칙으로만. 각 추가는 `--alias-change`로 기록되고 검증된다.
+
+### 5.6 역할 분리 (v1.1)
+| 역할 | 볼 수 있는 것 | 금지 |
+|---|---|---|
+| seal/review controller | hidden 평문, internal catalog, 모든 repo 파일 | B 이후 alias 선택·상수 선택·튜닝 피드백 전달. 할 수 있는 것은 절차 명령(스크립트 실행 지시, 커밋, 리뷰 디스패치)뿐 |
+| tuning worker (B..C 구현 서브에이전트) | seed/regression, 동결된 후보 목록·사전·인벤토리, 스냅샷, 튜닝 스크립트 | hidden 평문·봉인 경로·internal catalog 접근 |
+| semantic reviewer (B 전) | hidden 평문 + internal catalog | seed 파일, scorer 실행 |
+
+attestation 항목: "hidden을 본 주체가 B..C의 alias/상수 선택에 관여하지 않았다"(컨트롤러가 worker에게 보낸 브리프 전문을 readiness에 첨부하거나 sha로 고정).
+
+### 5.7 C / D / 게이트
+- C: 빈 커밋; `evaluation_code_sha256` 대상 6개 파일(기존 4 + `round_seal.py`, `alias_candidates_tool.py`; `concept_lexicon_check.py`는 T 전 도구라 제외).
+- D: `diag --round 2 --bench <sealed> --cache-dir <round2-cache> --json tests/benchmarks/round2-final.json` 1회; unseal; readiness. whitelist = `search_queries.json`, `round2-final.json`, `phase3-readiness.md`.
+- 게이트: held_out ≥ 15/16, negative 0/8. 보조 지표 `held_out_top3` 기록만.
+
+## 6. 동사 인벤토리 (`verb_methods`, T 동결)
+
+규칙: 한 동사는 한 메서드 집합; 질의 동사 여럿이면 교집합, 공집합이면 0(Round 1 §6.3). **다의어 원칙(v1.1)**: 오판은 무신호가 아니라 감산을 만들므로, 두 가지 이상의 메서드로 자연스럽게 읽히는 동사는 plausible methods의 **상위집합**을 쓴다. 메서드를 전혀 결정하지 않는 동사(`hand, give, put, take, bring, keep, manage, handle, work, do, use`)는 넣지 않는다. `leave`는 §5.2 실현성 검사 결과에 따라 `["POST"]`로 들어갈 수 있다(초안에 포함).
 
 ```json
 "verb_methods": {
-  "get": ["GET"], "fetch": ["GET"], "read": ["GET"], "list": ["GET"], "find": ["GET"], "search": ["GET"], "show": ["GET"],
-  "view": ["GET"], "browse": ["GET"], "look": ["GET"], "check": ["GET"], "inspect": ["GET"], "retrieve": ["GET"],
-  "display": ["GET"], "see": ["GET"], "query": ["GET"], "lookup": ["GET"], "open": ["GET"], "load": ["GET"],
-  "download": ["GET"], "count": ["GET"], "describe": ["GET"], "export": ["GET"],
+  "get": ["GET"], "fetch": ["GET"], "read": ["GET"], "list": ["GET"], "find": ["GET"], "show": ["GET"],
+  "view": ["GET"], "browse": ["GET"], "look": ["GET"], "inspect": ["GET"], "retrieve": ["GET"],
+  "display": ["GET"], "see": ["GET"], "lookup": ["GET"], "load": ["GET"], "download": ["GET"], "count": ["GET"],
+  "describe": ["GET"],
+  "search": ["GET", "POST"], "query": ["GET", "POST"], "check": ["GET", "POST"], "open": ["GET", "POST"],
+  "export": ["GET", "POST"],
   "create": ["POST"], "add": ["POST"], "post": ["POST"], "upload": ["POST"], "run": ["POST"], "submit": ["POST"],
   "start": ["POST"], "make": ["POST"], "publish": ["POST"], "send": ["POST"], "register": ["POST"], "attach": ["POST"],
   "insert": ["POST"], "invite": ["POST"], "import": ["POST"], "trigger": ["POST"], "execute": ["POST"],
   "generate": ["POST"], "copy": ["POST"], "clone": ["POST"], "duplicate": ["POST"], "link": ["POST"], "share": ["POST"],
-  "comment": ["POST"], "reply": ["POST"], "log": ["POST"], "record": ["POST"], "launch": ["POST"], "kick": ["POST"],
+  "comment": ["POST"], "reply": ["POST"], "log": ["POST"], "record": ["POST"], "launch": ["POST"], "leave": ["POST"],
   "update": ["PUT", "POST"], "change": ["PUT", "POST"], "edit": ["PUT", "POST"], "set": ["PUT", "POST"],
   "rename": ["PUT", "POST"], "modify": ["PUT", "POST"], "revise": ["PUT", "POST"], "rewrite": ["PUT", "POST"],
   "replace": ["PUT", "POST"], "move": ["PUT", "POST"], "transition": ["PUT", "POST"], "assign": ["PUT", "POST"],
   "reassign": ["PUT", "POST"], "reorder": ["PUT", "POST"], "rank": ["PUT", "POST"], "archive": ["PUT", "POST"],
   "restore": ["PUT", "POST"], "enable": ["PUT", "POST"], "disable": ["PUT", "POST"], "close": ["PUT", "POST"],
   "reopen": ["PUT", "POST"], "resolve": ["PUT", "POST"], "approve": ["PUT", "POST"], "mark": ["PUT", "POST"],
-  "pin": ["PUT", "POST"], "unpin": ["PUT", "POST"], "toggle": ["PUT", "POST"], "configure": ["PUT", "POST"],
-  "adjust": ["PUT", "POST"], "correct": ["PUT", "POST"], "fix": ["PUT", "POST"], "promote": ["PUT", "POST"],
-  "demote": ["PUT", "POST"],
+  "pin": ["PUT", "POST"], "toggle": ["PUT", "POST"], "configure": ["PUT", "POST"], "adjust": ["PUT", "POST"],
+  "correct": ["PUT", "POST"], "fix": ["PUT", "POST"], "promote": ["PUT", "POST"], "demote": ["PUT", "POST"],
+  "unassign": ["PUT", "POST", "DELETE"], "unpin": ["PUT", "POST", "DELETE"], "unlink": ["PUT", "POST", "DELETE"],
+  "cancel": ["PUT", "POST", "DELETE"], "clear": ["PUT", "POST", "DELETE"],
   "delete": ["DELETE"], "remove": ["DELETE"], "discard": ["DELETE"], "trash": ["DELETE"], "drop": ["DELETE"],
-  "erase": ["DELETE"], "clear": ["DELETE"], "purge": ["DELETE"], "unassign": ["DELETE"], "unlink": ["DELETE"],
-  "unwatch": ["DELETE"], "unsubscribe": ["DELETE"], "revoke": ["DELETE"], "cancel": ["DELETE"], "detach": ["DELETE"],
-  "destroy": ["DELETE"]
+  "erase": ["DELETE"], "purge": ["DELETE"], "unwatch": ["DELETE"], "unsubscribe": ["DELETE"], "revoke": ["DELETE"],
+  "detach": ["DELETE"], "destroy": ["DELETE"]
 }
 ```
 
-- Round 1 대비 변경: `update/change/edit/set/rename`과 `assign`이 PUT 전용 → PUT|POST(Atlassian이 갱신·배정에 POST를 섞어 씀; `set up … board`는 createBoard POST). `search`는 GET 유지(Round 1 §13).
-- `verb_methods`의 키는 로더 규칙(`^[a-z]+$`, fullmatch) 그대로. `path_noise`, `product_hints`, `tuning_grid`, `baseline`은 Round 1 T2 값 그대로 — 바뀌는 것은 `verb_methods`뿐이므로 `ranking_structure_sha256`만 갱신된다.
-- 토큰화 주의: 질의 unigram은 `token_forms` 적용 전 raw unigram으로 동사 판정(Round 1 §6.3). `rewrites`처럼 복수/3인칭형은 매칭되지 않는다 — 인벤토리에는 원형만 둔다(생성 규칙상 질의는 명령형·원형이 대부분이며, 이는 알려진 한계로 §13에 기록).
+- v1.0 대비: `search/query/check/open/export` GET|POST; `unassign/unpin/unlink/cancel/clear` PUT|POST|DELETE; `kick` 제거(의미 불명확); `leave` POST 추가(실현성 검사 대상).
+- **동결 전 검증**: `alias_candidates_tool.py --verb-report`가 각 동사에 대해 **카탈로그에서 그 동사가 operationId/summary에 나타나는 op들의 메서드 분포**를 출력한다(예: `check` → POST 3, GET 1). 분포가 인벤토리 집합 밖의 메서드를 포함하면 상위집합으로 넓힌다. 이 보고서는 readiness에 첨부한다(hidden 무관, 카탈로그만 사용).
+- `path_noise`, `product_hints`, `tuning_grid`, `baseline`은 Round 1 T2 값 그대로.
+- 굴절형(`rewrites`, `showing`)은 매칭되지 않는다 — 알려진 한계(§13).
 
-## 7. 개념 alias 정책
+## 7. 개념 어휘
 
-### 7.1 후보 목록 `alias_candidates.json` (커밋 T에서 동결)
-- 생성 도구 `tests/benchmarks/alias_candidates_tool.py --cache-dir DIR --bench BENCH --ranking RANKING --aliases ALIASES --out OUT`가 **결정적으로** 만든다:
-  1. seed 레코드마다 질의 unigram(`tokenize_unigrams` 동일 규칙: camelCase 분리, 소문자, len ≥ 2, STOPWORDS 제외).
-  2. 제외: 카탈로그 어휘(operationId·summary·tags·key의 unigram, `singular` 적용 포함)에 있는 토큰; `verb_methods` 키; 기존 alias 키; `product_hints` 키; **기능어 목록** `FUNCTION_WORDS = {new, up, fresh, inside, exist, dates, planning, entry, another, every, which, my, me, one, now, today, please, into, onto, brand, own, current, this}`(스펙에 명시, 도구 상수); 식별자형 토큰(seed 질의 토큰이 어떤 op의 operationId 소문자와 같은 것 — `createissue`, `multipartfile`).
-  3. 남은 토큰마다 `seed_ids`와 `allowed_targets` = 그 seed들의 `expected_top1_any` op들의 operationId·path·tags unigram(단수형)을 합친 집합. 타깃 집합이 비면 `allowed_targets: []`(등록만).
-  4. 결정적 정렬(토큰 사전순, 리스트 정렬), canonical sha256을 `round_freeze.json`에 기록.
-- 현재 seed 39건 기준 예상 후보(도구 실행 결과가 기준이며 이 목록은 설명용): `feedback → {comment, issue, add, …}`, `release → {version, create}`, `iteration → {sprint, update}`, `starred → {filter, favourite, get}`, `wiki → {blogpost, page, update, delete}`, `file → {attachment, delete}`, `files → {attachment, page, get}`, `uploaded → {attachment, delete}`, `attached → {attachment, page, get}`, `summary → {issue, edit}`.
-- `allowed_targets`에 동사 토큰(`get`, `add`, …)이 섞여 들어오면 **동사 테이블 키는 타깃에서 제거**한다(alias는 개념어→개념어만).
+### 7.0 일반 개념 사전 `concept_lexicon.json` (v1.1, T 전 생성·동결)
+- **개념 토큰 목록**(기계 생성, `alias_candidates_tool.py --concept-tokens`): 카탈로그 전 op의 경로 리터럴 세그먼트 unigram(숫자·`path_noise` 제외) ∪ tags unigram, `singular` 정규화, 출현 수와 함께. 현재 스냅샷 기준 약 356개.
+- **생성(clean context)**: 새 ChatGPT 대화(또는 빈 서브에이전트)에 **개념 토큰 목록(토큰, 출현 수, 소속 제품)만** 주고, 각 개념에 대해 "일반 사용자가 대신 쓸 법한 영어 단어(단일 unigram, 동사 제외)"를 최대 5개 생성하게 한다. 출력: `{"<synonym>": ["<concept>", …]}`. 프롬프트에 seed·hidden·Round 1 실패·현 alias·동사 인벤토리를 주지 않는다. 프롬프트 sha256과 결과 sha256을 기록.
+- **기계 검사·정규화**(`concept_lexicon_check.py`): (a) synonym은 `^[a-z]+$`, STOPWORDS·기능어(§7.1 목록)·동사 인벤토리 키·제품 힌트 키가 아니고, **카탈로그 어휘에 없는 단어**여야 한다(이미 있는 단어는 alias가 필요 없다); (b) 각 타깃은 개념 토큰 목록에 있어야 한다; (c) synonym 하나당 타깃 ≤ 2(모호성 상한); (d) `singular` 정규화 후 중복 제거; (e) 기존 `search_aliases.json` 키와 충돌하면 사전 항목 폐기. 위반 항목은 **삭제**(재요청 없음 — 인벤토리이므로 recall보다 결정성을 우선).
+- 병합(§5.2.3)은 `aliases`에 넣고 `alias_damping`(0.5)을 그대로 적용한다. 스코어러 변경 없음.
+- 크기 상한 없음(인벤토리). 단, 병합 후 `search_aliases.json`의 canonical sha256을 `round_freeze.json`에 `verb_inventory_sha256`과 함께 기록.
 
-### 7.2 B..C 추가 규칙
-- 추가 가능: `candidates[word].allowed_targets ⊇ 선택 타깃`인 direct alias `word → [targets…]`, 또는 `when_all`·`add`가 모두 (후보 단어 ∪ 그 단어의 allowed_targets) 안에 있는 조건 규칙.
-- 예산: 이번 라운드 추가분(alias + rule) ≤ 15, seed 1건당 1개(`notes.seed_query_id` 유일). notes: `origin: "round2"`, `seed_query_id`, `failure_classes ∋ "R6"`, `evidence`.
-- 전제: 그 seed가 **선택된 상수에서 실패 중**이어야 하고, 추가 후 통과해야 한다(`alias_change` false→true 로그).
-- 동사 alias 금지(동사는 §6). 감쇠 값 불변.
-- `tune_search_ranking.py --alias-change`가 후보 포함·예산·seed당 1개를 검사해 위반이면 로그를 쓰지 않고 exit 1.
+### 7.1 seed 유래 후보 목록 `alias_candidates.json` (T 동결)
+- 도구 `alias_candidates_tool.py --candidates`가 **결정적으로** 만든다(사전 병합 후):
+  1. seed 레코드마다 질의 unigram(`tokenize_unigrams` 규칙).
+  2. **정답 op 어휘** `expected_vocab(seed)` = 그 seed의 `expected_top1_any` op들의 operationId·path·tags·**summary** unigram(`singular` 적용) — 동사 인벤토리 키·기능어 제거.
+  3. 후보 = 질의 unigram 중 `expected_vocab(seed)`에 없고, 동사 인벤토리·기존 alias(사전 포함)·제품 힌트·기능어 어디에도 없는 토큰(**전역 카탈로그 출현 여부는 제외 기준이 아니다** — v1.1; 전역 출현 수는 `catalog_df`로 기록만).
+  4. 기능어(`FUNCTION_WORDS`, 최소화 v1.1): `{my, me, this, that, these, those, another, every, which, what, who, now, today, please, into, onto, brand, own, current, some, any, all, one, two, few, several, inside, up}` — 문법·지시 기능만. `dates, planning, entry, fresh, new, exist`는 후보에 남긴다(채택은 예산이 통제).
+  5. 식별자형 토큰(어떤 op의 operationId 소문자와 동일) 제외.
+  6. `allowed_targets(word)` = ∪ `expected_vocab(seed)` over the word's seeds. 비어 있으면 등록만.
+  7. 정렬·canonical sha256 → `round_freeze.json`.
+- 파일: `{"round": 2, "generated_from": {"bench_sha256", "aliases_sha256", "registry_fingerprint"}, "candidates": {"<word>": {"seed_ids": [...], "allowed_targets": [...], "catalog_df": n}}, "excluded": {"<word>": "<reason>"}}`.
 
-### 7.3 기존 alias
-Round 1 `rules[3]`(`{jql}→…`)과 phase2.5 항목은 grandfathered. 삭제·수정 금지.
+### 7.2 B..C 추가 규칙 (v1.1 강화)
+- **direct alias**: `word → [target]` — 정확히 1개 타깃, `word ∈ candidates`, `target ∈ allowed_targets(word)`.
+- **conditional rule**: `when_all = [word, ctx?]`(후보어 필수 + 문맥 토큰 최대 1개, 문맥 토큰은 해당 seed 질의의 unigram), `add = [target]` 정확히 1개, `target ∈ allowed_targets(word)`.
+- 예산: 추가분(alias + rule) ≤ 15, seed당 1개. notes: `origin: "round2"`, `candidate_word`(필수), `seed_query_id`, `failure_classes ∋ "R6"`, `evidence`.
+- 전제: 그 seed가 선택된 상수에서 실패 중이고 추가 후 통과(`alias_change` false→true).
+- 검증기 `validate_alias_change(before, after, candidates, budget)`(순수 함수)가 형태·후보·타깃·예산·seed당 1개·`candidate_word` 일치를 검사; 위반이면 로그 미기록, exit 1.
+- 동사 alias 금지. 감쇠 불변. 사전(§7.0)·phase2.5·round1 항목 수정·삭제 금지.
 
-## 8. 도구 일반화
+## 8. 도구 일반화와 production 변경
 
-- `round_seal.py --round N`: seal 키 `round{N}_seal`; `seal`은 bench에 `round{N}_seal`이 이미 있으면 거부; `unseal`은 같은 키로 검증. `round1_seal.py`는 삭제하고 테스트 import를 바꾼다.
-- `diag_search_queries.py`: `round_freeze.json`의 마지막 항목 `round`로 seal 키와 artifact 이름 결정; `--round N` 로 override 가능.
-- `tune_search_ranking.py`: 로그 파일 `search-tuning-round{N}.jsonl`, 라인에 `round`; `--alias-change` 검사(§7.2).
-- `evaluation_code_sha256`: 6개 파일(기존 4 + `round_seal.py`, `alias_candidates_tool.py`), 알고리즘 동일.
-- `round_freeze.json`: `[{"round": 1, "commit_T": "26005e4", "structure_sha256": "6b3e…"}, {"round": 2, "commit_T": …, "structure_sha256": …, "alias_candidates_sha256": …}]`.
+- `round_seal.py --round N`: seal 키 `round{N}_seal`; `seal`은 해당 키가 있으면 거부. `round1_seal.py` 삭제, 테스트 import 변경.
+- `diag_search_queries.py`: `round_freeze.json` 마지막 항목 또는 `--round N`으로 seal 키·artifact 이름 결정.
+- `tune_search_ranking.py`: 로그 `search-tuning-round{N}.jsonl`, 라인에 `round`; `--alias-change` 검증기(§7.2).
+- `alias_candidates_tool.py` 서브커맨드: `--concept-tokens`, `--verb-report`, `--feasibility`, `--candidates`, `--classify`(R5/R6를 bench에 기록, 결정적).
+- `concept_lexicon_check.py`: §7.0 검사·정규화; 결과 파일과 폐기 목록 출력.
+- `policy.py`(커밋 H, 유일한 production 변경): `_NOTE_ORIGINS` 튜플 → 정규식 `^(phase2\.5|round\d+|lexicon-r\d+)$`; `round\d+` 항목은 `seed_query_id`(`^s-\d{3}$`), `candidate_word`, R-class(`R4` 또는 `R6`) 필수; `lexicon-r\d+` 항목은 `seed_query_id: null`, `failure_classes: []`. 그 외 로더 로직 불변.
+- `evaluation_code_sha256`: 6개 파일(§5.7).
+- `round_freeze.json`: `[{"round": 1, "commit_T": "26005e4", "structure_sha256": …}, {"round": 2, "structure_sha256", "alias_candidates_sha256", "concept_lexicon_sha256", "verb_inventory_sha256"}]` (round 1 항목의 `commit_T`는 역사 기록으로 유지).
 
 ## 9. 진단 출력 추가
-`round2-final.json`에 Round 1 필드 전부 + `round`, `held_out_top3`(정보), `alias_sha256`, `alias_candidates_sha256`.
+`round2-final.json`: Round 1 필드 전부 + `round`, `held_out_top3`, `alias_sha256`, `alias_candidates_sha256`, `concept_lexicon_sha256`.
 
 ## 10. 테스트 전략
 
 ### 10.1 단위
-- 동사 인벤토리: `search_ranking.json`의 `verb_methods`가 스펙 §6 JSON 블록과 동일(스펙 파일 파싱); 메서드 의도 샘플: `set up a jira planning board` → allowed {POST, PUT}; `leave feedback on this jira ticket` → 의도 0 (`leave` 미등록, `feedback`은 동사 아님); `discard this uploaded ticket file` → DELETE; `browse pages` → GET; `revise`+`rewrite` 동시 → PUT|POST 교집합.
-- 후보 도구: 같은 입력 → 같은 출력(두 번 실행 diff 없음); 기능어·식별자·카탈로그 토큰 제외 각각 테스트; 타깃에서 동사 제거.
-- 튜닝 스크립트: `--alias-change`가 후보 밖 단어/타깃, 예산 초과, seed당 2개를 거부(순수 함수 `validate_alias_change(change, aliases_before, aliases_after, candidates, budget)` + 테스트).
-- 라운드 일반화: `round_seal.py --round 2`가 `round2_seal`을 쓰고 `round1_seal`을 건드리지 않음; diag가 round 2 artifact 이름을 쓰고 round 1 artifact 테스트가 여전히 통과.
+- 동사 인벤토리 == 스펙 §6 블록(스펙 파일 파싱); 샘플 의도: `set up a jira planning board` → {PUT, POST}; `leave feedback on this jira ticket` → {POST}; `discard this uploaded ticket file` → {DELETE}; `browse pages` → {GET}; `check access` → {GET, POST}; `revise`+`rewrite` → {PUT, POST}.
+- 실현성 검사: seed 39건 전부 (a) 또는 (b) 충족(테스트로 고정; 인벤토리 변경 시 깨짐).
+- 개념 사전 검사기: 규칙 (a)–(e) 각각 실패 케이스; 결정성(두 번 실행 동일).
+- 후보 도구: 결정성; **정답 op 어휘 기준** 제외(전역 출현 토큰 `workspace`가 후보로 남는 케이스를 고정); 기능어·식별자 제외; 타깃에 summary 포함, 동사 제거; R5/R6 분류 샘플.
+- 검증기 `validate_alias_change`: 타깃 2개 거부, 후보 밖 단어 거부, 문맥 토큰 2개 거부, 예산 초과 거부, seed당 2개 거부, `candidate_word` 불일치 거부.
+- `policy.py` notes-origin: `lexicon-r2`/`round2` 허용, `round9x` 형식 오류 거부, round2에 `candidate_word` 없으면 거부.
+- 라운드 일반화: `round_seal.py --round 2`가 `round1_seal`을 건드리지 않음; diag round 2 artifact 이름; Round 1 artifact 테스트 유지.
 
 ### 10.2 벤치마크 무결성 (`test_evaluator.py`)
-- `TestSealIntegrity`를 라운드 키 일반화(`round{N}_seal` for N in freeze list).
-- `alias_notes`: round2 항목이 §7.2 조건(후보 포함, 예산, seed당 1개, R6) 충족.
-- provenance: 동사 테이블은 검사 제외(인벤토리 근거); alias 단어는 seed 토큰 ∪ 카탈로그 토큰(기존) **그리고** round2 alias는 후보×타깃 안; 예외 목록은 `{epic}`(제품 힌트).
-- `round_freeze.json`: round 2 항목의 `structure_sha256` == 현재 파일, `alias_candidates_sha256` == 현재 파일.
-- 최종 artifact(round 2): Round 1과 같은 내부 일관성 검사.
+- `TestSealIntegrity` 라운드 키 일반화.
+- `alias_notes`: round2 항목 §7.2 전부; lexicon-r2 항목 형식.
+- provenance: 동사 테이블 검사 제외; alias 단어는 (seed 토큰 ∪ 카탈로그 토큰 ∪ 개념 사전 키) 안; round2 alias는 후보×타깃 안; 예외 `{epic}`.
+- `round_freeze.json` round 2: 4개 해시 == 현재 파일.
+- Round 1 불변: `round1-final.json`·`search-tuning-round1.jsonl` 파일 해시, `round1_seal` 객체 해시, readiness Round 1 섹션 텍스트 해시 == pre-work 상수.
+- 최종 artifact(round 2) 내부 일관성.
 
 ### 10.3 seed 회귀
-픽스처: r0 23/23·6/6 유지. 스냅샷: seed 39/39, regression 14/14(튜닝 로그 `adopted` 라인으로 검증, AC-06).
+픽스처 r0 23/23·6/6 유지. 스냅샷 seed 39/39, regression 14/14 — 튜닝 로그 adopted 라인(AC-06).
 
 ## 11. 상태 모델과 readiness
-Round 1 §11과 동일하되 Round 2 섹션. 게이트 통과 시 Discovery 축을 "충족(Round 2, 커밋 D sha)"으로 표시하고 Runtime stability 축은 별도임을 명시.
+Round 1 §11과 동일 + Round 2 섹션: 커밋 H/T/B/C/D sha, 스냅샷 fingerprint, 사전 생성 프롬프트/결과 sha, 폐기 항목 수, 동사 분포 보고서, 실현성 검사 결과, hidden 생성 프롬프트/결과 sha, 재요청 횟수, 결과 행, 상태. attestation에 §5.6 역할 분리 항목 추가.
 
 ## 12. Acceptance Criteria
 
 | ID | 기준 | 검증 |
 |---|---|---|
-| AC-01 | 95b8de0 < T < B < C < D; `search_aliases.json`·`search_ranking.json.constants` 변경 커밋은 B..C에만; `verb_methods`·`alias_candidates.json` 변경은 T에만 | git |
+| AC-01 | 95b8de0 < H < T < B < C < D; `search_aliases.json`(round2 항목)·`constants` 변경은 B..C에만; `verb_methods`·`alias_candidates.json`·사전 병합·`failure_classes` 변경은 T에만; `policy.py` 변경은 H에만 | git |
 | AC-02 | C..D 변경 파일 ⊆ {`search_queries.json`, `round2-final.json`, `phase3-readiness.md`} | git |
-| AC-03 | D의 평문 sha256 == `round2_seal`; D에 테스트 코드 변경 없음 | 테스트 + git |
+| AC-03 | D 평문 sha256 == `round2_seal`; D에 테스트 코드 변경 없음 | 테스트 + git |
 | AC-04 | gate 집합 origin ∈ {`held_out-r2`, `negative-r2`}, r0/r1 레코드 0개 | 테스트 |
-| AC-05 | `search.py`, `policy.py` diff vs 95b8de0 비어 있음(어휘 라운드) | git |
-| AC-06 | 스냅샷 seed 39/39, regression 14/14(adopted 로그 라인); 픽스처 r0 23/23·6/6 | 테스트 + 로그 |
+| AC-05 | `search.py` diff vs 95b8de0 비어 있음; `policy.py` diff는 notes-origin 규칙뿐 | git + 리뷰 |
+| AC-06 | 스냅샷 seed 39/39, regression 14/14(adopted 라인); 픽스처 r0 23/23·6/6 | 테스트 + 로그 |
 | AC-07 | §10.1 테스트 통과 | 테스트 |
-| AC-08 | `POLICY_VERSIONS["search"] == 3` 유지; `ranking_structure_sha256` == round 2 T 값 | 테스트 |
-| AC-09 | §4 불변 목록 diff vs 95b8de0 비어 있음; Round 1 artifact·로그·seal·readiness 섹션 불변 | git |
+| AC-08 | `POLICY_VERSIONS["search"] == 3`; `round_freeze` round 2 해시 4개 == 현재 파일 | 테스트 |
+| AC-09 | §4 불변 목록 diff 비어 있음; Round 1 artifact·로그·seal·readiness 섹션 해시 불변 | 테스트 + git |
 | AC-10 | `round2-final.json` provenance 필드 + `round`, `held_out_top3` | 테스트 |
-| AC-11 | 최종 artifact 정확히 하나, `git_commit`==C(컨트롤러 D 검사), D 이후 가변 파일 변경 커밋 없음 | git |
-| AC-12 | round2 alias/rule 전부 §7.2 조건·예산 충족; 동사 alias 없음 | 테스트 |
-| AC-13 | `alias_candidates.json` sha == freeze; 도구 재실행 결과와 동일 | 테스트 + 도구 |
-| AC-14 | 라운드 일반화 후 Round 1 artifact/seal 테스트가 여전히 통과 | 테스트 |
+| AC-11 | 최종 artifact 정확히 하나, `git_commit`==C(컨트롤러 D 검사), D 이후 가변 파일 변경 없음 | git |
+| AC-12 | round2 alias/rule 전부 §7.2(1 타깃, 후보 포함, 예산, seed당 1개, `candidate_word`) | 테스트 |
+| AC-13 | `alias_candidates.json`·`concept_lexicon` 병합분·인벤토리가 T 이후 불변; 도구 재실행 결과 동일 | 테스트 + 도구 |
+| AC-14 | 라운드 일반화 후 Round 1 테스트 통과 | 테스트 |
 | AC-15 | 튜닝 로그 round 2: adopted 정확히 하나, 상수 == 파일, baseline == freeze | 테스트 |
 | AC-16 | 전체 오프라인 테스트 통과, 새 의존성 없음 | unittest |
 
-Attestation(컨트롤러): 생성 프롬프트/결과 sha, 재요청 횟수, 1회 평가, 봉인 경로 미노출, 튜닝 로그 완전성, **동사 인벤토리와 후보 목록이 hidden set 생성 전에 커밋됐음(T < B)**.
+Attestation(컨트롤러): 사전·hidden 생성 프롬프트/결과 sha, 재요청 횟수, 1회 평가, 봉인 경로 미노출, 튜닝 로그 완전성, **인벤토리·사전·후보 목록이 hidden 생성 전에 커밋됨(T < B)**, **hidden을 본 주체가 B..C 선택에 관여하지 않음(worker 브리프 sha 첨부)**.
 
 ## 13. 위험과 완화
 
-- **인벤토리 과소/과다**: hidden set의 동사가 인벤토리에 없으면 R5 재발. 완화: 인벤토리는 100개 안팎의 일반 API 동사. 반대로 다의어(`check`, `open`, `log`)가 잘못된 메서드를 가리킬 수 있다 → 교집합 규칙과 어휘 점수가 상쇄; readiness에 기록.
-- **굴절형**: `rewrites`, `showing`은 매칭되지 않음. 완화: 생성 규칙이 명령형을 유도; Round 3 후보(동사 어간화).
-- **후보 목록이 seed에 과적합**: 후보는 seed 토큰에서만 나오므로 hidden set의 새 개념어(예 `epic link`)는 못 잇는다. 이것이 Round 2가 측정하려는 일반화다; 실패하면 Round 3에서 "개념 사전 일반 인벤토리" 결정으로 넘어간다.
-- **negative 약화**: 생성 규칙 추가로 negative가 더 어려워져 0/8 요구가 더 엄격해진다. 게이트는 유지한다.
-- **컨트롤러 누수**: Round 1과 동일한 attestation. Round 1 hidden 질의는 이제 seed이므로 설계·튜닝에 쓰는 것이 정당하다.
+- **개념 사전 품질**: clean context가 엉뚱한 동의어를 만들 수 있다(예 `note→comment`는 좋지만 `card→issue`는 논란). 완화: 타깃 ≤ 2, 카탈로그 어휘와 겹치는 단어 금지, alias 감쇠 0.5로 영향 제한. 오염 위험은 없음(hidden·seed 미제공).
+- **인벤토리 과소/과다**: §6 다의어 원칙과 카탈로그 분포 보고서로 완화.
+- **굴절형**: Round 3 후보.
+- **후보 목록 seed 과적합**: 후보는 seed 유래지만 사전이 일반 커버리지를 맡는다. hidden의 새 동의어는 사전이 못 덮으면 실패 — 그것이 측정 대상.
+- **negative 엄격화**: 규칙 추가로 0/8이 더 어려워짐. 게이트 유지.
+- **역할 분리의 실무적 한계**: 컨트롤러(이 세션)는 봉인·검토·커밋을 수행하고 평문을 본다. 완화: B..C의 모든 선택은 결정적 스크립트(상수)와 worker의 seed 분석(alias)으로만 이루어지고, 컨트롤러 브리프는 절차만 담는다(sha로 고정).
 
 ## 14. 한 줄 정의
 
-> 동사는 인벤토리로, 개념어는 사전 등록된 후보로, 둘 다 봉인 전에 잠그고, 같은 절차로 한 번만 잰다.
+> 동사와 개념 동의어는 인벤토리로, seed가 드러낸 단절은 사전 등록된 후보로, 셋 다 봉인 전에 잠그고, 본 사람은 고르지 않으며, 같은 절차로 한 번만 잰다.
