@@ -10,21 +10,22 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-02-search-quality-round2-design.md` v1.10 (external review: 10 rounds, final verdict "구현 계획으로 진행 가능"). The spec is binding; this plan is its argument.
 
-**Plan version:** v4 (after external plan reviews 1–3 — see "Plan revision notes" at the end).
+**Plan version:** v5 (after external plan reviews 1–4 — see "Plan revision notes" at the end).
 
 ## Global Constraints
 
 - Canonical test command: `python -m unittest discover -s tests -t .` (405 OK at `57eb1e5`; omitting `-t .` makes `tests/mcp` shadow the SDK and gives spurious ImportErrors).
 - Baseline commit for all "unchanged" checks: `95b8de0` (pre-work merge). Immutable from now to the terminal commit (spec §4, AC-05/AC-09): Round 1 spec §4 list, `tools/atlassian_docs/intelligence/search.py`, `tools/atlassian_docs/intelligence/data/operation_quirks.json`, `tests/benchmarks/round1-final.json`, `tests/benchmarks/search-tuning-round1.jsonl`, the `round1_seal` object inside the bench, and the Round 1 section of `docs/phase3-readiness.md` (from the line `## Search Quality Round 1 — decision record` up to, not including, the line `### Round 2 pre-work`).
-- `policy.py` may change only in the housekeeping commit(s) H/H′ (Task 1) and only in `_check_alias_notes`. After the last H′ every file in `TOOLING_FILES` (Task 3) is immutable until the terminal commit (D or F).
+- `policy.py` may change only in the housekeeping commit(s) H/H′ (Task 1) and only in `_check_alias_notes`. After the last H′ every file in `TOOLING_FILES` (Task 3) is immutable until the terminal commit (D, F or X).
 - Commit naming: Tasks 1–7 produce development commits H1..H7; **`housekeeping_commit` = H7** (the last of them, or the last H′ if a pre-T defect is fixed). AC-05's immutability window starts there. For AC-01a, `95b8de0..housekeeping_commit` is the *housekeeping range* in which `policy.py` and the tooling may change; the AC verifier treats that range as a single H.
-- Commit order (spec §5, v1.11): H1..H7 (tooling, Tasks 1–7) → S (source snapshot) → pre-T dependency order → T (freeze) → generation (stateless) → B (seal, then user encrypts the plaintext) → tuning (frozen worker brief, one-way pipeline) → C → D; or B → F on tuning failure; or B → X when a perfect tuning run is rejected because the canonical full suite failed (abort: Round 2 consumed, next attempt is Round 3). Controller-only steps are marked **[controller]**; user-only steps **[user]**.
+- Commit order (spec §5, v1.12): H1..H7 (tooling, Tasks 1–7) → S (source snapshot) → pre-T dependency order → T (freeze) → generation (stateless) → B (seal, then user encrypts the plaintext) → tuning (frozen worker brief, one-way pipeline) → (C → D | F | X). **terminal commit := D | F | X** (X = abort: a perfect tuning run was rejected because the canonical full suite failed; Round 2 consumed, next attempt is Round 3). Every "until the terminal commit" rule (tooling immutability, `.enc` checkpoints, readiness rendering) applies to all three. Controller-only steps are marked **[controller]**; user-only steps **[user]**.
 - Sealed plaintext path `~/.atlassian_api_updater/sealed/round2-sealed.json` is never given to an implementer or a tuning worker. After B only `round2-sealed.json.enc` exists; no agent knows the passphrase.
 - Source snapshot S: `~/.atlassian_api_updater/round2-cache/` (`$ATLASSIAN_DOCS_ROUND2_CACHE`), created once after H; every catalog-dependent step reads only S.
 - `POLICY_VERSIONS["search"]` stays 3. `search_ranking.json` tables other than `verb_methods` never change; `constants` change only inside the tuning run; `search_aliases.json` changes only at T (lexicon merge) and inside the tuning run (round2 entries).
 - Every commit message ends with `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`.
 - Chunked writes: no single tool call larger than ~60 lines.
-- After commit B the repository working tree must be clean when the worker starts: every controller record (checkpoints, attempt ledger, shas) accumulates in `~/.atlassian_api_updater/round2-work/controller-events.jsonl` (outside the repo) and is rendered into `docs/phase3-readiness.md` only in the terminal commit (D or F).
+- After commit B the repository working tree must be clean when the worker starts: every controller record (checkpoints, attempt ledger, shas) accumulates in `~/.atlassian_api_updater/round2-work/controller-events.jsonl` (outside the repo) and is rendered into `docs/phase3-readiness.md` only in the terminal commit (D, F or X).
+- Branch-aware test ACs (spec v1.12): the full suite must be green at T and at B (AC-23, common); after tuning it must be green on the success and tuning-failure branches (AC-07/14/16) while the abort branch preserves the failing test names/output as AC-22 evidence instead.
 
 ## Review Focus
 
@@ -283,10 +284,15 @@ class TestReplacementHelpers(unittest.TestCase):
         self.assertEqual(merged["negative"], plain["negative"])
         manifest = rs.coverage_manifest(merged, {r["id"]: 1 for s in ("held_out", "negative") for r in merged[s]})
         self.assertEqual(len(manifest), 24); self.assertEqual(manifest["h-003"]["record_sha256"], rs.canonical_sha256(new[0]))
-        attempts = [{"attempt_no": 1, "stage": "review", "status": "valid"}]
+        ids = [r["id"] for s in ("held_out", "negative") for r in merged[s]]
+        shas = {r["id"]: rs.canonical_sha256(r) for s in ("held_out", "negative") for r in merged[s]}
+        attempts = [{"attempt_no": 1, "stage": "review", "status": "valid", "reviewed_record_shas": shas, "accepted_ids": ids}]
         self.assertEqual(rs.verify_coverage(manifest, merged, attempts), [])
-        self.assertTrue(rs.verify_coverage(manifest, merged, [{"attempt_no": 1, "stage": "review", "status": "invalid"}]))
-        self.assertTrue(rs.verify_coverage(manifest, plain, attempts))                                     # stale sha for h-003
+        self.assertTrue(rs.verify_coverage(manifest, merged, [{**attempts[0], "status": "invalid"}]))
+        self.assertTrue(rs.verify_coverage(manifest, merged, [{**attempts[0], "accepted_ids": [i for i in ids if i != "h-003"]}]))   # reviewed but rejected
+        old = {**shas, "h-003": rs.canonical_sha256(plain["held_out"][2])}
+        self.assertTrue(rs.verify_coverage(manifest, merged, [{**attempts[0], "reviewed_record_shas": old}]))                  # reviewed the OLD h-003
+        self.assertTrue(rs.verify_coverage(manifest, plain, attempts))                                                        # stale manifest sha
 ```
 
 Run: `python -m unittest tests.benchmarks.test_round_seal -v` → Expected: FAIL (`section_origin`, `phrase_tokens`, `validate_reviewer_output`, `verify_freeze` missing).
@@ -375,16 +381,23 @@ def merge_replacements(plain, replacements) -> dict:
 
 
 def verify_coverage(manifest, plain, attempts) -> list:
-    """Every final record must be covered by an accepting review attempt that exists in the ledger with status valid."""
-    valid = {a["attempt_no"] for a in attempts if a.get("stage") == "review" and a.get("status") == "valid"}
+    """Every final record must be covered by a valid review attempt whose input contained exactly this record
+    (same canonical sha) and whose output accepted its id. Review attempts in the ledger carry
+    reviewed_record_shas {id: sha} and accepted_ids [...] (both derived from the attempt's input/output files)."""
+    by_no = {a["attempt_no"]: a for a in attempts if a.get("stage") == "review" and a.get("status") == "valid"}
     out = []
     for sect, _ in HIDDEN:
         for r in plain[sect]:
-            m = manifest.get(r["id"])
-            if m is None or m["record_sha256"] != canonical_sha256(r):
-                out.append(f"{r['id']}: manifest missing or stale")
-            elif m["accepted_review_attempt"] not in valid:
+            m, sha = manifest.get(r["id"]), canonical_sha256(r)
+            if m is None or m["record_sha256"] != sha:
+                out.append(f"{r['id']}: manifest missing or stale"); continue
+            a = by_no.get(m["accepted_review_attempt"])
+            if a is None:
                 out.append(f"{r['id']}: accepting review attempt {m['accepted_review_attempt']} is not a valid review attempt")
+            elif a.get("reviewed_record_shas", {}).get(r["id"]) != sha:
+                out.append(f"{r['id']}: review attempt {a['attempt_no']} did not review this exact record")
+            elif r["id"] not in (a.get("accepted_ids") or []):
+                out.append(f"{r['id']}: review attempt {a['attempt_no']} did not accept this id")
     return out
 
 
@@ -687,7 +700,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 **Interfaces:**
 - Consumes: `round_seal.load_catalogs_from_cache(cache_dir, round)`, `round_seal._write_bench`, `evaluator.canonical_sha256/STOPWORDS`, `search.tokenize_unigrams/singular` (read-only import of production code, like `round_seal`).
 - Produces (pure, unit-tested; `classify(bench, internal, ranking_raw, aliases_raw)` uses the independent R6 definition): `norm_tokens(text) -> tuple` (unigrams → `singular`, order kept, deduped); `FUNCTION_WORDS`; `op_vocab(op) -> frozenset` (operationId + literal path segments + tags + summary, normalized); `catalog_vocab(internal) -> frozenset`; `catalog_df(internal) -> dict`; `concept_tokens(internal, noise) -> dict token -> {"count", "sources"}`; `verb_report(internal, verb_methods) -> dict verb -> {"methods": {M: n}, "outside": [...], "review": bool}`; `allowed_methods(query, verb_methods) -> None | frozenset`; `method_safety(bench, verb_methods) -> list rows`; `expected_vocab(rec, by_key, verb_methods, noise, hints) -> frozenset`; `candidates(bench, internal, ranking_raw, aliases_raw) -> dict` (`candidates`, `excluded`); `classify(bench, verb_methods, cands) -> dict id -> sorted classes`; `lexicon_gate(lexicon_doc, bench, by_key, ranking_raw) -> (lexicon_doc, rejected_now)`; `provenance(fp, shas, inputs) -> dict`.
-- CLI (every command `--cache-dir S`, `--round N` default 2): `concept-tokens --out`, `verb-report [--out]`, `method-safety --out`, `lexicon-gate --lexicon FILE` (rewrites the file), `candidates --out`, `classify` (rewrites the bench seed `failure_classes`).
+- CLI (every command `--cache-dir S`, `--round N` default 2, `--bench FILE` default `tests/benchmarks/search_queries.json`): `concept-tokens --out`, `verb-report [--out]`, `method-safety --out`, `lexicon-gate --lexicon FILE` (rewrites the file), `candidates --out` (its provenance `inputs.bench` is the sha of the `--bench` file it read), `classify` (rewrites the bench seed `failure_classes` of the `--bench` file).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -997,7 +1010,7 @@ def _write(path, obj):
 
 def _load(args):
     _, internal, fp, shas = rs.load_catalogs_from_cache(args.cache_dir, args.round)
-    ranking, aliases, bench = _read(DATA / "search_ranking.json"), _read(DATA / "search_aliases.json"), _read(BENCH_PATH)
+    ranking, aliases, bench = _read(DATA / "search_ranking.json"), _read(DATA / "search_aliases.json"), _read(args.bench)
     inputs = {"ranking": canonical_sha256(ranking), "aliases": canonical_sha256(aliases), "bench": canonical_sha256(bench),
               "verb_inventory": canonical_sha256(ranking["verb_methods"])}
     return internal, fp, shas, ranking, aliases, bench, inputs
@@ -1056,7 +1069,7 @@ def cmd_classify(args):
     for rec in bench["seed"]:
         keep = [c for c in rec["failure_classes"] if c not in ("R5", "R6")]
         rec["failure_classes"] = keep + cls[rec["id"]]
-    rs._write_bench(BENCH_PATH, bench)
+    rs._write_bench(pathlib.Path(args.bench), bench)
     print(json.dumps({k: v for k, v in cls.items() if v}, sort_keys=True))
     return 0
 
@@ -1068,6 +1081,7 @@ def main(argv=None):
                             ("method-safety", cmd_method_safety, ("out",)), ("lexicon-gate", cmd_lexicon_gate, ("lexicon",)),
                             ("candidates", cmd_candidates, ("out",)), ("classify", cmd_classify, ())):
         p = sub.add_parser(name); p.add_argument("--cache-dir", required=True); p.add_argument("--round", type=int, default=2)
+        p.add_argument("--bench", default=str(BENCH_PATH))
         for e in extra:
             p.add_argument(f"--{e.rstrip('?')}", required=not e.endswith("?"))
         p.set_defaults(fn=fn)
@@ -2067,7 +2081,7 @@ class TestRound2FinalArtifact(unittest.TestCase):
 
 - [ ] **Step 3: Docs**
 
-`README.md` Round section: one paragraph "Round 2" pointing to the spec, the tools (`round_seal.py --round 2` incl. `freeze`/`verify-freeze`, `alias_candidates_tool.py`, `concept_lexicon_check.py prepare/finalize/merge`, the one-way `tune_search_ranking.py` with `--adopt`/`--verify`), the snapshot env var `ATLASSIAN_DOCS_ROUND2_CACHE`, and the terminal states D/F. `AGENTS.md`: one paragraph that the files in `evaluator.TOOLING_FILES` are immutable from `housekeeping_commit` to the terminal commit.
+`README.md` Round section: one paragraph "Round 2" pointing to the spec, the tools (`round_seal.py --round 2` incl. `freeze`/`verify-freeze`, `alias_candidates_tool.py`, `concept_lexicon_check.py prepare/finalize/merge`, the one-way `tune_search_ranking.py` with `--adopt`/`--verify`), the snapshot env var `ATLASSIAN_DOCS_ROUND2_CACHE`, and the terminal states D/F/X. `AGENTS.md`: one paragraph that the files in `evaluator.TOOLING_FILES` are immutable from `housekeeping_commit` to the terminal commit (D, F or X).
 
 - [ ] **Step 4: Full suite, commit**
 
@@ -2218,10 +2232,14 @@ Ledger kept/rejected counts, gate rejections, merge skips.
 - [ ] **Step 1: Candidates and classification**
 
 ```bash
-python tests/benchmarks/alias_candidates_tool.py candidates --cache-dir ~/.atlassian_api_updater/round2-cache --out tools/atlassian_docs/intelligence/data/alias_candidates.json
-python tests/benchmarks/alias_candidates_tool.py classify   --cache-dir ~/.atlassian_api_updater/round2-cache
+W=~/.atlassian_api_updater/round2-work; S=~/.atlassian_api_updater/round2-cache
+cp tests/benchmarks/search_queries.json $W/bench-preclassify.json      # the exact bench the candidates were generated from
+python tests/benchmarks/alias_candidates_tool.py candidates --cache-dir $S --bench $W/bench-preclassify.json --out tools/atlassian_docs/intelligence/data/alias_candidates.json
+python tests/benchmarks/alias_candidates_tool.py classify   --cache-dir $S          # rewrites the repo bench (R5/R6)
 python -m unittest discover -s tests -t .
 ```
+
+`alias_candidates.json.generated_from.inputs.bench` equals the sha of `bench-preclassify.json` (ledger it as `preclassify_bench_sha256`); the classified bench is a different input phase and is compared separately in Step 4b.
 
 - [ ] **Step 2: Worker brief (frozen text)**
 
@@ -2282,7 +2300,8 @@ Rules checked by a program (a violation is sent back to you by rule id):
 - reuse (checker-only, you cannot see the existing benchmark): queries that repeat an existing benchmark query or its word
   set are rejected; if that happens you will be asked for a replacement with rule id "reuse".
 negative: the query must have NO correct operation in the catalog; forbidden_top1 is the tempting wrong operation.
-Replacement contract: if a later message consists only of lines "record <id> rejected: <rule-id>", respond ONLY with a JSON
+Replacement contract: if a later message consists only of lines "record <id> rejected: <rule-id>" (one rule id per record, chosen by the
+fixed priority schema > catalog > words > operationId > summary/tags > negative-phrase > reuse), respond ONLY with a JSON
 array containing exactly one replacement record for each listed id, in the same record schema and with the same id.
 Do not repeat or modify any other record. If the message says "distribution rejected", it lists all 16 held_out ids:
 return 16 replacement held_out records that satisfy the distribution rule.
@@ -2340,7 +2359,7 @@ j = lambda p: json.loads(pathlib.Path(p).read_text(encoding="utf-8"))
 assert ev.canonical_sha256(j(tmp / "lexicon.json")) == ev.canonical_sha256(j(D / "concept_lexicon.json")), "lexicon replay differs"
 assert ev.lexicon_aliases_sha256(j(tmp / "aliases.json"), 2) == ev.lexicon_aliases_sha256(j(D / "search_aliases.json"), 2), "merge replay differs"
 # 2. candidates + classification from the committed inputs
-run("python", "tests/benchmarks/alias_candidates_tool.py", "candidates", "--cache-dir", str(S), "--out", str(tmp / "cands.json"))
+run("python", "tests/benchmarks/alias_candidates_tool.py", "candidates", "--cache-dir", str(S), "--bench", str(W / "bench-preclassify.json"), "--out", str(tmp / "cands.json"))
 assert ev.canonical_sha256(j(tmp / "cands.json")) == ev.canonical_sha256(j(D / "alias_candidates.json")), "candidates replay differs"
 _, internal, _, _ = __import__("tests.benchmarks.round_seal", fromlist=["x"]).load_catalogs_from_cache(S, 2)
 bench, ranking, aliases = j("tests/benchmarks/search_queries.json"), j(D / "search_ranking.json"), j(D / "search_aliases.json")
@@ -2373,7 +2392,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 ### Task 11: **[controller]** Hidden-set generation, machine check, stateless review, commit B, encryption
 
-Evidence for everything in this task goes to `~/.atlassian_api_updater/round2-work/controller-events.jsonl` and the **attempt ledger** `~/.atlassian_api_updater/round2-work/attempts.jsonl`: one line per model call `{"attempt_no", "stage": "generation"|"replacement"|"review", "input_sha256", "output_sha256", "status": "valid"|"parse_error"|"invalid"|"transport_error", "reason_code"}`. Plaintext never enters the ledger — hashes only. The repo working tree stays clean until commit B.
+Evidence for everything in this task goes to `~/.atlassian_api_updater/round2-work/controller-events.jsonl` and the **attempt ledger** `~/.atlassian_api_updater/round2-work/attempts.jsonl`: one line per model call `{"attempt_no", "stage": "generation"|"replacement"|"review", "input_sha256", "output_sha256", "status": "valid"|"parse_error"|"invalid"|"transport_error", "reason_code"}`; a valid `review` attempt additionally carries `reviewed_record_shas` (`{id: canonical sha}` of the records in its input) and `accepted_ids` (ids with `accept: true` in its output) so `verify_coverage` can link each final record to the attempt that reviewed that exact record. Plaintext never enters the ledger — hashes only. The repo working tree stays clean until commit B.
 
 - [ ] **Step 1: Materialize the exact generation input and generate**
 
@@ -2399,7 +2418,7 @@ python tests/benchmarks/round_seal.py check --round 2 --plain ~/.atlassian_api_u
   --bench tests/benchmarks/search_queries.json --internal-catalog ~/.atlassian_api_updater/round2-work/round2-internal-catalog.json
 ```
 
-On violations: ONE fixed-format re-request in the same chat — lines of the form `record h-00N rejected: <rule id>` (rule ids: `words`, `operationId`, `summary/tags`, `reuse`, `negative-phrase`, `schema`, `catalog`), nothing else. A `distribution` violation is not attributable to one record: the deterministic rule is to send `distribution rejected` followed by all 16 held_out ids, so the whole held_out section is replaced. The response must pass `validate_replacement_output(obj, requested_ids)` (a JSON array, exactly those ids — the contract is inside the frozen prompt), is merged with `merge_replacements`, re-checked, and later reviewed. Count re-requests.
+On violations: ONE fixed-format re-request in the same chat — lines of the form `record h-00N rejected: <rule id>`, nothing else. When a record violates several rules, exactly one rule id is sent, chosen by the fixed priority `schema > catalog > words > operationId > summary/tags > negative-phrase > reuse` (first match); the controller never chooses. A `distribution` violation is not attributable to one record: the deterministic rule is to send `distribution rejected` followed by all 16 held_out ids, so the whole held_out section is replaced. The response must pass `validate_replacement_output(obj, requested_ids)` (a JSON array, exactly those ids — the contract is inside the frozen prompt), is merged with `merge_replacements`, re-checked, and later reviewed. Count re-requests.
 
 - [ ] **Step 3: Semantic review (stateless, validated output)**
 
@@ -2536,13 +2555,13 @@ Append to `docs/phase3-readiness.md` after the Round 2 pre-work subsection (neve
 
 ### Task 16: **[controller]** Post-terminal provenance review and finishing
 
-- Record the terminal commit sha (D or F) in the ledger. Dispatch a reviewer (most capable model) limited to provenance: AC table of spec §12 row by row against git history, ledgers and artifacts; its report (with the terminal sha) is saved as `~/.atlassian_api_updater/round2-work/provenance-report.md` and summarized in memory; no code changes to `TOOLING_FILES`.
+- Record the terminal commit sha (D, F or X) in the ledger. Dispatch a reviewer (most capable model) limited to provenance: AC table of spec §12 row by row against git history, ledgers and artifacts; its report (with the terminal sha) is saved as `~/.atlassian_api_updater/round2-work/provenance-report.md` and summarized in memory; no code changes to `TOOLING_FILES`.
 - Update memory: `search-quality-round1-status.md` → Round 2 outcome; MEMORY.md index.
 - Use `superpowers:finishing-a-development-branch` (the user chooses merge/push).
 
 ## Self-review notes
 
-- Spec coverage: §4 files → Tasks 2–5, 10; §5.1 (H, S, order) → Tasks 1–8; §5.2 → Tasks 8–10; §5.3 → Tasks 2 (negative phrase rule, reviewer validator), 9, 11; §5.4 → Task 11; §5.5/§7.2 → Task 6, 12; §5.6 → Task 12 (predefined replies only); §5.7 → Tasks 12–14 (verify-freeze checkpoints); §6 → Task 8 (+ parity test in Task 10); §7.0 → Tasks 5, 9 (review before cap, validated review, exact-input hashes); §7.1 → Task 4; §8 → Tasks 1–3, 7; §9 → Task 7 (final fields); §10 → each task's tests; §11 → Task 15; §12 AC-01a/b/c (git, Tasks 10–14), AC-02/03 (Task 14), AC-04 (seal checkpoint, Task 2), AC-05 (Task 3 tooling hash + git), AC-06a/b, AC-07, AC-08 (Task 3), AC-09 (Task 3 invariants), AC-10/11 (Tasks 7, 14), AC-12 (Task 6 validator), AC-13 (Tasks 3/4 provenance), AC-14 (Task 2), AC-15a/b, AC-20a/b (Task 6 log test + events + mock-order test), AC-16, AC-17 (Task 1), AC-18a-B/D/F, AC-18b (Tasks 11, 13, 14), AC-19 (Tasks 3, 6 `--verify`, 11 attempt ledger, 12), AC-21 (Task 13).
+- Spec coverage: §4 files → Tasks 2–5, 10; §5.1 (H, S, order) → Tasks 1–8; §5.2 → Tasks 8–10; §5.3 → Tasks 2 (negative phrase rule, reviewer validator), 9, 11; §5.4 → Task 11; §5.5/§7.2 → Task 6, 12; §5.6 → Task 12 (predefined replies only); §5.7 → Tasks 12–14 (verify-freeze checkpoints); §6 → Task 8 (+ parity test in Task 10); §7.0 → Tasks 5, 9 (review before cap, validated review, exact-input hashes); §7.1 → Task 4; §8 → Tasks 1–3, 7; §9 → Task 7 (final fields); §10 → each task's tests; §11 → Task 15; §12 AC-01a/b/c (git, Tasks 10–14), AC-02/03 (Task 14), AC-04 (seal checkpoint, Task 2), AC-05 (Task 3 tooling hash + git), AC-06a/b, AC-07, AC-08 (Task 3), AC-09 (Task 3 invariants), AC-10/11 (Tasks 7, 14), AC-12 (Task 6 validator), AC-13 (Tasks 3/4 provenance), AC-14 (Task 2), AC-15a/b, AC-20a/b (Task 6 log test + events + mock-order test), AC-16, AC-17 (Task 1), AC-18a-B/D/F/X, AC-18b (Tasks 11, 13, 14), AC-19 (Tasks 3, 6 `--verify`, 11 attempt ledger, 12), AC-21 (Task 13 F), AC-22 + AC-01d (Task 13 X), AC-23 pre-B suite (Tasks 10, 11: the suite is run before T and before B and the result ledgered).
 - Controller ruling: the spec's optional `--from-baseline` restore is not implemented; a dirty round state is refused and restored by `git checkout <B> -- <files>` (spec §5.5.6 allows "거부(기본)").
 - The §6 spec-parity test is added at T (Task 10) because the inventory is finalized only after method-safety; `tests/intelligence/test_search.py` is not in `TOOLING_FILES`.
 
@@ -2553,3 +2572,5 @@ P0 closed: (1) Round 2 negative phrase machine rule + tests (Task 2); (2) R6 def
 v3 (after external plan review 2) — P0: (1) AC-17 pins the legacy subset (phase2.5 + round1) instead of the whole file, so T's lexicon merge does not break it (Task 1); (2) negative path fixture `assignee of this` with a phrase-equality assertion (Task 2); (3) inventory fixed-point loop: any change → verb-report + method-safety rerun, finalize only when unchanged and 0 violations (Task 8); (4) `tests/benchmarks/round2-method-safety.json` committed at T with provenance + guarded test (Tasks 8, 10); (5) `--reject RUN_ID --reason` pending→rejected transition restoring the B policy; rejected = round abort, neither C/D nor F (Tasks 6, 10 brief, 13); (6) reviewer catalog as JSON lines with the fields the prompt names, no truncation (Tasks 10, 11); (7) whole-branch semantic review moved to right after H7, before S; after B only hash/provenance checks (Tasks 7, 13); (8) terminal commit written as `terminal_commit: self`, its sha recorded post-terminal in the ledger and provenance report (Tasks 15, 16). P1: validator checks top-level immutables and `--verify` compares the stripped file with the B baseline (Task 6); guarded `TestRound2FinalArtifact` (Task 7); `validate_replacement_output` / `merge_replacements` / coverage manifest (Tasks 2, 11); `held_out_top3` derived from the same ranked lists (Task 7); `candidates(..., round)` (Task 4); housekeeping range `95b8de0..housekeeping_commit` for AC-01a (constraints).
 
 v4 (after external plan review 3) — P0: (1) negative-phrase tests use a summary-only op `listBoards`/"Show all boards" so Round 1 = 0 violations and Round 2 = exactly the new rule; `phrase_tokens` expectations match the declared normalization (Task 2); (2) `log_core` hash projection shared by `_finish` and the integrity test, `reject_reason` outside the hash (Task 6); (3) rejected run → abort terminal commit X (spec v1.11 AC-22), Round 2 consumed, next attempt Round 3 (Tasks 13, 15, constraints); (4) AC-13 deterministic replay checkpoint before T: lexicon prepare/finalize/gate/merge, candidates and R5/R6 regenerated and compared (Task 10 Step 4b); (5) replacement contract and the distribution-rejection batch rule inside the frozen generation prompt; `validate_replacement_output` applies to that contract (Tasks 10, 11). P1: `verify_coverage` links the manifest to valid review attempts (Tasks 2, 11); operationId rule wording matches the checker tokenizer (Task 10).
+
+v5 (after external plan review 4) — P0: (1) `candidates --bench FILE`; the pre-classification bench is pinned as `round2-work/bench-preclassify.json` and the AC-13 replay regenerates candidates from it, classification compared separately (Tasks 4, 10); (2) spec v1.12: AC-07/AC-14/AC-16 apply to success + tuning-failure only, new common AC-23 (full suite green at T and B), AC-22 keeps the failing test output as evidence (constraints, coverage map); (3) X promoted to a full terminal branch in spec and plan (`terminal commit := D | F | X`, AC-01d, AC-18a-X row, AC-05/AC-18b/attestation wording, Task 16). P1: `verify_coverage` checks the attempt's `reviewed_record_shas` and `accepted_ids` (Tasks 2, 11); fixed rejection-rule priority in the frozen prompt and Task 11; coverage map lists AC-22/AC-18a-X/AC-01d/AC-23; Task 16 records D/F/X.

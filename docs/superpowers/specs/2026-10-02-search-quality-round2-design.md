@@ -1,6 +1,6 @@
 # Search Quality Round 2 — Technical Specification
 
-**문서 버전:** v1.11 (v1.10 = 외부 검수 10회, 최종 판정 "구현 계획으로 진행 가능"; v1.11 = 구현 계획 검수 중 추가된 abort 분기)
+**문서 버전:** v1.12 (v1.10 = 외부 검수 10회, 최종 판정 "구현 계획으로 진행 가능"; v1.11/v1.12 = 구현 계획 검수 중 추가·정합화된 abort 분기)
 **기준일:** 2026-10-02
 **선행 구현:** Search Quality Round 1 (spec v1.4, 게이트 실패: held_out 4/16, negative 5/8) + Round 2 pre-work (`main` 95b8de0: 관찰 집합 강등, 라운드 비의존 테스트, 로더 보정). 오프라인 테스트 405개.
 **목적:** Round 1 절차(A→T→B→C→D)를 **어휘만 바꿔** 반복하고, 봉인된 새 held_out 16 / negative 8에서 Discovery 게이트(≥ 15/16, 0/8)를 충족한다.
@@ -45,6 +45,7 @@ R1–R4 정의는 Round 1 그대로.
 - 2026-10-02 외부 검수 7차(v1.6→v1.7): pre-T 작업을 **의존 순서**로 고정(동사 인벤토리 → method-safety → 필요 시 수정·재실행 → `verb_inventory_sha256` **확정** → 개념 토큰 → 사전 생성·검사·의미 검토 → seed 게이트 → 후보 → 브리프/프롬프트 → T; 사전 검사의 "동사 키 아님" 규칙은 확정된 인벤토리 기준); **Round 2 도구 코드 전부를 H에서 완성하고 `tooling_code_sha256`으로 T에 동결**, T..D 동안 변경 금지, C는 T 동결값 재확인 마커(`evaluation_code_sha256 == tooling 부분집합 해시`); P1: 사전 생성에도 first-valid 수명주기, §4 예시에 `generated_from`, S 무결성 체크포인트(B..C 시작·D 직전), 튜닝 실패 시 의미 고정(adopted 0, C/D 생략, 봉인 유지).
 - 2026-10-02 외부 검수 8차(v1.7→v1.8): §5.1의 stale 순서 문장 제거(의존 순서가 유일한 권위), T의 `verb_methods`는 확정 인벤토리; **튜닝 실패 후 hidden 재사용 규칙 폐기**(컨트롤러·검토자가 B 전에 평문을 봤으므로 다음 라운드에 재사용 불가 — 폐기하고 새로 생성); **AC를 공통 / 성공 분기 / 튜닝 실패 분기로 분리**(튜닝 실패도 검증 가능한 종료 상태); P1: 무결성 테스트 파일도 T..D 불변 목록에, `evaluation_code_sha256_at_T`를 `round_freeze`에 저장해 C는 단순 동등 검사, H′ 발생 시 최종 housekeeping 커밋을 readiness에 하나로 기록.
 - 2026-10-02 외부 검수 9차(v1.8→v1.9): **AC 전면 재작성** — 모든 행이 분기표 없이 단독으로 참/거짓 판정되도록 분할(AC-01a/b, AC-05 "종료 커밋까지", AC-06a/b, AC-15a/b, AC-18a-B/18a-D, AC-20a/b); **튜닝 실패 종료 커밋 F** 정의(H → T → B → F; whitelist = 튜닝 로그 + readiness; 실패한 상수·alias는 정책 파일에 절대 적용되지 않음 — B 상태 유지); P1: H′ 후 pre-T artifact를 의존 DAG에 따라 재생성(S는 fingerprint 동일 시 재사용), §5.2 item 2를 "결과 확인"으로, §11 상태 모델에 실패 분기 필드 null/not_applicable.
+- 2026-10-02 구현 계획 검수 4차 반영(v1.11→v1.12): abort 분기를 완전한 종료 분기로 승격 — 종료 커밋 := D | F | X; 절차 표기 H → T → B → (C → D | F | X); 도구 불변·`.enc` 체크포인트·attestation 문구를 세 종료 커밋 모두에 적용; AC-01d(abort 구간 규칙), AC-18a-X 행 추가; AC-07/AC-14/AC-16은 성공·튜닝 실패 분기에만 적용(abort의 원인이 바로 그 테스트 실패이므로), 새 공통 AC-23: T와 B 커밋 시점에 전체 오프라인 테스트 통과(ledger 기록); AC-22는 실패 테스트 이름·출력을 증거로 보존.
 - 2026-10-02 구현 계획 검수 3차 반영(v1.10→v1.11): **abort 분기 추가** — 튜닝이 39/39·14/14를 만족했으나 정식 전체 테스트가 실패해 run이 `rejected`된 경우(도구·테스트 결함), 같은 라운드를 H′에서 재시작하지 않는다(컨트롤러·검토자가 이미 hidden 평문을 봤으므로). 종료 커밋 **X**(`docs/phase3-readiness.md`만 변경; 정책 파일은 B 상태; hidden 미평가; 암호문 보관; `reject_reason`·실패 테스트 출력 기록)로 Round 2를 소비하고 다음 시도는 새 hidden set의 Round 3이다. AC-22 추가, AC-18a-X 체크포인트, 상태 모델에 abort 분기.
 - 2026-10-02 외부 검수 10차(v1.9→v1.10): **P0 없음 — "구현 계획으로 진행 가능"**. P1 문구 정리: AC-04는 B 봉인 과정의 체크포인트(F에서 평문 재독 금지), AC-19의 첫 AC-valid 채택은 "존재하면", 절차 표기를 H → T → B → (C → D | F)와 "종료 커밋까지"로 통일, §5.4 체크포인트에 F 반영, attestation의 평가 횟수를 분기별로, §10.3을 성공 분기 한정으로.
 
@@ -93,7 +94,7 @@ R1–R4 정의는 Round 1 그대로.
 | `tests/tune_search_ranking.py` | `--alias-change` 후보·예산·형태 검사, 로그에 `round` |
 | `tests/diag_search_queries.py` | seal 키·artifact 이름을 라운드에서 유도 |
 | `tests/benchmarks/search_queries.json` | T: seed `failure_classes` 기계 분류 기록; B: 봉인 메타 + `round2_seal`; D: 평문 |
-| `tests/benchmarks/round2-final.json`, `search-tuning-round2.jsonl` | D(성공 분기만) / B 이후 종료 커밋(C 또는 F)까지 |
+| `tests/benchmarks/round2-final.json`, `search-tuning-round2.jsonl` | D(성공 분기만) / B 이후 종료 커밋까지 |
 | `tests/benchmarks/test_evaluator.py`, `tests/intelligence/test_policy.py`, `tests/intelligence/test_search.py`, `tests/test_diag_search_queries.py`, `tests/test_tune_search_ranking.py` | §10 |
 | `docs/phase3-readiness.md` | Round 2 섹션 |
 | `README.md`, `AGENTS.md` | 한 단락 |
@@ -102,10 +103,10 @@ R1–R4 정의는 Round 1 그대로.
 
 가변 구간 규칙(AC-01a/b): `search_aliases.json`(round2 항목)과 `search_ranking.json.constants`는 B..C에서만; `verb_methods`, `alias_candidates.json`, `concept_lexicon` 병합분, `failure_classes` 분류는 T에서만; `policy.py`는 H에서만.
 
-## 5. 벤치마크 절차 (커밋 순서 H → T → B → (C → D | F))
+## 5. 벤치마크 절차 (커밋 순서 H → T → B → (C → D | F | X); 종료 커밋 := D | F | X)
 
 ### 5.1 커밋 H (housekeeping, T 전) + 소스 스냅샷 S
-`policy.py` notes-origin 규칙 확장(§4) + **Round 2 도구 코드 전부**(§8: `round_seal.py`, `alias_candidates_tool.py`, `concept_lexicon_check.py`, `tune_search_ranking.py`의 제안기·검증기·파이프라인, `diag_search_queries.py`, `evaluator.py`) + 테스트. 어휘·벤치마크 무변경. **H 이후 이 도구 파일들은 종료 커밋(D 또는 F)까지 변경 금지**(v1.7): 결정적 선택기·제안기·평가기의 코드가 hidden 생성 뒤에 바뀌면 "결정적"이 사후 조정 가능한 선택기가 되므로, T의 `round_freeze`에 `tooling_code_sha256`(도구 파일 목록의 canonical 연결 해시)을 기록하고 C의 `evaluation_code_sha256`은 그 부분집합(평가 경로 6개 파일)의 해시로서 T 값과 같아야 한다. pre-T 단계에서 도구 결함이 발견되면 **T 전에** 고치고 H′로 커밋한다(T 이후 발견 시 라운드 중단·재시작). readiness는 최종 housekeeping 커밋(H 또는 마지막 H′)을 `housekeeping_commit` 하나로 기록하고 AC-05는 그 커밋을 기준으로 한다. H′ 이후에는 영향받는 pre-T artifact를 의존 순서에 따라 재생성한다(도구가 바뀌면 verb-report부터 전부 재실행; S는 fingerprint·spec sha가 같으면 재사용). 무결성 테스트 파일(`tests/benchmarks/test_evaluator.py`, `tests/test_tune_search_ranking.py`, `tests/test_diag_search_queries.py`, `tests/intelligence/test_policy.py`)도 같은 불변 목록에 포함한다. `round_freeze`에는 `evaluation_code_sha256_at_T`(평가 경로 6개 파일의 T 시점 해시)도 저장해 C의 검증이 단순 동등 검사가 되게 한다.
+`policy.py` notes-origin 규칙 확장(§4) + **Round 2 도구 코드 전부**(§8: `round_seal.py`, `alias_candidates_tool.py`, `concept_lexicon_check.py`, `tune_search_ranking.py`의 제안기·검증기·파이프라인, `diag_search_queries.py`, `evaluator.py`) + 테스트. 어휘·벤치마크 무변경. **H 이후 이 도구 파일들은 종료 커밋(D, F 또는 X)까지 변경 금지**(v1.7): 결정적 선택기·제안기·평가기의 코드가 hidden 생성 뒤에 바뀌면 "결정적"이 사후 조정 가능한 선택기가 되므로, T의 `round_freeze`에 `tooling_code_sha256`(도구 파일 목록의 canonical 연결 해시)을 기록하고 C의 `evaluation_code_sha256`은 그 부분집합(평가 경로 6개 파일)의 해시로서 T 값과 같아야 한다. pre-T 단계에서 도구 결함이 발견되면 **T 전에** 고치고 H′로 커밋한다(T 이후 발견 시 라운드 중단·재시작). readiness는 최종 housekeeping 커밋(H 또는 마지막 H′)을 `housekeeping_commit` 하나로 기록하고 AC-05는 그 커밋을 기준으로 한다. H′ 이후에는 영향받는 pre-T artifact를 의존 순서에 따라 재생성한다(도구가 바뀌면 verb-report부터 전부 재실행; S는 fingerprint·spec sha가 같으면 재사용). 무결성 테스트 파일(`tests/benchmarks/test_evaluator.py`, `tests/test_tune_search_ranking.py`, `tests/test_diag_search_queries.py`, `tests/intelligence/test_policy.py`)도 같은 불변 목록에 포함한다. `round_freeze`에는 `evaluation_code_sha256_at_T`(평가 경로 6개 파일의 T 시점 해시)도 저장해 C의 검증이 단순 동등 검사가 되게 한다.
 
 **pre-T 의존 순서(v1.7, 고정)**: H → S → `--verb-report` → 동사 인벤토리 초안 → `--method-safety` → (위반 시 인벤토리 수정 → 재실행) → **`verb_inventory_sha256` 확정** → 개념 토큰 목록 → 사전 생성 → 기계 검사(확정 인벤토리 기준) → stateless 의미 검토 → 개념당 5개 절단 → seed 호환 게이트 → 사전 병합 → 후보 목록 → R5/R6 분류 → worker 브리프·프롬프트 → T. 인벤토리 확정 뒤에는 어떤 단계도 인벤토리를 바꾸지 않는다(바꾸면 사전부터 재실행).
 
@@ -134,7 +135,7 @@ R1–R4 정의는 Round 1 그대로.
 ### 5.4 커밋 B (봉인) + 평문 격리
 `round_seal.py seal --round 2` → `round2_seal`(형식 Round 1과 동일). readiness에 T SHA, B SHA, 생성 프롬프트/결과 sha, 재요청 횟수 기록.
 
-**평문 격리(v1.2)**: B 커밋 직후, 봉인 평문(`~/.atlassian_api_updater/sealed/round2-sealed.json`)을 **사용자가 자신의 터미널에서** 사용자만 아는 passphrase로 암호화하고 평문을 삭제한다(예: `openssl enc -aes-256-cbc -pbkdf2 -in round2-sealed.json -out round2-sealed.json.enc && rm round2-sealed.json`). 에이전트(컨트롤러·worker 모두)는 passphrase를 알지 못하며 세션에 입력하지 않는다. 컨트롤러는 `.enc` 존재와 평문 부재를 확인해 readiness에 기록한다(자동 체크포인트: B 직후와 종료 직전(D 또는 F)에 `.enc` 존재 ∧ 평문 부재 ∧ `.enc` sha256 동일; 그 사이 전체 기간은 컨트롤러 attestation. F에서는 복호화하지 않는다). 이 격리의 의미는 "선언된 위협 모델(에이전트의 일반 파일 탐색·도구 읽기)에서 암호학적으로 접근 불가"이며, 포렌식 삭제나 같은 UID의 악성 프로세스 격리는 목표가 아니다. 더 명확한 경계를 원하면 macOS 암호화 APFS sparsebundle에 평문을 두고 B 직후 unmount, D에서 사용자가 mount하는 방식을 써도 된다(동등하게 허용). internal catalog(`round2-internal-catalog.json`)는 hidden 정보를 담지 않으므로 평문으로 두어도 된다. 생성이 임시 채팅에서 이루어졌으므로 브라우저 경로로도 평문에 닿을 수 없다. 같은 파일시스템·같은 계정에서 "경로를 알리지 않음"은 격리가 아니므로 이 단계는 필수다.
+**평문 격리(v1.2)**: B 커밋 직후, 봉인 평문(`~/.atlassian_api_updater/sealed/round2-sealed.json`)을 **사용자가 자신의 터미널에서** 사용자만 아는 passphrase로 암호화하고 평문을 삭제한다(예: `openssl enc -aes-256-cbc -pbkdf2 -in round2-sealed.json -out round2-sealed.json.enc && rm round2-sealed.json`). 에이전트(컨트롤러·worker 모두)는 passphrase를 알지 못하며 세션에 입력하지 않는다. 컨트롤러는 `.enc` 존재와 평문 부재를 확인해 readiness에 기록한다(자동 체크포인트: B 직후와 종료 직전(D, F 또는 X)에 `.enc` 존재 ∧ 평문 부재 ∧ `.enc` sha256 동일; 그 사이 전체 기간은 컨트롤러 attestation. F와 X에서는 복호화하지 않는다). 이 격리의 의미는 "선언된 위협 모델(에이전트의 일반 파일 탐색·도구 읽기)에서 암호학적으로 접근 불가"이며, 포렌식 삭제나 같은 UID의 악성 프로세스 격리는 목표가 아니다. 더 명확한 경계를 원하면 macOS 암호화 APFS sparsebundle에 평문을 두고 B 직후 unmount, D에서 사용자가 mount하는 방식을 써도 된다(동등하게 허용). internal catalog(`round2-internal-catalog.json`)는 hidden 정보를 담지 않으므로 평문으로 두어도 된다. 생성이 임시 채팅에서 이루어졌으므로 브라우저 경로로도 평문에 닿을 수 없다. 같은 파일시스템·같은 계정에서 "경로를 알리지 않음"은 격리가 아니므로 이 단계는 필수다.
 
 ### 5.5 B..C (튜닝)
 - 튜닝 주체(tuning worker)는 §5.6의 역할 규칙을 따른다.
@@ -289,42 +290,45 @@ Round 1 §11과 동일 + Round 2 섹션(성공 분기: 커밋 H/T/B/C/D; 실패 
 
 ## 12. Acceptance Criteria
 
-라운드는 세 종료 상태 중 하나로 끝난다: **성공**(H → T → B → C → D), **튜닝 실패**(H → T → B → F), 또는 **abort**(H → T → B → X: 튜닝은 통과했으나 정식 전체 테스트 실패로 run이 `rejected`된 경우). 각 AC 행은 분기표 없이 단독으로 판정 가능하도록 적용 분기를 행 안에 명시한다. "종료 커밋"은 성공 분기에서 D, 실패 분기에서 F를 뜻한다.
+라운드는 세 종료 상태 중 하나로 끝난다: **성공**(H → T → B → C → D), **튜닝 실패**(H → T → B → F), 또는 **abort**(H → T → B → X: 튜닝은 통과했으나 정식 전체 테스트 실패로 run이 `rejected`된 경우). 각 AC 행은 분기표 없이 단독으로 판정 가능하도록 적용 분기를 행 안에 명시한다. "종료 커밋"은 성공 분기에서 D, 튜닝 실패 분기에서 F, abort 분기에서 X를 뜻한다.
 
 | ID | 분기 | 기준 | 검증 |
 |---|---|---|---|
 | AC-01a | 공통 | 95b8de0 < `housekeeping_commit` < T < B; `verb_methods`·`alias_candidates.json`·사전 병합·`failure_classes`·브리프·프롬프트 변경은 T에만; `policy.py`와 §5.1 도구 변경은 H/H′에만 | git |
 | AC-01b | 성공 | B < C < D; `search_aliases.json`(round2 항목)·`constants` 변경은 B..C에만 | git |
 | AC-01c | 실패 | B < F; F가 종료 커밋이며 C·D 없음; B..F에서 `search_ranking.json`·`search_aliases.json` 변경 없음(B 상태 유지) | git |
+| AC-01d | abort | B < X; X가 종료 커밋이며 C·D·F 없음; B..X에서 `search_ranking.json`·`search_aliases.json` 변경 없음(B 상태 유지; worker의 `--reject`가 복원) | git |
 | AC-02 | 성공 | C..D 변경 파일 ⊆ {`search_queries.json`, `round2-final.json`, `phase3-readiness.md`} | git |
 | AC-03 | 성공 | D 평문 sha256 == `round2_seal`; D에 테스트 코드 변경 없음 | 테스트 + git |
 | AC-04 | 공통 | gate 집합 origin ∈ {`held_out-r2`, `negative-r2`}, r0/r1 레코드 0개 — **B 봉인 과정의 체크포인트**로 검사해 결과를 `round2_seal`/readiness에 기록한다(F에서 평문을 다시 읽어 검사하는 것은 금지; 성공 분기는 D unseal 후 테스트로 재확인) | 봉인 스크립트 + 테스트(성공 분기) |
 | AC-05 | 공통 | `search.py` diff vs 95b8de0 비어 있음; `policy.py` diff는 notes-origin 규칙뿐; §5.1 도구·무결성 테스트 파일은 `housekeeping_commit` 이후 **종료 커밋까지** diff 비어 있음; `tooling_code_sha256` == 현재 파일 | git + 테스트 |
 | AC-06a | 공통 | 픽스처 r0 23/23·6/6 | 테스트 |
 | AC-06b | 성공 | adopted run의 스냅샷 seed 39/39, regression 14/14 | 로그 + 테스트 |
-| AC-07 | 공통 | §10.1 테스트 통과 | 테스트 |
+| AC-07 | 성공·실패 | §10.1 테스트 통과 | 테스트 |
 | AC-08 | 공통 | `POLICY_VERSIONS["search"] == 3`; `round_freeze` round 2 해시 10개 == 현재 파일; S 출처 필드 == 모든 영속 artifact의 provenance | 테스트 |
 | AC-09 | 공통 | §4 불변 목록 diff 비어 있음; Round 1 artifact·로그·seal·readiness 섹션 해시 불변 | 테스트 + git |
 | AC-10 | 성공 | `round2-final.json` provenance 필드 + `round`, `held_out_top3` | 테스트 |
 | AC-11 | 성공 | 최종 artifact 정확히 하나, `git_commit`==C(컨트롤러 D 검사), D 이후 가변 파일 변경 없음 | git |
 | AC-12 | 공통 | round2 alias/rule 전부 §7.2(1 타깃, 후보 포함, 예산, seed당 1개, `candidate_word`); 실패 분기에서는 0개 | 테스트 |
 | AC-13 | 공통 | `alias_candidates.json`·`concept_lexicon` 병합분·인벤토리가 T 이후 불변; 결정적 단계의 재실행 결과 동일(동결된 raw 생성 + 동결된 의미 검토 출력을 입력으로 한 정규화·게이트·후보 도구; LLM 호출 재실행 동일성은 요구하지 않음); 모든 영속 artifact의 `generated_from.registry_fingerprint` == `round_freeze.source_registry_fingerprint` | 테스트 + 도구 |
-| AC-14 | 공통 | 라운드 일반화 후 Round 1 테스트 통과 | 테스트 |
+| AC-14 | 성공·실패 | 라운드 일반화 후 Round 1 테스트 통과 | 테스트 |
 | AC-15a | 성공 | 튜닝 로그 round 2: `adopted: true` run 정확히 하나, 그 상수 == 파일, baseline == freeze | 테스트 |
 | AC-15b | 실패 | 튜닝 로그 round 2: `adopted: true` run 0개, `tuning_failed: true` run ≥ 1, 파일 상수 == B 상태 | 테스트 |
-| AC-16 | 공통 | 전체 오프라인 테스트 통과, 새 의존성 없음 | unittest |
+| AC-16 | 성공·실패 | 전체 오프라인 테스트 통과, 새 의존성 없음 | unittest |
+| AC-23 | 공통 | T 커밋과 B 커밋 시점에 전체 오프라인 테스트 통과(컨트롤러가 실행하고 ledger에 기록); 새 의존성 없음 | unittest + ledger |
 | AC-17 | 공통 | H 직후 기존 `search_aliases.json`이 변경 없이 로드(round1 notes 하위 호환) | 테스트 |
 | AC-18a-B | 공통 | B 직후 체크포인트: `.enc` 존재 ∧ 평문 부재 ∧ `.enc` sha256 기록 | 컨트롤러 스크립트 출력(readiness) |
 | AC-18a-D | 성공 | D 직전 체크포인트: `.enc` sha256 == B 직후 값 ∧ 평문 부재; D 복호화 평문 sha256 == `round2_seal` | 컨트롤러 스크립트 출력(readiness) |
 | AC-18a-F | 실패 | F 시점 체크포인트: `.enc` sha256 == B 직후 값 ∧ 평문 부재(복호화 없음) | 컨트롤러 스크립트 출력(readiness) |
+| AC-18a-X | abort | X 시점 체크포인트: `.enc` 존재 ∧ 평문 부재 ∧ `.enc` sha256 == B 직후 값(복호화 없음) | 컨트롤러 스크립트 출력(readiness) |
 | AC-18b | 공통 | attestation: B 이후 종료 커밋까지 평문 미복호화(성공 분기는 D에서만); 생성·검토는 Unpersonalized 임시 채팅(또는 stateless API) | readiness attestation |
 | AC-19 | 공통 | `round2-worker-brief.md`·hidden 생성/검토 프롬프트가 T에 커밋되고 sha == `round_freeze`; B 이후 alias 추가분 == 제안기 재실행 결과(실패 분기는 0개); AC-valid worker 출력이 존재하면 첫 번째만 채택(실패 분기에서는 없을 수 있음); 의미 검토는 배치당 첫 valid 출력, valid 이후 재실행 없음(attempt 로그) | 테스트 + readiness |
 | AC-20a | 공통 | 튜닝 로그 round 2를 `run_id`로 묶었을 때: 각 run에 `constants_selected` 정확히 1개(입력 alias sha == B 시점 sha) → `aliases_proposed` 정확히 1개 순서, 이후 상수 변경 0; 모든 run의 `baseline_sha256` 동일; AC-valid run끼리 `result_sha256` 동일(`run_log_sha256`는 기록만) | 테스트 |
 | AC-20b | 성공 | `adopted: true` run == 첫 AC-valid run(정확히 1개) | 테스트 |
-| AC-22 | abort | X 변경 파일 ⊆ {`phase3-readiness.md`}(튜닝 로그의 `rejected` 라인은 worker 커밋에 이미 있음); 정책 파일 == B 상태; `round2-final.json` 없음; hidden 미평가; `.enc` sha256 == B 직후 값(AC-18a-X); readiness 상태 "Round 2 aborted"에 `reject_reason`과 실패 테스트 출력; 봉인 hidden set은 재사용하지 않음 | git + 테스트 + readiness |
+| AC-22 | abort | X 변경 파일 ⊆ {`phase3-readiness.md`}(튜닝 로그의 `rejected` 라인은 worker 커밋에 이미 있음); 정책 파일 == B 상태; `round2-final.json` 없음; hidden 평가 0회; AC-18a-X 충족; readiness 상태 "Round 2 aborted"에 `reject_reason`·**실패한 테스트 이름과 출력**(증거 — 이 분기에서는 AC-07/14/16이 적용되지 않는다); 봉인 hidden set은 재사용하지 않음 | git + readiness |
 | AC-21 | 실패 | F 변경 파일 ⊆ {`search-tuning-round2.jsonl`, `phase3-readiness.md`}; `round2-final.json` 없음; hidden 평가 artifact 없음; readiness 상태 "Round 2 tuning failed"에 실패 `result_sha256`·`.enc` sha256 기록; 봉인 hidden set은 재사용하지 않음(§5.5) | git + 테스트 + readiness |
 
-Attestation(컨트롤러): 사전·hidden 생성 프롬프트/결과 sha와 실행 형태(임시 채팅), 재요청 횟수, hidden 평가 횟수(성공 분기 정확히 1회 / 실패 분기 0회), **B 이후 종료 커밋까지 봉인 평문이 튜닝 환경에서 읽을 수 없는 상태였음**, 튜닝 로그 완전성, **인벤토리·사전·후보 목록이 hidden 생성 전에 커밋됨(T < B)**, **hidden을 본 주체가 B..C 선택에 관여하지 않음(T 동결 브리프만 전달, alias는 결정적 제안기, 첫 AC-valid 출력 채택; 실행 횟수·출력 sha 첨부)**.
+Attestation(컨트롤러): 사전·hidden 생성 프롬프트/결과 sha와 실행 형태(임시 채팅), 재요청 횟수, hidden 평가 횟수(성공 분기 정확히 1회 / 튜닝 실패·abort 분기 0회), **B 이후 종료 커밋까지 봉인 평문이 튜닝 환경에서 읽을 수 없는 상태였음**, 튜닝 로그 완전성, **인벤토리·사전·후보 목록이 hidden 생성 전에 커밋됨(T < B)**, **hidden을 본 주체가 B..C 선택에 관여하지 않음(T 동결 브리프만 전달, alias는 결정적 제안기, 첫 AC-valid 출력 채택; 실행 횟수·출력 sha 첨부)**.
 
 ## 13. 위험과 완화
 
