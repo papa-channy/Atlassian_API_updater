@@ -1,6 +1,6 @@
 # Search Quality Round 2 — Technical Specification
 
-**문서 버전:** v1.12 (v1.10 = 외부 검수 10회, 최종 판정 "구현 계획으로 진행 가능"; v1.11/v1.12 = 구현 계획 검수 중 추가·정합화된 abort 분기)
+**문서 버전:** v1.13 (v1.10 = 외부 검수 10회, 최종 판정 "구현 계획으로 진행 가능"; v1.11–v1.13 = 구현 계획 검수 중 추가·정합화된 abort 분기와 분기별 AC-19)
 **기준일:** 2026-10-02
 **선행 구현:** Search Quality Round 1 (spec v1.4, 게이트 실패: held_out 4/16, negative 5/8) + Round 2 pre-work (`main` 95b8de0: 관찰 집합 강등, 라운드 비의존 테스트, 로더 보정). 오프라인 테스트 405개.
 **목적:** Round 1 절차(A→T→B→C→D)를 **어휘만 바꿔** 반복하고, 봉인된 새 held_out 16 / negative 8에서 Discovery 게이트(≥ 15/16, 0/8)를 충족한다.
@@ -45,6 +45,7 @@ R1–R4 정의는 Round 1 그대로.
 - 2026-10-02 외부 검수 7차(v1.6→v1.7): pre-T 작업을 **의존 순서**로 고정(동사 인벤토리 → method-safety → 필요 시 수정·재실행 → `verb_inventory_sha256` **확정** → 개념 토큰 → 사전 생성·검사·의미 검토 → seed 게이트 → 후보 → 브리프/프롬프트 → T; 사전 검사의 "동사 키 아님" 규칙은 확정된 인벤토리 기준); **Round 2 도구 코드 전부를 H에서 완성하고 `tooling_code_sha256`으로 T에 동결**, T..D 동안 변경 금지, C는 T 동결값 재확인 마커(`evaluation_code_sha256 == tooling 부분집합 해시`); P1: 사전 생성에도 first-valid 수명주기, §4 예시에 `generated_from`, S 무결성 체크포인트(B..C 시작·D 직전), 튜닝 실패 시 의미 고정(adopted 0, C/D 생략, 봉인 유지).
 - 2026-10-02 외부 검수 8차(v1.7→v1.8): §5.1의 stale 순서 문장 제거(의존 순서가 유일한 권위), T의 `verb_methods`는 확정 인벤토리; **튜닝 실패 후 hidden 재사용 규칙 폐기**(컨트롤러·검토자가 B 전에 평문을 봤으므로 다음 라운드에 재사용 불가 — 폐기하고 새로 생성); **AC를 공통 / 성공 분기 / 튜닝 실패 분기로 분리**(튜닝 실패도 검증 가능한 종료 상태); P1: 무결성 테스트 파일도 T..D 불변 목록에, `evaluation_code_sha256_at_T`를 `round_freeze`에 저장해 C는 단순 동등 검사, H′ 발생 시 최종 housekeeping 커밋을 readiness에 하나로 기록.
 - 2026-10-02 외부 검수 9차(v1.8→v1.9): **AC 전면 재작성** — 모든 행이 분기표 없이 단독으로 참/거짓 판정되도록 분할(AC-01a/b, AC-05 "종료 커밋까지", AC-06a/b, AC-15a/b, AC-18a-B/18a-D, AC-20a/b); **튜닝 실패 종료 커밋 F** 정의(H → T → B → F; whitelist = 튜닝 로그 + readiness; 실패한 상수·alias는 정책 파일에 절대 적용되지 않음 — B 상태 유지); P1: H′ 후 pre-T artifact를 의존 DAG에 따라 재생성(S는 fingerprint 동일 시 재사용), §5.2 item 2를 "결과 확인"으로, §11 상태 모델에 실패 분기 필드 null/not_applicable.
+- 2026-10-02 구현 계획 검수 6차 반영(v1.12→v1.13): AC-19를 분기별로 분리 — 성공: 적용된 round2 추가분 == 결정적 제안기 재실행 결과; 튜닝 실패: 적용 추가분 0, 제안기 최종 결과가 39/39·14/14 미달; abort: 적용 추가분 0(정책 == B), rejected run의 후보 `result_sha256` == 제안기 재실행 결과, 그 run의 `reject_evidence`(실패 테스트 id·출력 sha)가 로그에 존재. 브리프·프롬프트 동결 조건과 의미 검토 수명주기 조건은 공통 그대로.
 - 2026-10-02 구현 계획 검수 4차 반영(v1.11→v1.12): abort 분기를 완전한 종료 분기로 승격 — 종료 커밋 := D | F | X; 절차 표기 H → T → B → (C → D | F | X); 도구 불변·`.enc` 체크포인트·attestation 문구를 세 종료 커밋 모두에 적용; AC-01d(abort 구간 규칙), AC-18a-X 행 추가; AC-07/AC-14/AC-16은 성공·튜닝 실패 분기에만 적용(abort의 원인이 바로 그 테스트 실패이므로), 새 공통 AC-23: T와 B 커밋 시점에 전체 오프라인 테스트 통과(ledger 기록); AC-22는 실패 테스트 이름·출력을 증거로 보존.
 - 2026-10-02 구현 계획 검수 3차 반영(v1.10→v1.11): **abort 분기 추가** — 튜닝이 39/39·14/14를 만족했으나 정식 전체 테스트가 실패해 run이 `rejected`된 경우(도구·테스트 결함), 같은 라운드를 H′에서 재시작하지 않는다(컨트롤러·검토자가 이미 hidden 평문을 봤으므로). 종료 커밋 **X**(`docs/phase3-readiness.md`만 변경; 정책 파일은 B 상태; hidden 미평가; 암호문 보관; `reject_reason`·실패 테스트 출력 기록)로 Round 2를 소비하고 다음 시도는 새 hidden set의 Round 3이다. AC-22 추가, AC-18a-X 체크포인트, 상태 모델에 abort 분기.
 - 2026-10-02 외부 검수 10차(v1.9→v1.10): **P0 없음 — "구현 계획으로 진행 가능"**. P1 문구 정리: AC-04는 B 봉인 과정의 체크포인트(F에서 평문 재독 금지), AC-19의 첫 AC-valid 채택은 "존재하면", 절차 표기를 H → T → B → (C → D | F)와 "종료 커밋까지"로 통일, §5.4 체크포인트에 F 반영, attestation의 평가 횟수를 분기별로, §10.3을 성공 분기 한정으로.
@@ -322,7 +323,10 @@ Round 1 §11과 동일 + Round 2 섹션(성공 분기: 커밋 H/T/B/C/D; 실패 
 | AC-18a-F | 실패 | F 시점 체크포인트: `.enc` sha256 == B 직후 값 ∧ 평문 부재(복호화 없음) | 컨트롤러 스크립트 출력(readiness) |
 | AC-18a-X | abort | X 시점 체크포인트: `.enc` 존재 ∧ 평문 부재 ∧ `.enc` sha256 == B 직후 값(복호화 없음) | 컨트롤러 스크립트 출력(readiness) |
 | AC-18b | 공통 | attestation: B 이후 종료 커밋까지 평문 미복호화(성공 분기는 D에서만); 생성·검토는 Unpersonalized 임시 채팅(또는 stateless API) | readiness attestation |
-| AC-19 | 공통 | `round2-worker-brief.md`·hidden 생성/검토 프롬프트가 T에 커밋되고 sha == `round_freeze`; B 이후 alias 추가분 == 제안기 재실행 결과(실패 분기는 0개); AC-valid worker 출력이 존재하면 첫 번째만 채택(실패 분기에서는 없을 수 있음); 의미 검토는 배치당 첫 valid 출력, valid 이후 재실행 없음(attempt 로그) | 테스트 + readiness |
+| AC-19a | 공통 | `round2-worker-brief.md`·hidden 생성/검토 프롬프트가 T에 커밋되고 sha == `round_freeze`; AC-valid worker 출력이 존재하면 첫 번째만 채택; 의미 검토는 배치당 첫 valid 출력, valid 이후 재실행 없음(attempt 로그) | 테스트 + readiness |
+| AC-19b | 성공 | 적용된 round2 alias 추가분 == 결정적 제안기 재실행 결과(`--verify`), 파일 상수 == adopted run | 테스트 + 도구 |
+| AC-19c | 실패 | 적용 추가분 0; 튜닝 로그의 `failed` run이 제안기 최종 결과 39/39·14/14 미달을 기록 | 테스트 |
+| AC-19d | abort | 적용 추가분 0(정책 == B); rejected run의 후보 `result_sha256` == 제안기 재실행 결과(`--verify`, abort 모드); 그 run에 `reject_evidence`(실패 테스트 id 목록·출력 sha256) 존재 | 테스트 + 도구 |
 | AC-20a | 공통 | 튜닝 로그 round 2를 `run_id`로 묶었을 때: 각 run에 `constants_selected` 정확히 1개(입력 alias sha == B 시점 sha) → `aliases_proposed` 정확히 1개 순서, 이후 상수 변경 0; 모든 run의 `baseline_sha256` 동일; AC-valid run끼리 `result_sha256` 동일(`run_log_sha256`는 기록만) | 테스트 |
 | AC-20b | 성공 | `adopted: true` run == 첫 AC-valid run(정확히 1개) | 테스트 |
 | AC-22 | abort | X 변경 파일 ⊆ {`phase3-readiness.md`}(튜닝 로그의 `rejected` 라인은 worker 커밋에 이미 있음); 정책 파일 == B 상태; `round2-final.json` 없음; hidden 평가 0회; AC-18a-X 충족; readiness 상태 "Round 2 aborted"에 `reject_reason`·**실패한 테스트 이름과 출력**(증거 — 이 분기에서는 AC-07/14/16이 적용되지 않는다); 봉인 hidden set은 재사용하지 않음 | git + readiness |

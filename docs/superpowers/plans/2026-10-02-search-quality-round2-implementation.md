@@ -8,9 +8,9 @@
 
 **Tech Stack:** Python ≥ 3.10 stdlib only under `tools/`; `unittest`; no new dependencies.
 
-**Spec:** `docs/superpowers/specs/2026-10-02-search-quality-round2-design.md` **v1.12** (v1.10 passed 10 external reviews with "구현 계획으로 진행 가능"; v1.11/v1.12 added the abort branch X, AC-01d, AC-18a-X, AC-22, AC-23 during plan review). The spec v1.12 is binding; this plan is its argument.
+**Spec:** `docs/superpowers/specs/2026-10-02-search-quality-round2-design.md` **v1.13** (v1.10 passed 10 external reviews with "구현 계획으로 진행 가능"; v1.11–v1.13 added the abort branch X, AC-01d, AC-18a-X, AC-22, AC-23 and the per-branch AC-19 during plan review). The spec v1.13 is binding; this plan is its argument.
 
-**Plan version:** v6 (after external plan reviews 1–5 — see "Plan revision notes" at the end).
+**Plan version:** v7 (after external plan reviews 1–6 — see "Plan revision notes" at the end).
 
 ## Global Constraints
 
@@ -1413,7 +1413,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 **Interfaces:**
 - Keeps: `grid_points`, `l1_index_distance`, `select_candidate`, `plan_effects`, `dirty_paths`, `ranking_with`, `evaluate_point`, `top5`, `write_constants`, `build_state`, `SEED_TOTAL`, `REGRESSION_TOTAL`, `CONSTANT_KEYS`.
 - Produces: `ROUND = ev.current_round()["round"]`; `LOG_PATH = tests/benchmarks/search-tuning-round{ROUND}.jsonl`; `CANDIDATES_PATH`; `baseline_mismatch(aliases_raw, ranking_raw, cands_doc) -> list[str]`; `baseline_sha256(...)`; `result_sha256(final_constants, alias_patch)`; `round2_note(word, sid, target, kind)`; `alias_patch(base_raw, working_raw)`; `strip_round_entries(raw, round) -> raw` (removes `round{N}` aliases/rules/notes = reconstructs the B state); `log_core(line) -> dict` (hash projection: all keys except `run_log_sha256`, `status`, `adopted`, `reject_reason`); `propose_aliases(eval_fn, bench, base_raw, cands, budget=15) -> (working_raw, patch)`; `validate_alias_change(before_raw, after_raw, cands, queries, budget=15) -> list[str]` (`queries`: id → query; a rule's context token must be a unigram of that seed's query, a target must be in `targets_by_seed[word][seed]`); `verify_replay(eval_fn, bench, base_raw, cands, constants, expected_result_sha256) -> list[str]` (re-runs the proposer, compares `result_sha256`); `EVENTS = ("baseline_checked", "constants_selected", "aliases_proposed", "final_check")`.
-- CLI: `python tests/tune_search_ranking.py --cache-dir S [--dry-run] [--note TEXT]` (pipeline; exit 0 = perfect, pending adoption; 1 = tuning_failed; 2 = setup/baseline/replay error); `--adopt RUN_ID` (marks the pending run adopted after the caller ran the full suite; refuses if the policy files no longer reproduce the run's `result_sha256`); `--reject RUN_ID --reason R` (pending → rejected: restores the B policy files via `git checkout --`, verifies the baseline, records `reject_reason`; a rejected run ends the round with the abort commit X — spec v1.12 §12 AC-22); `--verify --cache-dir S` (replay check against the adopted run; exit 0/1).
+- CLI: `python tests/tune_search_ranking.py --cache-dir S [--dry-run] [--note TEXT]` (pipeline; exit 0 = perfect, pending adoption; 1 = tuning_failed; 2 = setup/baseline/replay error); `--adopt RUN_ID` (marks the pending run adopted after the caller ran the full suite; refuses if the policy files no longer reproduce the run's `result_sha256`); `--reject RUN_ID --reason R --evidence PATH` (pending → rejected: reads the saved red-suite output at PATH, stores `reject_evidence: {exit_code, failing_tests, output_sha256}` on the log line, restores the B policy files via `git checkout --`, verifies the baseline, records `reject_reason`; a rejected run ends the round with the abort commit X — spec v1.13 AC-22); `--materialize RUN_ID --out DIR` (writes the candidate `search_ranking.json`/`search_aliases.json` that run produced — B files + `constants_selected` + `aliases_proposed` — into DIR so a reviewer can reproduce the failure signature in a temporary worktree); `--verify` is branch-aware (replays against the single `adopted` run, else the single `rejected` run: the rejected candidate's `result_sha256` must equal the replay while the applied delta is 0); `--verify --cache-dir S` (replay check against the adopted run; exit 0/1).
 - Log line keys: `run_id`, `run_at`, `git_commit`, `round`, `registry_fingerprint`, `baseline_sha256`, `events`, `constants_selected`, `grid_size`, `passing_combos`, `aliases_proposed` (`aliases`, `rules`, `notes`, `resolved_by_prior_change`, `unresolved`, `trials`), `seed`, `regression_negative`, `tuning_failed`, `status` (`pending` | `adopted` | `failed` | `rejected`; `rejected` lines also carry `reject_reason`), `adopted` (bool), `result_sha256`, `run_log_sha256`, `dirty`, `note`, `ranking_structure_sha256`, `baseline`.
 
 - [ ] **Step 1: Write the failing tests**
@@ -1537,6 +1537,16 @@ class TestReplayAndHashes(unittest.TestCase):
         self.assertEqual(tune.baseline_mismatch(BASE_RAW, {"x": 1}, cands), ["ranking"])
         self.assertEqual(tune.baseline_mismatch({**BASE_RAW, "aliases": {}}, {"x": 1}, cands), ["aliases", "ranking"])
 
+    def test_suite_evidence_and_materialize(self):
+        text = "FAIL: test_a (tests.x.TestA)\nERROR: test_b (tests.y.TestB)\n\nRan 3 tests\n\nFAILED (failures=1, errors=1)\n"
+        ev_sig = tune.suite_evidence(text)
+        self.assertEqual(ev_sig["failing_tests"], ["tests.x.TestA.test_a", "tests.y.TestB.test_b"]); self.assertRegex(ev_sig["output_sha256"], r"^[0-9a-f]{64}$")
+        self.assertEqual(tune.suite_evidence("Ran 3 tests\n\nOK\n")["failing_tests"], [])
+        line = {"constants_selected": {**BASE, "method_match_bonus": 3.0}, "aliases_proposed": {"aliases": {"workspace": ["page"]}, "rules": [], "notes": {"workspace": tune.round2_note("workspace", "s-001", "page", "alias")}}}
+        ranking, aliases = tune.materialize_candidate(line, BASE_RAW, {"constants": dict(BASE), "version": 1})
+        self.assertEqual(ranking["constants"]["method_match_bonus"], 3.0); self.assertEqual(aliases["aliases"]["workspace"], ["page"])
+        self.assertEqual(tune.alias_patch(BASE_RAW, aliases), line["aliases_proposed"])
+
     def test_pipeline_calls_selector_once_then_proposer_once(self):
         from unittest import mock
         calls = []
@@ -1568,7 +1578,7 @@ tune_round(b_aliases, b_ranking, snapshot, frozen_candidates, seed, regression) 
      canonical full test suite passed); else status "failed" (tuning_failed), nothing written but the log.
 No constant reselection after aliases, no second proposal. --dry-run writes nothing and prints the would-be log line.
 """
-import argparse, copy, dataclasses, datetime, itertools, json, os, pathlib, re, shutil, subprocess, sys, tempfile, uuid
+import argparse, copy, dataclasses, datetime, hashlib, itertools, json, os, pathlib, re, shutil, subprocess, sys, tempfile, uuid
 from types import MappingProxyType
 from unittest import mock
 
@@ -1741,7 +1751,7 @@ def baseline_sha256(aliases_raw, ranking_raw, fp, cands_doc, bench) -> str:
                                     "regression_benchmark_sha256": policy.canonical_sha256(bench["regression_negative"])})
 
 
-LOG_MUTABLE_KEYS = ("run_log_sha256", "status", "adopted", "reject_reason")
+LOG_MUTABLE_KEYS = ("run_log_sha256", "status", "adopted", "reject_reason", "reject_evidence")
 
 
 def log_core(line: dict) -> dict:
@@ -1795,6 +1805,7 @@ def _parse(argv):
     ap.add_argument("--note", default="")
     ap.add_argument("--adopt", default=None, metavar="RUN_ID")
     ap.add_argument("--reject", default=None, metavar="RUN_ID"); ap.add_argument("--reason", default="full-suite-failed")
+    ap.add_argument("--evidence", default=None, metavar="PATH"); ap.add_argument("--materialize", default=None, metavar="RUN_ID"); ap.add_argument("--out", default=None)
     ap.add_argument("--verify", action="store_true")
     return ap.parse_args(argv)
 
@@ -1821,7 +1832,11 @@ def main(argv=None) -> int:
     if args.adopt:
         return _adopt(args.adopt)
     if args.reject:
-        return _reject(args.reject, args.reason)
+        if not args.evidence:
+            print("error: --reject needs --evidence PATH (the captured red-suite output)", file=sys.stderr); return 2
+        return _reject(args.reject, args.reason, args.evidence)
+    if args.materialize:
+        return _materialize(args.materialize, args.out or "candidate-policy")
     cache = (args.cache_dir or pathlib.Path("")).expanduser()
     if not all((cache / f"{s}.json").is_file() for s in SOURCES):
         print(f"error: {cache} is not a cache snapshot (missing <source>.json)", file=sys.stderr); return 2
@@ -1914,39 +1929,84 @@ def _adopt(run_id) -> int:
     return 0
 
 
-def _reject(run_id, reason) -> int:
-    """pending -> rejected (e.g. the canonical full suite failed): restore the B policy files and record why.
-    A rejected run is a round abort (the tooling or its tests are wrong), distinct from tuning_failed."""
+FAILING_TEST = re.compile(r"^(?:FAIL|ERROR): (\S+) \(([^)]+)\)", re.M)
+
+
+def suite_evidence(text: str) -> dict:
+    """Failure signature of a captured unittest run: failing test ids (sorted) + sha of the full output."""
+    ids = sorted(f"{mod}.{name}" for name, mod in FAILING_TEST.findall(text))
+    return {"failing_tests": ids, "output_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest()}
+
+
+def materialize_candidate(line: dict, b_aliases_raw: dict, b_ranking_raw: dict) -> tuple:
+    """The policy files a run produced: B ranking with constants_selected, B aliases + aliases_proposed."""
+    ranking = json.loads(json.dumps(b_ranking_raw)); ranking["constants"] = dict(line["constants_selected"])
+    aliases, patch = json.loads(json.dumps(b_aliases_raw)), line["aliases_proposed"]
+    aliases["aliases"].update(patch["aliases"]); aliases["rules"] += patch["rules"]; aliases["notes"].update(patch["notes"])
+    return ranking, aliases
+
+
+def _materialize(run_id, out_dir) -> int:
+    lines = [l for l in _read_log() if l["run_id"] == run_id]
+    if len(lines) != 1:
+        print(f"error: unknown run {run_id}", file=sys.stderr); return 2
+    raw_a, raw_r = json.loads(ALIASES_PATH.read_text(encoding="utf-8")), json.loads(RANKING_PATH.read_text(encoding="utf-8"))
+    ranking, aliases = materialize_candidate(lines[0], strip_round_entries(raw_a, ROUND), raw_r)
+    out = pathlib.Path(out_dir); out.mkdir(parents=True, exist_ok=True)
+    (out / "search_ranking.json").write_text(json.dumps(ranking, indent=2) + "\n", encoding="utf-8")
+    (out / "search_aliases.json").write_text(json.dumps(aliases, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    print(json.dumps({"run_id": run_id, "result_sha256_from_files": result_sha256(ranking["constants"], lines[0]["aliases_proposed"])}))
+    return 0
+
+
+def _reject(run_id, reason, evidence_path) -> int:
+    """pending -> rejected (the canonical full suite failed on the candidate policy): the red-suite output captured BEFORE
+    the rollback is summarized onto the log line, then the B policy files are restored. A rejected run is a round abort
+    (spec v1.13 AC-22), distinct from tuning_failed."""
     lines = _read_log()
     mine = [l for l in lines if l["run_id"] == run_id]
     if len(mine) != 1 or mine[0]["status"] != "pending":
         print(f"error: run {run_id} is not a pending run", file=sys.stderr); return 2
+    text = pathlib.Path(evidence_path).expanduser().read_text(encoding="utf-8", errors="replace")
+    ev_sig = suite_evidence(text)
+    if not ev_sig["failing_tests"]:
+        print("error: evidence file contains no FAIL/ERROR lines; refusing to reject a green run", file=sys.stderr); return 2
+    if _current_result_sha256() != mine[0]["result_sha256"]:
+        print("error: policy files no longer reproduce this run's result_sha256; evidence would not belong to this candidate", file=sys.stderr); return 2
     subprocess.run(["git", "checkout", "--", str(ALIASES_PATH.relative_to(ROOT)), str(RANKING_PATH.relative_to(ROOT))], cwd=ROOT, check=True)
     cands_doc = json.loads(CANDIDATES_PATH.read_text(encoding="utf-8"))
     bad = baseline_mismatch(json.loads(ALIASES_PATH.read_text(encoding="utf-8")), json.loads(RANKING_PATH.read_text(encoding="utf-8")), cands_doc)
     if bad:
         print(f"error: B baseline not restored: {bad}", file=sys.stderr); return 2
     mine[0]["status"], mine[0]["reject_reason"] = "rejected", reason
+    mine[0]["reject_evidence"] = {"exit_code": 1, **ev_sig, "evidence_path": str(evidence_path)}
     _write_log(lines)
-    print(json.dumps({"run_id": run_id, "status": "rejected", "reason": reason}))
+    print(json.dumps({"run_id": run_id, "status": "rejected", "reason": reason, "failing_tests": ev_sig["failing_tests"], "output_sha256": ev_sig["output_sha256"]}))
     return 0
 
 
 def _verify(cache, bench, rp, aliases_raw, ranking_raw, cands_doc) -> int:
-    adopted = [l for l in _read_log() if l["adopted"]]
-    if len(adopted) != 1:
-        print("error: exactly one adopted run required", file=sys.stderr); return 2
-    base, consts = strip_round_entries(aliases_raw, ROUND), dict(rp.constants)
+    """AC-19 per branch (spec v1.13): success -> replay == adopted run and files carry its delta; abort -> replay == the
+    rejected candidate while the applied delta is 0 (policy == B)."""
+    log = _read_log()
+    adopted, rejected = [l for l in log if l["adopted"]], [l for l in log if l["status"] == "rejected"]
+    if len(adopted) + len(rejected) != 1:
+        print("error: exactly one adopted run (success) or one rejected run (abort) required", file=sys.stderr); return 2
+    target = (adopted or rejected)[0]
+    base = strip_round_entries(aliases_raw, ROUND)
+    consts = dict(rp.constants) if adopted else dict(target["constants_selected"])
+    if rejected and (alias_patch(base, aliases_raw)["aliases"] or alias_patch(base, aliases_raw)["rules"] or policy.canonical_sha256(aliases_raw) != cands_doc["generated_from"]["inputs"]["aliases"]):
+        print("MISMATCH abort branch: policy files are not at the B state", file=sys.stderr); return 1
 
     def body(state):
         def eval_fn(raw):
             s, r = evaluate_point(state, rp, consts, bench, _alias_policy(raw))
             return frozenset(f["id"] for f in s["failed"]), frozenset(f["id"] for f in r["failed"])
-        return verify_replay(eval_fn, bench, base, cands_doc["candidates"], consts, adopted[0]["result_sha256"])
+        return verify_replay(eval_fn, bench, base, cands_doc["candidates"], consts, target["result_sha256"])
     problems = _with_state(cache, body)
     if policy.canonical_sha256(base) != cands_doc["generated_from"]["inputs"]["aliases"]:
         problems.append("stripped alias file differs from the B baseline recorded in alias_candidates.json")
-    if consts != adopted[0]["constants_selected"]:
+    if adopted and consts != adopted[0]["constants_selected"]:
         problems.append("constants on disk differ from the adopted run")
     print("replay ok" if not problems else "\n".join(f"MISMATCH {m}" for m in problems))
     return 1 if problems else 0
@@ -2263,14 +2323,18 @@ Procedure (run from the repo root, exactly once; rerun only after a tool error, 
      git add tools/atlassian_docs/intelligence/data/search_ranking.json tools/atlassian_docs/intelligence/data/search_aliases.json
              tests/benchmarks/search-tuning-round2.jsonl
      git commit -m "round2: tuning run (one-way pipeline, adopted <run_id>)" + the project trailer.
-   If step 2 exited 0 but step 3 FAILED:
-     python tests/tune_search_ranking.py --reject <run_id> --reason full-suite-failed   (restores the B policy files)
+   If step 2 exited 0 but step 3 FAILED (run step 3 as
+     python -m unittest discover -s tests -t . > ~/.atlassian_api_updater/round2-work/suite-<run_id>.txt 2>&1
+   so the red output is captured BEFORE anything is rolled back):
+     python tests/tune_search_ranking.py --reject <run_id> --reason full-suite-failed --evidence ~/.atlassian_api_updater/round2-work/suite-<run_id>.txt
+       (stores the failure signature on the log line, then restores the B policy files)
      git add tests/benchmarks/search-tuning-round2.jsonl
-     git commit -m "round2: tuning run rejected (full suite failed)" + trailer; report the failing tests verbatim.
+     git commit -m "round2: tuning run rejected (full suite failed)" + trailer.
    If step 2 exited 1 (tuning_failed): commit ONLY tests/benchmarks/search-tuning-round2.jsonl with message
      "round2: tuning failed (log only)" + trailer; do not touch the data files.
    If step 2 exited 2: do not commit; report the stderr verbatim.
-Report: exit codes, the JSON summary lines printed by step 2, the --adopt/--reject output, the commit sha, and nothing else.
+Report: exit codes, the JSON summary lines printed by step 2, the --adopt/--reject output, the commit sha, and — when rejected — the
+evidence file path plus the failing test ids verbatim. Nothing else.
 ```
 
 - [ ] **Step 3: Hidden generation prompt template (frozen text)**
@@ -2397,7 +2461,7 @@ assert not subprocess.run(["git", "status", "--porcelain", "--untracked-files=no
 r = subprocess.run(["python", "-m", "unittest", "discover", "-s", "tests", "-t", "."], capture_output=True, text=True)
 ev = {"event": "ac23_test_checkpoint", "checkpoint": cp, "commit": head, "command": "python -m unittest discover -s tests -t .",
       "exit_code": r.returncode, "output_sha256": hashlib.sha256((r.stdout + r.stderr).encode()).hexdigest(),
-      "summary": (r.stderr.strip().splitlines() or [""])[-1], "dependency_diff": "none",
+      "summary": (r.stderr.strip().splitlines() or [""])[-1],
       "at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
 with open(pathlib.Path.home() / ".atlassian_api_updater" / "round2-work" / "controller-events.jsonl", "a") as fh:
     fh.write(json.dumps(ev) + "\n")
@@ -2496,7 +2560,7 @@ assert not subprocess.run(["git", "status", "--porcelain", "--untracked-files=no
 r = subprocess.run(["python", "-m", "unittest", "discover", "-s", "tests", "-t", "."], capture_output=True, text=True)
 ev = {"event": "ac23_test_checkpoint", "checkpoint": cp, "commit": head, "command": "python -m unittest discover -s tests -t .",
       "exit_code": r.returncode, "output_sha256": hashlib.sha256((r.stdout + r.stderr).encode()).hexdigest(),
-      "summary": (r.stderr.strip().splitlines() or [""])[-1], "dependency_diff": "none",
+      "summary": (r.stderr.strip().splitlines() or [""])[-1],
       "at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
 with open(pathlib.Path.home() / ".atlassian_api_updater" / "round2-work" / "controller-events.jsonl", "a") as fh:
     fh.write(json.dumps(ev) + "\n")
@@ -2529,7 +2593,7 @@ test ! -e ~/.atlassian_api_updater/sealed/round2-sealed.json && shasum -a 256 ~/
 - Review package + task reviewer as usual, with a **branch-aware** checklist (the reviewer is told the run's `status` from the worker report):
   - `status=adopted`: full suite green; `--verify` passes; the adopted `constants_selected`/`result_sha256` match the policy files; commit touches only the three allowed files.
   - `status=failed`: full suite green; policy files unchanged (== B); the `tuning_failed` line validates; commit touches only the log.
-  - `status=rejected`: the full suite is **expected to be red** — the reviewer compares the worker's reported failing test names/output with its own run of the suite (they must match), confirms `--reject` restored `search_ranking.json`/`search_aliases.json` exactly to B (`baseline_mismatch == []`), that the commit touches only the log, and that the log line has `status: rejected` + `reject_reason`; it must NOT require green tests. Only after this review passes does Task 13 take the X branch.
+  - `status=rejected`: the committed HEAD is at the B policy, so the suite there is normally green — the reviewer must NOT re-run it expecting red. It checks instead: `baseline_mismatch == []` on HEAD (policy == B); the commit touches only the log; the log line has `status: rejected`, `reject_reason` and `reject_evidence` whose `output_sha256` equals the sha of the worker's evidence file and whose `failing_tests` equal the ids the worker reported; then it reproduces the signature: `git worktree add /tmp/r2-cand HEAD`, `python tests/tune_search_ranking.py --materialize <run_id> --out /tmp/r2-cand/tools/atlassian_docs/intelligence/data` (printed `result_sha256_from_files` must equal the run's `result_sha256`), runs the canonical suite inside that worktree and confirms `suite_evidence(output)["failing_tests"] == reject_evidence.failing_tests`; removes the worktree. Only after this review passes does Task 13 take the X branch.
 
 ---
 
@@ -2537,7 +2601,7 @@ test ! -e ~/.atlassian_api_updater/sealed/round2-sealed.json && shasum -a 256 ~/
 
 - [ ] **Step 1: Hash/provenance check only (both branches)**
 
-No semantic code review after B (Task 7 Step 5 was the last one). Check: `git diff --stat <housekeeping_commit> -- <TOOLING_FILES>` empty; `tooling_code_sha256` unchanged; worker commit touches only the brief's allowed files; the tuning log has exactly one `adopted` run (success) or only `failed` runs (failure). A `rejected` run (full suite failed after a perfect tuning) ends Round 2 as **aborted** (spec v1.12 AC-22): checkpoint AC-18a-X (`.enc` sha unchanged, no plaintext), render the readiness Round 2 section (abort branch: policy files at B, hidden unevaluated, ciphertext retained, `reject_reason`, the failing test output) and commit `X: Round 2 aborted (rejected tuning run)` touching only `docs/phase3-readiness.md`. Round 2 is consumed; the next attempt is Round 3 with a new hidden set. Skip Task 14; continue with Task 16.
+No semantic code review after B (Task 7 Step 5 was the last one). Check: `git diff --stat <housekeeping_commit> -- <TOOLING_FILES>` empty; `tooling_code_sha256` unchanged; worker commit touches only the brief's allowed files; the tuning log matches exactly one branch: success = exactly one `adopted` run; tuning failure = `failed` ≥ 1 and no `adopted`/`rejected`; abort = exactly one `rejected` run and no `adopted`. A `rejected` run (full suite failed after a perfect tuning) ends Round 2 as **aborted** (spec v1.13 AC-22): ledger `{"event": "rejected_suite_evidence", "run_id", "candidate_result_sha256", "command", "exit_code": 1, "failing_tests", "output_sha256", "output_path"}` copied from the log line + evidence file; run `python tests/tune_search_ranking.py --verify --cache-dir S` (abort-aware AC-19: replay == rejected candidate, applied delta 0); checkpoint AC-18a-X (`.enc` sha unchanged, no plaintext); render the readiness Round 2 section (abort branch: policy files at B with B/X shas, hidden unevaluated, ciphertext retained, `reject_reason`, the failing test ids and the evidence output sha, the output itself quoted from the evidence file) and commit `X: Round 2 aborted (rejected tuning run)` touching only `docs/phase3-readiness.md`. Round 2 is consumed; the next attempt is Round 3 with a new hidden set. Skip Task 14; continue with Task 16.
 
 - [ ] **Step 2a: Success (`status: adopted`, worker commit present)**
 
@@ -2592,7 +2656,7 @@ Gate: held_out ≥ 15/16 and negative 0/8.
 
 ### Task 15: **[controller]** Render the readiness Round 2 section from the ledgers (before the terminal commit)
 
-Append to `docs/phase3-readiness.md` after the Round 2 pre-work subsection (never inside the Round 1 section) a `## Search Quality Round 2 — decision record (<date>)` section rendered from `controller-events.jsonl` + `attempts.jsonl`: `housekeeping_commit`, S fingerprint + spec shas, verb-report decisions, method-safety result, lexicon template/generation-input/raw/review-input/review-output shas + counts (kept/rejected/gate/merge-skipped), candidates count, R5/R6 counts, T/B/C shas (the terminal commit itself is written as `terminal_commit: self` — its sha cannot be known before it exists; it is recorded in the ledger and in Task 16's provenance report), hidden generation input/output shas per attempt with status, re-request count, reviewer input/output shas, `temporary_chat_unpersonalized: true`, `.enc` sha at B/terminal, worker brief sha + run count + `run_id`/`result_sha256` per run, `--verify` result, tuning log summary, result row (success) or failure row, the state model table with `null`/`not_applicable` on the failure and abort branches (C/D, decryption time, result row, `round2-final` are N/A on both), on the abort branch additionally `B_alias_sha256 == X_alias_sha256` and `B_ranking_sha256 == X_ranking_sha256` (canonical shas of the two policy files at B and at X, so AC-01d/AC-22 are checkable without git), and the attestation list of spec §12. This task is a step of Task 13 (failure F / abort X) or Task 14 (success D); it never produces its own commit.
+Append to `docs/phase3-readiness.md` after the Round 2 pre-work subsection (never inside the Round 1 section) a `## Search Quality Round 2 — decision record (<date>)` section rendered from `controller-events.jsonl` + `attempts.jsonl` (on the abort branch the `rejected_suite_evidence` event and the referenced evidence file are the source of truth for AC-22's failing test names/output): `housekeeping_commit`, S fingerprint + spec shas, verb-report decisions, method-safety result, lexicon template/generation-input/raw/review-input/review-output shas + counts (kept/rejected/gate/merge-skipped), candidates count, R5/R6 counts, T/B/C shas (the terminal commit itself is written as `terminal_commit: self` — its sha cannot be known before it exists; it is recorded in the ledger and in Task 16's provenance report), hidden generation input/output shas per attempt with status, re-request count, reviewer input/output shas, `temporary_chat_unpersonalized: true`, `.enc` sha at B/terminal, worker brief sha + run count + `run_id`/`result_sha256` per run, `--verify` result, tuning log summary, result row (success) or failure row, the state model table with `null`/`not_applicable` on the failure and abort branches (C/D, decryption time, result row, `round2-final` are N/A on both), on the abort branch additionally `B_alias_sha256 == X_alias_sha256` and `B_ranking_sha256 == X_ranking_sha256` (canonical shas of the two policy files at B and at X, so AC-01d/AC-22 are checkable without git), and the attestation list of spec §12. This task is a step of Task 13 (failure F / abort X) or Task 14 (success D); it never produces its own commit.
 
 ---
 
@@ -2604,7 +2668,7 @@ Append to `docs/phase3-readiness.md` after the Round 2 pre-work subsection (neve
 
 ## Self-review notes
 
-- Spec coverage: §4 files → Tasks 2–5, 10; §5.1 (H, S, order) → Tasks 1–8; §5.2 → Tasks 8–10; §5.3 → Tasks 2 (negative phrase rule, reviewer validator), 9, 11; §5.4 → Task 11; §5.5/§7.2 → Task 6, 12; §5.6 → Task 12 (predefined replies only); §5.7 → Tasks 12–14 (verify-freeze checkpoints); §6 → Task 8 (+ parity test in Task 10); §7.0 → Tasks 5, 9 (review before cap, validated review, exact-input hashes); §7.1 → Task 4; §8 → Tasks 1–3, 7; §9 → Task 7 (final fields); §10 → each task's tests; §11 → Task 15; §12 AC-01a/b/c (git, Tasks 10–14), AC-02/03 (Task 14), AC-04 (seal checkpoint, Task 2), AC-05 (Task 3 tooling hash + git), AC-06a/b, AC-07, AC-08 (Task 3), AC-09 (Task 3 invariants), AC-10/11 (Tasks 7, 14), AC-12 (Task 6 validator), AC-13 (Tasks 3/4 provenance), AC-14 (Task 2), AC-15a/b, AC-20a/b (Task 6 log test + events + mock-order test), AC-16, AC-17 (Task 1), AC-18a-B/D/F/X, AC-18b (Tasks 11, 13, 14), AC-19 (Tasks 3, 6 `--verify`, 11 attempt ledger, 12), AC-21 (Task 13 F), AC-22 + AC-01d (Task 13 X), AC-23 pre-B suite (Tasks 10, 11: the suite is run before T and before B and the result ledgered).
+- Spec coverage: §4 files → Tasks 2–5, 10; §5.1 (H, S, order) → Tasks 1–8; §5.2 → Tasks 8–10; §5.3 → Tasks 2 (negative phrase rule, reviewer validator), 9, 11; §5.4 → Task 11; §5.5/§7.2 → Task 6, 12; §5.6 → Task 12 (predefined replies only); §5.7 → Tasks 12–14 (verify-freeze checkpoints); §6 → Task 8 (+ parity test in Task 10); §7.0 → Tasks 5, 9 (review before cap, validated review, exact-input hashes); §7.1 → Task 4; §8 → Tasks 1–3, 7; §9 → Task 7 (final fields); §10 → each task's tests; §11 → Task 15; §12 AC-01a/b/c (git, Tasks 10–14), AC-02/03 (Task 14), AC-04 (seal checkpoint, Task 2), AC-05 (Task 3 tooling hash + git), AC-06a/b, AC-07, AC-08 (Task 3), AC-09 (Task 3 invariants), AC-10/11 (Tasks 7, 14), AC-12 (Task 6 validator), AC-13 (Tasks 3/4 provenance), AC-14 (Task 2), AC-15a/b, AC-20a/b (Task 6 log test + events + mock-order test), AC-16, AC-17 (Task 1), AC-18a-B/D/F/X, AC-18b (Tasks 11, 13, 14), AC-19 (Tasks 3, 6 `--verify`, 11 attempt ledger, 12), AC-21 (Task 13 F), AC-22 + AC-01d (Task 13 X), AC-23 (Tasks 10, 11: the suite is re-run on the clean committed HEAD right after the T and B commits and the result ledgered; dependency changes are covered by AC-05's git invariant).
 - Controller ruling: the spec's optional `--from-baseline` restore is not implemented; a dirty round state is refused and restored by `git checkout <B> -- <files>` (spec §5.5.6 allows "거부(기본)").
 - The §6 spec-parity test is added at T (Task 10) because the inventory is finalized only after method-safety; `tests/intelligence/test_search.py` is not in `TOOLING_FILES`.
 
@@ -2619,3 +2683,5 @@ v4 (after external plan review 3) — P0: (1) negative-phrase tests use a summar
 v5 (after external plan review 4) — P0: (1) `candidates --bench FILE`; the pre-classification bench is pinned as `round2-work/bench-preclassify.json` and the AC-13 replay regenerates candidates from it, classification compared separately (Tasks 4, 10); (2) spec v1.12: AC-07/AC-14/AC-16 apply to success + tuning-failure only, new common AC-23 (full suite green at T and B), AC-22 keeps the failing test output as evidence (constraints, coverage map); (3) X promoted to a full terminal branch in spec and plan (`terminal commit := D | F | X`, AC-01d, AC-18a-X row, AC-05/AC-18b/attestation wording, Task 16). P1: `verify_coverage` checks the attempt's `reviewed_record_shas` and `accepted_ids` (Tasks 2, 11); fixed rejection-rule priority in the frozen prompt and Task 11; coverage map lists AC-22/AC-18a-X/AC-01d/AC-23; Task 16 records D/F/X.
 
 v6 (after external plan review 5) — P0: (1) explicit AC-23 evidence step after the T and B commits (suite re-run on the clean committed HEAD, event with commit/exit code/output sha appended to the ledger; Tasks 10, 11); (2) Task 12 task reviewer is branch-aware (`adopted`/`failed` require a green suite, `rejected` requires the captured red suite to match the worker's report plus B restoration, never green tests); (3) the binding spec is v1.12 everywhere (header, architecture sentence, Task 6/13 references). P1: Task 15 N/A fields on failure and abort branches; X readiness records B-vs-X policy file shas.
+
+v7 (after external plan review 6) — P0: (1) the red suite output is captured before `--reject`, which now takes `--evidence PATH`, verifies the files still reproduce the candidate, and stores `reject_evidence` (failing test ids + output sha) on the log line; `--materialize RUN_ID --out DIR` rebuilds the candidate policy files so the branch-aware reviewer reproduces the failure signature in a temporary worktree instead of expecting HEAD to be red (Tasks 6, 10 brief, 12); (2) the `rejected_suite_evidence` ledger event feeds Task 15, and the brief's report includes the evidence path and failing ids (Tasks 13, 15); (3) spec v1.13 splits AC-19 per branch and `--verify` is abort-aware (Tasks 6, 13). P1: `dependency_diff` dropped from the AC-23 event (AC-05 covers it); Task 13 names the three log-state branches; self-review AC-23 wording.
