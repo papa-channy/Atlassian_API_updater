@@ -1,6 +1,6 @@
 # Search Quality Round 2 — Technical Specification
 
-**문서 버전:** v1.4
+**문서 버전:** v1.5
 **기준일:** 2026-10-02
 **선행 구현:** Search Quality Round 1 (spec v1.4, 게이트 실패: held_out 4/16, negative 5/8) + Round 2 pre-work (`main` 95b8de0: 관찰 집합 강등, 라운드 비의존 테스트, 로더 보정). 오프라인 테스트 405개.
 **목적:** Round 1 절차(A→T→B→C→D)를 **어휘만 바꿔** 반복하고, 봉인된 새 held_out 16 / negative 8에서 Discovery 게이트(≥ 15/16, 0/8)를 충족한다.
@@ -40,6 +40,7 @@ R1–R4 정의는 Round 1 그대로.
 - 2026-10-02 외부 검수 2차(v1.1→v1.2): notes 스키마를 라운드별로 분기(`candidate_word`는 round ≥ 2만 필수, Round 1 항목 그대로 로드되는 회귀 테스트); 사전 병합분의 동결 해시 `lexicon_aliases_sha256` 추가와 `concept_lexicon.json` 산출물 명시; 생성 단계는 **ChatGPT 임시 채팅(메모리·기록 없음)** 으로 고정("새 대화"는 독립성 보장이 아님); B..C 동안 봉인 평문을 **사용자 보유 passphrase로 암호화하고 평문 삭제**(worker 환경에서 읽을 수 없음을 물리적으로 보장), D에서 사용자가 복호화. P1 반영: 개념당 synonym ≤ 5 기계 강제(사전순 앞 5개), 정규화 후 카탈로그 비교, 폐기 항목에 `catalog_df`·개념 기록, `leave` → POST|DELETE 상위집합, `--verb-report`는 진단 전용, 타깃 어휘에서 path_noise·식별자형·제품 힌트 제거, worker 출력 sha·실행 횟수 기록, R5의 ∃ 의미론.
 - 2026-10-02 외부 검수 3차(v1.2→v1.3): 임시 채팅은 **Unpersonalized** 선택 필수(Personalized 임시 채팅은 메모리·맞춤 지시를 사용함), 서버측 30일 보존은 인정하고 "완전 stateless 저장"이라 쓰지 않음; **worker 브리프를 T에서 동결**(`round2-worker-brief.md` 커밋, sha를 `round_freeze`에)하고 B..C의 alias 추가를 **사전 선언된 결정적 선택기**(`--propose-aliases`)로 바꿔 컨트롤러·worker의 선택 여지 제거, 다중 실행 시 첫 AC-valid 출력 채택; **사전–seed 호환 게이트**(seed에 등장하는 synonym은 `lexicon_targets ∩ allowed_targets ≠ ∅`일 때만 유지, 아니면 폐기해 seed 후보로 남김); P1: synonym 타깃 = 정확히 1, stateless 의미 검토자(binary reject만), 정규화 카탈로그 어휘 정의 고정, AC-18을 자동 체크포인트와 attestation으로 분리, "암호학적으로 접근 불가(선언된 위협 모델)" 표현, APFS 암호화 볼륨 대안 명시.
 - 2026-10-02 외부 검수 4차(v1.3→v1.4): B..C 튜닝을 **단방향 파이프라인**으로 고정(상수는 B 시점 alias 상태에서 정확히 1회 선택 → alias는 그 상수에서 정확히 1회 제안 → 최종 검증; 재선택·재제안 금지, 최종 검증 실패면 튜닝 실패로 종료); 모든 튜닝 실행은 **B baseline을 명시적 입력**으로 삼고 worktree의 round2 상태를 읽지 않음(dirty 상태 거부); 사전의 의미 검토자도 §5.3과 **같은 stateless 실행 계약**; P1: `round_freeze` 예시 6개 필드, 사전 처리 순서 단일화(정규화 → 구조 검사 → stateless 의미 reject → 개념당 사전순 5개 → seed 호환 게이트 → 병합), §13 타깃 문구, 제안기의 working alias 상태 명시, `targets_by_seed`로 현재 seed의 타깃만 순회, AC-20(상수 1회·alias 1회 불변).
+- 2026-10-02 외부 검수 5차(v1.4→v1.5): **소스 스냅샷 S를 H 직후, 모든 카탈로그 의존 pre-T 작업 전에 생성**하고 T 이후 재스냅샷 없음(한 라운드가 하나의 op universe만 사용); **hidden 의미 검토자도 §5.3 stateless 실행 계약**(입력: hidden 평문 + internal catalog + 규칙만; 컨트롤러는 디스패치·적용만); AC-20을 **run_id 기준**으로 재정의(run마다 상수 1회→alias 1회, 전체에서 adopted run 1개, 모든 AC-valid run의 baseline·output sha 동일); P1: 제안기는 각 seed 차례에 working 상태로 재평가해 이미 통과면 `resolved_by_prior_change`로 건너뜀, AC-13 범위를 결정적 단계로 한정, §7.0 생성 문장을 §5.3 계약으로 통일, `--feasibility`→`--method-safety`, §13 오염 표현 정정.
 
 ---
 
@@ -50,7 +51,7 @@ R1–R4 정의는 Round 1 그대로.
 ## 2. 범위
 
 ### 2.1 포함
-1. `verb_methods` 인벤토리 교체(§6) + seed 실현성 검사.
+1. `verb_methods` 인벤토리 교체(§6) + seed 메서드 안전성 검사.
 2. 일반 개념 사전 `concept_lexicon.json`(§7.0) — clean-context 생성, 기계 검사, T 동결.
 3. seed 유래 alias 후보 목록 `alias_candidates.json`(§7.1) — 결정적 생성, T 동결; R5/R6 기계 분류.
 4. 봉인·진단·튜닝 도구의 라운드 일반화(§8); `policy.py`의 alias notes `origin` 허용값 확장(§8, 유일한 production 변경).
@@ -96,19 +97,21 @@ R1–R4 정의는 Round 1 그대로.
 
 ## 5. 벤치마크 절차 (커밋 순서 H → T → B → C → D)
 
-### 5.1 커밋 H (housekeeping, T 전)
+### 5.1 커밋 H (housekeeping, T 전) + 소스 스냅샷 S
 `policy.py` notes-origin 규칙 확장(§4) + 라운드 일반화 도구(§8) + 테스트. 어휘·벤치마크 무변경.
+
+**소스 스냅샷 S(v1.5)**: H 직후, 카탈로그에 의존하는 어떤 pre-T 작업(개념 토큰 목록, `--verb-report`, method-safety, 사전 게이트, 후보 목록)보다 **먼저** `~/.atlassian_api_updater/round2-cache/`(`$ATLASSIAN_DOCS_ROUND2_CACHE`; 존재 시 거부)를 만들고 registry fingerprint·spec sha를 readiness에 고정한다. 이후 모든 단계(pre-T 도구, hidden 생성용 generator catalog, B..C 튜닝, D 평가)는 S만 읽는다. **T 이후 재스냅샷은 없다.** 각 도구는 `generated_from.registry_fingerprint`를 기록하고, S의 fingerprint와 다르면 거부한다. 순서: H → S → verb-report/사전 생성/method-safety/사전 게이트 → 후보/worker 브리프 → T → B → C → D.
 
 ### 5.2 커밋 T (동결)
 1. `search_ranking.json` `verb_methods` ← §6 인벤토리.
-2. **seed 실현성 검사**(`alias_candidates_tool.py --feasibility`): seed 39건 각각에 대해, 질의 unigram ∩ 인벤토리의 허용 메서드 교집합이 (a) 공집합(의도 0)이거나 (b) 정답 op 메서드를 포함해야 한다. 위반(허용 집합이 정답 메서드를 배제)이 있으면 그 동사를 상위집합으로 넓혀 재실행 — **이 조정은 T 전에 끝나고 인벤토리와 함께 동결된다.** 결과(통과 목록)는 readiness에 기록.
+2. **메서드 안전성 검사**(`alias_candidates_tool.py --method-safety`; 의미: 인벤토리가 seed에 잘못된 메서드 불일치 감산을 만들지 않는지): seed 39건 각각에 대해, 질의 unigram ∩ 인벤토리의 허용 메서드 교집합이 (a) 공집합(의도 0)이거나 (b) 정답 op 메서드를 포함해야 한다. 위반(허용 집합이 정답 메서드를 배제)이 있으면 그 동사를 상위집합으로 넓혀 재실행 — **이 조정은 T 전에 끝나고 인벤토리와 함께 동결된다.** 결과(통과 목록)는 readiness에 기록.
 3. **사전–seed 호환 게이트**(`alias_candidates_tool.py --lexicon-gate`, T 전): 사전 synonym `w`가 어떤 seed 질의의 unigram에 등장하면 `lexicon_targets(w) ∩ allowed_targets(w) ≠ ∅`(§7.1.6 정의, seed의 정답 op 어휘)일 때만 유지하고, 교집합이 비면 그 사전 항목을 폐기(`rejected[w].reason = "seed-incompatible"`)해 seed 유래 후보로 남긴다. seed만 사용하므로 독립성 훼손 없음; 사전 오생성이 seed 단어를 선점해 B..C에서 복구 불가능해지는 상황을 막는다.
 4. 개념 사전 병합: `concept_lexicon.json` 항목을 `search_aliases.json.aliases`에 병합(`notes[word] = {"origin": "lexicon-r2", "seed_query_id": null, "failure_classes": [], "evidence": "concept lexicon r2"}`). 충돌(이미 있는 alias 키)은 기존 항목 우선, 사전 항목은 버림(기록).
 5. `alias_candidates.json` 생성(§7.1) — 사전 병합 **후**에 실행(사전이 이미 잇는 토큰은 후보에서 자연히 빠진다).
 6. seed `failure_classes` 기계 분류(R5/R6)를 bench에 기록(§0.2). 기존 R1–R4 표기는 유지하고 R5/R6를 추가.
 7. **worker 브리프 동결**: `tests/benchmarks/round2-worker-brief.md`(B..C 튜닝 worker에게 전달할 브리프 전문 — 실행할 명령 순서, 허용 파일, 보고 형식만; seed 분석·힌트 없음)를 T에 커밋하고 sha를 `round_freeze.json`에 `worker_brief_sha256`으로 기록. B 이후 컨트롤러는 이 파일을 그대로 전달만 할 수 있다.
 8. `round_freeze.json` round 2 항목(해시 6개, §4).
-9. T 직후 스냅샷 재복사(`$ATLASSIAN_DOCS_ROUND2_CACHE`, 기본 `~/.atlassian_api_updater/round2-cache/`; 존재 시 거부). fingerprint·T SHA를 readiness에 기록.
+9. T SHA와 S fingerprint(§5.1)를 readiness에 기록. 스냅샷은 §5.1의 S를 그대로 사용(재복사 없음).
 
 ### 5.3 생성 (stateless clean context, Round 1 §5.4 규칙)
 - **생성기 실행 형태(v1.3, 사전 §7.0과 hidden 모두 동일)**: 1순위는 메모리 없는 stateless API 호출, 실무 2순위는 ChatGPT **임시 채팅 + Unpersonalized**. 임시 채팅은 시작 전 Personalized/Unpersonalized를 고를 수 있고 Personalized는 기존 메모리·맞춤 지시를 사용하므로 **Unpersonalized 선택이 필수**이며, 생성 전에 UI에서 그 상태를 확인하고 readiness에 `temporary_chat_unpersonalized: true`를 attestation한다. 일반 "새 대화"는 계정 메모리를 통해 과거 대화(Round 1 실패어 등)가 섞일 수 있으므로 금지. 임시 채팅은 채팅 기록에서 다시 열 수 없다(OpenAI가 안전 목적으로 최대 30일 사본을 보관할 수 있으므로 "완전 stateless 저장"은 아니지만 이 벤치마크의 누수 모델에는 영향 없음). 생성 결과는 컨트롤러가 즉시 추출해 sha256을 계산하고, 저장하지 않고 탭을 닫는다. readiness에 실행 형태를 기록.
@@ -116,6 +119,7 @@ R1–R4 정의는 Round 1 그대로.
 - negative 규칙 분리:
   - **machine**: 질의의 정규화 unigram 열이 어떤 op의 summary 또는 마지막 리터럴 세그먼트의 unigram 열과 **완전히 같으면** 거부(토큰 정규화 후 exact phrase).
   - **reviewer**: "이 질의에 정답 op가 존재하면 negative가 아니다"; 유인 오답이 실제로 오답인지.
+- **hidden 의미 검토자(v1.5)**: §5.3 실행 계약과 동일하게 stateless API 또는 Unpersonalized 임시 채팅에서 실행한다. 입력은 hidden 평문 + internal catalog + 검토 규칙(§5.3 reviewer 규칙, 정답 op 존재 여부·유인 오답의 오답 여부)뿐이며 seed·alias·scorer·Round 1 실패·repo 접근 없음. 출력은 레코드별 accept/reject + 사유. 컨트롤러는 검토자를 디스패치하고 결과를 적용(재요청 피드백 구성)할 뿐 accept/reject를 직접 결정하지 않는다. 검토자 입력/출력 sha256과 실행 형태를 readiness에 기록.
 - machine check 0 violation → reviewer check → 재요청은 최소 피드백.
 
 ### 5.4 커밋 B (봉인) + 평문 격리
@@ -141,7 +145,7 @@ R1–R4 정의는 Round 1 그대로.
 |---|---|---|
 | seal/review controller | hidden 평문(B 전·D만), internal catalog, 모든 repo 파일 | B 이후 alias 선택·상수 선택·튜닝 피드백 전달. 할 수 있는 것은 절차 명령(스크립트 실행 지시, 커밋, 리뷰 디스패치)뿐 |
 | tuning worker (B..C 구현 서브에이전트) | seed/regression, 동결된 후보 목록·사전·인벤토리, 스냅샷, 튜닝 스크립트 | hidden 평문(B..C 동안 기계상 존재하지 않음 §5.4)·internal catalog 접근 |
-| semantic reviewer (B 전) | hidden 평문 + internal catalog | seed 파일, scorer 실행 |
+| semantic reviewer (B 전, §5.3 stateless 계약으로 실행) | hidden 평문 + internal catalog + 규칙 | seed·alias·scorer·Round 1 실패·repo; 컨트롤러의 직접 판정 |
 | 사용자 | passphrase | — |
 
 attestation 항목: (1) "B..C 동안 봉인 평문은 튜닝 환경에서 읽을 수 없는 상태였다"(암호화 시각·`.enc` sha256·평문 부재 확인); (2) "hidden을 본 주체가 B..C의 alias/상수 선택에 관여하지 않았다"; 증거로 worker 브리프 sha256, worker 실행 횟수, 각 실행의 출력(패치) sha256을 readiness에 기록해 컨트롤러의 선별(cherry-picking) 여지를 줄인다.
@@ -186,7 +190,7 @@ attestation 항목: (1) "B..C 동안 봉인 평문은 튜닝 환경에서 읽을
 ```
 
 - v1.0 대비: `search/query/check/open/export` GET|POST; `unassign/unpin/unlink/cancel/clear` PUT|POST|DELETE; `kick` 제거(의미 불명확); `leave` POST|DELETE.
-- **동결 전 진단**: `alias_candidates_tool.py --verb-report`가 각 동사에 대해 **카탈로그에서 그 동사가 operationId/summary에 나타나는 op들의 메서드 분포**를 출력한다(예: `check` → POST 3, GET 1). 토큰 출현은 동사 용법과 명사 용법(`record`, `comment`, `query`)을 구별하지 못하므로 이 보고서는 **진단 전용**이며 자동 확장 명령이 아니다: 분포가 인벤토리 밖의 메서드를 포함하는 동사는 "검토 대상"으로 표시하고, 컨트롤러가 동사 용법인지 판단해 넓힐지 결정한 뒤 readiness에 결정과 근거를 기록한다. 단 §5.2 실현성 검사 위반은 반드시 고친다. (hidden 무관, 카탈로그만 사용.)
+- **동결 전 진단**: `alias_candidates_tool.py --verb-report`가 각 동사에 대해 **카탈로그에서 그 동사가 operationId/summary에 나타나는 op들의 메서드 분포**를 출력한다(예: `check` → POST 3, GET 1). 토큰 출현은 동사 용법과 명사 용법(`record`, `comment`, `query`)을 구별하지 못하므로 이 보고서는 **진단 전용**이며 자동 확장 명령이 아니다: 분포가 인벤토리 밖의 메서드를 포함하는 동사는 "검토 대상"으로 표시하고, 컨트롤러가 동사 용법인지 판단해 넓힐지 결정한 뒤 readiness에 결정과 근거를 기록한다. 단 §5.2 메서드 안전성 검사 위반은 반드시 고친다. (hidden 무관, 카탈로그만 사용.)
 - `path_noise`, `product_hints`, `tuning_grid`, `baseline`은 Round 1 T2 값 그대로.
 - 굴절형(`rewrites`, `showing`)은 매칭되지 않는다 — 알려진 한계(§13).
 
@@ -194,7 +198,7 @@ attestation 항목: (1) "B..C 동안 봉인 평문은 튜닝 환경에서 읽을
 
 ### 7.0 일반 개념 사전 `concept_lexicon.json` (v1.1, T 전 생성·동결)
 - **개념 토큰 목록**(기계 생성, `alias_candidates_tool.py --concept-tokens`): 카탈로그 전 op의 경로 리터럴 세그먼트 unigram(숫자·`path_noise` 제외) ∪ tags unigram, `singular` 정규화, 출현 수와 함께. 현재 스냅샷 기준 약 356개.
-- **생성(stateless clean context, §5.3 실행 형태)**: ChatGPT 임시 채팅에 **개념 토큰 목록(토큰, 출현 수, 소속 제품)만** 주고, 각 개념에 대해 "일반 사용자가 대신 쓸 법한 영어 단어(단일 unigram, 동사 제외)"를 최대 5개 생성하게 한다. 출력: `{"<synonym>": ["<concept>", …]}`. 프롬프트에 seed·hidden·Round 1 실패·현 alias·동사 인벤토리를 주지 않는다. 프롬프트 sha256과 원본 결과 sha256(`raw_sha256`)을 `concept_lexicon.json`과 readiness에 기록.
+- **생성(§5.3 실행 계약: stateless API 우선, 또는 Unpersonalized 임시 채팅)**: 생성기에 **개념 토큰 목록(토큰, 출현 수, 소속 제품; S에서 계산)만** 주고, 각 개념에 대해 "일반 사용자가 대신 쓸 법한 영어 단어(단일 unigram, 동사 제외)"를 최대 5개 생성하게 한다. 출력: `{"<synonym>": ["<concept>", …]}`. 프롬프트에 seed·hidden·Round 1 실패·현 alias·동사 인벤토리를 주지 않는다. 프롬프트 sha256과 원본 결과 sha256(`raw_sha256`)을 `concept_lexicon.json`과 readiness에 기록.
 - **기계 검사·정규화**(`concept_lexicon_check.py`, 순서 고정): (0) synonym과 타깃을 lowercase + `singular` canonical form으로 먼저 정규화하고 중복을 합친다; (a) synonym은 `^[a-z]+$`, STOPWORDS·기능어(§7.1 목록)·동사 인벤토리 키·제품 힌트 키가 아니고, **정규화된 카탈로그 어휘에 없는 단어**여야 한다 — 정규화 카탈로그 어휘 = 전 op의 operationId·경로 리터럴 세그먼트·tags·summary의 unigram을 `singular`로 정규화한 집합(§7.1의 `expected_vocab`과 같은 토큰화; `files`→`file`처럼 정규화 후 비교하므로 굴절형 우회 없음; 이미 있는 단어는 alias가 필요 없다); (b) 각 타깃은 개념 토큰 목록에 있어야 한다; (c) synonym 하나당 타깃 **정확히 1**(두 개념을 가리키는 synonym은 폐기 — 감쇠 0.5가 두 연결을 만들어 negative에 불리); (d) **개념당 synonym ≤ 5를 역방향으로 강제** — 초과 시 그 개념을 가리키는 synonym을 사전순으로 정렬해 앞 5개만 남긴다(결정적); (e) 기존 `search_aliases.json` 키와 충돌하면 사전 항목 폐기; (f) §5.2.3 사전–seed 호환 게이트.
 - **stateless 의미 검토(T 전, 품질 필터)**: 사전순 절단은 품질 기준이 아니므로 절단 **전에** 의미 검토를 둔다. 검토자는 **§5.3과 완전히 같은 실행 계약**(stateless API 또는 Unpersonalized 임시 채팅)으로 실행한다 — "빈 컨텍스트 서브에이전트"는 현재 세션의 메모리·컨텍스트를 상속할 수 있으므로 불충분. 입력은 개념 토큰 + 생성된 synonym 목록만(seed·hidden·실패 목록 없음); 각 항목을 "일반 사용자의 동의어 표현인가"로 **binary reject만** 한다(추가·수정 금지). 실행 형태와 입력/출력 sha256을 readiness에 기록.
 - **처리 순서(단일 정의)**: (0) 정규화 → (a)(b)(c)(e) 구조 검사 → stateless 의미 reject → (d) 개념당 사전순 5개 → (f) seed 호환 게이트 → 병합. (d)가 의미 검토 뒤에 오므로 앞 5개 중 reject된 자리를 6번째 이후의 좋은 synonym이 채운다. 위반 항목은 **삭제**(재요청 없음 — 인벤토리이므로 recall보다 결정성을 우선)하되 `rejected[synonym] = {"reason", "targets", "catalog_df"}`로 기록한다(카탈로그에 이미 있는 다의어 synonym은 Round 3 근거).
@@ -213,7 +217,7 @@ attestation 항목: (1) "B..C 동안 봉인 평문은 튜닝 환경에서 읽을
 - 파일: `{"round": 2, "generated_from": {"bench_sha256", "aliases_sha256", "registry_fingerprint"}, "candidates": {"<word>": {"seed_ids": [...], "targets_by_seed": {"s-NNN": [...]}, "allowed_targets": [...], "catalog_df": n}}, "excluded": {"<word>": "<reason>"}}`.
 
 ### 7.2 B..C 추가 규칙 (v1.1 강화)
-- **결정적 제안기 `--propose-aliases`(v1.3)**: 입력 = 선택된 상수, `alias_candidates.json`, 스냅샷 seed/regression 결과. 절차: `working_aliases`는 B 시점 alias에서 시작하고, 채택된 변경은 즉시 적용되며, 이후의 모든 시도는 그 working 상태에서 평가한다. 실패 seed를 id 오름차순으로 순회; 각 seed에 대해 그 질의의 후보어를 사전순, **그 seed의 `targets_by_seed`** 를 사전순으로 순회하며(다른 seed 때문에 허용된 타깃은 시도하지 않음) (i) direct alias `word → [target]`를 시도, 그 seed가 통과하고 다른 seed/regression이 하나도 깨지지 않으면 채택; (ii) 전부 실패하면 conditional rule(`when_all = [word, ctx]`, ctx는 그 seed 질의의 나머지 unigram 사전순)을 같은 기준으로 시도; (iii) 그래도 없으면 그 seed는 미해결로 기록. 예산 15에 도달하면 중단. 제안기는 순수 함수이며 같은 입력에 같은 출력을 낸다(테스트).
+- **결정적 제안기 `--propose-aliases`(v1.3)**: 입력 = 선택된 상수, `alias_candidates.json`, 스냅샷 seed/regression 결과. 절차: `working_aliases`는 B 시점 alias에서 시작하고, 채택된 변경은 즉시 적용되며, 이후의 모든 시도는 그 working 상태에서 평가한다. seed를 id 오름차순으로 순회하되 **각 seed 차례 시작 시 working 상태로 재평가**해 이미 통과면 `resolved_by_prior_change`로 기록하고 건너뛴다; 각 seed에 대해 그 질의의 후보어를 사전순, **그 seed의 `targets_by_seed`** 를 사전순으로 순회하며(다른 seed 때문에 허용된 타깃은 시도하지 않음) (i) direct alias `word → [target]`를 시도, 그 seed가 통과하고 다른 seed/regression이 하나도 깨지지 않으면 채택; (ii) 전부 실패하면 conditional rule(`when_all = [word, ctx]`, ctx는 그 seed 질의의 나머지 unigram 사전순)을 같은 기준으로 시도; (iii) 그래도 없으면 그 seed는 미해결로 기록. 예산 15에 도달하면 중단. 제안기는 순수 함수이며 같은 입력에 같은 출력을 낸다(테스트).
 - **direct alias**: `word → [target]` — 정확히 1개 타깃, `word ∈ candidates`, `target ∈ allowed_targets(word)`.
 - **conditional rule**: `when_all = [word, ctx?]`(후보어 필수 + 문맥 토큰 최대 1개, 문맥 토큰은 해당 seed 질의의 unigram), `add = [target]` 정확히 1개, `target ∈ allowed_targets(word)`.
 - 예산: 추가분(alias + rule) ≤ 15, seed당 1개. notes: `origin: "round2"`, `candidate_word`(필수), `seed_query_id`, `failure_classes ∋ "R6"`, `evidence`.
@@ -226,7 +230,7 @@ attestation 항목: (1) "B..C 동안 봉인 평문은 튜닝 환경에서 읽을
 - `round_seal.py --round N`: seal 키 `round{N}_seal`; `seal`은 해당 키가 있으면 거부. `round1_seal.py` 삭제, 테스트 import 변경.
 - `diag_search_queries.py`: `round_freeze.json` 마지막 항목 또는 `--round N`으로 seal 키·artifact 이름 결정.
 - `tune_search_ranking.py`: 로그 `search-tuning-round{N}.jsonl`, 라인에 `round`; `--alias-change` 검증기(§7.2).
-- `alias_candidates_tool.py` 서브커맨드: `--concept-tokens`, `--verb-report`, `--feasibility`, `--candidates`, `--classify`(R5/R6를 bench에 기록, 결정적).
+- `alias_candidates_tool.py` 서브커맨드: `--concept-tokens`, `--verb-report`, `--method-safety`, `--candidates`, `--classify`(R5/R6를 bench에 기록, 결정적).
 - `concept_lexicon_check.py`: §7.0 검사·정규화; 결과 파일과 폐기 목록 출력.
 - `policy.py`(커밋 H, 유일한 production 변경) — notes `origin` 스키마를 **하위 호환**으로 분기:
 
@@ -248,13 +252,13 @@ attestation 항목: (1) "B..C 동안 봉인 평문은 튜닝 환경에서 읽을
 
 ### 10.1 단위
 - 동사 인벤토리 == 스펙 §6 블록(스펙 파일 파싱); 샘플 의도: `set up a jira planning board` → {PUT, POST}; `leave feedback on this jira ticket` → {POST, DELETE}; `discard this uploaded ticket file` → {DELETE}; `browse pages` → {GET}; `check access` → {GET, POST}; `revise`+`rewrite` → {PUT, POST}.
-- 실현성 검사: seed 39건 전부 (a) 또는 (b) 충족(테스트로 고정; 인벤토리 변경 시 깨짐).
+- 메서드 안전성 검사: seed 39건 전부 (a) 또는 (b) 충족(테스트로 고정; 인벤토리 변경 시 깨짐).
 - 개념 사전 검사기: 규칙 (0),(a)–(e) 각각 실패 케이스(굴절형 `files` 거부, 개념당 6개 → 사전순 5개, 타깃 3개 거부); 결정성(두 번 실행 동일); `rejected` 기록.
 - `lexicon_aliases_sha256` 계산 함수: round2 alias 추가 전후 동일, 사전 항목 하나 변경 시 상이.
 - 후보 도구: 결정성; **정답 op 어휘 기준** 제외(전역 출현 토큰 `workspace`가 후보로 남는 케이스를 고정); 기능어·식별자 제외; 타깃에 summary 포함, 동사 제거; R5/R6 분류 샘플.
 - 검증기 `validate_alias_change`: 타깃 2개 거부, 후보 밖 단어 거부, 문맥 토큰 2개 거부, 예산 초과 거부, seed당 2개 거부, `candidate_word` 불일치 거부, 제안기 출력과 불일치 거부.
 - 제안기 `--propose-aliases`: 결정성(두 번 동일), 순회 순서(id·사전순) 고정 케이스, working 상태 누적, 현재 seed의 타깃만 시도, 다른 seed를 깨는 alias 비채택, 예산 15 중단, 미해결 기록.
-- 단방향 파이프라인: clean B 상태에서 두 번 실행 → byte-identical; 첫 출력이 적용된 worktree에서 실행 → "dirty round2 state" 거부(또는 `--from-baseline`으로 같은 출력); constants/round2 alias를 임의 변경한 상태 → baseline mismatch 실패; 재실행이 이전 출력을 입력으로 쓰지 않음; alias 제안 후 상수 재선택 경로 없음.
+- 단방향 파이프라인: clean B 상태에서 두 번 실행 → byte-identical(두 run_id, 둘째는 adopted=false); 첫 출력이 적용된 worktree에서 실행 → "dirty round2 state" 거부(또는 `--from-baseline`으로 같은 출력); constants/round2 alias를 임의 변경한 상태 → baseline mismatch 실패; 재실행이 이전 출력을 입력으로 쓰지 않음; alias 제안 후 상수 재선택 경로 없음.
 - 사전–seed 호환 게이트: 교집합 비면 폐기·후보로 복귀, 교집합 있으면 유지.
 - `policy.py` notes-origin: `lexicon-r2`/`round2` 허용, `round9x` 형식 오류 거부, round2에 `candidate_word` 없으면 거부, round1 항목은 `candidate_word` 없이 통과, 현재 `search_aliases.json` 로드 회귀(§8).
 - 라운드 일반화: `round_seal.py --round 2`가 `round1_seal`을 건드리지 않음; diag round 2 artifact 이름; Round 1 artifact 테스트 유지.
@@ -271,7 +275,7 @@ attestation 항목: (1) "B..C 동안 봉인 평문은 튜닝 환경에서 읽을
 픽스처 r0 23/23·6/6 유지. 스냅샷 seed 39/39, regression 14/14 — 튜닝 로그 adopted 라인(AC-06).
 
 ## 11. 상태 모델과 readiness
-Round 1 §11과 동일 + Round 2 섹션: 커밋 H/T/B/C/D sha, 스냅샷 fingerprint, 생성 실행 형태(Unpersonalized 임시 채팅 attestation), 사전 생성 프롬프트/결과 sha, 폐기 항목 수, 동사 분포 보고서와 확장 결정, 실현성 검사 결과, hidden 생성 프롬프트/결과 sha, 재요청 횟수, 평문 암호화 시각·`.enc` sha256·복호화 시각, worker 브리프 sha·실행 횟수·출력 sha, 결과 행, 상태. attestation에 §5.6 항목 추가.
+Round 1 §11과 동일 + Round 2 섹션: 커밋 H/T/B/C/D sha, 스냅샷 fingerprint, 생성 실행 형태(Unpersonalized 임시 채팅 attestation), 사전 생성 프롬프트/결과 sha, 폐기 항목 수, 동사 분포 보고서와 확장 결정, 메서드 안전성 검사 결과, hidden 생성 프롬프트/결과 sha, 재요청 횟수, 평문 암호화 시각·`.enc` sha256·복호화 시각, worker 브리프 sha·실행 횟수·출력 sha, 결과 행, 상태. attestation에 §5.6 항목 추가.
 
 ## 12. Acceptance Criteria
 
@@ -289,12 +293,12 @@ Round 1 §11과 동일 + Round 2 섹션: 커밋 H/T/B/C/D sha, 스냅샷 fingerp
 | AC-18a | 자동 체크포인트: B 직후와 D 직전에 `.enc` 존재 ∧ 평문 부재 ∧ `.enc` sha256 동일; D 복호화 평문 sha256 == `round2_seal` | 컨트롤러 스크립트 출력(readiness) |
 | AC-18b | attestation: B..C 전체 기간 평문 미복호화; 생성은 Unpersonalized 임시 채팅(또는 stateless API) | readiness attestation |
 | AC-19 | `round2-worker-brief.md`가 T에 커밋되고 sha == `round_freeze.worker_brief_sha256`; B..C alias 추가분 == 제안기 재실행 결과; worker 출력 중 첫 AC-valid 채택 | 테스트 + readiness |
-| AC-20 | 튜닝 로그 round 2에 상수 선택 라인 정확히 1개(입력 alias sha == B 시점 sha)와 그 뒤 alias 제안 라인 정확히 1개; 그 이후 상수 변경 없음; 모든 실행의 baseline sha 동일 | 테스트 |
+| AC-20 | 튜닝 로그 round 2를 `run_id`로 묶었을 때: 각 run에 `constants_selected` 정확히 1개(입력 alias sha == B 시점 sha) → `aliases_proposed` 정확히 1개 순서, 이후 상수 변경 0; 전체에서 `adopted: true`인 run 정확히 1개 = 첫 AC-valid run; 모든 AC-valid run의 baseline sha 동일·output sha 동일 | 테스트 |
 | AC-09 | §4 불변 목록 diff 비어 있음; Round 1 artifact·로그·seal·readiness 섹션 해시 불변 | 테스트 + git |
 | AC-10 | `round2-final.json` provenance 필드 + `round`, `held_out_top3` | 테스트 |
 | AC-11 | 최종 artifact 정확히 하나, `git_commit`==C(컨트롤러 D 검사), D 이후 가변 파일 변경 없음 | git |
 | AC-12 | round2 alias/rule 전부 §7.2(1 타깃, 후보 포함, 예산, seed당 1개, `candidate_word`) | 테스트 |
-| AC-13 | `alias_candidates.json`·`concept_lexicon` 병합분·인벤토리가 T 이후 불변; 도구 재실행 결과 동일 | 테스트 + 도구 |
+| AC-13 | `alias_candidates.json`·`concept_lexicon` 병합분·인벤토리가 T 이후 불변; **결정적 단계의 재실행 결과 동일**(동결된 raw 생성 결과 + 동결된 의미 검토 출력을 입력으로 한 정규화·게이트·후보 도구; LLM 호출 자체의 재실행 동일성은 요구하지 않음); 모든 도구 산출물의 `registry_fingerprint` == S | 테스트 + 도구 |
 | AC-14 | 라운드 일반화 후 Round 1 테스트 통과 | 테스트 |
 | AC-15 | 튜닝 로그 round 2: adopted 정확히 하나, 상수 == 파일, baseline == freeze | 테스트 |
 | AC-16 | 전체 오프라인 테스트 통과, 새 의존성 없음 | unittest |
@@ -303,7 +307,7 @@ Attestation(컨트롤러): 사전·hidden 생성 프롬프트/결과 sha와 실�
 
 ## 13. 위험과 완화
 
-- **개념 사전 품질**: clean context가 엉뚱한 동의어를 만들 수 있다(예 `note→comment`는 좋지만 `card→issue`는 논란). 완화: 타깃 정확히 1, stateless 의미 검토, 카탈로그 어휘와 겹치는 단어 금지, alias 감쇠 0.5로 영향 제한. 오염 위험은 없음(hidden·seed 미제공).
+- **개념 사전 품질**: clean context가 엉뚱한 동의어를 만들 수 있다(예 `note→comment`는 좋지만 `card→issue`는 논란). 완화: 타깃 정확히 1, stateless 의미 검토, 카탈로그 어휘와 겹치는 단어 금지, alias 감쇠 0.5로 영향 제한. hidden 오염은 없음(생성에 hidden·seed 미제공); T의 seed 호환 게이트는 의도적으로 seed-informed한 학습 절차의 일부다.
 - **인벤토리 과소/과다**: §6 다의어 원칙과 카탈로그 분포 보고서로 완화.
 - **굴절형**: Round 3 후보.
 - **후보 목록 seed 과적합**: 후보는 seed 유래지만 사전이 일반 커버리지를 맡는다. hidden의 새 동의어는 사전이 못 덮으면 실패 — 그것이 측정 대상.
