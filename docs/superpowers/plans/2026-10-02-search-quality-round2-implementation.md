@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-02-search-quality-round2-design.md` **v1.13** (v1.10 passed 10 external reviews with "구현 계획으로 진행 가능"; v1.11–v1.13 added the abort branch X, AC-01d, AC-18a-X, AC-22, AC-23 and the per-branch AC-19 during plan review). The spec v1.13 is binding; this plan is its argument.
 
-**Plan version:** v8 (after external plan reviews 1–7 — see "Plan revision notes" at the end).
+**Plan version:** v9 (external plan reviews 1–8; review 8 verdict: P0 0, "구현 진행 가능" — see "Plan revision notes" at the end).
 
 ## Global Constraints
 
@@ -1543,6 +1543,29 @@ class TestReplayAndHashes(unittest.TestCase):
         tampered = {"constants": {**BASE, "method_match_bonus": 3.0}}                      # aliases == B, ranking != B
         self.assertEqual(tune.baseline_mismatch(BASE_RAW, tampered, cands), ["ranking"])    # --verify (abort) must fail on this
 
+    def test_verify_abort_mode_rejects_tampered_ranking(self):
+        """Integration-level: _verify itself (not only the helper) must fail when aliases == B but ranking != B."""
+        from unittest import mock
+        rejected = {"run_id": "r1", "status": "rejected", "adopted": False, "constants_selected": dict(BASE), "result_sha256": "0" * 64}
+        cands = {"generated_from": {"inputs": {"aliases": policy.canonical_sha256(BASE_RAW), "ranking": policy.canonical_sha256({"constants": dict(BASE)})}}, "candidates": {}}
+        rp = policy.load_ranking()
+        with mock.patch.object(tune, "_read_log", return_value=[rejected]), mock.patch.object(tune, "_with_state", side_effect=AssertionError("replay must not run")):
+            with mock.patch("sys.stderr") as err:
+                code = tune._verify(pathlib.Path("unused"), tune._BENCH, rp, BASE_RAW, {"constants": {**BASE, "method_match_bonus": 3.0}}, cands)
+        self.assertEqual(code, 1); self.assertTrue(any("MISMATCH abort branch" in str(c) for c in err.write.call_args_list))
+
+    def test_materialize_refuses_when_files_do_not_reproduce_result_sha(self):
+        import tempfile
+        from unittest import mock
+        line = {"run_id": "r2", "constants_selected": {**BASE, "method_match_bonus": 3.0}, "result_sha256": "f" * 64,
+                "aliases_proposed": {"aliases": {"workspace": ["page"]}, "rules": [], "notes": {"workspace": tune.round2_note("workspace", "s-001", "page", "alias")}}}
+        with tempfile.TemporaryDirectory() as td, mock.patch.object(tune, "_read_log", return_value=[line]), \
+             mock.patch.object(tune, "ALIASES_PATH", pathlib.Path(td) / "a.json"), mock.patch.object(tune, "RANKING_PATH", pathlib.Path(td) / "r.json"), mock.patch("sys.stderr"):
+            (pathlib.Path(td) / "a.json").write_text(json.dumps(BASE_RAW)); (pathlib.Path(td) / "r.json").write_text(json.dumps({"constants": dict(BASE)}))
+            self.assertEqual(tune._materialize("r2", pathlib.Path(td) / "out"), 2)        # recorded sha is wrong -> refused
+            line["result_sha256"] = tune.result_sha256(line["constants_selected"], line["aliases_proposed"])
+            self.assertEqual(tune._materialize("r2", pathlib.Path(td) / "out"), 0)
+
     def test_suite_evidence_and_materialize(self):
         text = ("======================================================================\nFAIL: test_a (tests.x.TestA.test_a)\n"
                 "----------------------------------------------------------------------\nTraceback (most recent call last):\n  ...\nAssertionError: 1 != 2\n\n"
@@ -2614,7 +2637,7 @@ test ! -e ~/.atlassian_api_updater/sealed/round2-sealed.json && shasum -a 256 ~/
 - Review package + task reviewer as usual, with a **branch-aware** checklist (the reviewer is told the run's `status` from the worker report):
   - `status=adopted`: full suite green; `--verify` passes; the adopted `constants_selected`/`result_sha256` match the policy files; commit touches only the three allowed files.
   - `status=failed`: full suite green; policy files unchanged (== B); the `tuning_failed` line validates; commit touches only the log.
-  - `status=rejected`: the committed HEAD is at the B policy, so the suite there is normally green — the reviewer must NOT re-run it expecting red. It checks instead: `baseline_mismatch == []` on HEAD (policy == B); the commit touches only the log; the log line has `status: rejected`, `reject_reason` and `reject_evidence` whose `output_sha256` equals the sha of the worker's evidence file and whose `failing_tests` equal the ids the worker reported; then it reproduces the signature: `git worktree add /tmp/r2-cand HEAD`, `python tests/tune_search_ranking.py --materialize <run_id> --out /tmp/r2-cand/tools/atlassian_docs/intelligence/data` (printed `result_sha256_from_files` must equal the run's `result_sha256`), runs the canonical suite inside that worktree and confirms `suite_evidence(output)["failing_tests"] == reject_evidence.failing_tests` (the worktree's log line is `rejected` while the worker saw it `pending`; the log-integrity test accepts both, so this difference cannot change the signature); removes the worktree. Only after this review passes does Task 13 take the X branch.
+  - `status=rejected`: the committed HEAD is at the B policy, so the suite there is normally green — the reviewer must NOT re-run it expecting red. It checks instead: `baseline_mismatch == []` on HEAD (policy == B); the commit touches only the log; the log line has `status: rejected`, `reject_reason` and `reject_evidence` whose `output_sha256` equals the sha of the worker's evidence file and whose `failing_tests` equal the ids the worker reported; then it reproduces the signature: `git worktree add /tmp/r2-cand HEAD`, `python tests/tune_search_ranking.py --materialize <run_id> --out /tmp/r2-cand/tools/atlassian_docs/intelligence/data` (printed `result_sha256_from_files` must equal the run's `result_sha256`), runs the canonical suite inside that worktree and confirms `suite_evidence(output)["failing_tests"] == reject_evidence.failing_tests` (the worktree's log line is `rejected` while the worker saw it `pending`; in the frozen suite the tuning-log integrity test treats both as valid states, and the reproduction target is the canonical failing-test id set, not byte equality of the output); removes the worktree. Only after this review passes does Task 13 take the X branch.
 
 ---
 
@@ -2708,3 +2731,5 @@ v6 (after external plan review 5) — P0: (1) explicit AC-23 evidence step after
 v7 (after external plan review 6) — P0: (1) the red suite output is captured before `--reject`, which now takes `--evidence PATH`, verifies the files still reproduce the candidate, and stores `reject_evidence` (failing test ids + output sha) on the log line; `--materialize RUN_ID --out DIR` rebuilds the candidate policy files so the branch-aware reviewer reproduces the failure signature in a temporary worktree instead of expecting HEAD to be red (Tasks 6, 10 brief, 12); (2) the `rejected_suite_evidence` ledger event feeds Task 15, and the brief's report includes the evidence path and failing ids (Tasks 13, 15); (3) spec v1.13 splits AC-19 per branch and `--verify` is abort-aware (Tasks 6, 13). P1: `dependency_diff` dropped from the AC-23 event (AC-05 covers it); Task 13 names the three log-state branches; self-review AC-23 wording.
 
 v8 (after external plan review 7) — P0: abort-mode `--verify` now requires `baseline_mismatch(aliases, ranking) == []` (both policy files at B) plus no round2 delta, with a tamper test `test_abort_verify_requires_both_policy_files_at_b` (Task 6). P1: `--materialize` recomputes `result_sha256` from the written files and asserts it equals the run's; `suite_evidence` canonicalizes both unittest header forms and the test uses real output; stale v1.12 references and the `log_core` interface list fixed; reviewer note on the pending/rejected log-state difference.
+
+v9 (after external plan review 8 — approved, P0 0) — P1: `test_verify_abort_mode_rejects_tampered_ranking` calls `_verify` itself with a mocked rejected log; `test_materialize_refuses_when_files_do_not_reproduce_result_sha` exercises the `--materialize` failure path in a temp dir; reviewer wording on the pending/rejected log-state difference softened to what the frozen suite actually guarantees.
