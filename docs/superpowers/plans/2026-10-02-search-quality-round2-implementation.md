@@ -10,17 +10,21 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-02-search-quality-round2-design.md` v1.10 (external review: 10 rounds, final verdict "구현 계획으로 진행 가능"). The spec is binding; this plan is its argument.
 
+**Plan version:** v2 (after external plan review 1: 12 P0 / 5 P1 folded in — see "Plan revision notes" at the end).
+
 ## Global Constraints
 
 - Canonical test command: `python -m unittest discover -s tests -t .` (405 OK at `57eb1e5`; omitting `-t .` makes `tests/mcp` shadow the SDK and gives spurious ImportErrors).
 - Baseline commit for all "unchanged" checks: `95b8de0` (pre-work merge). Immutable from now to the terminal commit (spec §4, AC-05/AC-09): Round 1 spec §4 list, `tools/atlassian_docs/intelligence/search.py`, `tools/atlassian_docs/intelligence/data/operation_quirks.json`, `tests/benchmarks/round1-final.json`, `tests/benchmarks/search-tuning-round1.jsonl`, the `round1_seal` object inside the bench, and the Round 1 section of `docs/phase3-readiness.md` (from the line `## Search Quality Round 1 — decision record` up to, not including, the line `### Round 2 pre-work`).
 - `policy.py` may change only in the housekeeping commit(s) H/H′ (Task 1) and only in `_check_alias_notes`. After the last H′ every file in `TOOLING_FILES` (Task 3) is immutable until the terminal commit (D or F).
-- Commit order (spec §5): H (tooling, Tasks 1–7) → S (source snapshot) → pre-T dependency order → T (freeze) → generation (stateless) → B (seal, then user encrypts the plaintext) → tuning (frozen worker brief, one-way pipeline) → C → D, or B → F on tuning failure. Controller-only steps are marked **[controller]**; user-only steps **[user]**.
+- Commit naming: Tasks 1–7 produce development commits H1..H7; **`housekeeping_commit` = H7** (the last of them, or the last H′ if a pre-T defect is fixed). AC-05's immutability window starts there.
+- Commit order (spec §5): H1..H7 (tooling, Tasks 1–7) → S (source snapshot) → pre-T dependency order → T (freeze) → generation (stateless) → B (seal, then user encrypts the plaintext) → tuning (frozen worker brief, one-way pipeline) → C → D, or B → F on tuning failure. Controller-only steps are marked **[controller]**; user-only steps **[user]**.
 - Sealed plaintext path `~/.atlassian_api_updater/sealed/round2-sealed.json` is never given to an implementer or a tuning worker. After B only `round2-sealed.json.enc` exists; no agent knows the passphrase.
 - Source snapshot S: `~/.atlassian_api_updater/round2-cache/` (`$ATLASSIAN_DOCS_ROUND2_CACHE`), created once after H; every catalog-dependent step reads only S.
 - `POLICY_VERSIONS["search"]` stays 3. `search_ranking.json` tables other than `verb_methods` never change; `constants` change only inside the tuning run; `search_aliases.json` changes only at T (lexicon merge) and inside the tuning run (round2 entries).
 - Every commit message ends with `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`.
 - Chunked writes: no single tool call larger than ~60 lines.
+- After commit B the repository working tree must be clean when the worker starts: every controller record (checkpoints, attempt ledger, shas) accumulates in `~/.atlassian_api_updater/round2-work/controller-events.jsonl` (outside the repo) and is rendered into `docs/phase3-readiness.md` only in the terminal commit (D or F).
 
 ## Review Focus
 
@@ -32,7 +36,7 @@
 
 ---
 
-### Task 1: Round-aware alias-notes schema in `policy.py` (commit H)
+### Task 1: Round-aware alias-notes schema in `policy.py` (commit H1)
 
 **Files:**
 - Modify: `tools/atlassian_docs/intelligence/policy.py:57-74`
@@ -138,7 +142,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 ---
 
-### Task 2: Generalize the seal tool to `round_seal.py --round N` and add the `freeze` command (commit H)
+### Task 2: Generalize the seal tool to `round_seal.py --round N` and add the `freeze` command (commit H2)
 
 **Files:**
 - Rename: `tests/benchmarks/round1_seal.py` → `tests/benchmarks/round_seal.py` (`git mv`)
@@ -149,6 +153,8 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 **Interfaces:**
 - Produces: module constants become functions of the round: `section_origin(round) -> dict`, `seal_key(round) -> str` (`f"round{round}_seal"`); `machine_check(plain, bench, internal_catalog, round=1)`; `seal_metadata(records, round, section_name)` unchanged; `load_catalogs_from_cache(cache_dir, round=1)` (snapshot label `round{N}-snapshot`); CLI subcommands take `--round N` (default 1); new `cmd_freeze` (Task 3 fills its hash list; here it only writes `round`, `structure_sha256`, `verb_inventory_sha256`, `source_registry_fingerprint`, `source_spec_sha256`).
 - Produces: `seal` writes `bench[seal_key]` with the Round 1 fields plus `"machine_check": "passed"` and `"origins": {"held_out": "held_out-rN", "negative": "negative-rN"}` (AC-04 checkpoint record).
+- Produces: the Round 2 negative machine rule (spec §5.3): `phrase_tokens(text) -> tuple` (lowercase, split on non-alphanumerics, drop STOPWORDS, `evaluator.singular` each, order kept) and, for `round >= 2`, a violation when a negative query's phrase equals any op's summary phrase or last-literal-path-segment phrase. `evaluator.singular` is a stdlib copy of `search.singular`.
+- Produces: `validate_reviewer_output(obj, ids) -> list[str]` (object with exactly `ids` as keys, each `{"accept": bool, "reason": str}`) and `verify_freeze(round, cache_dir) -> list[str]` + CLI `verify-freeze --round N --cache-dir S` (registry fingerprint and all three source spec shas equal the `round_freeze` entry; exit 1 on mismatch).
 
 - [ ] **Step 1: Rename files and fix imports**
 
@@ -191,9 +197,61 @@ class TestRoundParameter(unittest.TestCase):
                 self.assertEqual(out["round2_seal"]["origins"], rs.section_origin(2))
                 self.assertEqual(out["held_out"]["round"], 2)
                 self.assertEqual(rs.main(["seal", "--round", "2", "--plain", str(pp), "--bench", str(bp), "--cache-dir", td]), 1)
+
+
+class TestRound2NegativePhraseRule(unittest.TestCase):
+    def _plain(self):
+        plain = valid_plain()
+        for r in plain["held_out"] + plain["negative"]:
+            r["origin"] = r["origin"].replace("-r1", "-r2")
+        return plain
+
+    def test_phrase_tokens(self):
+        self.assertEqual(rs.phrase_tokens("Get all the Boards"), ("get", "all", "board"))
+        self.assertEqual(rs.phrase_tokens("/rest/agile/1.0/board"), ("rest", "agile", "board"))
+
+    def test_negative_equal_to_summary_phrase_rejected(self):
+        plain = self._plain(); plain["negative"][0]["query"] = "get all boards"          # summary of D, 3 words
+        msgs = rs.machine_check(plain, BENCH, CAT, round=2)
+        self.assertTrue(any(m.startswith("n-001") and "summary phrase" in m for m in msgs), msgs)
+        plain1 = valid_plain(); plain1["negative"][0]["query"] = "get all boards"
+        self.assertEqual(rs.machine_check(plain1, BENCH, CAT, round=1), [])             # Round 1 rule set unchanged
+
+    def test_negative_equal_to_last_path_segment_rejected(self):
+        plain = self._plain(); plain["negative"][1]["query"] = "the assignee of it"     # last literal segment of F
+        msgs = rs.machine_check(plain, BENCH, CAT, round=2)
+        self.assertTrue(any(m.startswith("n-002") and "path phrase" in m for m in msgs), msgs)
+
+    def test_valid_round2_plain_has_no_violations(self):
+        self.assertEqual(rs.machine_check(self._plain(), BENCH, CAT, round=2), [])
+
+
+class TestReviewerOutputValidator(unittest.TestCase):
+    def test_exact_keys_and_schema(self):
+        ids = ["h-001", "n-001"]
+        good = {"h-001": {"accept": True, "reason": "ok"}, "n-001": {"accept": False, "reason": "answerable"}}
+        self.assertEqual(rs.validate_reviewer_output(good, ids), [])
+        self.assertTrue(rs.validate_reviewer_output({"h-001": good["h-001"]}, ids))                         # missing
+        self.assertTrue(rs.validate_reviewer_output({**good, "h-999": good["h-001"]}, ids))                 # extra
+        self.assertTrue(rs.validate_reviewer_output({**good, "n-001": {"accept": "no", "reason": "x"}}, ids))  # non-bool
+        self.assertTrue(rs.validate_reviewer_output({**good, "n-001": "reject"}, ids))                       # non-object
+        self.assertTrue(rs.validate_reviewer_output(["h-001"], ids))
+
+
+class TestVerifyFreeze(unittest.TestCase):
+    def test_verify_freeze_compares_fingerprint_and_spec_shas(self):
+        from unittest import mock
+        shas = {"jira-platform": "a" * 64, "jira-software": "b" * 64, "confluence": "c" * 64}
+        entry = {"round": 2, "source_registry_fingerprint": "f" * 64, "source_spec_sha256": dict(shas)}
+        fake = lambda cache_dir, round=1: ([], CAT, "f" * 64, dict(shas))
+        with mock.patch.object(rs, "load_catalogs_from_cache", fake), mock.patch.object(rs.ev, "freeze_for", lambda r: entry):
+            self.assertEqual(rs.verify_freeze(2, "x"), [])
+        bad = lambda cache_dir, round=1: ([], CAT, "f" * 64, {**shas, "confluence": "d" * 64})
+        with mock.patch.object(rs, "load_catalogs_from_cache", bad), mock.patch.object(rs.ev, "freeze_for", lambda r: entry):
+            self.assertEqual(rs.verify_freeze(2, "x"), ["spec_sha256[confluence] differs from round_freeze"])
 ```
 
-Run: `python -m unittest tests.benchmarks.test_round_seal -k RoundParameter -v` → Expected: FAIL (`section_origin` missing).
+Run: `python -m unittest tests.benchmarks.test_round_seal -v` → Expected: FAIL (`section_origin`, `phrase_tokens`, `validate_reviewer_output`, `verify_freeze` missing).
 
 - [ ] **Step 3: Implement the round parameter**
 
@@ -222,6 +280,81 @@ SECTION_ID_PREFIX = {"held_out": "h-", "negative": "n-"}
 - `main`: `ap.add_argument("--round", type=int, default=1)` added to every subparser (define a helper `def _round(p): p.add_argument("--round", type=int, default=1)`).
 
 Update the module docstring to show `--round N` on every command.
+
+Add the Round 2 negative rule, the reviewer-output validator and `verify_freeze` (module level, after `_reuse_checks`; `ev` is `from tests.benchmarks import evaluator as ev`):
+
+```python
+def phrase_tokens(text) -> tuple:
+    return tuple(ev.singular(t) for t in _TOKEN_SPLIT.split((text or "").lower()) if t and t not in STOPWORDS)
+
+
+def _last_literal_segment(key) -> str:
+    for seg in reversed(key.split(":", 2)[2].split("/")):
+        if seg and not (seg.startswith("{") and seg.endswith("}")):
+            return seg
+    return ""
+
+
+def _negative_phrase_checks(rec, internal_catalog):
+    # Round 2 spec 5.3 machine rule: a negative query must not equal an op summary or last-path-segment phrase.
+    q, out = phrase_tokens(rec.get("query") or ""), []
+    for op in internal_catalog:
+        if q == phrase_tokens(op.get("summary")):
+            out.append(f"{rec.get('id', '?')}: negative query equals summary phrase of {op['key']}"); break
+        if q == phrase_tokens(_last_literal_segment(op["key"])):
+            out.append(f"{rec.get('id', '?')}: negative query equals path phrase of {op['key']}"); break
+    return out
+
+
+def validate_reviewer_output(obj, ids) -> list:
+    # Hidden semantic reviewer output: exactly the record ids, each {"accept": bool, "reason": str}.
+    if not isinstance(obj, dict):
+        return ["reviewer output must be a JSON object keyed by record id"]
+    wanted = set(ids)
+    out = [f"missing id {i}" for i in ids if i not in obj] + [f"extra key {k!r}" for k in obj if k not in wanted]
+    for k, v in obj.items():
+        if k in wanted and (not isinstance(v, dict) or not isinstance(v.get("accept"), bool) or not isinstance(v.get("reason"), str)):
+            out.append(f"{k}: value must be {{accept: bool, reason: str}}")
+    return out
+
+
+def verify_freeze(round: int, cache_dir) -> list:
+    # S integrity checkpoint (spec 5.7): the snapshot still matches the round_freeze source fields.
+    _, _, fp, shas = load_catalogs_from_cache(cache_dir, round)
+    entry, out = ev.freeze_for(round), []
+    if fp != entry.get("source_registry_fingerprint"):
+        out.append("registry fingerprint differs from round_freeze")
+    want = entry.get("source_spec_sha256") or {}
+    for name in sorted(set(shas) | set(want)):
+        if shas.get(name) != want.get(name):
+            out.append(f"spec_sha256[{name}] differs from round_freeze")
+    return out
+
+
+def cmd_verify_freeze(args):
+    problems = verify_freeze(args.round, args.cache_dir)
+    for m in problems:
+        print(f"MISMATCH {m}")
+    print("freeze ok" if not problems else f"{len(problems)} mismatch(es)")
+    return 1 if problems else 0
+```
+
+In `machine_check`, after `out += _record_checks(sect, rec, by_key, opid_sets)` add `if sect == "negative" and round >= 2: out += _negative_phrase_checks(rec, internal_catalog)`. Register `verify-freeze` (`_round(p); p.add_argument("--cache-dir", required=True); p.set_defaults(fn=cmd_verify_freeze)`). `evaluator.py` gets `singular` now (Task 3 keeps it): a stdlib copy of `search.singular` —
+
+```python
+IRREGULAR_SINGULAR = {"statuses": "status"}; UNCHANGED_PLURAL = frozenset({"series", "species", "news"})
+
+
+def singular(t: str) -> str:
+    if t in IRREGULAR_SINGULAR: return IRREGULAR_SINGULAR[t]
+    if t in UNCHANGED_PLURAL or len(t) <= 3: return t
+    if t.endswith("ies"): return t[:-3] + "y"
+    if t.endswith(("sses", "shes", "ches", "xes")): return t[:-2]
+    if t.endswith(("ss", "us", "is")): return t
+    return t[:-1] if t.endswith("s") else t
+```
+
+`evaluator.freeze_for` does not exist until Task 3; add it in this task (Task 3 Step 4 shows the final form) so `verify_freeze` imports cleanly.
 
 - [ ] **Step 4: Add the `freeze` command (hash list completed in Task 3)**
 
@@ -273,7 +406,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 ---
 
-### Task 3: Round-freeze list, tooling hash, R5/R6 schema, Round 1 invariants (commit H)
+### Task 3: Round-freeze list, tooling hash, R5/R6 schema, Round 1 invariants (commit H3)
 
 **Files:**
 - Modify: `tests/benchmarks/round_freeze.json` (object → one-element list)
@@ -469,7 +602,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 ---
 
-### Task 4: `alias_candidates_tool.py` — concept tokens, verb report, method-safety, candidates, R5/R6, lexicon gate (commit H)
+### Task 4: `alias_candidates_tool.py` — concept tokens, verb report, method-safety, candidates, R5/R6, lexicon gate (commit H4)
 
 **Files:**
 - Create: `tests/benchmarks/alias_candidates_tool.py`
@@ -477,7 +610,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: `round_seal.load_catalogs_from_cache(cache_dir, round)`, `round_seal._write_bench`, `evaluator.canonical_sha256/STOPWORDS`, `search.tokenize_unigrams/singular` (read-only import of production code, like `round_seal`).
-- Produces (pure, unit-tested): `norm_tokens(text) -> tuple` (unigrams → `singular`, order kept, deduped); `FUNCTION_WORDS`; `op_vocab(op) -> frozenset` (operationId + literal path segments + tags + summary, normalized); `catalog_vocab(internal) -> frozenset`; `catalog_df(internal) -> dict`; `concept_tokens(internal, noise) -> dict token -> {"count", "sources"}`; `verb_report(internal, verb_methods) -> dict verb -> {"methods": {M: n}, "outside": [...], "review": bool}`; `allowed_methods(query, verb_methods) -> None | frozenset`; `method_safety(bench, verb_methods) -> list rows`; `expected_vocab(rec, by_key, verb_methods, noise, hints) -> frozenset`; `candidates(bench, internal, ranking_raw, aliases_raw) -> dict` (`candidates`, `excluded`); `classify(bench, verb_methods, cands) -> dict id -> sorted classes`; `lexicon_gate(lexicon_doc, bench, by_key, ranking_raw) -> (lexicon_doc, rejected_now)`; `provenance(fp, shas, inputs) -> dict`.
+- Produces (pure, unit-tested; `classify(bench, internal, ranking_raw, aliases_raw)` uses the independent R6 definition): `norm_tokens(text) -> tuple` (unigrams → `singular`, order kept, deduped); `FUNCTION_WORDS`; `op_vocab(op) -> frozenset` (operationId + literal path segments + tags + summary, normalized); `catalog_vocab(internal) -> frozenset`; `catalog_df(internal) -> dict`; `concept_tokens(internal, noise) -> dict token -> {"count", "sources"}`; `verb_report(internal, verb_methods) -> dict verb -> {"methods": {M: n}, "outside": [...], "review": bool}`; `allowed_methods(query, verb_methods) -> None | frozenset`; `method_safety(bench, verb_methods) -> list rows`; `expected_vocab(rec, by_key, verb_methods, noise, hints) -> frozenset`; `candidates(bench, internal, ranking_raw, aliases_raw) -> dict` (`candidates`, `excluded`); `classify(bench, verb_methods, cands) -> dict id -> sorted classes`; `lexicon_gate(lexicon_doc, bench, by_key, ranking_raw) -> (lexicon_doc, rejected_now)`; `provenance(fp, shas, inputs) -> dict`.
 - CLI (every command `--cache-dir S`, `--round N` default 2): `concept-tokens --out`, `verb-report [--out]`, `method-safety --out`, `lexicon-gate --lexicon FILE` (rewrites the file), `candidates --out`, `classify` (rewrites the bench seed `failure_classes`).
 
 - [ ] **Step 1: Write the failing tests**
@@ -561,13 +694,11 @@ class TestCandidates(unittest.TestCase):
         self.assertEqual(doc["excluded"]["ticket"], "existing_alias")
 
     def test_classify_r5_r6(self):
-        cands = act.candidates(BENCH, CAT2, RANK, ALIASES)["candidates"]
-        cls = act.classify(BENCH, VERBS, cands)
-        self.assertEqual(cls["s-001"], ["R6"]); self.assertEqual(cls["s-002"], [])
+        cls = act.classify(BENCH, CAT2, RANK, ALIASES)
+        self.assertEqual(cls["s-001"], ["R6"]); self.assertEqual(cls["s-002"], [])      # key is id-like, not R6
         self.assertEqual(cls["s-004"], ["R5"])                      # conflicting verbs -> no expected method covered
         no_verb = {"seed": [seed(7, "ticket details overview", A)], "regression_negative": []}
-        self.assertEqual(act.classify(no_verb, VERBS, {})["s-007"], ["R5", "R6"])
-
+        self.assertEqual(act.classify(no_verb, CAT2, RANK, ALIASES)["s-007"], ["R5", "R6"])   # ticket is an alias; details/overview are not
 
 class TestLexiconGate(unittest.TestCase):
     def test_gate_keeps_compatible_and_rejects_incompatible(self):
@@ -738,19 +869,22 @@ def candidates(bench, internal, ranking_raw, aliases_raw) -> dict:
     return {"round": 2, "candidates": dict(sorted(cands.items())), "excluded": excluded}
 
 
-def classify(bench, verb_methods, cands) -> dict:
-    """spec §0.2: R5 = no verb or allowed methods cover no expected op (∃ semantics); R6 = the seed has a candidate word."""
-    r6 = {sid for c in cands.values() for sid in c["seed_ids"]}
-    out = {}
+def classify(bench, internal, ranking_raw, aliases_raw) -> dict:
+    """spec §0.2 (independent definitions): R5 = no inventory verb, or the allowed methods cover no expected op
+    (∃ semantics); R6 = some query token is in none of expected-op vocab / verbs / existing alias words /
+    product hints / function words (id-like, noise and digits are ignored)."""
+    by_key = {op["key"]: op for op in internal}
+    verbs, noise, hints = ranking_raw["verb_methods"], frozenset(ranking_raw["path_noise"]), ranking_raw["product_hints"]
+    alias_words, out = alias_source_words(aliases_raw), {}
     for rec in bench["seed"]:
-        allowed, classes = allowed_methods(rec["query"], verb_methods), []
+        allowed, classes = allowed_methods(rec["query"], verbs), []
         if allowed is None or not (allowed & expected_methods(rec)):
             classes.append("R5")
-        if rec["id"] in r6:
+        known = expected_vocab(rec, by_key, verbs, noise, hints) | set(verbs) | alias_words | set(hints) | FUNCTION_WORDS | STOPWORDS | ID_LIKE | noise
+        if any(t not in known and not t.isdigit() for t in norm_tokens(rec["query"])):
             classes.append("R6")
         out[rec["id"]] = classes
     return out
-
 
 def lexicon_gate(lexicon_doc, bench, by_key, ranking_raw):
     """spec §5.2.3: a lexicon synonym that occurs in a seed query must target that seed's expected vocabulary."""
@@ -842,7 +976,7 @@ def cmd_candidates(args):
 
 def cmd_classify(args):
     internal, _, _, ranking, aliases, bench, _ = _load(args)
-    cls = classify(bench, ranking["verb_methods"], candidates(bench, internal, ranking, aliases)["candidates"])
+    cls = classify(bench, internal, ranking, aliases)
     for rec in bench["seed"]:
         keep = [c for c in rec["failure_classes"] if c not in ("R5", "R6")]
         rec["failure_classes"] = keep + cls[rec["id"]]
@@ -882,17 +1016,17 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 ---
 
-### Task 5: `concept_lexicon_check.py` — normalize, validate, cap, merge (commit H)
+### Task 5: `concept_lexicon_check.py` — normalize, validate, review, cap, merge (commit H5)
 
 **Files:**
 - Create: `tests/benchmarks/concept_lexicon_check.py`
 - Test: `tests/benchmarks/test_concept_lexicon_check.py`
 
 **Interfaces:**
-- Consumes: `alias_candidates_tool.{norm_tokens, catalog_vocab, catalog_df, concept_tokens, FUNCTION_WORDS}`, `evaluator.{canonical_sha256, STOPWORDS}`.
-- Produces (pure): `normalize_raw(raw) -> dict syn -> sorted targets`; `structural_check(lex, concept_set, catalog_set, verbs, hints, alias_keys) -> (kept, rejected)` with reasons `shape`, `function_word`, `verb`, `product_hint`, `in_catalog`, `target_not_concept`, `multi_target`, `alias_conflict`; `apply_review(lex, review) -> (kept, rejected)` (reason `semantic-reject`); `cap_per_concept(lex, limit=5) -> (kept, rejected)` (reason `concept-cap`, lexicographic first 5 kept); `build(raw, review, concept_set, catalog_set, df, verbs, hints, alias_keys) -> (lexicon, rejected)`; `merge(aliases_raw, lexicon, round) -> (new_aliases_raw, skipped)`.
-- CLI: `check --cache-dir S --raw RAW.json --prompt PROMPT.md [--review REVIEW.json] --out tools/.../concept_lexicon.json`; `merge --lexicon FILE --aliases tools/.../search_aliases.json --round 2`.
-- `concept_lexicon.json` shape: `{"round", "generated_from", "prompt_sha256", "raw_sha256", "review_output_sha256" | null, "lexicon": {syn: [concept]}, "rejected": {syn: {"reason", "targets", "catalog_df"}}, "catalog_df": {syn: n}}`.
+- Consumes: `alias_candidates_tool.{norm_tokens, catalog_vocab, catalog_df, concept_tokens, alias_source_words, FUNCTION_WORDS, DATA, provenance, _write}`, `round_seal.load_catalogs_from_cache`, `evaluator.{canonical_sha256, STOPWORDS}`.
+- Produces (pure): `normalize_raw(raw) -> dict syn -> sorted targets`; `structural_check(lex, concept_set, catalog_set, verbs, hints, alias_keys) -> (kept, rejected)` with reasons `shape`, `function_word`, `verb`, `product_hint`, `in_catalog`, `alias_conflict`, `multi_target`, `target_not_concept`; `prepare_review(raw, ...) -> (kept, rejected)` = normalize + structural (NO cap); `validate_review(review, keys) -> list[str]` (object, exactly `keys`, every value bool); `apply_review(lex, review) -> (kept, rejected)` (reason `semantic-reject`; `review` must have passed `validate_review`); `cap_per_concept(lex, limit=5) -> (kept, rejected)` (reason `concept-cap`, lexicographic first 5); `finalize(kept, rejected, review) -> (lexicon, rejected)` = apply_review → cap; `build(raw, review, ...)` = prepare_review → finalize; `merge(aliases_raw, lexicon, round) -> (new_raw, skipped)`.
+- CLI: `prepare --cache-dir S --raw RAW.json --out lexicon_structural.json` (writes `{"lexicon": kept, "rejected": ...}` — the reviewer input); `finalize --cache-dir S --raw RAW.json --structural lexicon_structural.json --review REVIEW.json --generation-input FILLED_PROMPT.txt --review-input FILLED_REVIEW.txt --template tests/benchmarks/round2-lexicon-generation-prompt.md --out tools/.../concept_lexicon.json` (refuses when `validate_review` fails); `merge --lexicon FILE --aliases tools/.../search_aliases.json --round 2`.
+- `concept_lexicon.json` shape: `{"round", "generated_from", "prompt_template_sha256", "generation_input_sha256", "raw_sha256", "review_input_sha256", "review_output_sha256", "lexicon", "rejected", "catalog_df"}` (the two `*_input_sha256` are hashes of the exact bytes sent to the model).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -903,6 +1037,7 @@ from tests.benchmarks import concept_lexicon_check as clc
 CONCEPTS = {"issue", "comment", "page", "sprint", "attachment", "version", "space"}
 CATALOG = CONCEPTS | {"file", "get", "workspace", "linked"}
 VERBS, HINTS, ALIAS_KEYS = {"get", "create"}, {"jira", "confluence"}, {"ticket"}
+ARGS = (CONCEPTS, CATALOG, VERBS, HINTS, ALIAS_KEYS)
 
 
 class TestChecks(unittest.TestCase):
@@ -911,29 +1046,47 @@ class TestChecks(unittest.TestCase):
         self.assertEqual(clc.normalize_raw(raw), {"note": ["comment"], "ticket": ["issue"]})
 
     def test_plural_synonym_rejected_after_normalization(self):
-        kept, rej = clc.structural_check({"file": ["attachment"], "files": ["attachment"]}, CONCEPTS, CATALOG, VERBS, HINTS, ALIAS_KEYS)
-        self.assertEqual(kept, {}); self.assertEqual({k: v["reason"] for k, v in rej.items()}, {"file": "in_catalog", "files": "in_catalog"})
+        kept, rej = clc.prepare_review({"files": ["attachments"], "File": ["attachment"]}, *ARGS)
+        self.assertEqual(kept, {}); self.assertEqual({k: v["reason"] for k, v in rej.items()}, {"file": "in_catalog"})
 
     def test_structural_reasons(self):
         lex = {"note": ["comment"], "my": ["issue"], "get": ["issue"], "jira": ["issue"], "doc": ["page", "space"],
                "card": ["board"], "ticket": ["issue"], "e-mail": ["comment"]}
-        kept, rej = clc.structural_check(lex, CONCEPTS, CATALOG, VERBS, HINTS, ALIAS_KEYS)
+        kept, rej = clc.structural_check(lex, *ARGS)
         self.assertEqual(kept, {"note": ["comment"]})
         self.assertEqual({k: v["reason"] for k, v in rej.items()},
                          {"my": "function_word", "get": "verb", "jira": "product_hint", "doc": "multi_target",
                           "card": "target_not_concept", "ticket": "alias_conflict", "e-mail": "shape"})
 
-    def test_review_and_cap(self):
-        lex = {f"w{i}": ["issue"] for i in range(7)}
-        kept, rej = clc.apply_review(lex, {"w0": False, "w1": True})
-        self.assertNotIn("w0", kept); self.assertEqual(rej["w0"]["reason"], "semantic-reject"); self.assertEqual(len(kept), 6)
-        kept2, rej2 = clc.cap_per_concept(kept, 5)
-        self.assertEqual(sorted(kept2), ["w1", "w2", "w3", "w4", "w5"]); self.assertEqual(rej2["w6"]["reason"], "concept-cap")
+    def test_prepare_review_does_not_cap(self):
+        raw = {f"w{i}": ["issue"] for i in range(8)}
+        kept, _ = clc.prepare_review(raw, *ARGS)
+        self.assertEqual(len(kept), 8)
+
+    def test_validate_review_exact_keys_and_bools(self):
+        keys = ["w0", "w1"]
+        self.assertEqual(clc.validate_review({"w0": True, "w1": False}, keys), [])
+        self.assertTrue(clc.validate_review({"w0": True}, keys))                       # missing
+        self.assertTrue(clc.validate_review({"w0": True, "w1": False, "w9": True}, keys))  # extra
+        self.assertTrue(clc.validate_review({"w0": True, "w1": "no"}, keys))           # non-bool
+        self.assertTrue(clc.validate_review([True, False], keys))                      # non-object
+
+    def test_review_then_cap_recovers_sixth_synonym(self):
+        kept = {f"w{i}": ["issue"] for i in range(7)}
+        review = {f"w{i}": i not in (0, 1, 2) for i in range(7)}
+        lexicon, rej = clc.finalize(kept, {}, review)
+        self.assertEqual(sorted(lexicon), ["w3", "w4", "w5", "w6"])                   # 4 survive the review, all kept (<= 5)
+        self.assertEqual(rej["w0"]["reason"], "semantic-reject")
+        kept8 = {f"w{i}": ["issue"] for i in range(8)}
+        lexicon8, rej8 = clc.finalize(kept8, {}, {k: True for k in kept8})
+        self.assertEqual(sorted(lexicon8), ["w0", "w1", "w2", "w3", "w4"]); self.assertEqual(rej8["w7"]["reason"], "concept-cap")
+        with self.assertRaises(ValueError):
+            clc.finalize(kept, {}, {"w0": True})                                       # invalid review refused
 
     def test_build_is_deterministic_and_ordered(self):
         raw = {"Notes": ["comment"], "files": ["attachment"], "release": ["version"], "cards": ["board"]}
-        a = clc.build(raw, None, CONCEPTS, CATALOG, {"file": 3}, VERBS, HINTS, ALIAS_KEYS)
-        b = clc.build(raw, None, CONCEPTS, CATALOG, {"file": 3}, VERBS, HINTS, ALIAS_KEYS)
+        review = {"note": True, "release": True}
+        a = clc.build(raw, review, *ARGS, df={"file": 3}); b = clc.build(raw, review, *ARGS, df={"file": 3})
         self.assertEqual(a, b); self.assertEqual(a[0], {"note": ["comment"], "release": ["version"]})
         self.assertEqual(a[1]["file"]["catalog_df"], 3); self.assertEqual(a[1]["card"]["reason"], "target_not_concept")
 
@@ -948,17 +1101,20 @@ class TestChecks(unittest.TestCase):
 
 Run: `python -m unittest tests.benchmarks.test_concept_lexicon_check` → Expected: ImportError.
 
-- [ ] **Step 2: Implement**
+- [ ] **Step 2: Implement (pure part)**
 
 ```python
 """Round 2 concept lexicon (spec §7.0): normalize a stateless generator's output, validate it against the catalog,
-apply the stateless semantic review, cap per concept, and merge into search_aliases.json as origin lexicon-rN.
+apply the stateless semantic review (validated: exact keys, booleans), cap per concept AFTER the review, and merge
+into search_aliases.json as origin lexicon-rN.
 
-  python tests/benchmarks/concept_lexicon_check.py check --cache-dir S --raw RAW.json --prompt PROMPT.md
-         [--review REVIEW.json] --out tools/atlassian_docs/intelligence/data/concept_lexicon.json
+  python tests/benchmarks/concept_lexicon_check.py prepare  --cache-dir S --raw RAW.json --out lexicon_structural.json
+  python tests/benchmarks/concept_lexicon_check.py finalize --cache-dir S --raw RAW.json --structural lexicon_structural.json
+         --review REVIEW.json --generation-input GEN_INPUT.txt --review-input REV_INPUT.txt
+         --template tests/benchmarks/round2-lexicon-generation-prompt.md --out tools/.../concept_lexicon.json
   python tests/benchmarks/concept_lexicon_check.py merge --lexicon LEX.json --aliases tools/.../search_aliases.json --round 2
 """
-import argparse, copy, json, pathlib, re, sys
+import argparse, copy, hashlib, json, pathlib, re, sys
 
 if __package__ in (None, ""):
     sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
@@ -978,9 +1134,10 @@ def _rej(reason, targets, df=0):
 def normalize_raw(raw) -> dict:
     out = {}
     for syn, targets in (raw or {}).items():
-        key = " ".join(act.norm_tokens(str(syn))) if act.norm_tokens(str(syn)) else str(syn).lower()
-        toks = [t for target in (targets if isinstance(targets, list) else [targets]) for t in act.norm_tokens(str(target))]
-        out.setdefault(key, set()).update(toks)
+        toks = act.norm_tokens(str(syn))
+        key = " ".join(toks) if toks else str(syn).lower()
+        vals = [t for target in (targets if isinstance(targets, list) else [targets]) for t in act.norm_tokens(str(target))]
+        out.setdefault(key, set()).update(vals)
     return {k: sorted(v) for k, v in sorted(out.items())}
 
 
@@ -991,37 +1148,67 @@ def structural_check(lex, concept_set, catalog_set, verbs, hints, alias_keys):
                   else "verb" if syn in verbs else "product_hint" if syn in hints else "in_catalog" if syn in catalog_set
                   else "alias_conflict" if syn in alias_keys else "multi_target" if len(targets) != 1
                   else "target_not_concept" if targets[0] not in concept_set else None)
-        (rej.__setitem__(syn, _rej(reason, targets)) if reason else kept.__setitem__(syn, list(targets)))
+        if reason:
+            rej[syn] = _rej(reason, targets)
+        else:
+            kept[syn] = list(targets)
     return kept, rej
 
 
+def prepare_review(raw, concept_set, catalog_set, verbs, hints, alias_keys):
+    """Order (spec §7.0): normalize -> structural. No cap here: the semantic review sees every surviving synonym."""
+    return structural_check(normalize_raw(raw), concept_set, catalog_set, verbs, hints, alias_keys)
+
+
+def validate_review(review, keys) -> list:
+    if not isinstance(review, dict):
+        return ["review must be a JSON object keyed by synonym"]
+    wanted = set(keys)
+    out = [f"missing key {k!r}" for k in keys if k not in review] + [f"extra key {k!r}" for k in review if k not in wanted]
+    out += [f"{k!r}: value must be true/false" for k, v in review.items() if k in wanted and not isinstance(v, bool)]
+    return out
+
+
 def apply_review(lex, review):
+    problems = validate_review(review, list(lex))
+    if problems:
+        raise ValueError("invalid semantic review: " + "; ".join(problems))
     kept, rej = {}, {}
     for syn, targets in lex.items():
-        (rej.__setitem__(syn, _rej("semantic-reject", targets)) if review and review.get(syn) is False else kept.__setitem__(syn, list(targets)))
+        if review[syn]:
+            kept[syn] = list(targets)
+        else:
+            rej[syn] = _rej("semantic-reject", targets)
     return kept, rej
 
 
 def cap_per_concept(lex, limit=MAX_PER_CONCEPT):
-    by_concept = {}
+    by_concept, kept, rej = {}, {}, {}
     for syn, targets in sorted(lex.items()):
         by_concept.setdefault(targets[0], []).append(syn)
-    kept, rej = {}, {}
     for concept, syns in by_concept.items():
         for i, syn in enumerate(sorted(syns)):
-            (kept if i < limit else rej).__setitem__(syn, lex[syn] if i < limit else _rej("concept-cap", lex[syn]))
+            if i < limit:
+                kept[syn] = lex[syn]
+            else:
+                rej[syn] = _rej("concept-cap", lex[syn])
     return dict(sorted(kept.items())), rej
 
 
-def build(raw, review, concept_set, catalog_set, df, verbs, hints, alias_keys):
-    """Order (spec §7.0): normalize -> structural -> semantic reject -> per-concept cap. The seed gate runs later."""
-    lex = normalize_raw(raw)
-    kept, rejected = structural_check(lex, concept_set, catalog_set, verbs, hints, alias_keys)
+def finalize(kept, rejected, review):
+    """review (validated) -> per-concept cap; rejected entries accumulate."""
+    rejected = dict(rejected)
     kept, r2 = apply_review(kept, review); rejected.update(r2)
     kept, r3 = cap_per_concept(kept); rejected.update(r3)
-    for syn, e in rejected.items():
-        e["catalog_df"] = df.get(syn, 0)
     return kept, dict(sorted(rejected.items()))
+
+
+def build(raw, review, concept_set, catalog_set, verbs, hints, alias_keys, df=None):
+    kept, rejected = prepare_review(raw, concept_set, catalog_set, verbs, hints, alias_keys)
+    lexicon, rejected = finalize(kept, rejected, review)
+    for syn, e in rejected.items():
+        e["catalog_df"] = (df or {}).get(syn, 0)
+    return lexicon, rejected
 
 
 def merge(aliases_raw, lexicon, round):
@@ -1033,26 +1220,52 @@ def merge(aliases_raw, lexicon, round):
         out["notes"][syn] = {"origin": f"lexicon-r{round}", "seed_query_id": None, "failure_classes": [],
                              "evidence": f"concept lexicon r{round}"}
     return out, skipped
+```
 
+- [ ] **Step 3: Implement (CLI)**
 
+```python
 def _read(p):
     return json.loads(pathlib.Path(p).read_text(encoding="utf-8"))
 
 
-def cmd_check(args):
+def _sha(p):
+    return hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()
+
+
+def _context(args):
     _, internal, fp, shas = rs.load_catalogs_from_cache(args.cache_dir, args.round)
     ranking, aliases = _read(act.DATA / "search_ranking.json"), _read(act.DATA / "search_aliases.json")
-    raw, prompt = _read(args.raw), pathlib.Path(args.prompt).read_bytes()
-    review = _read(args.review) if args.review else None
-    concept_set = set(act.concept_tokens(internal, ranking["path_noise"]))
+    return internal, fp, shas, ranking, aliases, (set(act.concept_tokens(internal, ranking["path_noise"])), act.catalog_vocab(internal),
+                                                  set(ranking["verb_methods"]), set(ranking["product_hints"]), act.alias_source_words(aliases))
+
+
+def cmd_prepare(args):
+    _, _, _, _, _, ctx = _context(args)
+    kept, rejected = prepare_review(_read(args.raw), *ctx)
+    act._write(args.out, {"round": args.round, "lexicon": kept, "rejected": rejected})
+    print(f"structural: {len(kept)} kept, {len(rejected)} rejected")
+    return 0
+
+
+def cmd_finalize(args):
+    internal, fp, shas, ranking, aliases, ctx = _context(args)
+    raw, structural, review = _read(args.raw), _read(args.structural), _read(args.review)
+    kept, rejected = prepare_review(raw, *ctx)
+    if kept != structural["lexicon"]:
+        print("REFUSED: structural file does not match prepare_review(raw) on the current catalog"); return 1
+    problems = validate_review(review, list(kept))
+    if problems:
+        print("\n".join(f"INVALID REVIEW {m}" for m in problems)); return 1
+    lexicon, rejected = finalize(kept, rejected, review)
     df = act.catalog_df(internal)
-    lexicon, rejected = build(raw, review, concept_set, act.catalog_vocab(internal), df, set(ranking["verb_methods"]),
-                              set(ranking["product_hints"]), act.alias_source_words(aliases))
-    doc = {"round": args.round, "prompt_sha256": __import__("hashlib").sha256(prompt).hexdigest(), "raw_sha256": canonical_sha256(raw),
-           "review_output_sha256": canonical_sha256(review) if review is not None else None,
+    for syn, e in rejected.items():
+        e["catalog_df"] = df.get(syn, 0)
+    doc = {"round": args.round, "prompt_template_sha256": _sha(args.template), "generation_input_sha256": _sha(args.generation_input),
+           "raw_sha256": canonical_sha256(raw), "review_input_sha256": _sha(args.review_input), "review_output_sha256": canonical_sha256(review),
            "generated_from": act.provenance(fp, shas, {"verb_inventory": canonical_sha256(ranking["verb_methods"]),
                                                         "aliases": canonical_sha256(aliases), "raw_generation": canonical_sha256(raw),
-                                                        "semantic_review": canonical_sha256(review) if review is not None else "none"}),
+                                                        "semantic_review": canonical_sha256(review)}),
            "lexicon": lexicon, "rejected": rejected, "catalog_df": {s: df.get(s, 0) for s in lexicon}}
     act._write(args.out, doc)
     print(f"lexicon: {len(lexicon)} kept, {len(rejected)} rejected")
@@ -1072,9 +1285,12 @@ def cmd_merge(args):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    p = sub.add_parser("check"); p.add_argument("--cache-dir", required=True); p.add_argument("--round", type=int, default=2)
-    p.add_argument("--raw", required=True); p.add_argument("--prompt", required=True); p.add_argument("--review")
-    p.add_argument("--out", required=True); p.set_defaults(fn=cmd_check)
+    p = sub.add_parser("prepare"); p.add_argument("--cache-dir", required=True); p.add_argument("--round", type=int, default=2)
+    p.add_argument("--raw", required=True); p.add_argument("--out", required=True); p.set_defaults(fn=cmd_prepare)
+    p = sub.add_parser("finalize"); p.add_argument("--cache-dir", required=True); p.add_argument("--round", type=int, default=2)
+    for name in ("raw", "structural", "review", "generation-input", "review-input", "template", "out"):
+        p.add_argument(f"--{name}", required=True)
+    p.set_defaults(fn=cmd_finalize)
     p = sub.add_parser("merge"); p.add_argument("--lexicon", required=True); p.add_argument("--aliases", required=True)
     p.add_argument("--round", type=int, default=2); p.set_defaults(fn=cmd_merge)
     args = ap.parse_args(argv)
@@ -1085,19 +1301,19 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
-- [ ] **Step 3: Run the tests and the suite, commit**
+- [ ] **Step 4: Run the tests and the suite, commit**
 
 ```bash
 python -m unittest tests.benchmarks.test_concept_lexicon_check -v && python -m unittest discover -s tests -t .
 git add tests/benchmarks/concept_lexicon_check.py tests/benchmarks/test_concept_lexicon_check.py
-git commit -m "benchmarks: concept_lexicon_check (normalize, structural rules, semantic reject, per-concept cap, merge)
+git commit -m "benchmarks: concept_lexicon_check (prepare/finalize: review before cap, validated review, merge)
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
 ---
 
-### Task 6: One-way tuning pipeline with the deterministic alias proposer (commit H)
+### Task 6: One-way tuning pipeline, deterministic alias proposer, replay verifier, two-stage adoption (commit H6)
 
 **Files:**
 - Modify (rewrite): `tests/tune_search_ranking.py`
@@ -1106,12 +1322,13 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 **Interfaces:**
 - Keeps: `grid_points`, `l1_index_distance`, `select_candidate`, `plan_effects`, `dirty_paths`, `ranking_with`, `evaluate_point`, `top5`, `write_constants`, `build_state`, `SEED_TOTAL`, `REGRESSION_TOTAL`, `CONSTANT_KEYS`.
-- Produces: `ROUND = ev.current_round()["round"]`; `LOG_PATH = tests/benchmarks/search-tuning-round{ROUND}.jsonl`; `CANDIDATES_PATH`; `baseline_mismatch(aliases_raw, ranking_raw, cands_doc) -> list[str]`; `baseline_sha256(aliases_raw, ranking_raw, fp, cands_doc, bench) -> str`; `result_sha256(final_constants, alias_patch) -> str`; `round2_note(word, sid, target, kind)`; `propose_aliases(eval_fn, bench, base_raw, cands, budget=15) -> (working_raw, patch)` where `eval_fn(raw_aliases) -> (failed_seed_ids: frozenset, failed_regression_ids: frozenset)`; `alias_patch(base_raw, working_raw) -> dict` (`aliases`, `rules`, `notes` added); `validate_alias_change(before_raw, after_raw, cands, budget=15) -> list[str]`; `main(argv)` running the one-way pipeline; exit 0 success, 1 tuning_failed, 2 setup/baseline errors.
-- Log line keys: `run_id`, `run_at`, `git_commit`, `round`, `registry_fingerprint`, `baseline_sha256`, `constants_selected`, `grid_size`, `passing_combos`, `aliases_proposed` (`aliases`, `rules`, `notes`, `resolved_by_prior_change`, `unresolved`, `trials`), `seed`, `regression_negative`, `tuning_failed`, `adopted`, `result_sha256`, `run_log_sha256`, `dirty`, `note`.
+- Produces: `ROUND = ev.current_round()["round"]`; `LOG_PATH = tests/benchmarks/search-tuning-round{ROUND}.jsonl`; `CANDIDATES_PATH`; `baseline_mismatch(aliases_raw, ranking_raw, cands_doc) -> list[str]`; `baseline_sha256(...)`; `result_sha256(final_constants, alias_patch)`; `round2_note(word, sid, target, kind)`; `alias_patch(base_raw, working_raw)`; `strip_round_entries(raw, round) -> raw` (removes `round{N}` aliases/rules/notes = reconstructs the B state); `propose_aliases(eval_fn, bench, base_raw, cands, budget=15) -> (working_raw, patch)`; `validate_alias_change(before_raw, after_raw, cands, queries, budget=15) -> list[str]` (`queries`: id → query; a rule's context token must be a unigram of that seed's query, a target must be in `targets_by_seed[word][seed]`); `verify_replay(eval_fn, bench, base_raw, cands, constants, expected_result_sha256) -> list[str]` (re-runs the proposer, compares `result_sha256`); `EVENTS = ("baseline_checked", "constants_selected", "aliases_proposed", "final_check")`.
+- CLI: `python tests/tune_search_ranking.py --cache-dir S [--dry-run] [--note TEXT]` (pipeline; exit 0 = perfect, pending adoption; 1 = tuning_failed; 2 = setup/baseline/replay error); `--adopt RUN_ID` (marks the pending run adopted after the caller ran the full suite; refuses if the policy files no longer reproduce the run's `result_sha256`); `--verify --cache-dir S` (replay check against the adopted run; exit 0/1).
+- Log line keys: `run_id`, `run_at`, `git_commit`, `round`, `registry_fingerprint`, `baseline_sha256`, `events`, `constants_selected`, `grid_size`, `passing_combos`, `aliases_proposed` (`aliases`, `rules`, `notes`, `resolved_by_prior_change`, `unresolved`, `trials`), `seed`, `regression_negative`, `tuning_failed`, `status` (`pending` | `adopted` | `failed` | `rejected`), `adopted` (bool), `result_sha256`, `run_log_sha256`, `dirty`, `note`, `ranking_structure_sha256`, `baseline`.
 
 - [ ] **Step 1: Write the failing tests**
 
-Replace `tests/test_tune_search_ranking.py` `TestEffects` additions and add a proposer class (keep `TestSelector` and `test_plan_effects`/`test_dirty_paths` as they are; `dirty_paths` now excludes the round-N log — update the porcelain sample to `search-tuning-round2.jsonl` when `tune.ROUND == 2`, else keep round1; simplest: use `tune.LOG_REL` in the sample string):
+Keep `TestSelector` and `TestEffects` (use `tune.LOG_REL` in the porcelain sample). Add `import json` and:
 
 ```python
 CANDS = {"workspace": {"seed_ids": ["s-001"], "targets_by_seed": {"s-001": ["page", "space"]}, "allowed_targets": ["page", "space"], "catalog_df": 7},
@@ -1121,10 +1338,11 @@ BASE_RAW = {"version": 1, "alias_damping": 0.5, "rule_damping": 1.0, "aliases": 
             "notes": {"ticket": {"origin": "phase2.5", "seed_query_id": None, "failure_classes": [], "evidence": "x"}}}
 BENCH2 = {"seed": [{"id": "s-001", "query": "browse pages inside this workspace"}, {"id": "s-002", "query": "leave feedback on this ticket"},
                    {"id": "s-003", "query": "read feedback on the issue"}], "regression_negative": [{"id": "rn-001", "query": "x"}]}
+QUERIES = {r["id"]: r["query"] for r in BENCH2["seed"]}
 
 
 def fake_eval(rules):
-    """rules: dict alias-word -> target that makes the listed seeds pass; 'BREAK:<word>' marks a regression break."""
+    """rules: (word, target) -> seeds fixed; ("rule", sorted when_all, target) -> seeds fixed; ("BREAK", word, target) -> regression breaks."""
     def fn(raw):
         failed, reg = {"s-001", "s-002", "s-003"}, set()
         for word, targets in raw["aliases"].items():
@@ -1156,13 +1374,17 @@ class TestProposer(unittest.TestCase):
         self.assertEqual(patch["aliases"], {}); self.assertEqual(patch["rules"], [{"when_all": ["workspace", "browse"], "add": ["page"]}])
         self.assertIn("rule:0", patch["notes"]); self.assertEqual(patch["unresolved"], ["s-002", "s-003"])
 
-    def test_budget_and_per_seed_one(self):
+    def test_budget_checked_after_prior_change_reevaluation(self):
+        fn = fake_eval({("workspace", "page"): ["s-001"], ("feedback", "comment"): ["s-002", "s-003"]})
+        _, patch = tune.propose_aliases(fn, BENCH2, BASE_RAW, CANDS, budget=2)
+        self.assertEqual(patch["resolved_by_prior_change"], ["s-003"]); self.assertEqual(patch["unresolved"], [])
+        _, patch1 = tune.propose_aliases(fn, BENCH2, BASE_RAW, CANDS, budget=1)
+        self.assertEqual(patch1["aliases"], {"workspace": ["page"]}); self.assertEqual(patch1["unresolved"], ["s-002", "s-003"])
+
+    def test_per_seed_one_and_used_word_skips_direct(self):
         fn = fake_eval({("workspace", "page"): ["s-001"], ("feedback", "comment"): ["s-002"], ("feedback", "issue"): ["s-003"]})
-        _, patch = tune.propose_aliases(fn, BENCH2, BASE_RAW, CANDS, budget=1)
-        self.assertEqual(patch["aliases"], {"workspace": ["page"]}); self.assertEqual(patch["unresolved"], ["s-002", "s-003"])
-        _, patch2 = tune.propose_aliases(fn, BENCH2, BASE_RAW, CANDS)
-        self.assertEqual(patch2["aliases"], {"workspace": ["page"], "feedback": ["comment"]})      # s-003: word already used, no rule fits
-        self.assertEqual(patch2["unresolved"], ["s-003"])
+        _, patch = tune.propose_aliases(fn, BENCH2, BASE_RAW, CANDS)
+        self.assertEqual(patch["aliases"], {"workspace": ["page"], "feedback": ["comment"]}); self.assertEqual(patch["unresolved"], ["s-003"])
 
 
 class TestValidator(unittest.TestCase):
@@ -1172,53 +1394,86 @@ class TestValidator(unittest.TestCase):
             raw["aliases"][w] = [t]; raw["notes"][w] = tune.round2_note(w, sid, t, "alias")
         return raw
 
+    def v(self, after, **kw):
+        return tune.validate_alias_change(BASE_RAW, after, CANDS, QUERIES, **kw)
+
     def test_accepts_proposer_shape(self):
-        self.assertEqual(tune.validate_alias_change(BASE_RAW, self.after(workspace=("page", "s-001")), CANDS), [])
+        self.assertEqual(self.v(self.after(workspace=("page", "s-001"))), [])
+        rule = json.loads(json.dumps(BASE_RAW)); rule["rules"] = [{"when_all": ["workspace", "browse"], "add": ["page"]}]
+        rule["notes"]["rule:0"] = tune.round2_note("workspace", "s-001", "page", "rule")
+        self.assertEqual(self.v(rule), [])
 
     def test_rejects_bad_shapes(self):
         two = self.after(workspace=("page", "s-001")); two["aliases"]["workspace"] = ["page", "space"]
-        self.assertTrue(any("exactly 1" in v for v in tune.validate_alias_change(BASE_RAW, two, CANDS)))
-        self.assertTrue(any("candidate" in v for v in tune.validate_alias_change(BASE_RAW, self.after(release=("version", "s-001")), CANDS)))
-        self.assertTrue(any("target" in v for v in tune.validate_alias_change(BASE_RAW, self.after(workspace=("issue", "s-001")), CANDS)))
-        bad_seed = self.after(workspace=("page", "s-002"))
-        self.assertTrue(any("seed" in v for v in tune.validate_alias_change(BASE_RAW, bad_seed, CANDS)))
+        self.assertTrue(any("exactly 1" in m for m in self.v(two)))
+        self.assertTrue(any("candidate" in m for m in self.v(self.after(release=("version", "s-001")))))
+        self.assertTrue(any("target" in m for m in self.v(self.after(workspace=("issue", "s-001")))))
+        self.assertTrue(any("target" in m for m in self.v(self.after(feedback=("issue", "s-002")))))      # allowed overall, not for s-002
+        self.assertTrue(any("seed" in m for m in self.v(self.after(workspace=("page", "s-002")))))
         twice = self.after(workspace=("page", "s-001")); twice["aliases"]["feedback"] = ["comment"]
         twice["notes"]["feedback"] = tune.round2_note("feedback", "s-001", "comment", "alias")
-        self.assertTrue(any("per seed" in v for v in tune.validate_alias_change(BASE_RAW, twice, CANDS)))
-        self.assertTrue(any("budget" in v for v in tune.validate_alias_change(BASE_RAW, self.after(workspace=("page", "s-001")), CANDS, budget=0)))
+        self.assertTrue(any("per seed" in m for m in self.v(twice)))
+        self.assertTrue(any("budget" in m for m in self.v(self.after(workspace=("page", "s-001")), budget=0)))
         removed = self.after(); del removed["aliases"]["ticket"]; del removed["notes"]["ticket"]
-        self.assertTrue(any("removed" in v for v in tune.validate_alias_change(BASE_RAW, removed, CANDS)))
+        self.assertTrue(any("removed" in m for m in self.v(removed)))
         rule = json.loads(json.dumps(BASE_RAW)); rule["rules"] = [{"when_all": ["workspace", "browse", "page"], "add": ["page"]}]
         rule["notes"]["rule:0"] = tune.round2_note("workspace", "s-001", "page", "rule")
-        self.assertTrue(any("context" in v for v in tune.validate_alias_change(BASE_RAW, rule, CANDS)))
+        self.assertTrue(any("context" in m for m in self.v(rule)))
+        rule2 = json.loads(json.dumps(BASE_RAW)); rule2["rules"] = [{"when_all": ["workspace", "sprint"], "add": ["page"]}]
+        rule2["notes"]["rule:0"] = tune.round2_note("workspace", "s-001", "page", "rule")
+        self.assertTrue(any("context" in m for m in self.v(rule2)))                                   # sprint not in the query
 
 
-class TestHashes(unittest.TestCase):
-    def test_result_sha_ignores_run_metadata_and_baseline_mismatch_detects_dirty(self):
+class TestReplayAndHashes(unittest.TestCase):
+    def test_strip_round_entries_reconstructs_base(self):
+        fn = fake_eval({("workspace", "page"): ["s-001"]})
+        working, _ = tune.propose_aliases(fn, BENCH2, BASE_RAW, CANDS)
+        self.assertEqual(tune.strip_round_entries(working, tune.ROUND), BASE_RAW)
+
+    def test_verify_replay_detects_manual_edit(self):
+        fn = fake_eval({("workspace", "page"): ["s-001"]})
+        working, patch = tune.propose_aliases(fn, BENCH2, BASE_RAW, CANDS)
+        c = {"method_match_bonus": 2.0}
+        self.assertEqual(tune.verify_replay(fn, BENCH2, BASE_RAW, CANDS, c, tune.result_sha256(c, patch)), [])
+        edited = json.loads(json.dumps(patch)); edited["aliases"]["workspace"] = ["space"]
+        self.assertTrue(tune.verify_replay(fn, BENCH2, BASE_RAW, CANDS, c, tune.result_sha256(c, edited)))
+
+    def test_result_sha_and_baseline_mismatch(self):
         c = {"method_match_bonus": 2.0}; p = {"aliases": {"a": ["b"]}, "rules": [], "notes": {}}
         self.assertEqual(tune.result_sha256(c, p), tune.result_sha256(dict(c), json.loads(json.dumps(p))))
         cands = {"generated_from": {"inputs": {"aliases": policy.canonical_sha256(BASE_RAW), "ranking": "r" * 64}}}
         self.assertEqual(tune.baseline_mismatch(BASE_RAW, {"x": 1}, cands), ["ranking"])
         self.assertEqual(tune.baseline_mismatch({**BASE_RAW, "aliases": {}}, {"x": 1}, cands), ["aliases", "ranking"])
+
+    def test_pipeline_calls_selector_once_then_proposer_once(self):
+        from unittest import mock
+        calls = []
+        with mock.patch.object(tune, "select_candidate", side_effect=lambda *a, **k: calls.append("select") or dict(BASE)), \
+             mock.patch.object(tune, "propose_aliases", side_effect=lambda *a, **k: calls.append("propose") or (json.loads(json.dumps(BASE_RAW)), {"aliases": {}, "rules": {}, "notes": {}, "resolved_by_prior_change": [], "unresolved": [], "trials": 0})):
+            tune.run_pipeline(lambda point, raw: ({"passed": S, "failed": []}, {"passed": R, "failed": []}), tune._BENCH, BASE_RAW, {"candidates": {}}, GRID, BASE)
+        self.assertEqual(calls, ["select", "propose"])
 ```
 
-Add `import json` at the top of the test module. Run: `python -m unittest tests.test_tune_search_ranking` → Expected: AttributeError (`propose_aliases` missing).
+Run: `python -m unittest tests.test_tune_search_ranking` → Expected: AttributeError.
 
-- [ ] **Step 2: Rewrite `tests/tune_search_ranking.py` (header + pure helpers)**
+- [ ] **Step 2: Rewrite the header (constants) of `tests/tune_search_ranking.py`**
 
-Keep the existing pure helpers verbatim (`grid_points`, `l1_index_distance`, `select_candidate`, `plan_effects`, `dirty_paths`, `ranking_with`, `evaluate_point`, `top5`, `write_constants`, `_git`, `build_state`). Replace the docstring, constants and remove `head_alias_policy`, `_alias_change`, `--alias-change`:
+Keep the pure helpers verbatim (`grid_points`, `l1_index_distance`, `select_candidate`, `plan_effects`, `dirty_paths`, `ranking_with`, `evaluate_point`, `top5`, `write_constants`, `_git`, `build_state`); delete `head_alias_policy`, `_alias_change`, the `--alias-change` option.
 
 ```python
 """One-way, deterministic Round-N tuning (Round 2 spec §5.5/§7.2):
 
-    python tests/tune_search_ranking.py --cache-dir S [--dry-run] [--note TEXT]
+    python tests/tune_search_ranking.py --cache-dir S [--dry-run] [--note TEXT]     # pipeline, exit 0 pending / 1 failed / 2 error
+    python tests/tune_search_ranking.py --adopt RUN_ID                               # after the full suite passed
+    python tests/tune_search_ranking.py --verify --cache-dir S                       # replay the adopted run
 
 tune_round(b_aliases, b_ranking, snapshot, frozen_candidates, seed, regression) -> (final_constants, alias_patch, log):
-  1. the working tree must be at the B baseline (search_aliases.json / search_ranking.json canonical hashes equal
-     alias_candidates.json.generated_from.inputs); otherwise exit 2 ("dirty round state") - restore B first.
-  2. constants := select_candidate over the whole grid, evaluated with the B aliases (exactly once).
-  3. alias_patch := propose_aliases at those constants (exactly once; frozen candidates only, 1 target each).
-  4. final check seed+regression; perfect -> write constants + aliases + log (adopted); else tuning_failed, log only.
+  0. baseline_checked: working tree == B baseline (alias/ranking canonical hashes == alias_candidates.generated_from.inputs)
+     and verify_freeze(S) ok; otherwise exit 2 - restore B first (git checkout <B> -- <files>).
+  1. constants_selected: select_candidate over the whole grid, evaluated with the B aliases (exactly once).
+  2. aliases_proposed: propose_aliases at those constants (exactly once; frozen candidates only, 1 target each).
+  3. final_check: seed+regression perfect -> policy files written, log status "pending" (adoption needs --adopt after the
+     canonical full test suite passed); else status "failed" (tuning_failed), nothing written but the log.
 No constant reselection after aliases, no second proposal. --dry-run writes nothing and prints the would-be log line.
 """
 import argparse, copy, dataclasses, datetime, itertools, json, os, pathlib, re, shutil, subprocess, sys, tempfile, uuid
@@ -1228,6 +1483,7 @@ from unittest import mock
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 from tests.benchmarks import evaluator as ev  # noqa: E402
+from tests.benchmarks import round_seal as rs  # noqa: E402
 from tests.benchmarks.evaluator import evaluate  # noqa: E402
 from tools.atlassian_docs import storage, sync  # noqa: E402
 from tools.atlassian_docs.intelligence import RegistryManager, policy, search_operations  # noqa: E402
@@ -1245,9 +1501,10 @@ _BENCH = json.loads(BENCH_PATH.read_text(encoding="utf-8"))
 SEED_TOTAL, REGRESSION_TOTAL = len(_BENCH["seed"]), len(_BENCH["regression_negative"])
 SOURCES = ("jira-platform", "jira-software", "confluence")
 BUDGET = 15
+EVENTS = ("baseline_checked", "constants_selected", "aliases_proposed", "final_check")
 ```
 
-- [ ] **Step 3: Add the proposer, validator and hashes**
+- [ ] **Step 3: Proposer, validator, replay, hashes**
 
 ```python
 def _norm_tokens(text):
@@ -1261,17 +1518,30 @@ def round2_note(word, sid, target, kind) -> dict:
 
 
 def alias_patch(base_raw, working_raw) -> dict:
-    new_rules = working_raw["rules"][len(base_raw["rules"]):]
     return {"aliases": {w: v for w, v in working_raw["aliases"].items() if w not in base_raw["aliases"]},
-            "rules": new_rules, "notes": {k: n for k, n in working_raw["notes"].items() if k not in base_raw["notes"]}}
+            "rules": working_raw["rules"][len(base_raw["rules"]):],
+            "notes": {k: n for k, n in working_raw["notes"].items() if k not in base_raw["notes"]}}
+
+
+def strip_round_entries(raw, round) -> dict:
+    """Reconstruct the B state: drop every alias/rule whose note has origin round{N} (rules are a suffix)."""
+    origin, out = f"round{round}", copy.deepcopy(raw)
+    for key, n in list(out["notes"].items()):
+        if n.get("origin") == origin:
+            del out["notes"][key]
+            if not key.startswith("rule:"):
+                out["aliases"].pop(key, None)
+    keep = [i for i in range(len(out["rules"])) if raw["notes"].get(f"rule:{i}", {}).get("origin") != origin]
+    out["rules"] = [out["rules"][i] for i in keep]
+    return out
 
 
 def propose_aliases(eval_fn, bench, base_raw, cands, budget=BUDGET):
-    """spec §7.2: seeds in id order; per seed, candidate words (sorted) x that seed's targets (sorted); direct alias
-    first, then one-context rules; accept the first trial that fixes the seed without breaking any passing record.
-    Every accepted change is applied immediately; later seeds are re-evaluated against the working state."""
+    """spec §7.2: seeds in id order; each seed is re-evaluated against the working state first (resolved_by_prior_change),
+    then the budget is checked; candidate words (sorted) x that seed's targets (sorted); direct alias first, then
+    one-context rules; accept the first trial that fixes the seed without breaking any passing record."""
     working = copy.deepcopy(base_raw)
-    seed_fail, reg_fail = eval_fn(working)
+    seed_fail, _ = eval_fn(working)
     patch = {"resolved_by_prior_change": [], "unresolved": [], "trials": 0}
     accepted_n, by_id = 0, {r["id"]: r for r in bench["seed"]}
 
@@ -1281,14 +1551,13 @@ def propose_aliases(eval_fn, bench, base_raw, cands, budget=BUDGET):
         return sid not in f and f <= (cur_fail - {sid}) and r <= cur_reg
 
     for sid in sorted(seed_fail):
-        if accepted_n >= budget:
-            patch["unresolved"].append(sid); continue
         cur_fail, cur_reg = eval_fn(working)
         if sid not in cur_fail:
             patch["resolved_by_prior_change"].append(sid); continue
+        if accepted_n >= budget:
+            patch["unresolved"].append(sid); continue
         words = sorted(w for w, c in cands.items() if sid in c["seed_ids"])
-        qtoks = _norm_tokens(by_id[sid]["query"])
-        found = None
+        qtoks, found = _norm_tokens(by_id[sid]["query"]), None
         for word in words:
             if word in working["aliases"]:
                 continue
@@ -1319,9 +1588,8 @@ def propose_aliases(eval_fn, bench, base_raw, cands, budget=BUDGET):
     return working, patch
 
 
-def validate_alias_change(before_raw, after_raw, cands, budget=BUDGET) -> list:
-    """Pure (spec §7.2): only additions, each a frozen candidate word -> exactly one allowed target, notes round{N}
-    with candidate_word, one change per seed, within budget; existing entries untouched."""
+def validate_alias_change(before_raw, after_raw, cands, queries, budget=BUDGET) -> list:
+    """Pure shape check (spec §7.2); replay equality is verify_replay."""
     out = []
     for w, v in before_raw["aliases"].items():
         if after_raw["aliases"].get(w) != v:
@@ -1340,12 +1608,15 @@ def validate_alias_change(before_raw, after_raw, cands, budget=BUDGET) -> list:
         if cw not in cands:
             out.append(f"{key}: candidate_word {cw!r} not in frozen candidates"); continue
         if sid not in cands[cw]["seed_ids"]:
-            out.append(f"{key}: seed {sid!r} is not a seed of candidate {cw!r}")
+            out.append(f"{key}: seed {sid!r} is not a seed of candidate {cw!r}"); continue
         per_seed[sid] = per_seed.get(sid, 0) + 1
         if key.startswith("rule:"):
             rule = after_raw["rules"][int(key[5:])]
+            ctx = [t for t in rule["when_all"] if t != cw]
             if cw not in rule["when_all"] or len(rule["when_all"]) > 2:
                 out.append(f"{key}: rule must be candidate_word plus at most one context token")
+            elif ctx and ctx[0] not in _norm_tokens(queries.get(sid, "")):
+                out.append(f"{key}: context token {ctx[0]!r} is not a unigram of seed {sid}")
             targets = rule["add"]
         else:
             if key != cw:
@@ -1353,8 +1624,8 @@ def validate_alias_change(before_raw, after_raw, cands, budget=BUDGET) -> list:
             targets = after_raw["aliases"].get(key, [])
         if len(targets) != 1:
             out.append(f"{key}: exactly 1 target required")
-        elif targets[0] not in cands[cw]["allowed_targets"]:
-            out.append(f"{key}: target {targets[0]!r} not an allowed target of {cw!r}")
+        elif targets[0] not in cands[cw]["targets_by_seed"].get(sid, []):
+            out.append(f"{key}: target {targets[0]!r} is not a target of {cw!r} for seed {sid}")
     for w in added["aliases"]:
         if w not in added["notes"]:
             out.append(f"alias {w!r} added without a note")
@@ -1380,9 +1651,16 @@ def baseline_sha256(aliases_raw, ranking_raw, fp, cands_doc, bench) -> str:
 def result_sha256(final_constants, patch) -> str:
     return policy.canonical_sha256({"final_constants": dict(final_constants),
                                     "alias_patch": {k: patch[k] for k in ("aliases", "rules", "notes")}})
+
+
+def verify_replay(eval_fn, bench, base_raw, cands, constants, expected_result_sha256) -> list:
+    """AC-19: the committed alias additions must equal a fresh proposer run from the B state at the adopted constants."""
+    _, patch = propose_aliases(eval_fn, bench, base_raw, cands)
+    got = result_sha256(constants, patch)
+    return [] if got == expected_result_sha256 else [f"replay result_sha256 {got} != adopted {expected_result_sha256}"]
 ```
 
-- [ ] **Step 4: Rewrite `main` as the one-way pipeline**
+- [ ] **Step 4: Pipeline, adoption, verification CLI**
 
 ```python
 def _alias_policy(raw):
@@ -1392,69 +1670,92 @@ def _alias_policy(raw):
         return policy.load_aliases(p)
 
 
+def run_pipeline(evaluate_fn, bench, aliases_raw, cands_doc, grid, baseline):
+    """Pure orchestration (tested with a fake evaluate_fn(point, raw_aliases) -> (seed_res, reg_res)):
+    constants exactly once with the B aliases, then the proposer exactly once at those constants."""
+    results = []
+    for point in grid_points(grid):
+        s, r = evaluate_fn(point, aliases_raw)
+        results.append((point, s["passed"], r["passed"]))
+    selected = select_candidate(results, baseline, grid)
+
+    def eval_fn(raw):
+        s, r = evaluate_fn(selected, raw)
+        return frozenset(f["id"] for f in s["failed"]), frozenset(f["id"] for f in r["failed"])
+    working, patch = propose_aliases(eval_fn, bench, aliases_raw, cands_doc["candidates"])
+    seed_res, reg_res = evaluate_fn(selected, working)
+    return results, selected, working, patch, seed_res, reg_res
+
+
 def _parse(argv):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--cache-dir", required=True, type=pathlib.Path)
+    ap.add_argument("--cache-dir", type=pathlib.Path)
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--note", default="")
+    ap.add_argument("--adopt", default=None, metavar="RUN_ID")
+    ap.add_argument("--verify", action="store_true")
     return ap.parse_args(argv)
+
+
+def _read_log():
+    return [json.loads(x) for x in LOG_PATH.read_text(encoding="utf-8").splitlines() if x.strip()] if LOG_PATH.exists() else []
+
+
+def _write_log(lines):
+    LOG_PATH.write_text("\n".join(json.dumps(x, ensure_ascii=False, sort_keys=True) for x in lines) + "\n", encoding="utf-8")
+
+
+def _with_state(cache, fn):
+    """Build the registry from a temporary copy of the snapshot and call fn(state)."""
+    with tempfile.TemporaryDirectory() as td:
+        copy_dir = pathlib.Path(td) / "cache"
+        shutil.copytree(cache, copy_dir)
+        with mock.patch.object(storage, "CACHE_DIR", copy_dir):
+            return fn(build_state(copy_dir))
 
 
 def main(argv=None) -> int:
     args = _parse(argv)
-    cache = args.cache_dir.expanduser()
+    if args.adopt:
+        return _adopt(args.adopt)
+    cache = (args.cache_dir or pathlib.Path("")).expanduser()
     if not all((cache / f"{s}.json").is_file() for s in SOURCES):
         print(f"error: {cache} is not a cache snapshot (missing <source>.json)", file=sys.stderr); return 2
+    problems = rs.verify_freeze(ROUND, cache)
+    if problems:
+        print("error: snapshot S differs from round_freeze: " + "; ".join(problems), file=sys.stderr); return 2
     os.environ.pop("ATLASSIAN_DOCS_SEARCH_LOG", None)
     bench, rp = _BENCH, policy.load_ranking(RANKING_PATH)
     aliases_raw, ranking_raw = json.loads(ALIASES_PATH.read_text(encoding="utf-8")), json.loads(RANKING_PATH.read_text(encoding="utf-8"))
     cands_doc = json.loads(CANDIDATES_PATH.read_text(encoding="utf-8"))
+    if args.verify:
+        return _verify(cache, bench, rp, aliases_raw, ranking_raw, cands_doc)
     bad = baseline_mismatch(aliases_raw, ranking_raw, cands_doc)
     if bad:
         print(f"error: dirty round state: {bad} differ from the B baseline recorded in alias_candidates.json; "
               f"restore the B commit's files first (git checkout <B> -- {ALIASES_PATH.name} {RANKING_PATH.name})", file=sys.stderr); return 2
     seal = bench.get(f"round{ROUND}_seal") or {}
-    grid, baseline, base_policy = rp.tuning_grid, dict(rp.baseline), _alias_policy(aliases_raw)
-    with tempfile.TemporaryDirectory() as td:
-        copy_dir = pathlib.Path(td) / "cache"
-        shutil.copytree(cache, copy_dir)
-        with mock.patch.object(storage, "CACHE_DIR", copy_dir):
-            state = build_state(copy_dir)
-            fp = state.registry.fingerprint
-            if fp != seal.get("registry_fingerprint") or fp != cands_doc["generated_from"]["registry_fingerprint"]:
-                print(f"error: registry fingerprint {fp} != round{ROUND}_seal / alias_candidates provenance; wrong snapshot?", file=sys.stderr); return 2
-            results = []
-            for point in grid_points(grid):                                   # step 2: constants, exactly once, B aliases
-                s, r = evaluate_point(state, rp, point, bench, base_policy)
-                results.append((point, s["passed"], r["passed"]))
-            selected = select_candidate(results, baseline, grid)
 
-            def eval_fn(raw):                                                 # step 3: proposer at the frozen constants
-                s, r = evaluate_point(state, rp, selected, bench, _alias_policy(raw))
-                return frozenset(f["id"] for f in s["failed"]), frozenset(f["id"] for f in r["failed"])
-            working, patch = propose_aliases(eval_fn, bench, aliases_raw, cands_doc["candidates"])
-            violations = validate_alias_change(aliases_raw, working, cands_doc["candidates"])
-            if violations:
-                print("\n".join(f"VIOLATION {v}" for v in violations), file=sys.stderr); return 2
-            seed_res, reg_res = evaluate_point(state, rp, selected, bench, _alias_policy(working))   # step 4: final check
-            for f in seed_res["failed"] + reg_res["failed"]:
-                print(f"  FAIL {f['id']} {f['query']!r}")
-                for key, score, sig in top5(state, rp, selected, f["query"], _alias_policy(working)):
-                    print(f"      {score:8.3f}  {key}  {json.dumps(sig, sort_keys=True)}")
+    def body(state):
+        fp = state.registry.fingerprint
+        if fp != seal.get("registry_fingerprint") or fp != cands_doc["generated_from"]["registry_fingerprint"]:
+            raise SystemExit(f"error: registry fingerprint {fp} != round{ROUND}_seal / alias_candidates provenance; wrong snapshot?")
+        evaluate_fn = lambda point, raw: evaluate_point(state, rp, point, bench, _alias_policy(raw))
+        results, selected, working, patch, seed_res, reg_res = run_pipeline(evaluate_fn, bench, aliases_raw, cands_doc, rp.tuning_grid, dict(rp.baseline))
+        violations = validate_alias_change(aliases_raw, working, cands_doc["candidates"], {r["id"]: r["query"] for r in bench["seed"]})
+        if violations:
+            raise SystemExit("\n".join(f"VIOLATION {v}" for v in violations))
+        for f in seed_res["failed"] + reg_res["failed"]:
+            print(f"  FAIL {f['id']} {f['query']!r}")
+            for key, score, sig in top5(state, rp, selected, f["query"], _alias_policy(working)):
+                print(f"      {score:8.3f}  {key}  {json.dumps(sig, sort_keys=True)}")
+        return fp, results, selected, working, patch, seed_res, reg_res
+    try:
+        fp, results, selected, working, patch, seed_res, reg_res = _with_state(cache, body)
+    except SystemExit as e:
+        print(e, file=sys.stderr); return 2
     return _finish(args, rp, fp, results, selected, patch, working, seed_res, reg_res,
                    baseline_sha256(aliases_raw, ranking_raw, fp, cands_doc, bench))
-
-
-def _append_log(line: dict) -> None:
-    old = [json.loads(x) for x in LOG_PATH.read_text(encoding="utf-8").splitlines() if x.strip()] if LOG_PATH.exists() else []
-    out = [json.dumps(x, ensure_ascii=False, sort_keys=True) for x in old + [line]]
-    LOG_PATH.write_text("\n".join(out) + "\n", encoding="utf-8")
-
-
-def _prior_adopted() -> bool:
-    if not LOG_PATH.exists():
-        return False
-    return any(json.loads(x).get("adopted") for x in LOG_PATH.read_text(encoding="utf-8").splitlines() if x.strip())
 
 
 def _finish(args, rp, fp, results, selected, patch, working, seed_res, reg_res, base_sha) -> int:
@@ -1462,30 +1763,74 @@ def _finish(args, rp, fp, results, selected, patch, working, seed_res, reg_res, 
     effects = plan_effects(args.dry_run, perfect)
     line = {"run_id": str(uuid.uuid4()), "run_at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "git_commit": _git("rev-parse", "HEAD").strip(), "round": ROUND, "registry_fingerprint": fp,
-            "baseline_sha256": base_sha, "constants_selected": selected, "grid_size": len(results),
+            "baseline_sha256": base_sha, "events": list(EVENTS), "constants_selected": selected, "grid_size": len(results),
             "passing_combos": sum(1 for _, s, r in results if s == SEED_TOTAL and r == REGRESSION_TOTAL),
             "aliases_proposed": patch, "seed": f"{seed_res['passed']}/{SEED_TOTAL}",
             "regression_negative": f"{reg_res['passed']}/{REGRESSION_TOTAL}", "tuning_failed": not perfect,
-            "adopted": effects["write_constants"] and not _prior_adopted(), "result_sha256": result_sha256(selected, patch),
+            "result_sha256": result_sha256(selected, patch),
             "dirty": dirty_paths(_git("status", "--porcelain", "--untracked-files=no")), "note": args.note,
             "ranking_structure_sha256": rp.structure_sha256, "baseline": dict(rp.baseline)}
-    line["run_log_sha256"] = policy.canonical_sha256(line)
-    if line["adopted"]:
+    line["run_log_sha256"] = policy.canonical_sha256(line)          # hashed before status/adopted (they change on --adopt)
+    line["status"], line["adopted"] = ("pending" if perfect else "failed"), False
+    if effects["write_constants"]:                                   # candidate policy, adoption pending --adopt
         write_constants(selected)
         ALIASES_PATH.write_text(json.dumps(working, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         policy.load_aliases(ALIASES_PATH)
     if effects["append_log"]:
-        _append_log(line)
+        _write_log(_read_log() + [line])
     else:
         print("dry run: nothing written; would-be log line:"); print(json.dumps(line, ensure_ascii=False, sort_keys=True))
-    print(json.dumps({k: line[k] for k in ("constants_selected", "seed", "regression_negative", "passing_combos", "tuning_failed",
-                                           "adopted", "result_sha256")}, ensure_ascii=False))
+    print(json.dumps({k: line[k] for k in ("run_id", "constants_selected", "seed", "regression_negative", "passing_combos",
+                                           "tuning_failed", "status", "result_sha256")}, ensure_ascii=False))
     print(json.dumps({"aliases": patch["aliases"], "rules": patch["rules"], "unresolved": patch["unresolved"],
                       "resolved_by_prior_change": patch["resolved_by_prior_change"]}, ensure_ascii=False))
     return 0 if perfect else 1
-```
 
-`dirty_paths` keeps its signature but compares with `LOG_REL` (now round-based).
+
+def _current_result_sha256() -> str:
+    """result_sha256 recomputed from the policy files on disk (constants + round-N alias additions)."""
+    raw = json.loads(ALIASES_PATH.read_text(encoding="utf-8"))
+    base = strip_round_entries(raw, ROUND)
+    return result_sha256(policy.load_ranking(RANKING_PATH).constants, alias_patch(base, raw))
+
+
+def _adopt(run_id) -> int:
+    """Second stage (AC-19/20): called by the frozen worker brief only after the canonical full suite passed."""
+    lines = _read_log()
+    mine = [l for l in lines if l["run_id"] == run_id]
+    if len(mine) != 1 or mine[0]["status"] != "pending":
+        print(f"error: run {run_id} is not a pending run", file=sys.stderr); return 2
+    if any(l["adopted"] for l in lines):
+        print("error: a run is already adopted", file=sys.stderr); return 2
+    if _current_result_sha256() != mine[0]["result_sha256"]:
+        print("error: policy files no longer reproduce this run's result_sha256", file=sys.stderr); return 2
+    mine[0]["status"], mine[0]["adopted"] = "adopted", True
+    _write_log(lines)
+    print(json.dumps({"run_id": run_id, "adopted": True}))
+    return 0
+
+
+def _verify(cache, bench, rp, aliases_raw, ranking_raw, cands_doc) -> int:
+    adopted = [l for l in _read_log() if l["adopted"]]
+    if len(adopted) != 1:
+        print("error: exactly one adopted run required", file=sys.stderr); return 2
+    base, consts = strip_round_entries(aliases_raw, ROUND), dict(rp.constants)
+
+    def body(state):
+        def eval_fn(raw):
+            s, r = evaluate_point(state, rp, consts, bench, _alias_policy(raw))
+            return frozenset(f["id"] for f in s["failed"]), frozenset(f["id"] for f in r["failed"])
+        return verify_replay(eval_fn, bench, base, cands_doc["candidates"], consts, adopted[0]["result_sha256"])
+    problems = _with_state(cache, body)
+    if consts != adopted[0]["constants_selected"]:
+        problems.append("constants on disk differ from the adopted run")
+    print("replay ok" if not problems else "\n".join(f"MISMATCH {m}" for m in problems))
+    return 1 if problems else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+```
 
 - [ ] **Step 5: Round-2 integrity tests in `test_evaluator.py` (guarded)**
 
@@ -1500,16 +1845,9 @@ class TestRound2AliasesAndLog(unittest.TestCase):
             print("alias_candidates.json absent: checked after commit T"); return
         from tests import tune_search_ranking as tune
         raw = json.loads(ALIASES.read_text(encoding="utf-8")); cands = json.loads(CANDIDATES.read_text(encoding="utf-8"))["candidates"]
-        before = json.loads(json.dumps(raw))
-        for key, n in list(raw["notes"].items()):
-            if n["origin"] == "round2":
-                if key.startswith("rule:"):
-                    before["rules"] = before["rules"][:int(key[5:])] if len(before["rules"]) > int(key[5:]) else before["rules"]
-                else:
-                    before["aliases"].pop(key, None)
-                before["notes"].pop(key, None)
-        self.assertEqual(tune.validate_alias_change(before, raw, cands), [])
-        b = json.loads(BENCH.read_text(encoding="utf-8")); seeds = {r["id"]: r for r in b["seed"]}
+        b = json.loads(BENCH.read_text(encoding="utf-8")); queries = {r["id"]: r["query"] for r in b["seed"]}
+        self.assertEqual(tune.validate_alias_change(tune.strip_round_entries(raw, 2), raw, cands, queries), [])
+        seeds = {r["id"]: r for r in b["seed"]}
         for n in raw["notes"].values():
             if n["origin"] == "round2":
                 self.assertIn("R6", seeds[n["seed_query_id"]]["failure_classes"])
@@ -1517,38 +1855,40 @@ class TestRound2AliasesAndLog(unittest.TestCase):
     def test_round2_tuning_log_one_way(self):
         if not TUNING_LOG_R2.exists():
             print("round 2 tuning log absent: checked after tuning"); return
+        from tests import tune_search_ranking as tune
         lines = [json.loads(l) for l in TUNING_LOG_R2.read_text(encoding="utf-8").splitlines() if l.strip()]
-        runs = {l["run_id"] for l in lines}
-        self.assertEqual(len(runs), len(lines))                                   # one record per run
+        self.assertEqual(len({l["run_id"] for l in lines}), len(lines))
         for l in lines:
-            self.assertEqual(l["round"], 2); self.assertIn("constants_selected", l); self.assertIn("aliases_proposed", l)
+            self.assertEqual(l["round"], 2); self.assertEqual(l["events"], list(tune.EVENTS))
             self.assertRegex(l["baseline_sha256"], r"^[0-9a-f]{64}$"); self.assertRegex(l["result_sha256"], r"^[0-9a-f]{64}$")
-            self.assertEqual(l["run_log_sha256"], ev.canonical_sha256({k: v for k, v in l.items() if k != "run_log_sha256"}))
+            self.assertIn(l["status"], ("pending", "adopted", "failed", "rejected")); self.assertEqual(l["adopted"], l["status"] == "adopted")
+            self.assertEqual(l["run_log_sha256"], ev.canonical_sha256({k: v for k, v in l.items() if k not in ("run_log_sha256", "status", "adopted")}))
         self.assertEqual(len({l["baseline_sha256"] for l in lines}), 1)
         valid = [l for l in lines if not l["tuning_failed"]]
         self.assertLessEqual(len({l["result_sha256"] for l in valid}), 1)
         adopted = [l for l in lines if l["adopted"]]
-        if valid:
-            self.assertEqual(adopted, [valid[0]])
-            raw = json.loads(RANKING.read_text(encoding="utf-8"))
-            self.assertEqual(adopted[0]["constants_selected"], raw["constants"])
-        else:
-            self.assertEqual(adopted, [])
+        self.assertLessEqual(len(adopted), 1)
+        if adopted:
+            self.assertEqual(adopted[0], valid[0])
+            raw = json.loads(RANKING.read_text(encoding="utf-8")); self.assertEqual(adopted[0]["constants_selected"], raw["constants"])
+            self.assertEqual(tune._current_result_sha256(), adopted[0]["result_sha256"])     # files reproduce the adopted result
 ```
+
+(`run_log_sha256` is computed in `_finish` before `status`/`adopted` are added, so `--adopt` does not change it.)
 
 - [ ] **Step 6: Run everything and commit**
 
 ```bash
 python -m unittest tests.test_tune_search_ranking -v && python -m unittest discover -s tests -t .
 git add tests/tune_search_ranking.py tests/test_tune_search_ranking.py tests/benchmarks/test_evaluator.py
-git commit -m "tuning: one-way pipeline from the B baseline, deterministic alias proposer, validator, result/run-log hashes
+git commit -m "tuning: one-way pipeline from the B baseline, deterministic proposer, replay verifier, two-stage adoption
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
 ---
 
-### Task 7: Round-aware diagnostic, docs, and the Round 1 regression guard (commit H)
+### Task 7: Round-aware diagnostic with the Round 2 final fields, docs (commit H7 = `housekeeping_commit`)
 
 **Files:**
 - Modify: `tests/diag_search_queries.py`
@@ -1556,7 +1896,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 - Modify: `README.md`, `AGENTS.md` (one paragraph each)
 
 **Interfaces:**
-- Produces: `diag.run(argv)` takes `--round N` (default `ev.current_round()["round"]`); the seal key is `round{N}_seal`; report gains `"round": N`; plaintext hidden records must carry origin `held_out-r{N}` / `negative-r{N}` (checked via `check_schema` + explicit origin assertion, exit 2 otherwise).
+- Produces: `diag.run(argv)` takes `--round N` (default `ev.current_round()["round"]`); the seal key is `round{N}_seal`; plaintext hidden records must carry origin `held_out-r{N}` / `negative-r{N}` (exit 2 otherwise); report gains `"round": N`, `"held_out_top3"` (`{"passed": n, "total": m}` for the `held_out` set: records whose some `expected_top1_any` key is within the top 3 results; `null` when held_out is not evaluated), `"alias_candidates_sha256"` and `"concept_lexicon_sha256"` (canonical sha of the data files, `null` if absent) alongside the existing `alias_sha256`.
 
 - [ ] **Step 1: Tests**
 
@@ -1575,27 +1915,38 @@ In `tests/test_diag_search_queries.py` change `run_diag` to pass `"--round", "1"
         p = self.tmp / "wrong_round.json"; p.write_text(json.dumps(plain), encoding="utf-8")
         code, rep = self.run_diag("--bench-file", str(self.good_bench), "--bench", str(p), "--sets", "held_out")
         self.assertEqual(code, 2); self.assertEqual(rep["sets"], {})
+
+    def test_round2_final_fields(self):
+        code, rep = self.run_diag("--bench-file", str(self.good_bench), "--bench", str(self.plain_path))
+        self.assertEqual(rep["held_out_top3"], {"passed": 2, "total": 2})
+        for k in ("alias_sha256", "alias_candidates_sha256", "concept_lexicon_sha256"):
+            self.assertIn(k, rep)
+        for k in ("alias_candidates_sha256", "concept_lexicon_sha256"):
+            path = diag.policy.DATA_DIR / f"{k[:-7]}.json"
+            self.assertEqual(rep[k], ev.canonical_sha256(json.loads(path.read_text(encoding="utf-8"))) if path.exists() else None)
+        code2, rep2 = self.run_diag("--bench-file", str(self.good_bench), "--sets", "seed")
+        self.assertIsNone(rep2["held_out_top3"])
 ```
 
 - [ ] **Step 2: Implement**
 
-In `diag_search_queries.py`: add `ap.add_argument("--round", type=int, default=None)`; in `run`, `rnd = args.round or ev.current_round()["round"]`; `_sections(bench, plain, rnd)` asserts `rec["origin"] == f"{name}-r{rnd}"` for every plaintext record, returning an error tuple `(2, {"error": "wrong_round_origin", "sets": {}})` from `run` when violated; `_evaluate(state, bench, sections, sets, plain, rnd)` uses `seal = bench.get(f"round{rnd}_seal") or {}` and adds `"round": rnd` to the report; messages say `round{rnd}_seal`. Update the module docstring.
+In `diag_search_queries.py`: add `ap.add_argument("--round", type=int, default=None)`; in `run`, `rnd = args.round or ev.current_round()["round"]`; `_sections(bench, plain, rnd)` checks `rec["origin"] == f"{name}-r{rnd}"` for every plaintext record and `run` returns `(2, {"error": "wrong_round_origin", "sets": {}})` when violated; `_evaluate(state, bench, sections, sets, plain, rnd)` uses `seal = bench.get(f"round{rnd}_seal") or {}`, adds `"round": rnd`, `"alias_candidates_sha256": _data_sha("alias_candidates.json")`, `"concept_lexicon_sha256": _data_sha("concept_lexicon.json")` (helper returning `ev.canonical_sha256(json)` or `None`), and `"held_out_top3": None`; when `held_out` is evaluated (not sealed) compute `top3 = [r["key"] for r in search_operations(state, q, limit=3)["results"]]` per record and set `report["held_out_top3"] = {"passed": count(any(k in top3 for k in expected)), "total": len(records)}`. Update the docstring.
 
 - [ ] **Step 3: Docs**
 
-`README.md` Round section: one paragraph "Round 2" pointing to the spec, the tools (`round_seal.py --round 2`, `alias_candidates_tool.py`, `concept_lexicon_check.py`, one-way `tune_search_ranking.py`), the snapshot env var `ATLASSIAN_DOCS_ROUND2_CACHE`, and the terminal states D/F. `AGENTS.md`: one paragraph that the Round 2 tooling files listed in `evaluator.TOOLING_FILES` are immutable from the housekeeping commit to the terminal commit.
+`README.md` Round section: one paragraph "Round 2" pointing to the spec, the tools (`round_seal.py --round 2` incl. `freeze`/`verify-freeze`, `alias_candidates_tool.py`, `concept_lexicon_check.py prepare/finalize/merge`, the one-way `tune_search_ranking.py` with `--adopt`/`--verify`), the snapshot env var `ATLASSIAN_DOCS_ROUND2_CACHE`, and the terminal states D/F. `AGENTS.md`: one paragraph that the files in `evaluator.TOOLING_FILES` are immutable from `housekeeping_commit` to the terminal commit.
 
 - [ ] **Step 4: Full suite, commit**
 
 ```bash
 python -m unittest discover -s tests -t .
 git add tests/diag_search_queries.py tests/test_diag_search_queries.py README.md AGENTS.md
-git commit -m "diag: --round N (seal key, plaintext origin check, report.round); Round 2 docs
+git commit -m "diag: --round N, plaintext origin check, Round 2 final fields (held_out_top3, candidates/lexicon shas); docs
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
-This is the last tooling commit: **H = HEAD after Task 7** (record its sha as `housekeeping_commit`). Any later tool defect found before T is fixed in an H′ commit and `housekeeping_commit` is updated.
+**H7 = HEAD after this commit = `housekeeping_commit`.** Record its sha in `~/.atlassian_api_updater/round2-work/controller-events.jsonl` (`{"event": "housekeeping_commit", "sha": ...}`). A tool defect found before T is fixed in an H′ commit that replaces `housekeeping_commit`; affected pre-T artifacts are regenerated in dependency order.
 
 ---
 
@@ -1618,7 +1969,7 @@ python tests/benchmarks/round_seal.py catalog --round 2 --cache-dir ~/.atlassian
   --internal-out ~/.atlassian_api_updater/round2-work/round2-internal-catalog.json
 ```
 
-Record `registry_fingerprint` and the three `spec_sha256` lines in `docs/phase3-readiness.md` (Round 2 section draft, Task 17 finalizes it).
+Ledger `registry_fingerprint` and the three `spec_sha256` lines in `~/.atlassian_api_updater/round2-work/controller-events.jsonl` (Task 15 renders them).
 
 - [ ] **Step 2: Verb report on the current (Round 1) table, then write the §6 inventory**
 
@@ -1635,7 +1986,7 @@ python tests/benchmarks/alias_candidates_tool.py method-safety --cache-dir ~/.at
 python tests/benchmarks/alias_candidates_tool.py verb-report   --cache-dir ~/.atlassian_api_updater/round2-cache --out ~/.atlassian_api_updater/round2-work/verb_report.json
 ```
 
-For each `VIOLATION` widen that verb to the superset that covers the expected method, re-run. `REVIEW` lines are diagnostic: decide per verb (verb usage vs noun usage) and record the decision in readiness; do not widen automatically. Then run `python -m unittest discover -s tests -t .` (the spec-§6 parity test in `tests/intelligence/test_search.py` is added here: it parses the JSON block under `## 6.` of the Round 2 spec and asserts equality with `verb_methods`; if the inventory was widened, update the spec §6 block in the same commit so both stay equal).
+For each `VIOLATION` widen that verb to the superset that covers the expected method, re-run. `REVIEW` lines are diagnostic: decide per verb (verb usage vs noun usage) and ledger the decision; do not widen automatically. Then run `python -m unittest discover -s tests -t .` (the spec-§6 parity test in `tests/intelligence/test_search.py` is added here: it parses the JSON block under `## 6.` of the Round 2 spec and asserts equality with `verb_methods`; if the inventory was widened, update the spec §6 block in the same commit so both stay equal).
 
 - [ ] **Step 4: Finalize**
 
@@ -1643,7 +1994,7 @@ For each `VIOLATION` widen that verb to the superset that covers the expected me
 python -c "import json; from tests.benchmarks.evaluator import canonical_sha256 as c; print(c(json.load(open('tools/atlassian_docs/intelligence/data/search_ranking.json'))['verb_methods']))"
 ```
 
-Record this `verb_inventory_sha256` in readiness. **From here the inventory does not change.** Commit (not T yet — T is one commit, Task 11; keep this as a staged working-tree change or commit as `T0: verb inventory` if the user prefers smaller commits; the plan's default is a single T commit, so leave it uncommitted and continue).
+Record this `verb_inventory_sha256` in the controller events ledger. **From here the inventory does not change.** Leave the change in the working tree: pre-T policy/data changes are committed exactly once, as the single T commit in Task 10 (no intermediate commit; AC-01a).
 
 ---
 
@@ -1678,14 +2029,13 @@ CONCEPT TOKENS:
 
 - [ ] **Step 3: Generate in a stateless context**
 
-Open ChatGPT **Temporary chat**, select **Unpersonalized**, confirm the UI state (screenshot kept in `round2-work/`), paste the prompt with the token lines filled from `concept_tokens.json` (`"\t".join([token, str(count), ",".join(sources)])`), take the first parseable JSON output, save it as `~/.atlassian_api_updater/round2-work/lexicon_raw.json`, close the chat without saving. Record `sha256` of the filled prompt and of the raw output. If the output is not parseable JSON: transport/parse retry with the identical prompt; never a semantic re-request.
+Materialize the exact model input: fill the template's `<one line per token ...>` line with `"\t".join([token, str(count), ",".join(sources)])` per token from `concept_tokens.json` and write `~/.atlassian_api_updater/round2-work/lexicon-generation-input.txt`; ledger its sha256 (`generation_input_sha256`) and the template's (`prompt_template_sha256`). Open ChatGPT **Temporary chat**, select **Unpersonalized**, confirm the UI state (screenshot kept in `round2-work/`), paste the input file byte-for-byte, take the first parseable JSON output, save it as `round2-work/lexicon_raw.json`, close the chat without saving; ledger the attempt (`attempts.jsonl`, stage `lexicon-generation`). Not parseable → retry with the identical input; never a semantic re-request.
 
-- [ ] **Step 4: Structural check (no review yet) to produce the review input**
+- [ ] **Step 4: Structural stage (no review, no cap) to produce the review input**
 
 ```bash
-python tests/benchmarks/concept_lexicon_check.py check --cache-dir ~/.atlassian_api_updater/round2-cache \
-  --raw ~/.atlassian_api_updater/round2-work/lexicon_raw.json --prompt tests/benchmarks/round2-lexicon-generation-prompt.md \
-  --out ~/.atlassian_api_updater/round2-work/lexicon_structural.json
+python tests/benchmarks/concept_lexicon_check.py prepare --cache-dir ~/.atlassian_api_updater/round2-cache \
+  --raw ~/.atlassian_api_updater/round2-work/lexicon_raw.json --out ~/.atlassian_api_updater/round2-work/lexicon_structural.json
 ```
 
 - [ ] **Step 5: Semantic review (stateless, binary reject only)**
@@ -1702,18 +2052,21 @@ ENTRIES:
 <the "lexicon" object of lexicon_structural.json>
 ```
 
-Run it in a new Unpersonalized Temporary chat (same lifecycle rules), save the first parseable output as `round2-work/lexicon_review.json`, record its sha256, then:
+Materialize `round2-work/lexicon-review-input.txt` (template with `<the "lexicon" object of lexicon_structural.json>` replaced by that JSON), ledger its sha256, run it in a new Unpersonalized Temporary chat (same lifecycle rules), save the first parseable output as `round2-work/lexicon_review.json`; `finalize` refuses an invalid review (missing/extra keys, non-bool) → retry the identical input, ledger each attempt. Then:
 
 ```bash
-python tests/benchmarks/concept_lexicon_check.py check --cache-dir ~/.atlassian_api_updater/round2-cache \
-  --raw ~/.atlassian_api_updater/round2-work/lexicon_raw.json --prompt tests/benchmarks/round2-lexicon-generation-prompt.md \
-  --review ~/.atlassian_api_updater/round2-work/lexicon_review.json --out tools/atlassian_docs/intelligence/data/concept_lexicon.json
+python tests/benchmarks/concept_lexicon_check.py finalize --cache-dir ~/.atlassian_api_updater/round2-cache \
+  --raw ~/.atlassian_api_updater/round2-work/lexicon_raw.json --structural ~/.atlassian_api_updater/round2-work/lexicon_structural.json \
+  --review ~/.atlassian_api_updater/round2-work/lexicon_review.json \
+  --generation-input ~/.atlassian_api_updater/round2-work/lexicon-generation-input.txt \
+  --review-input ~/.atlassian_api_updater/round2-work/lexicon-review-input.txt \
+  --template tests/benchmarks/round2-lexicon-generation-prompt.md --out tools/atlassian_docs/intelligence/data/concept_lexicon.json
 python tests/benchmarks/alias_candidates_tool.py lexicon-gate --cache-dir ~/.atlassian_api_updater/round2-cache --lexicon tools/atlassian_docs/intelligence/data/concept_lexicon.json
 python tests/benchmarks/concept_lexicon_check.py merge --lexicon tools/atlassian_docs/intelligence/data/concept_lexicon.json --aliases tools/atlassian_docs/intelligence/data/search_aliases.json --round 2
 python -m unittest discover -s tests -t .
 ```
 
-Record kept/rejected counts, gate rejections, merge skips in readiness.
+Ledger kept/rejected counts, gate rejections, merge skips.
 
 ---
 
@@ -1747,34 +2100,47 @@ Forbidden: anything under ~/.atlassian_api_updater/sealed/, any *.enc file, any 
 Procedure (run from the repo root, exactly once; rerun only after a tool error, never after a valid result):
 1. git status --porcelain --untracked-files=no   -> must be empty (otherwise stop and report).
 2. python tests/tune_search_ranking.py --cache-dir "$ATLASSIAN_DOCS_ROUND2_CACHE" --note "round2 tuning run"
+   (prints a JSON line with run_id and status: "pending" = candidate policy written, "failed" = log only)
 3. python -m unittest discover -s tests -t .
-4. If step 2 exited 0 and step 3 is OK: git add tools/atlassian_docs/intelligence/data/search_ranking.json
-   tools/atlassian_docs/intelligence/data/search_aliases.json tests/benchmarks/search-tuning-round2.jsonl
-   and commit with message "round2: tuning run (one-way pipeline)" + the project trailer.
+4. If step 2 exited 0 and step 3 is OK:
+     python tests/tune_search_ranking.py --adopt <run_id>
+     git add tools/atlassian_docs/intelligence/data/search_ranking.json tools/atlassian_docs/intelligence/data/search_aliases.json
+             tests/benchmarks/search-tuning-round2.jsonl
+     git commit -m "round2: tuning run (one-way pipeline, adopted <run_id>)" + the project trailer.
+   If step 2 exited 0 but step 3 FAILED: git checkout -- tools/atlassian_docs/intelligence/data/search_ranking.json
+     tools/atlassian_docs/intelligence/data/search_aliases.json   (the run stays "pending", never adopted); report.
    If step 2 exited 1 (tuning_failed): commit ONLY tests/benchmarks/search-tuning-round2.jsonl with message
-   "round2: tuning failed (log only)" + trailer; do not touch the data files.
+     "round2: tuning failed (log only)" + trailer; do not touch the data files.
    If step 2 exited 2: do not commit; report the stderr verbatim.
-Report: exit codes, the two JSON summary lines printed by step 2, the commit sha, and nothing else.
+Report: exit codes, the JSON summary lines printed by step 2, the --adopt output, the commit sha, and nothing else.
 ```
 
 - [ ] **Step 3: Hidden generation prompt template (frozen text)**
 
-`tests/benchmarks/round2-hidden-generation-prompt.md` — the Round 1 generation prompt structure with the Round 2 rules:
+`tests/benchmarks/round2-hidden-generation-prompt.md` — a natural-language transcription of the `round_seal.py` checker contract (the ids in `Rules checked by a program` are the re-request rule ids):
 
 ```
 You are creating an evaluation set for an API operation search engine over the Atlassian Jira / Confluence REST catalog.
-Attached/below is the catalog: one line per operation with key, source, method, summary, tags.
+Below is the catalog: one line per operation with key, source, method, summary, tags (tab-separated).
 Produce ONLY one JSON object: {"held_out": [16 records], "negative": [8 records]}.
-held_out record: {"id": "h-001".., "query": "...", "expected_top1_any": ["<key>"], "forbidden_top1": [], "origin": "held_out-r2",
+held_out record: {"id": "h-001".."h-016", "query": "...", "expected_top1_any": ["<key>"], "forbidden_top1": [], "origin": "held_out-r2",
   "failure_classes": [], "ambiguous": false}
-negative record: {"id": "n-001".., "query": "...", "expected_top1_any": [], "forbidden_top1": ["<key>"], "origin": "negative-r2",
+negative record: {"id": "n-001".."n-008", "query": "...", "expected_top1_any": [], "forbidden_top1": ["<key>"], "origin": "negative-r2",
   "failure_classes": [], "ambiguous": false}
-Rules for every query: 3 to 7 words; natural end-user phrasing; never copy two consecutive words from the expected
-operation's summary or tags; never equal the operationId's words; never reuse a query from the catalog text.
-held_out: at least 6 jira-platform, 4 jira-software, 5 confluence targets; at least 4 GET, 4 POST, 2 PUT, 2 DELETE;
-at most 7 queries name a product ("jira"/"confluence"), at least 9 do not.
-negative: the query must have NO correct operation in the catalog; forbidden_top1 is the tempting wrong operation;
-a query whose normalized words equal an operation summary or the last path segment is NOT allowed.
+Rules checked by a program (a violation is sent back to you by rule id):
+- words: every query has 3 to 7 words of natural end-user phrasing.
+- operationId: the set of words in a query (lowercased, split on non-letters, ignoring a/an/the/to/of/for/in/on/at/and/or/with/by/from/is/are/be/this/that)
+  must not equal the set of words of any operation's operationId.
+- summary/tags: after removing those same small words, a held_out query must not contain two consecutive words that also
+  appear consecutively in the expected operation's summary or in one of its tags.
+- distribution (held_out): at least 6 jira-platform, 4 jira-software, 5 confluence expected operations; at least 4 GET,
+  4 POST, 2 PUT, 2 DELETE; at least 4 queries contain "jira" or "confluence" and at least 9 contain neither.
+- negative-phrase: a negative query's words (same normalization, singularized) must not equal, in order, the words of any
+  operation summary or of the last literal segment of any operation path.
+- schema / catalog: ids and origins exactly as above; every key must exist in the catalog.
+- reuse (checker-only, you cannot see the existing benchmark): queries that repeat an existing benchmark query or its word
+  set are rejected; if that happens you will be asked for a replacement with rule id "reuse".
+negative: the query must have NO correct operation in the catalog; forbidden_top1 is the tempting wrong operation.
 No commentary.
 
 CATALOG:
@@ -1819,18 +2185,64 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 ### Task 11: **[controller]** Hidden-set generation, machine check, stateless review, commit B, encryption
 
-- [ ] **Step 1: Generate** in a new **Unpersonalized Temporary chat** with the frozen template filled with `round2-generator-catalog.json` lines. First parseable output → `~/.atlassian_api_updater/sealed/round2-sealed.json` (mode 600). Record prompt/result sha256.
+Evidence for everything in this task goes to `~/.atlassian_api_updater/round2-work/controller-events.jsonl` and the **attempt ledger** `~/.atlassian_api_updater/round2-work/attempts.jsonl`: one line per model call `{"attempt_no", "stage": "generation"|"replacement"|"review", "input_sha256", "output_sha256", "status": "valid"|"parse_error"|"invalid"|"transport_error", "reason_code"}`. Plaintext never enters the ledger — hashes only. The repo working tree stays clean until commit B.
 
-- [ ] **Step 2: Machine check**
+- [ ] **Step 1: Materialize the exact generation input and generate**
+
+```bash
+python - <<'EOF2'
+import json, pathlib, hashlib
+w = pathlib.Path.home() / ".atlassian_api_updater" / "round2-work"
+tpl = pathlib.Path("tests/benchmarks/round2-hidden-generation-prompt.md").read_text(encoding="utf-8")
+cat = json.load(open(w / "round2-generator-catalog.json"))
+lines = "\n".join(f"{r['key']}\t{r['source']}\t{r['method']}\t{r['summary']}\t{','.join(r['tags'] or [])}" for r in cat)
+filled = tpl.replace("<generator catalog lines>", lines)
+(w / "hidden-generation-input.txt").write_text(filled, encoding="utf-8")
+print("generation_input_sha256", hashlib.sha256(filled.encode()).hexdigest())
+EOF2
+```
+
+Open a new **Unpersonalized Temporary chat** (confirm the toggle, screenshot to `round2-work/`), paste `hidden-generation-input.txt` byte-for-byte, take the first output; store it as `~/.atlassian_api_updater/sealed/round2-sealed.json` (mode 600) only if it parses as JSON with `held_out`/`negative` lists; ledger the attempt (`parse_error` → retry with the identical input; never a semantic re-request before the machine check).
+
+- [ ] **Step 2: Machine check (checker-only constraints included)**
 
 ```bash
 python tests/benchmarks/round_seal.py check --round 2 --plain ~/.atlassian_api_updater/sealed/round2-sealed.json \
   --bench tests/benchmarks/search_queries.json --internal-catalog ~/.atlassian_api_updater/round2-work/round2-internal-catalog.json
 ```
 
-On violations: re-request in the SAME temporary chat with the fixed format only (`레코드 h-00N 거부: <rule id>`), first parseable output again, re-check. Count re-requests.
+On violations: ONE fixed-format re-request in the same chat — lines of the form `record h-00N rejected: <rule id>` (rule ids: `words`, `operationId`, `summary/tags`, `reuse`, `distribution`, `negative-phrase`, `schema`, `catalog`), nothing else — first parseable output replaces only the rejected records (`stage: replacement`); re-check. Count re-requests.
 
-- [ ] **Step 3: Semantic review** — new Unpersonalized Temporary chat with the frozen reviewer prompt + plaintext + internal catalog; first parseable output; record sha. Rejected records → one fixed-format re-request to the generator chat for replacements → machine check → review again for the replacements only. The controller applies results; it never decides accept/reject itself.
+- [ ] **Step 3: Semantic review (stateless, validated output)**
+
+```bash
+python - <<'EOF2'
+import json, pathlib, hashlib
+w = pathlib.Path.home() / ".atlassian_api_updater" / "round2-work"
+tpl = pathlib.Path("tests/benchmarks/round2-hidden-reviewer-prompt.md").read_text(encoding="utf-8")
+plain = json.load(open(pathlib.Path.home() / ".atlassian_api_updater" / "sealed" / "round2-sealed.json"))
+cat = json.load(open(w / "round2-internal-catalog.json"))
+filled = tpl.replace("<plaintext records>", json.dumps(plain, ensure_ascii=False, indent=1)).replace(
+    "<internal catalog lines>", "\n".join(f"{r['key']}\t{r['operation_id']}\t{r['summary']}\t{','.join(r['tags'] or [])}\t{(r['description'] or '')[:200]}" for r in cat))
+(w / "hidden-review-input.txt").write_text(filled, encoding="utf-8")
+print("review_input_sha256", hashlib.sha256(filled.encode()).hexdigest())
+EOF2
+```
+
+New Unpersonalized Temporary chat → paste `hidden-review-input.txt` → first output → `round2-work/hidden-review-output.json` → validate:
+
+```bash
+python - <<'EOF2'
+import json, pathlib
+from tests.benchmarks import round_seal as rs
+w = pathlib.Path.home() / ".atlassian_api_updater"
+plain = json.load(open(w / "sealed" / "round2-sealed.json")); out = json.load(open(w / "round2-work" / "hidden-review-output.json"))
+ids = [r["id"] for r in plain["held_out"] + plain["negative"]]
+problems = rs.validate_reviewer_output(out, ids); print(problems or "valid"); print(sorted(k for k, v in out.items() if not v["accept"]))
+EOF2
+```
+
+Invalid output → `status: invalid`, retry the identical input (transport/parse/invalid only). Rejected ids → one fixed-format replacement request to the generator chat (`record h-00N rejected: reviewer`), machine check, then a review of the replacement records only (same frozen prompt, records = replacements). No semantic rerun after a valid output. The controller applies results; it never decides accept/reject itself.
 
 - [ ] **Step 4: Seal (commit B)**
 
@@ -1838,11 +2250,13 @@ On violations: re-request in the SAME temporary chat with the fixed format only 
 python tests/benchmarks/round_seal.py seal --round 2 --plain ~/.atlassian_api_updater/sealed/round2-sealed.json \
   --bench tests/benchmarks/search_queries.json --cache-dir ~/.atlassian_api_updater/round2-cache
 python -m unittest discover -s tests -t .
-git add tests/benchmarks/search_queries.json docs/phase3-readiness.md
+git add tests/benchmarks/search_queries.json
 git commit -m "B: Round 2 seal (held_out 16 / negative 8 sha256 + distributions)
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
+
+(Only the bench changes in B; readiness is rendered at the terminal commit from the ledgers.)
 
 - [ ] **Step 5: [user] Encrypt and delete the plaintext**
 
@@ -1852,7 +2266,7 @@ Ask the user to run in their own terminal (never in this session):
 cd ~/.atlassian_api_updater/sealed && openssl enc -aes-256-cbc -pbkdf2 -in round2-sealed.json -out round2-sealed.json.enc && rm round2-sealed.json
 ```
 
-Then the controller verifies the AC-18a-B checkpoint and records it:
+Then the controller records the AC-18a-B checkpoint in the ledger:
 
 ```bash
 test ! -e ~/.atlassian_api_updater/sealed/round2-sealed.json && shasum -a 256 ~/.atlassian_api_updater/sealed/round2-sealed.json.enc
@@ -1860,71 +2274,90 @@ test ! -e ~/.atlassian_api_updater/sealed/round2-sealed.json && shasum -a 256 ~/
 
 ---
 
-### Task 12: **[controller]** Dispatch the frozen worker brief (B..C)
+### Task 12: **[controller]** S checkpoint, then dispatch the frozen worker brief (B..C)
 
-- Dispatch one implementer subagent (standard model) whose prompt is: one line of context + "read `tests/benchmarks/round2-worker-brief.md` first; it is your entire procedure" + the env var value for S + the report file path. Nothing else. Record the brief sha (must equal `round_freeze.worker_brief_sha256`), the number of runs, and each report's result sha.
+- `python tests/benchmarks/round_seal.py verify-freeze --round 2 --cache-dir ~/.atlassian_api_updater/round2-cache` must print `freeze ok` (ledger it); `git status --porcelain --untracked-files=no` must be empty.
+- Dispatch one implementer subagent (standard model) whose prompt is: one line of context + "read `tests/benchmarks/round2-worker-brief.md` first; it is your entire procedure" + the env var value for S + the report file path. Nothing else. Ledger the brief sha (must equal `round_freeze.worker_brief_sha256`), the number of runs, each report's `run_id`/`result_sha256`.
 - Only predefined replies are allowed to the worker: "run the brief procedure", "run it again" (after a tool error).
-- Review package + task reviewer as usual, but the reviewer checks only: the commit matches the brief's rules, the log line validates, tests are green.
+- Review package + task reviewer as usual; the reviewer checks only: the commit matches the brief's rules, `--verify` passes, the log line validates, tests are green.
 
 ---
 
-### Task 13: **[controller]** Commit C (success branch) or F (failure branch)
+### Task 13: **[controller]** Whole-branch code review, then commit C (success) or F (failure)
 
-- Success (`tuning_failed: false`, adopted run committed):
+- [ ] **Step 1: Whole-branch review before freezing the evaluator (both branches)**
+
+Dispatch the whole-branch code reviewer (most capable model) over `95b8de0..HEAD`. Findings in `TOOLING_FILES` cannot be fixed now (they are frozen since T): a defect that changes evaluation semantics is a **round abort** (record, stop, restart from H′); other findings are parked for after the terminal commit (docs, non-tooling tests).
+
+- [ ] **Step 2a: Success (`status: adopted`, worker commit present)**
 
 ```bash
-python -c "from tests.benchmarks import evaluator as ev, round_seal as rs; import pathlib; e=ev.freeze_for(2); assert ev.evaluation_code_sha256(pathlib.Path('.'))==e['evaluation_code_sha256_at_T'], 'evaluator changed since T'; print('ok')"
+python tests/benchmarks/round_seal.py verify-freeze --round 2 --cache-dir ~/.atlassian_api_updater/round2-cache
+python tests/tune_search_ranking.py --verify --cache-dir ~/.atlassian_api_updater/round2-cache
+python -c "from tests.benchmarks import evaluator as ev; import pathlib; e=ev.freeze_for(2); assert ev.evaluation_code_sha256(pathlib.Path('.'))==e['evaluation_code_sha256_at_T'], 'evaluator changed since T'; print('ok')"
 python -m unittest discover -s tests -t .
 git commit --allow-empty -m "C: Round 2 freeze before final evaluation (evaluation_code_sha256 == at_T)
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
-- Failure (`tuning_failed: true`): the worker already committed the log-only commit; add readiness status "Round 2 tuning failed" (AC-21), verify `.enc` sha unchanged and no plaintext (AC-18a-F), commit `F: Round 2 tuning failed` touching only readiness. Skip Tasks 14–15; go to Task 16.
+- [ ] **Step 2b: Failure (`status: failed`, log-only worker commit present)**
+
+Checkpoint AC-18a-F (`.enc` sha unchanged, no plaintext) → ledger; render the full readiness Round 2 section (Task 15, failure branch) → commit `F: Round 2 tuning failed` touching only `docs/phase3-readiness.md`. Skip Task 14; continue with Task 16.
 
 ---
 
-### Task 14: **[controller + user]** Commit D — single evaluation
+### Task 14: **[controller + user]** Commit D — single evaluation (success branch)
 
+- [ ] `python tests/benchmarks/round_seal.py verify-freeze --round 2 --cache-dir ~/.atlassian_api_updater/round2-cache` → `freeze ok`; AC-18a-D checkpoint (`.enc` sha == B value) → ledger.
 - [ ] **[user]** decrypt in their terminal: `cd ~/.atlassian_api_updater/sealed && openssl enc -d -aes-256-cbc -pbkdf2 -in round2-sealed.json.enc -out round2-sealed.json`.
-- [ ] Controller checkpoint AC-18a-D (`.enc` sha unchanged), then plaintext sha must equal the seal:
+- [ ] Plaintext sha must equal the seal, then exactly one evaluation:
 
 ```bash
-python - <<'EOF'
+python - <<'EOF2'
 import json, pathlib
 from tests.benchmarks.evaluator import canonical_sha256
 p = json.load(open(pathlib.Path.home()/".atlassian_api_updater/sealed/round2-sealed.json"))
 b = json.load(open("tests/benchmarks/search_queries.json"))["round2_seal"]
 assert canonical_sha256(p["held_out"]) == b["held_out_sha256"] and canonical_sha256(p["negative"]) == b["negative_sha256"]; print("seal ok")
-EOF
+EOF2
 python tests/diag_search_queries.py --round 2 --bench ~/.atlassian_api_updater/sealed/round2-sealed.json \
   --cache-dir ~/.atlassian_api_updater/round2-cache --json tests/benchmarks/round2-final.json
 python tests/benchmarks/round_seal.py unseal --round 2 --plain ~/.atlassian_api_updater/sealed/round2-sealed.json --bench tests/benchmarks/search_queries.json
 python -m unittest discover -s tests -t .
+```
+
+Then render readiness (Task 15, success branch) and commit D:
+
+```bash
 git add tests/benchmarks/search_queries.json tests/benchmarks/round2-final.json docs/phase3-readiness.md
-git commit -m "D: Round 2 final evaluation (single run) and unseal
+git commit -m "D: Round 2 final evaluation (single run), unseal, decision record
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
-Exactly one `diag` run with `--bench`. Gate: held_out ≥ 15/16 and negative 0/8.
+Gate: held_out ≥ 15/16 and negative 0/8.
 
 ---
 
-### Task 15: **[controller]** Readiness Round 2 section and attestation
+### Task 15: **[controller]** Render the readiness Round 2 section from the ledgers (before the terminal commit)
 
-Append to `docs/phase3-readiness.md` (after the Round 2 pre-work subsection, never inside the Round 1 section) a `## Search Quality Round 2 — decision record (2026-10-0X)` section with: `housekeeping_commit`, S fingerprint + spec shas, verb-report decisions, method-safety result, lexicon prompt/raw/review shas + counts, candidates count, R5/R6 counts, T/B/(C/D | F) shas, generation prompt/result shas + re-request count + reviewer shas + `temporary_chat_unpersonalized: true`, `.enc` sha at B/at terminal, worker brief sha + run count + output shas, tuning log summary, result row (or failure row), the state model table with `null`/`not_applicable` on the failure branch, and the attestation list of spec §12. Commit as part of D (or F).
+Append to `docs/phase3-readiness.md` after the Round 2 pre-work subsection (never inside the Round 1 section) a `## Search Quality Round 2 — decision record (<date>)` section rendered from `controller-events.jsonl` + `attempts.jsonl`: `housekeeping_commit`, S fingerprint + spec shas, verb-report decisions, method-safety result, lexicon template/generation-input/raw/review-input/review-output shas + counts (kept/rejected/gate/merge-skipped), candidates count, R5/R6 counts, T/B/(C/D | F) shas, hidden generation input/output shas per attempt with status, re-request count, reviewer input/output shas, `temporary_chat_unpersonalized: true`, `.enc` sha at B/terminal, worker brief sha + run count + `run_id`/`result_sha256` per run, `--verify` result, tuning log summary, result row (success) or failure row, the state model table with `null`/`not_applicable` on the failure branch, and the attestation list of spec §12. This task is a step of Task 13 (failure) or Task 14 (success); it never produces its own commit.
 
 ---
 
-### Task 16: **[controller]** Final review and finishing
+### Task 16: **[controller]** Post-terminal provenance review and finishing
 
-- Dispatch the whole-branch code reviewer (most capable model) over `95b8de0..HEAD`; one fix dispatch max (post-terminal fixes may touch only test code outside `TOOLING_FILES`, docs, and memory notes — anything else means the round's provenance is broken and must be reported, not patched).
-- Update memory: `search-quality-round1-status.md` → add the Round 2 outcome; MEMORY.md index.
+- Dispatch a reviewer (most capable model) limited to provenance: AC table of spec §12 row by row against git history, ledgers and artifacts; no code changes to `TOOLING_FILES`; parked findings from Task 13 may be fixed only in docs / non-tooling tests.
+- Update memory: `search-quality-round1-status.md` → Round 2 outcome; MEMORY.md index.
 - Use `superpowers:finishing-a-development-branch` (the user chooses merge/push).
 
 ## Self-review notes
 
-- Spec coverage: §4 files → Tasks 2–5, 10; §5.1 (H, S, order) → Tasks 1–8; §5.2 → Tasks 8–10; §5.3 → Tasks 9, 11; §5.4 → Task 11; §5.5/§7.2 → Task 6, 12; §5.6 → Task 12 (predefined replies only); §5.7 → Tasks 13–14; §6 → Task 8 (+ parity test in Task 10); §7.0 → Tasks 5, 9; §7.1 → Task 4; §8 → Tasks 1–3, 7; §10 → each task's tests; §11 → Task 15; §12 AC-01a/b/c (git, Tasks 10–14), AC-02/03 (Task 14), AC-04 (seal checkpoint, Task 2), AC-05 (Task 3 tooling hash + git), AC-06a/b (existing seed test + log), AC-07, AC-08 (Task 3), AC-09 (Task 3 invariants), AC-10/11 (Task 14), AC-12 (Task 6 validator test), AC-13 (Task 3/4 provenance), AC-14 (Task 2), AC-15a/b, AC-20a/b (Task 6 log test), AC-16, AC-17 (Task 1), AC-18a/b (Tasks 11, 13, 14), AC-19 (Tasks 3, 6, 12), AC-21 (Task 13).
-- Known simplification (controller ruling): the spec's optional `--from-baseline` restore is not implemented; a dirty round state is refused and restored by `git checkout <B> -- <files>` manually (spec §5.5.6 allows "거부(기본)").
-- The §6 spec-parity test is added at T (Task 10) rather than in H because the inventory is finalized only after method-safety; test code under `tests/intelligence/test_search.py` is not in `TOOLING_FILES`, so this is allowed.
+- Spec coverage: §4 files → Tasks 2–5, 10; §5.1 (H, S, order) → Tasks 1–8; §5.2 → Tasks 8–10; §5.3 → Tasks 2 (negative phrase rule, reviewer validator), 9, 11; §5.4 → Task 11; §5.5/§7.2 → Task 6, 12; §5.6 → Task 12 (predefined replies only); §5.7 → Tasks 12–14 (verify-freeze checkpoints); §6 → Task 8 (+ parity test in Task 10); §7.0 → Tasks 5, 9 (review before cap, validated review, exact-input hashes); §7.1 → Task 4; §8 → Tasks 1–3, 7; §9 → Task 7 (final fields); §10 → each task's tests; §11 → Task 15; §12 AC-01a/b/c (git, Tasks 10–14), AC-02/03 (Task 14), AC-04 (seal checkpoint, Task 2), AC-05 (Task 3 tooling hash + git), AC-06a/b, AC-07, AC-08 (Task 3), AC-09 (Task 3 invariants), AC-10/11 (Tasks 7, 14), AC-12 (Task 6 validator), AC-13 (Tasks 3/4 provenance), AC-14 (Task 2), AC-15a/b, AC-20a/b (Task 6 log test + events + mock-order test), AC-16, AC-17 (Task 1), AC-18a-B/D/F, AC-18b (Tasks 11, 13, 14), AC-19 (Tasks 3, 6 `--verify`, 11 attempt ledger, 12), AC-21 (Task 13).
+- Controller ruling: the spec's optional `--from-baseline` restore is not implemented; a dirty round state is refused and restored by `git checkout <B> -- <files>` (spec §5.5.6 allows "거부(기본)").
+- The §6 spec-parity test is added at T (Task 10) because the inventory is finalized only after method-safety; `tests/intelligence/test_search.py` is not in `TOOLING_FILES`.
+
+## Plan revision notes (v2, after external plan review 1)
+
+P0 closed: (1) Round 2 negative phrase machine rule + tests (Task 2); (2) R6 defined independently of the candidate artifact (Task 4); (3) lexicon review before the per-concept cap via `prepare`/`finalize` (Task 5); (4) reviewer-output validators for the lexicon review and the hidden review with missing/extra/non-bool/non-object tests (Tasks 2, 5); (5) proposer replay verification `--verify` + `verify_replay`, validator checks `targets_by_seed` and rule context ∈ seed unigrams (Task 6); (6) two-stage adoption `pending` → `--adopt` after the full suite (Task 6, brief); (7) final diag fields `held_out_top3`, candidates/lexicon shas (Task 7); (8) controller evidence kept outside the repo, readiness rendered at the terminal commit on both branches (Tasks 11–15); (9) `verify-freeze` S checkpoints before dispatch and before D, tuning script checks spec shas too (Tasks 2, 12–14); (10) no T0 option (Task 8); (11) exact filled model inputs materialized and hashed, template hash separate (Tasks 5, 9, 11); (12) attempt ledger per model call (Task 11). P1: prompt rules transcribed from the checker (Task 10), budget checked after re-evaluation (Task 6), `events` + mock-order test for AC-20a (Task 6), H1..H7 with `housekeeping_commit` = H7 (constraints), whole-branch review moved before C (Task 13).
