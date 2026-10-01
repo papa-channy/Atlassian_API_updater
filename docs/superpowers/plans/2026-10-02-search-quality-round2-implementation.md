@@ -4,13 +4,13 @@
 
 **Goal:** Repeat the sealed-evaluation procedure with vocabulary-only changes (general verb inventory, general concept lexicon, seed-derived alias candidates), all frozen before a fresh hidden set is generated, tune once through a deterministic one-way pipeline, and measure the sealed set exactly once.
 
-**Architecture:** No scorer change. `policy.py` gains a round-aware alias-notes schema (the only production change). All Round 2 tooling is completed in commit H and frozen by hash at commit T: `tests/benchmarks/round_seal.py` (generalized seal + freeze entry), `tests/benchmarks/alias_candidates_tool.py` (concept tokens, verb report, method-safety, candidates, R5/R6 classification, lexicon gate), `tests/benchmarks/concept_lexicon_check.py` (lexicon normalization/validation/merge), and `tests/tune_search_ranking.py` rewritten as a one-way pipeline (constants once → deterministic alias proposer once → final check) that only ever starts from the B baseline. Controller tasks run the pre-T dependency order, generate the lexicon and the hidden set in stateless contexts, seal, dispatch the frozen worker brief, and evaluate at D (or close at F).
+**Architecture:** No scorer change. `policy.py` gains a round-aware alias-notes schema (the only production change). All Round 2 tooling is completed in commit H and frozen by hash at commit T: `tests/benchmarks/round_seal.py` (generalized seal + freeze entry), `tests/benchmarks/alias_candidates_tool.py` (concept tokens, verb report, method-safety, candidates, R5/R6 classification, lexicon gate), `tests/benchmarks/concept_lexicon_check.py` (lexicon normalization/validation/merge), and `tests/tune_search_ranking.py` rewritten as a one-way pipeline (constants once → deterministic alias proposer once → final check) that only ever starts from the B baseline. Controller tasks run the pre-T dependency order, generate the lexicon and the hidden set in stateless contexts, seal, dispatch the frozen worker brief, and evaluate at D, close at F, or abort at X.
 
 **Tech Stack:** Python ≥ 3.10 stdlib only under `tools/`; `unittest`; no new dependencies.
 
-**Spec:** `docs/superpowers/specs/2026-10-02-search-quality-round2-design.md` v1.10 (external review: 10 rounds, final verdict "구현 계획으로 진행 가능"). The spec is binding; this plan is its argument.
+**Spec:** `docs/superpowers/specs/2026-10-02-search-quality-round2-design.md` **v1.12** (v1.10 passed 10 external reviews with "구현 계획으로 진행 가능"; v1.11/v1.12 added the abort branch X, AC-01d, AC-18a-X, AC-22, AC-23 during plan review). The spec v1.12 is binding; this plan is its argument.
 
-**Plan version:** v5 (after external plan reviews 1–4 — see "Plan revision notes" at the end).
+**Plan version:** v6 (after external plan reviews 1–5 — see "Plan revision notes" at the end).
 
 ## Global Constraints
 
@@ -1413,7 +1413,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 **Interfaces:**
 - Keeps: `grid_points`, `l1_index_distance`, `select_candidate`, `plan_effects`, `dirty_paths`, `ranking_with`, `evaluate_point`, `top5`, `write_constants`, `build_state`, `SEED_TOTAL`, `REGRESSION_TOTAL`, `CONSTANT_KEYS`.
 - Produces: `ROUND = ev.current_round()["round"]`; `LOG_PATH = tests/benchmarks/search-tuning-round{ROUND}.jsonl`; `CANDIDATES_PATH`; `baseline_mismatch(aliases_raw, ranking_raw, cands_doc) -> list[str]`; `baseline_sha256(...)`; `result_sha256(final_constants, alias_patch)`; `round2_note(word, sid, target, kind)`; `alias_patch(base_raw, working_raw)`; `strip_round_entries(raw, round) -> raw` (removes `round{N}` aliases/rules/notes = reconstructs the B state); `log_core(line) -> dict` (hash projection: all keys except `run_log_sha256`, `status`, `adopted`, `reject_reason`); `propose_aliases(eval_fn, bench, base_raw, cands, budget=15) -> (working_raw, patch)`; `validate_alias_change(before_raw, after_raw, cands, queries, budget=15) -> list[str]` (`queries`: id → query; a rule's context token must be a unigram of that seed's query, a target must be in `targets_by_seed[word][seed]`); `verify_replay(eval_fn, bench, base_raw, cands, constants, expected_result_sha256) -> list[str]` (re-runs the proposer, compares `result_sha256`); `EVENTS = ("baseline_checked", "constants_selected", "aliases_proposed", "final_check")`.
-- CLI: `python tests/tune_search_ranking.py --cache-dir S [--dry-run] [--note TEXT]` (pipeline; exit 0 = perfect, pending adoption; 1 = tuning_failed; 2 = setup/baseline/replay error); `--adopt RUN_ID` (marks the pending run adopted after the caller ran the full suite; refuses if the policy files no longer reproduce the run's `result_sha256`); `--reject RUN_ID --reason R` (pending → rejected: restores the B policy files via `git checkout --`, verifies the baseline, records `reject_reason`; a rejected run ends the round with the abort commit X — spec v1.11 §12 AC-22); `--verify --cache-dir S` (replay check against the adopted run; exit 0/1).
+- CLI: `python tests/tune_search_ranking.py --cache-dir S [--dry-run] [--note TEXT]` (pipeline; exit 0 = perfect, pending adoption; 1 = tuning_failed; 2 = setup/baseline/replay error); `--adopt RUN_ID` (marks the pending run adopted after the caller ran the full suite; refuses if the policy files no longer reproduce the run's `result_sha256`); `--reject RUN_ID --reason R` (pending → rejected: restores the B policy files via `git checkout --`, verifies the baseline, records `reject_reason`; a rejected run ends the round with the abort commit X — spec v1.12 §12 AC-22); `--verify --cache-dir S` (replay check against the adopted run; exit 0/1).
 - Log line keys: `run_id`, `run_at`, `git_commit`, `round`, `registry_fingerprint`, `baseline_sha256`, `events`, `constants_selected`, `grid_size`, `passing_combos`, `aliases_proposed` (`aliases`, `rules`, `notes`, `resolved_by_prior_change`, `unresolved`, `trials`), `seed`, `regression_negative`, `tuning_failed`, `status` (`pending` | `adopted` | `failed` | `rejected`; `rejected` lines also carry `reject_reason`), `adopted` (bool), `result_sha256`, `run_log_sha256`, `dirty`, `note`, `ranking_structure_sha256`, `baseline`.
 
 - [ ] **Step 1: Write the failing tests**
@@ -2386,6 +2386,26 @@ git commit -m "T: Round 2 freeze (verb inventory, concept lexicon, candidates, R
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
+- [ ] **AC-23 evidence (after the commit, on the clean HEAD)**
+
+```bash
+python - <<'EOF2'
+import hashlib, json, pathlib, subprocess, datetime
+cp = "T"
+head = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+assert not subprocess.run(["git", "status", "--porcelain", "--untracked-files=no"], capture_output=True, text=True).stdout.strip(), "dirty tree"
+r = subprocess.run(["python", "-m", "unittest", "discover", "-s", "tests", "-t", "."], capture_output=True, text=True)
+ev = {"event": "ac23_test_checkpoint", "checkpoint": cp, "commit": head, "command": "python -m unittest discover -s tests -t .",
+      "exit_code": r.returncode, "output_sha256": hashlib.sha256((r.stdout + r.stderr).encode()).hexdigest(),
+      "summary": (r.stderr.strip().splitlines() or [""])[-1], "dependency_diff": "none",
+      "at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+with open(pathlib.Path.home() / ".atlassian_api_updater" / "round2-work" / "controller-events.jsonl", "a") as fh:
+    fh.write(json.dumps(ev) + "\n")
+print(ev); assert r.returncode == 0, "AC-23 violated: suite not green on the committed tree"
+EOF2
+```
+
+
 `git diff --stat 95b8de0 -- tools/atlassian_docs/intelligence/search.py` must be empty; `git diff <H> -- $(python -c "from tests.benchmarks import evaluator as ev; print(' '.join(ev.TOOLING_FILES))")` must be empty (otherwise this is an H′ situation: fix, commit H′, redo Tasks 8–10 from the affected step).
 
 ---
@@ -2465,6 +2485,26 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 (Only the bench changes in B; readiness is rendered at the terminal commit from the ledgers.)
 
+- [ ] **AC-23 evidence (after the commit, on the clean HEAD)**
+
+```bash
+python - <<'EOF2'
+import hashlib, json, pathlib, subprocess, datetime
+cp = "B"
+head = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+assert not subprocess.run(["git", "status", "--porcelain", "--untracked-files=no"], capture_output=True, text=True).stdout.strip(), "dirty tree"
+r = subprocess.run(["python", "-m", "unittest", "discover", "-s", "tests", "-t", "."], capture_output=True, text=True)
+ev = {"event": "ac23_test_checkpoint", "checkpoint": cp, "commit": head, "command": "python -m unittest discover -s tests -t .",
+      "exit_code": r.returncode, "output_sha256": hashlib.sha256((r.stdout + r.stderr).encode()).hexdigest(),
+      "summary": (r.stderr.strip().splitlines() or [""])[-1], "dependency_diff": "none",
+      "at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+with open(pathlib.Path.home() / ".atlassian_api_updater" / "round2-work" / "controller-events.jsonl", "a") as fh:
+    fh.write(json.dumps(ev) + "\n")
+print(ev); assert r.returncode == 0, "AC-23 violated: suite not green on the committed tree"
+EOF2
+```
+
+
 - [ ] **Step 5: [user] Encrypt and delete the plaintext**
 
 Ask the user to run in their own terminal (never in this session):
@@ -2486,7 +2526,10 @@ test ! -e ~/.atlassian_api_updater/sealed/round2-sealed.json && shasum -a 256 ~/
 - `python tests/benchmarks/round_seal.py verify-freeze --round 2 --cache-dir ~/.atlassian_api_updater/round2-cache` must print `freeze ok` (ledger it); `git status --porcelain --untracked-files=no` must be empty.
 - Dispatch one implementer subagent (standard model) whose prompt is: one line of context + "read `tests/benchmarks/round2-worker-brief.md` first; it is your entire procedure" + the env var value for S + the report file path. Nothing else. Ledger the brief sha (must equal `round_freeze.worker_brief_sha256`), the number of runs, each report's `run_id`/`result_sha256`.
 - Only predefined replies are allowed to the worker: "run the brief procedure", "run it again" (after a tool error).
-- Review package + task reviewer as usual; the reviewer checks only: the commit matches the brief's rules, `--verify` passes, the log line validates, tests are green.
+- Review package + task reviewer as usual, with a **branch-aware** checklist (the reviewer is told the run's `status` from the worker report):
+  - `status=adopted`: full suite green; `--verify` passes; the adopted `constants_selected`/`result_sha256` match the policy files; commit touches only the three allowed files.
+  - `status=failed`: full suite green; policy files unchanged (== B); the `tuning_failed` line validates; commit touches only the log.
+  - `status=rejected`: the full suite is **expected to be red** — the reviewer compares the worker's reported failing test names/output with its own run of the suite (they must match), confirms `--reject` restored `search_ranking.json`/`search_aliases.json` exactly to B (`baseline_mismatch == []`), that the commit touches only the log, and that the log line has `status: rejected` + `reject_reason`; it must NOT require green tests. Only after this review passes does Task 13 take the X branch.
 
 ---
 
@@ -2494,7 +2537,7 @@ test ! -e ~/.atlassian_api_updater/sealed/round2-sealed.json && shasum -a 256 ~/
 
 - [ ] **Step 1: Hash/provenance check only (both branches)**
 
-No semantic code review after B (Task 7 Step 5 was the last one). Check: `git diff --stat <housekeeping_commit> -- <TOOLING_FILES>` empty; `tooling_code_sha256` unchanged; worker commit touches only the brief's allowed files; the tuning log has exactly one `adopted` run (success) or only `failed` runs (failure). A `rejected` run (full suite failed after a perfect tuning) ends Round 2 as **aborted** (spec v1.11 AC-22): checkpoint AC-18a-X (`.enc` sha unchanged, no plaintext), render the readiness Round 2 section (abort branch: policy files at B, hidden unevaluated, ciphertext retained, `reject_reason`, the failing test output) and commit `X: Round 2 aborted (rejected tuning run)` touching only `docs/phase3-readiness.md`. Round 2 is consumed; the next attempt is Round 3 with a new hidden set. Skip Task 14; continue with Task 16.
+No semantic code review after B (Task 7 Step 5 was the last one). Check: `git diff --stat <housekeeping_commit> -- <TOOLING_FILES>` empty; `tooling_code_sha256` unchanged; worker commit touches only the brief's allowed files; the tuning log has exactly one `adopted` run (success) or only `failed` runs (failure). A `rejected` run (full suite failed after a perfect tuning) ends Round 2 as **aborted** (spec v1.12 AC-22): checkpoint AC-18a-X (`.enc` sha unchanged, no plaintext), render the readiness Round 2 section (abort branch: policy files at B, hidden unevaluated, ciphertext retained, `reject_reason`, the failing test output) and commit `X: Round 2 aborted (rejected tuning run)` touching only `docs/phase3-readiness.md`. Round 2 is consumed; the next attempt is Round 3 with a new hidden set. Skip Task 14; continue with Task 16.
 
 - [ ] **Step 2a: Success (`status: adopted`, worker commit present)**
 
@@ -2549,7 +2592,7 @@ Gate: held_out ≥ 15/16 and negative 0/8.
 
 ### Task 15: **[controller]** Render the readiness Round 2 section from the ledgers (before the terminal commit)
 
-Append to `docs/phase3-readiness.md` after the Round 2 pre-work subsection (never inside the Round 1 section) a `## Search Quality Round 2 — decision record (<date>)` section rendered from `controller-events.jsonl` + `attempts.jsonl`: `housekeeping_commit`, S fingerprint + spec shas, verb-report decisions, method-safety result, lexicon template/generation-input/raw/review-input/review-output shas + counts (kept/rejected/gate/merge-skipped), candidates count, R5/R6 counts, T/B/C shas (the terminal commit itself is written as `terminal_commit: self` — its sha cannot be known before it exists; it is recorded in the ledger and in Task 16's provenance report), hidden generation input/output shas per attempt with status, re-request count, reviewer input/output shas, `temporary_chat_unpersonalized: true`, `.enc` sha at B/terminal, worker brief sha + run count + `run_id`/`result_sha256` per run, `--verify` result, tuning log summary, result row (success) or failure row, the state model table with `null`/`not_applicable` on the failure branch, and the attestation list of spec §12. This task is a step of Task 13 (failure F / abort X) or Task 14 (success D); it never produces its own commit.
+Append to `docs/phase3-readiness.md` after the Round 2 pre-work subsection (never inside the Round 1 section) a `## Search Quality Round 2 — decision record (<date>)` section rendered from `controller-events.jsonl` + `attempts.jsonl`: `housekeeping_commit`, S fingerprint + spec shas, verb-report decisions, method-safety result, lexicon template/generation-input/raw/review-input/review-output shas + counts (kept/rejected/gate/merge-skipped), candidates count, R5/R6 counts, T/B/C shas (the terminal commit itself is written as `terminal_commit: self` — its sha cannot be known before it exists; it is recorded in the ledger and in Task 16's provenance report), hidden generation input/output shas per attempt with status, re-request count, reviewer input/output shas, `temporary_chat_unpersonalized: true`, `.enc` sha at B/terminal, worker brief sha + run count + `run_id`/`result_sha256` per run, `--verify` result, tuning log summary, result row (success) or failure row, the state model table with `null`/`not_applicable` on the failure and abort branches (C/D, decryption time, result row, `round2-final` are N/A on both), on the abort branch additionally `B_alias_sha256 == X_alias_sha256` and `B_ranking_sha256 == X_ranking_sha256` (canonical shas of the two policy files at B and at X, so AC-01d/AC-22 are checkable without git), and the attestation list of spec §12. This task is a step of Task 13 (failure F / abort X) or Task 14 (success D); it never produces its own commit.
 
 ---
 
@@ -2574,3 +2617,5 @@ v3 (after external plan review 2) — P0: (1) AC-17 pins the legacy subset (phas
 v4 (after external plan review 3) — P0: (1) negative-phrase tests use a summary-only op `listBoards`/"Show all boards" so Round 1 = 0 violations and Round 2 = exactly the new rule; `phrase_tokens` expectations match the declared normalization (Task 2); (2) `log_core` hash projection shared by `_finish` and the integrity test, `reject_reason` outside the hash (Task 6); (3) rejected run → abort terminal commit X (spec v1.11 AC-22), Round 2 consumed, next attempt Round 3 (Tasks 13, 15, constraints); (4) AC-13 deterministic replay checkpoint before T: lexicon prepare/finalize/gate/merge, candidates and R5/R6 regenerated and compared (Task 10 Step 4b); (5) replacement contract and the distribution-rejection batch rule inside the frozen generation prompt; `validate_replacement_output` applies to that contract (Tasks 10, 11). P1: `verify_coverage` links the manifest to valid review attempts (Tasks 2, 11); operationId rule wording matches the checker tokenizer (Task 10).
 
 v5 (after external plan review 4) — P0: (1) `candidates --bench FILE`; the pre-classification bench is pinned as `round2-work/bench-preclassify.json` and the AC-13 replay regenerates candidates from it, classification compared separately (Tasks 4, 10); (2) spec v1.12: AC-07/AC-14/AC-16 apply to success + tuning-failure only, new common AC-23 (full suite green at T and B), AC-22 keeps the failing test output as evidence (constraints, coverage map); (3) X promoted to a full terminal branch in spec and plan (`terminal commit := D | F | X`, AC-01d, AC-18a-X row, AC-05/AC-18b/attestation wording, Task 16). P1: `verify_coverage` checks the attempt's `reviewed_record_shas` and `accepted_ids` (Tasks 2, 11); fixed rejection-rule priority in the frozen prompt and Task 11; coverage map lists AC-22/AC-18a-X/AC-01d/AC-23; Task 16 records D/F/X.
+
+v6 (after external plan review 5) — P0: (1) explicit AC-23 evidence step after the T and B commits (suite re-run on the clean committed HEAD, event with commit/exit code/output sha appended to the ledger; Tasks 10, 11); (2) Task 12 task reviewer is branch-aware (`adopted`/`failed` require a green suite, `rejected` requires the captured red suite to match the worker's report plus B restoration, never green tests); (3) the binding spec is v1.12 everywhere (header, architecture sentence, Task 6/13 references). P1: Task 15 N/A fields on failure and abort branches; X readiness records B-vs-X policy file shas.
