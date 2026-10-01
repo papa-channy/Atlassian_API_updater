@@ -1,6 +1,6 @@
 # Search Quality Round 2 — Technical Specification
 
-**문서 버전:** v1.7
+**문서 버전:** v1.8
 **기준일:** 2026-10-02
 **선행 구현:** Search Quality Round 1 (spec v1.4, 게이트 실패: held_out 4/16, negative 5/8) + Round 2 pre-work (`main` 95b8de0: 관찰 집합 강등, 라운드 비의존 테스트, 로더 보정). 오프라인 테스트 405개.
 **목적:** Round 1 절차(A→T→B→C→D)를 **어휘만 바꿔** 반복하고, 봉인된 새 held_out 16 / negative 8에서 Discovery 게이트(≥ 15/16, 0/8)를 충족한다.
@@ -43,6 +43,7 @@ R1–R4 정의는 Round 1 그대로.
 - 2026-10-02 외부 검수 5차(v1.4→v1.5): **소스 스냅샷 S를 H 직후, 모든 카탈로그 의존 pre-T 작업 전에 생성**하고 T 이후 재스냅샷 없음(한 라운드가 하나의 op universe만 사용); **hidden 의미 검토자도 §5.3 stateless 실행 계약**(입력: hidden 평문 + internal catalog + 규칙만; 컨트롤러는 디스패치·적용만); AC-20을 **run_id 기준**으로 재정의(run마다 상수 1회→alias 1회, 전체에서 adopted run 1개, 모든 AC-valid run의 baseline·output sha 동일); P1: 제안기는 각 seed 차례에 working 상태로 재평가해 이미 통과면 `resolved_by_prior_change`로 건너뜀, AC-13 범위를 결정적 단계로 한정, §7.0 생성 문장을 §5.3 계약으로 통일, `--feasibility`→`--method-safety`, §13 오염 표현 정정.
 - 2026-10-02 외부 검수 6차(v1.5→v1.6): **hidden 생성 프롬프트와 hidden 의미 검토 프롬프트를 T에서 동결**(`round2-hidden-generation-prompt.md`, `round2-hidden-reviewer-prompt.md`, 해시 2개 추가 → `round_freeze` 8개) + 검토 실행 수명주기 고정(배치마다 첫 parseable/valid 출력 채택, valid 이후 의미 재실행 금지, transport/parse 실패만 동일 입력 재시도, 모든 attempt 기록, 재요청 항목도 같은 절차); 튜닝 결과 해시를 **`result_sha256`(final_constants + alias_patch canonical)** 과 `run_log_sha256`(run_id·진단 포함)으로 분리하고 AC-20·결정성 검증은 `result_sha256` 기준; P1: S의 `source_registry_fingerprint`·source별 `source_spec_sha256`을 `round_freeze` 항목에 저장, 영속 artifact 공통 provenance 스키마 `generated_from`, `baseline_sha256` 정의 고정.
 - 2026-10-02 외부 검수 7차(v1.6→v1.7): pre-T 작업을 **의존 순서**로 고정(동사 인벤토리 → method-safety → 필요 시 수정·재실행 → `verb_inventory_sha256` **확정** → 개념 토큰 → 사전 생성·검사·의미 검토 → seed 게이트 → 후보 → 브리프/프롬프트 → T; 사전 검사의 "동사 키 아님" 규칙은 확정된 인벤토리 기준); **Round 2 도구 코드 전부를 H에서 완성하고 `tooling_code_sha256`으로 T에 동결**, T..D 동안 변경 금지, C는 T 동결값 재확인 마커(`evaluation_code_sha256 == tooling 부분집합 해시`); P1: 사전 생성에도 first-valid 수명주기, §4 예시에 `generated_from`, S 무결성 체크포인트(B..C 시작·D 직전), 튜닝 실패 시 의미 고정(adopted 0, C/D 생략, 봉인 유지).
+- 2026-10-02 외부 검수 8차(v1.7→v1.8): §5.1의 stale 순서 문장 제거(의존 순서가 유일한 권위), T의 `verb_methods`는 확정 인벤토리; **튜닝 실패 후 hidden 재사용 규칙 폐기**(컨트롤러·검토자가 B 전에 평문을 봤으므로 다음 라운드에 재사용 불가 — 폐기하고 새로 생성); **AC를 공통 / 성공 분기 / 튜닝 실패 분기로 분리**(튜닝 실패도 검증 가능한 종료 상태); P1: 무결성 테스트 파일도 T..D 불변 목록에, `evaluation_code_sha256_at_T`를 `round_freeze`에 저장해 C는 단순 동등 검사, H′ 발생 시 최종 housekeeping 커밋을 readiness에 하나로 기록.
 
 ---
 
@@ -80,7 +81,7 @@ R1–R4 정의는 Round 1 그대로.
 | `tools/atlassian_docs/intelligence/data/alias_candidates.json` | 신규(T): §7.1 |
 | `tools/atlassian_docs/intelligence/data/concept_lexicon.json` | 신규(T): §7.0 검사·정규화를 통과한 사전(`{"round": 2, "generated_from": {"registry_fingerprint", "spec_sha256", "inputs": {"verb_inventory": …, "aliases": …, "raw_generation": …, "semantic_review": …}, "tool_version"}, "prompt_sha256", "raw_sha256", "review_output_sha256", "lexicon": {...}, "rejected": {...}}`) |
 | `tools/atlassian_docs/intelligence/policy.py` | T 전(housekeeping 커밋 H): notes `origin` 스키마를 라운드별로 분기(§8) — Round 1 항목은 그대로 로드 |
-| `tests/benchmarks/round_freeze.json` | 리스트; round 2 항목 = `{"round": 2, "structure_sha256", "verb_inventory_sha256", "concept_lexicon_sha256", "lexicon_aliases_sha256", "alias_candidates_sha256", "worker_brief_sha256", "hidden_generation_prompt_sha256", "hidden_reviewer_prompt_sha256", "tooling_code_sha256", "source_registry_fingerprint", "source_spec_sha256": {"<source>": "…"}}` (**`commit_T` 없음** — T SHA는 readiness/B 메타에 기록; 해시 9개 + S 출처 2개 필드). `lexicon_aliases_sha256` = `search_aliases.json`에서 `notes[k].origin == "lexicon-r2"`인 alias와 notes 부분집합의 canonical sha256 — B..C에서 round2 항목이 추가돼도 사전 부분의 불변을 검증 |
+| `tests/benchmarks/round_freeze.json` | 리스트; round 2 항목 = `{"round": 2, "structure_sha256", "verb_inventory_sha256", "concept_lexicon_sha256", "lexicon_aliases_sha256", "alias_candidates_sha256", "worker_brief_sha256", "hidden_generation_prompt_sha256", "hidden_reviewer_prompt_sha256", "tooling_code_sha256", "evaluation_code_sha256_at_T", "source_registry_fingerprint", "source_spec_sha256": {"<source>": "…"}}` (**`commit_T` 없음** — T SHA는 readiness/B 메타에 기록; 해시 10개 + S 출처 2개 필드). `lexicon_aliases_sha256` = `search_aliases.json`에서 `notes[k].origin == "lexicon-r2"`인 alias와 notes 부분집합의 canonical sha256 — B..C에서 round2 항목이 추가돼도 사전 부분의 불변을 검증 |
 | `tests/benchmarks/round_seal.py` | `round1_seal.py` 이름 변경 + `--round N` |
 | `tests/benchmarks/round2-worker-brief.md` | 신규(T): B..C worker 브리프 전문(§5.2.7) |
 | `tests/benchmarks/round2-hidden-generation-prompt.md`, `round2-hidden-reviewer-prompt.md` | 신규(T): hidden 생성 프롬프트 템플릿(generator catalog 삽입 자리만)과 의미 검토 프롬프트 전문(§5.2.7, §5.3) |
@@ -101,21 +102,21 @@ R1–R4 정의는 Round 1 그대로.
 ## 5. 벤치마크 절차 (커밋 순서 H → T → B → C → D)
 
 ### 5.1 커밋 H (housekeeping, T 전) + 소스 스냅샷 S
-`policy.py` notes-origin 규칙 확장(§4) + **Round 2 도구 코드 전부**(§8: `round_seal.py`, `alias_candidates_tool.py`, `concept_lexicon_check.py`, `tune_search_ranking.py`의 제안기·검증기·파이프라인, `diag_search_queries.py`, `evaluator.py`) + 테스트. 어휘·벤치마크 무변경. **H 이후 이 도구 파일들은 D까지 변경 금지**(v1.7): 결정적 선택기·제안기·평가기의 코드가 hidden 생성 뒤에 바뀌면 "결정적"이 사후 조정 가능한 선택기가 되므로, T의 `round_freeze`에 `tooling_code_sha256`(도구 파일 목록의 canonical 연결 해시)을 기록하고 C의 `evaluation_code_sha256`은 그 부분집합(평가 경로 6개 파일)의 해시로서 T 값과 같아야 한다. pre-T 단계에서 도구 결함이 발견되면 **T 전에** 고치고 H′로 커밋한다(T 이후 발견 시 라운드 중단·재시작).
+`policy.py` notes-origin 규칙 확장(§4) + **Round 2 도구 코드 전부**(§8: `round_seal.py`, `alias_candidates_tool.py`, `concept_lexicon_check.py`, `tune_search_ranking.py`의 제안기·검증기·파이프라인, `diag_search_queries.py`, `evaluator.py`) + 테스트. 어휘·벤치마크 무변경. **H 이후 이 도구 파일들은 D까지 변경 금지**(v1.7): 결정적 선택기·제안기·평가기의 코드가 hidden 생성 뒤에 바뀌면 "결정적"이 사후 조정 가능한 선택기가 되므로, T의 `round_freeze`에 `tooling_code_sha256`(도구 파일 목록의 canonical 연결 해시)을 기록하고 C의 `evaluation_code_sha256`은 그 부분집합(평가 경로 6개 파일)의 해시로서 T 값과 같아야 한다. pre-T 단계에서 도구 결함이 발견되면 **T 전에** 고치고 H′로 커밋한다(T 이후 발견 시 라운드 중단·재시작). readiness는 최종 housekeeping 커밋(H 또는 마지막 H′)을 `housekeeping_commit` 하나로 기록하고 AC-05는 그 커밋을 기준으로 한다. 무결성 테스트 파일(`tests/benchmarks/test_evaluator.py`, `tests/test_tune_search_ranking.py`, `tests/test_diag_search_queries.py`, `tests/intelligence/test_policy.py`)도 같은 불변 목록에 포함한다. `round_freeze`에는 `evaluation_code_sha256_at_T`(평가 경로 6개 파일의 T 시점 해시)도 저장해 C의 검증이 단순 동등 검사가 되게 한다.
 
 **pre-T 의존 순서(v1.7, 고정)**: H → S → `--verb-report` → 동사 인벤토리 초안 → `--method-safety` → (위반 시 인벤토리 수정 → 재실행) → **`verb_inventory_sha256` 확정** → 개념 토큰 목록 → 사전 생성 → 기계 검사(확정 인벤토리 기준) → stateless 의미 검토 → 개념당 5개 절단 → seed 호환 게이트 → 사전 병합 → 후보 목록 → R5/R6 분류 → worker 브리프·프롬프트 → T. 인벤토리 확정 뒤에는 어떤 단계도 인벤토리를 바꾸지 않는다(바꾸면 사전부터 재실행).
 
-**소스 스냅샷 S(v1.5)**: H 직후, 카탈로그에 의존하는 어떤 pre-T 작업(개념 토큰 목록, `--verb-report`, method-safety, 사전 게이트, 후보 목록)보다 **먼저** `~/.atlassian_api_updater/round2-cache/`(`$ATLASSIAN_DOCS_ROUND2_CACHE`; 존재 시 거부)를 만들고 registry fingerprint·spec sha를 readiness에 고정한다. 이후 모든 단계(pre-T 도구, hidden 생성용 generator catalog, B..C 튜닝, D 평가)는 S만 읽는다. **T 이후 재스냅샷은 없다.** 각 도구는 `generated_from.registry_fingerprint`를 기록하고, S의 fingerprint와 다르면 거부한다. 순서: H → S → verb-report/사전 생성/method-safety/사전 게이트 → 후보/worker 브리프 → T → B → C → D.
+**소스 스냅샷 S(v1.5)**: H 직후, 카탈로그에 의존하는 어떤 pre-T 작업(개념 토큰 목록, `--verb-report`, method-safety, 사전 게이트, 후보 목록)보다 **먼저** `~/.atlassian_api_updater/round2-cache/`(`$ATLASSIAN_DOCS_ROUND2_CACHE`; 존재 시 거부)를 만들고 registry fingerprint·spec sha를 readiness에 고정한다. 이후 모든 단계(pre-T 도구, hidden 생성용 generator catalog, B..C 튜닝, D 평가)는 S만 읽는다. **T 이후 재스냅샷은 없다.** 각 도구는 `generated_from.registry_fingerprint`를 기록하고, S의 fingerprint와 다르면 거부한다. 이후 모든 단계의 순서는 아래 **pre-T 의존 순서**(유일한 권위)를 따른다.
 
 ### 5.2 커밋 T (동결)
-1. `search_ranking.json` `verb_methods` ← §6 인벤토리(초안).
+1. `search_ranking.json` `verb_methods` ← §6 인벤토리(**확정본** — method-safety는 이미 §5.1 순서에서 끝났다).
 2. **메서드 안전성 검사**(인벤토리 확정 단계 — 이 단계가 끝나야 사전 생성을 시작한다)(`alias_candidates_tool.py --method-safety`; 의미: 인벤토리가 seed에 잘못된 메서드 불일치 감산을 만들지 않는지): seed 39건 각각에 대해, 질의 unigram ∩ 인벤토리의 허용 메서드 교집합이 (a) 공집합(의도 0)이거나 (b) 정답 op 메서드를 포함해야 한다. 위반(허용 집합이 정답 메서드를 배제)이 있으면 그 동사를 상위집합으로 넓혀 재실행 — **이 조정은 사전 생성 전에 끝나고 `verb_inventory_sha256`로 확정된다.** 결과(통과 목록)는 readiness에 기록. 사전의 "동사 키 아님" 검사는 이 확정 인벤토리를 기준으로 한다.
 3. **사전–seed 호환 게이트**(`alias_candidates_tool.py --lexicon-gate`, T 전): 사전 synonym `w`가 어떤 seed 질의의 unigram에 등장하면 `lexicon_targets(w) ∩ allowed_targets(w) ≠ ∅`(§7.1.6 정의, seed의 정답 op 어휘)일 때만 유지하고, 교집합이 비면 그 사전 항목을 폐기(`rejected[w].reason = "seed-incompatible"`)해 seed 유래 후보로 남긴다. seed만 사용하므로 독립성 훼손 없음; 사전 오생성이 seed 단어를 선점해 B..C에서 복구 불가능해지는 상황을 막는다.
 4. 개념 사전 병합: `concept_lexicon.json` 항목을 `search_aliases.json.aliases`에 병합(`notes[word] = {"origin": "lexicon-r2", "seed_query_id": null, "failure_classes": [], "evidence": "concept lexicon r2"}`). 충돌(이미 있는 alias 키)은 기존 항목 우선, 사전 항목은 버림(기록).
 5. `alias_candidates.json` 생성(§7.1) — 사전 병합 **후**에 실행(사전이 이미 잇는 토큰은 후보에서 자연히 빠진다).
 6. seed `failure_classes` 기계 분류(R5/R6)를 bench에 기록(§0.2). 기존 R1–R4 표기는 유지하고 R5/R6를 추가.
 7. **worker 브리프 동결**: `tests/benchmarks/round2-worker-brief.md`(B..C 튜닝 worker에게 전달할 브리프 전문 — 실행할 명령 순서, 허용 파일, 보고 형식만; seed 분석·힌트 없음)를 T에 커밋하고 sha를 `round_freeze.json`에 `worker_brief_sha256`으로 기록. B 이후 컨트롤러는 이 파일을 그대로 전달만 할 수 있다. 같은 커밋에 **hidden 생성 프롬프트 템플릿**과 **hidden 의미 검토 프롬프트**(§5.3)를 동결한다 — 컨트롤러는 Round 1 hidden을 본 상태이므로 B 전 프롬프트 표현 변경이 생성·검토 결과를 유도할 수 있어, 두 프롬프트의 문구는 T 이후 바꿀 수 없다(재요청 피드백은 §5.3의 고정 형식만).
-8. `round_freeze.json` round 2 항목(해시 9개 — 8개 + `tooling_code_sha256` — + S 출처: `source_registry_fingerprint`, source별 `source_spec_sha256`; §4).
+8. `round_freeze.json` round 2 항목(해시 10개 — 8개 + `tooling_code_sha256` + `evaluation_code_sha256_at_T` — + S 출처: `source_registry_fingerprint`, source별 `source_spec_sha256`; §4).
 9. T SHA와 S fingerprint(§5.1)를 readiness에 기록. 스냅샷은 §5.1의 S를 그대로 사용(재복사 없음).
 
 ### 5.3 생성 (stateless clean context, Round 1 §5.4 규칙)
@@ -140,7 +141,7 @@ R1–R4 정의는 Round 1 그대로.
   2. `selected_constants` := `select_candidate(grid, base_aliases, seed, regression)` — grid 전수, **정확히 1회**.
   3. `alias_patch` := `propose_aliases(base_aliases, selected_constants, frozen_candidates, seed, regression)` — **정확히 1회**(§7.2).
   4. `final_config` := `selected_constants + alias_patch`; 최종 seed/regression 검증(39/39·14/14).
-  5. **상수 재선택·alias 재제안 금지.** alias 제안은 상수 재선택을 유발하지 않는다. 최종 검증이 실패하면 그 run은 `tuning_failed: true`로 기록되고 `adopted` run은 0개이며 grid→alias 루프를 다시 돌리지 않는다. 이 경우 C/D는 생략하고 Round 2는 "튜닝 실패"로 종료한다(AC-15/AC-20은 "not applicable — round DoD failed"로 readiness에 기록). 봉인 평문은 암호화 상태로 유지되어, 다음 라운드의 T가 복호화 전에 이루어지면 같은 hidden set을 재사용할 수 있다.
+  5. **상수 재선택·alias 재제안 금지.** alias 제안은 상수 재선택을 유발하지 않는다. 최종 검증이 실패하면 그 run은 `tuning_failed: true`로 기록되고 `adopted` run은 0개이며 grid→alias 루프를 다시 돌리지 않는다. 이 경우 C/D는 생략하고 Round 2는 "튜닝 실패"로 종료한다(§12의 튜닝 실패 분기 AC 적용). **봉인된 hidden set은 재사용하지 않는다**: 컨트롤러와 의미 검토자가 B 전에 평문을 봤으므로 다음 라운드의 정책·프롬프트·도구 결정에 그 기억이 섞일 수 있다. 암호문은 기록용으로 보관하되(`.enc` sha256을 readiness에), 다음 라운드는 새 hidden set을 생성한다.
   6. **입력은 항상 B baseline**: 실행은 worktree의 현재 `constants`·round2 alias를 읽지 않고 B 상태(파일 sha로 확인)에서 시작한다. worktree에 round2 변경이 이미 있으면 "dirty round2 state"로 거부하거나(기본) `--from-baseline`으로 B 상태를 복원해 실행한다. 따라서 재실행은 같은 함수의 같은 입력이며, 유효한 출력은 byte-identical해야 한다.
 - worker도 컨트롤러도 상수·alias를 고르지 않는다. 각 alias 추가는 `--alias-change`로 기록·검증된다.
 - **출력 선택 규칙**: worker 실행이 여러 번이면(예: 도구 오류로 재실행) **첫 번째 AC-valid 출력**(검증기 통과 + 테스트 통과)을 채택한다. 모든 실행이 B baseline에서 시작하므로 유효한 출력의 **canonical 튜닝 결과**는 byte-identical해야 하며, 다르면 그 자체가 결함으로 기록된다(채택 불가, 원인 조사 후 재실행). 해시는 둘로 분리한다: `result_sha256` = sha256(canonical({`final_constants`, `alias_patch`})) — 결정성 검증 대상; `run_log_sha256` = sha256(canonical(run_id·타임스탬프·진단을 포함한 전체 로그)) — provenance 기록용. 실행 횟수와 각 출력 sha를 readiness에 기록.
@@ -156,7 +157,7 @@ R1–R4 정의는 Round 1 그대로.
 attestation 항목: (1) "B..C 동안 봉인 평문은 튜닝 환경에서 읽을 수 없는 상태였다"(암호화 시각·`.enc` sha256·평문 부재 확인); (2) "hidden을 본 주체가 B..C의 alias/상수 선택에 관여하지 않았다"; 증거로 worker 브리프 sha256, worker 실행 횟수, 각 실행의 출력(패치) sha256을 readiness에 기록해 컨트롤러의 선별(cherry-picking) 여지를 줄인다.
 
 ### 5.7 C / D / 게이트
-- C: 빈 커밋; `evaluation_code_sha256` 대상 6개 파일(기존 4 + `round_seal.py`, `alias_candidates_tool.py`; `concept_lexicon_check.py`는 T 전 도구라 제외). **C는 새 동결 시점이 아니라 T에서 얼린 도구가 그대로임을 재확인하는 마커**: 값이 T의 `tooling_code_sha256` 계산에 쓰인 같은 파일 내용에서 나와야 하며, 다르면 D를 진행하지 않는다. S 무결성 체크포인트: B..C 시작 시와 D 직전에 실제 S의 registry fingerprint·spec sha == `round_freeze` 출처 필드를 assert.
+- C: 빈 커밋; `evaluation_code_sha256` 대상 6개 파일(기존 4 + `round_seal.py`, `alias_candidates_tool.py`; `concept_lexicon_check.py`는 T 전 도구라 제외). **C는 새 동결 시점이 아니라 T에서 얼린 도구가 그대로임을 재확인하는 마커**: C에서 계산한 값 == `round_freeze.evaluation_code_sha256_at_T`(단순 동등 검사), 다르면 D를 진행하지 않는다. S 무결성 체크포인트: B..C 시작 시와 D 직전에 실제 S의 registry fingerprint·spec sha == `round_freeze` 출처 필드를 assert.
 - D: 사용자가 자신의 터미널에서 복호화(`openssl enc -d …`); 컨트롤러가 평문 sha256 == `round2_seal`임을 확인한 뒤 `diag --round 2 --bench <sealed> --cache-dir <round2-cache> --json tests/benchmarks/round2-final.json` 1회; unseal; readiness. whitelist = `search_queries.json`, `round2-final.json`, `phase3-readiness.md`.
 - 게이트: held_out ≥ 15/16, negative 0/8. 보조 지표 `held_out_top3` 기록만.
 
@@ -248,7 +249,7 @@ attestation 항목: (1) "B..C 동안 봉인 평문은 튜닝 환경에서 읽을
 
   구현: origin을 정규식 `^(phase2\.5|round(\d+)|lexicon-r(\d+))$`로 받고 라운드 번호를 정수로 분기. 그 외 로더 로직 불변. **회귀 테스트**: H 직후 현재 `search_aliases.json`(phase2.5 + round1 항목)이 변경 없이 로드되고 `ranking_sha256`·alias sha가 95b8de0과 동일.
 - `evaluation_code_sha256`: 6개 파일(§5.7).
-- `round_freeze.json`: `[{"round": 1, "commit_T": "26005e4", "structure_sha256": …}, {"round": 2, "structure_sha256", "verb_inventory_sha256", "concept_lexicon_sha256", "lexicon_aliases_sha256", "alias_candidates_sha256", "worker_brief_sha256", "hidden_generation_prompt_sha256", "hidden_reviewer_prompt_sha256", "tooling_code_sha256", "source_registry_fingerprint", "source_spec_sha256": {…}}]` (round 1 항목의 `commit_T`는 역사 기록으로 유지).
+- `round_freeze.json`: `[{"round": 1, "commit_T": "26005e4", "structure_sha256": …}, {"round": 2, "structure_sha256", "verb_inventory_sha256", "concept_lexicon_sha256", "lexicon_aliases_sha256", "alias_candidates_sha256", "worker_brief_sha256", "hidden_generation_prompt_sha256", "hidden_reviewer_prompt_sha256", "tooling_code_sha256", "evaluation_code_sha256_at_T", "source_registry_fingerprint", "source_spec_sha256": {…}}]` (round 1 항목의 `commit_T`는 역사 기록으로 유지).
 
 ## 9. 진단 출력 추가
 `round2-final.json`: Round 1 필드 전부 + `round`, `held_out_top3`, `alias_sha256`, `alias_candidates_sha256`, `concept_lexicon_sha256`.
@@ -273,7 +274,7 @@ attestation 항목: (1) "B..C 동안 봉인 평문은 튜닝 환경에서 읽을
 - `TestSealIntegrity` 라운드 키 일반화.
 - `alias_notes`: round2 항목 §7.2 전부; lexicon-r2 항목 형식.
 - provenance: 동사 테이블 검사 제외; alias 단어는 (seed 토큰 ∪ 카탈로그 토큰 ∪ 개념 사전 키) 안; round2 alias는 후보×타깃 안; 예외 `{epic}`.
-- `round_freeze.json` round 2: 9개 해시 == 현재 파일(`lexicon_aliases_sha256`는 부분집합 계산; 브리프·프롬프트 2개는 파일 해시; `tooling_code_sha256`는 §5.1 도구 파일 목록, `evaluation_code_sha256`는 그 부분집합); `source_registry_fingerprint` == 모든 pre-T artifact의 `generated_from.registry_fingerprint`.
+- `round_freeze.json` round 2: 10개 해시 == 현재 파일(`lexicon_aliases_sha256`는 부분집합 계산; 브리프·프롬프트 2개는 파일 해시; `tooling_code_sha256`는 §5.1 도구 파일 목록, `evaluation_code_sha256`는 그 부분집합); `source_registry_fingerprint` == 모든 pre-T artifact의 `generated_from.registry_fingerprint`.
 - Round 1 불변: `round1-final.json`·`search-tuning-round1.jsonl` 파일 해시, `round1_seal` 객체 해시, readiness Round 1 섹션 텍스트 해시 == pre-work 상수.
 - 최종 artifact(round 2) 내부 일관성.
 
@@ -285,6 +286,14 @@ Round 1 §11과 동일 + Round 2 섹션: 커밋 H/T/B/C/D sha, 스냅샷 fingerp
 
 ## 12. Acceptance Criteria
 
+라운드는 두 종료 상태 중 하나로 끝난다. **공통 AC**는 항상 적용되고, **성공 분기 AC**는 최종 검증(39/39·14/14)을 통과해 C·D가 존재할 때, **튜닝 실패 분기 AC**는 `tuning_failed`일 때 적용된다.
+
+| 분기 | 적용 AC |
+|---|---|
+| 공통 | AC-01(H<T<B 부분과 구간 규칙), AC-04, AC-05, AC-06(seed 픽스처 r0 부분), AC-07, AC-08, AC-09, AC-12, AC-13, AC-14, AC-16, AC-17, AC-18a(B 직후 체크포인트), AC-18b, AC-19, AC-20(run 구조) |
+| 성공 분기 | AC-01(C<D 부분), AC-02, AC-03, AC-06(adopted 라인 39/39·14/14), AC-10, AC-11, AC-15(adopted 1개), AC-18a(D 직전·복호화 부분), AC-20(adopted run 1개) |
+| 튜닝 실패 분기 | AC-21: C·D 커밋 없음, `round2-final.json` 없음, 튜닝 로그에 `tuning_failed: true`·`adopted` run 0개, hidden 평가 artifact 없음, `.enc`가 봉인된 채 남아 있고 sha256이 readiness에 기록됨, readiness 상태 "Round 2 tuning failed" |
+
 | ID | 기준 | 검증 |
 |---|---|---|
 | AC-01 | 95b8de0 < H < T < B < C < D; `search_aliases.json`(round2 항목)·`constants` 변경은 B..C에만; `verb_methods`·`alias_candidates.json`·사전 병합·`failure_classes` 변경은 T에만; `policy.py` 변경은 H에만 | git |
@@ -294,11 +303,12 @@ Round 1 §11과 동일 + Round 2 섹션: 커밋 H/T/B/C/D sha, 스냅샷 fingerp
 | AC-05 | `search.py` diff vs 95b8de0 비어 있음; `policy.py` diff는 notes-origin 규칙뿐; §5.1 도구 파일은 H(또는 T 전 H′) 이후 D까지 diff 비어 있음, `tooling_code_sha256` == 현재 파일 | git + 테스트 |
 | AC-06 | 스냅샷 seed 39/39, regression 14/14(adopted 라인); 픽스처 r0 23/23·6/6 | 테스트 + 로그 |
 | AC-07 | §10.1 테스트 통과 | 테스트 |
-| AC-08 | `POLICY_VERSIONS["search"] == 3`; `round_freeze` round 2 해시 9개 == 현재 파일, S 출처 필드 == 모든 artifact의 provenance | 테스트 |
+| AC-08 | `POLICY_VERSIONS["search"] == 3`; `round_freeze` round 2 해시 10개 == 현재 파일, S 출처 필드 == 모든 artifact의 provenance | 테스트 |
 | AC-17 | H 직후 기존 `search_aliases.json`이 변경 없이 로드(round1 notes 하위 호환) | 테스트 |
 | AC-18a | 자동 체크포인트: B 직후와 D 직전에 `.enc` 존재 ∧ 평문 부재 ∧ `.enc` sha256 동일; D 복호화 평문 sha256 == `round2_seal` | 컨트롤러 스크립트 출력(readiness) |
 | AC-18b | attestation: B..C 전체 기간 평문 미복호화; 생성은 Unpersonalized 임시 채팅(또는 stateless API) | readiness attestation |
 | AC-19 | `round2-worker-brief.md`·hidden 생성/검토 프롬프트가 T에 커밋되고 sha == `round_freeze`; B..C alias 추가분 == 제안기 재실행 결과; worker 출력 중 첫 AC-valid 채택; 의미 검토는 배치당 첫 valid 출력, valid 이후 재실행 없음(attempt 로그) | 테스트 + readiness |
+| AC-21 | 튜닝 실패 분기 종료 상태(위 표) | git + 테스트 + readiness |
 | AC-20 | 튜닝 로그 round 2를 `run_id`로 묶었을 때: 각 run에 `constants_selected` 정확히 1개(입력 alias sha == B 시점 sha) → `aliases_proposed` 정확히 1개 순서, 이후 상수 변경 0; 전체에서 `adopted: true`인 run 정확히 1개 = 첫 AC-valid run; 모든 AC-valid run의 `baseline_sha256` 동일·`result_sha256` 동일(`run_log_sha256`는 기록만) | 테스트 |
 | AC-09 | §4 불변 목록 diff 비어 있음; Round 1 artifact·로그·seal·readiness 섹션 해시 불변 | 테스트 + git |
 | AC-10 | `round2-final.json` provenance 필드 + `round`, `held_out_top3` | 테스트 |
