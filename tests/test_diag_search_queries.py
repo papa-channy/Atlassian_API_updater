@@ -19,11 +19,14 @@ SEALED_COUNTS = {"held_out": 16, "negative": 8}
 
 def base_bench() -> dict:
     """Bundled bench reduced to what is independent of any round's hidden-set state: seed/regression_negative
-    records with an r0 origin (their answers are in the fixtures) and empty held_out/negative."""
+    records with an r0 origin (their answers are in the fixtures), empty held_out/negative and only round1_seal (the
+    tests rewrite its fingerprint; a later round's seal from the bundled bench is dropped)."""
     b = json.loads(diag.BENCH.read_text(encoding="utf-8"))
     for sect in ("seed", "regression_negative"):
         b[sect] = [r for r in b[sect] if r["origin"].endswith("-r0")]
     b["held_out"], b["negative"] = [], []
+    for key in [k for k in b if k.startswith("round") and k.endswith("_seal") and k != "round1_seal"]:
+        del b[key]
     return b
 
 
