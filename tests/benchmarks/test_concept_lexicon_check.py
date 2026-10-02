@@ -25,6 +25,13 @@ class TestChecks(unittest.TestCase):
                          {"my": "function_word", "get": "verb", "jira": "product_hint", "doc": "multi_target",
                           "card": "target_not_concept", "ticket": "alias_conflict", "e-mail": "shape"})
 
+    def test_id_like_rejected_after_shape(self):
+        lex = {"404": ["issue"], "key": ["issue"], "w3": ["issue"]}
+        kept, rej = clc.structural_check(lex, *ARGS)
+        self.assertEqual(rej["404"]["reason"], "id_like")
+        self.assertEqual(rej["key"]["reason"], "id_like")
+        self.assertNotEqual(rej.get("w3", {}).get("reason"), "id_like")  # has a letter, not in ID_LIKE: id_like does not reject it
+
     def test_prepare_review_does_not_cap(self):
         raw = {f"w{i}": ["issue"] for i in range(8)}
         kept, _ = clc.prepare_review(raw, *ARGS)
