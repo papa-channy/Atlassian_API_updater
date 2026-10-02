@@ -1,6 +1,6 @@
 # Search Quality Round 2 — Technical Specification
 
-**문서 버전:** v1.13 (v1.10 = 외부 검수 10회, 최종 판정 "구현 계획으로 진행 가능"; v1.11–v1.13 = 구현 계획 검수 중 추가·정합화된 abort 분기와 분기별 AC-19)
+**문서 버전:** v1.14 (v1.10 = 외부 검수 10회, 최종 판정 "구현 계획으로 진행 가능"; v1.11–v1.13 = 구현 계획 검수 중 추가·정합화된 abort 분기와 분기별 AC-19; v1.14 = H 전체 브랜치 코드 리뷰 반영: fixture 호환 제약)
 **기준일:** 2026-10-02
 **선행 구현:** Search Quality Round 1 (spec v1.4, 게이트 실패: held_out 4/16, negative 5/8) + Round 2 pre-work (`main` 95b8de0: 관찰 집합 강등, 라운드 비의존 테스트, 로더 보정). 오프라인 테스트 405개.
 **목적:** Round 1 절차(A→T→B→C→D)를 **어휘만 바꿔** 반복하고, 봉인된 새 held_out 16 / negative 8에서 Discovery 게이트(≥ 15/16, 0/8)를 충족한다.
@@ -45,6 +45,7 @@ R1–R4 정의는 Round 1 그대로.
 - 2026-10-02 외부 검수 7차(v1.6→v1.7): pre-T 작업을 **의존 순서**로 고정(동사 인벤토리 → method-safety → 필요 시 수정·재실행 → `verb_inventory_sha256` **확정** → 개념 토큰 → 사전 생성·검사·의미 검토 → seed 게이트 → 후보 → 브리프/프롬프트 → T; 사전 검사의 "동사 키 아님" 규칙은 확정된 인벤토리 기준); **Round 2 도구 코드 전부를 H에서 완성하고 `tooling_code_sha256`으로 T에 동결**, T..D 동안 변경 금지, C는 T 동결값 재확인 마커(`evaluation_code_sha256 == tooling 부분집합 해시`); P1: 사전 생성에도 first-valid 수명주기, §4 예시에 `generated_from`, S 무결성 체크포인트(B..C 시작·D 직전), 튜닝 실패 시 의미 고정(adopted 0, C/D 생략, 봉인 유지).
 - 2026-10-02 외부 검수 8차(v1.7→v1.8): §5.1의 stale 순서 문장 제거(의존 순서가 유일한 권위), T의 `verb_methods`는 확정 인벤토리; **튜닝 실패 후 hidden 재사용 규칙 폐기**(컨트롤러·검토자가 B 전에 평문을 봤으므로 다음 라운드에 재사용 불가 — 폐기하고 새로 생성); **AC를 공통 / 성공 분기 / 튜닝 실패 분기로 분리**(튜닝 실패도 검증 가능한 종료 상태); P1: 무결성 테스트 파일도 T..D 불변 목록에, `evaluation_code_sha256_at_T`를 `round_freeze`에 저장해 C는 단순 동등 검사, H′ 발생 시 최종 housekeeping 커밋을 readiness에 하나로 기록.
 - 2026-10-02 외부 검수 9차(v1.8→v1.9): **AC 전면 재작성** — 모든 행이 분기표 없이 단독으로 참/거짓 판정되도록 분할(AC-01a/b, AC-05 "종료 커밋까지", AC-06a/b, AC-15a/b, AC-18a-B/18a-D, AC-20a/b); **튜닝 실패 종료 커밋 F** 정의(H → T → B → F; whitelist = 튜닝 로그 + readiness; 실패한 상수·alias는 정책 파일에 절대 적용되지 않음 — B 상태 유지); P1: H′ 후 pre-T artifact를 의존 DAG에 따라 재생성(S는 fingerprint 동일 시 재사용), §5.2 item 2를 "결과 확인"으로, §11 상태 모델에 실패 분기 필드 null/not_applicable.
+- 2026-10-02 H 전체 브랜치 코드 리뷰 반영(v1.13→v1.14): §6 `update` 행을 `["PUT"]`로 좁힘(fixture s-022 충돌); pre-T 순서에 **fixture 호환 검사**(method-safety 직후, 좁힘 전용, 충돌 시 사용자 판단) 추가; 튜닝 파이프라인에 fixture 하드 제약(후보가 r0 fixture 23/23·6/6을 깨면 무효, `fixture_fail` 기록). 컨트롤러 ruling(사용자 미확인) — 사용자가 되돌릴 수 있도록 ledger에 기록.
 - 2026-10-02 구현 계획 검수 6차 반영(v1.12→v1.13): AC-19를 분기별로 분리 — 성공: 적용된 round2 추가분 == 결정적 제안기 재실행 결과; 튜닝 실패: 적용 추가분 0, 제안기 최종 결과가 39/39·14/14 미달; abort: 적용 추가분 0(정책 == B), rejected run의 후보 `result_sha256` == 제안기 재실행 결과, 그 run의 `reject_evidence`(실패 테스트 id·출력 sha)가 로그에 존재. 브리프·프롬프트 동결 조건과 의미 검토 수명주기 조건은 공통 그대로.
 - 2026-10-02 구현 계획 검수 4차 반영(v1.11→v1.12): abort 분기를 완전한 종료 분기로 승격 — 종료 커밋 := D | F | X; 절차 표기 H → T → B → (C → D | F | X); 도구 불변·`.enc` 체크포인트·attestation 문구를 세 종료 커밋 모두에 적용; AC-01d(abort 구간 규칙), AC-18a-X 행 추가; AC-07/AC-14/AC-16은 성공·튜닝 실패 분기에만 적용(abort의 원인이 바로 그 테스트 실패이므로), 새 공통 AC-23: T와 B 커밋 시점에 전체 오프라인 테스트 통과(ledger 기록); AC-22는 실패 테스트 이름·출력을 증거로 보존.
 - 2026-10-02 구현 계획 검수 3차 반영(v1.10→v1.11): **abort 분기 추가** — 튜닝이 39/39·14/14를 만족했으나 정식 전체 테스트가 실패해 run이 `rejected`된 경우(도구·테스트 결함), 같은 라운드를 H′에서 재시작하지 않는다(컨트롤러·검토자가 이미 hidden 평문을 봤으므로). 종료 커밋 **X**(`docs/phase3-readiness.md`만 변경; 정책 파일은 B 상태; hidden 미평가; 암호문 보관; `reject_reason`·실패 테스트 출력 기록)로 Round 2를 소비하고 다음 시도는 새 hidden set의 Round 3이다. AC-22 추가, AC-18a-X 체크포인트, 상태 모델에 abort 분기.
@@ -115,7 +116,7 @@ R1–R4 정의는 Round 1 그대로.
 
 ### 5.2 커밋 T (동결)
 1. `search_ranking.json` `verb_methods` ← §6 인벤토리(**확정본** — method-safety는 이미 §5.1 순서에서 끝났다).
-2. **메서드 안전성 검사 결과 확인**(검사 자체는 §5.1 순서에서 T 전에 끝났고 인벤토리는 확정본; T에는 그 결과 파일을 포함한다)(`alias_candidates_tool.py --method-safety`; 의미: 인벤토리가 seed에 잘못된 메서드 불일치 감산을 만들지 않는지): seed 39건 각각에 대해, 질의 unigram ∩ 인벤토리의 허용 메서드 교집합이 (a) 공집합(의도 0)이거나 (b) 정답 op 메서드를 포함해야 한다. 위반(허용 집합이 정답 메서드를 배제)이 있으면 그 동사를 상위집합으로 넓혀 재실행 — **이 조정은 사전 생성 전에 끝나고 `verb_inventory_sha256`로 확정된다.** 결과(통과 목록)는 readiness에 기록. 사전의 "동사 키 아님" 검사는 이 확정 인벤토리를 기준으로 한다.
+2. **메서드 안전성 검사 결과 확인**(검사 자체는 §5.1 순서에서 T 전에 끝났고 인벤토리는 확정본; T에는 그 결과 파일을 포함한다)(`alias_candidates_tool.py --method-safety`; 의미: 인벤토리가 seed에 잘못된 메서드 불일치 감산을 만들지 않는지): seed 39건 각각에 대해, 질의 unigram ∩ 인벤토리의 허용 메서드 교집합이 (a) 공집합(의도 0)이거나 (b) 정답 op 메서드를 포함해야 한다. 위반(허용 집합이 정답 메서드를 배제)이 있으면 그 동사를 상위집합으로 넓혀 재실행 — **이 조정은 사전 생성 전에 끝나고 `verb_inventory_sha256`로 확정된다.** 결과(통과 목록)는 readiness에 기록. 사전의 "동사 키 아님" 검사는 이 확정 인벤토리를 기준으로 한다. **fixture 호환 검사(v1.14)**: method-safety 통과 직후 fixture 회귀 스위트(`tests/intelligence/test_search.py` r0 seed 23건·negative 6건, `tests/test_diag_search_queries.py` 23/23)를 실행한다. 인벤토리 행이 fixture 회귀를 일으키면 그 동사를 Round 1 값 쪽으로 **좁혀** method-safety를 재실행한다(§6의 `update` 행이 이 검사로 `["PUT"]`이 되었다: `["PUT","POST"]`는 fixture s-022 "update issue summary"에서 `POST /issue`를 top-1로 올린다). 같은 동사에서 method-safety(넓힘)와 fixture(좁힘)가 충돌하면 절차를 멈추고 사용자 판단을 받는다. AC-23(T에서 스위트 green)은 이 검사가 통과해야 성립한다.
 3. **사전–seed 호환 게이트**(`alias_candidates_tool.py --lexicon-gate`, T 전): 사전 synonym `w`가 어떤 seed 질의의 unigram에 등장하면 `lexicon_targets(w) ∩ allowed_targets(w) ≠ ∅`(§7.1.6 정의, seed의 정답 op 어휘)일 때만 유지하고, 교집합이 비면 그 사전 항목을 폐기(`rejected[w].reason = "seed-incompatible"`)해 seed 유래 후보로 남긴다. seed만 사용하므로 독립성 훼손 없음; 사전 오생성이 seed 단어를 선점해 B..C에서 복구 불가능해지는 상황을 막는다.
 4. 개념 사전 병합: `concept_lexicon.json` 항목을 `search_aliases.json.aliases`에 병합(`notes[word] = {"origin": "lexicon-r2", "seed_query_id": null, "failure_classes": [], "evidence": "concept lexicon r2"}`). 충돌(이미 있는 alias 키)은 기존 항목 우선, 사전 항목은 버림(기록).
 5. `alias_candidates.json` 생성(§7.1) — 사전 병합 **후**에 실행(사전이 이미 잇는 토큰은 후보에서 자연히 빠진다).
@@ -184,7 +185,7 @@ attestation 항목: (1) "B..C 동안 봉인 평문은 튜닝 환경에서 읽을
   "generate": ["POST"], "copy": ["POST"], "clone": ["POST"], "duplicate": ["POST"], "link": ["POST"], "share": ["POST"],
   "comment": ["POST"], "reply": ["POST"], "log": ["POST"], "record": ["POST"], "launch": ["POST"],
   "leave": ["POST", "DELETE"],
-  "update": ["PUT", "POST"], "change": ["PUT", "POST"], "edit": ["PUT", "POST"], "set": ["PUT", "POST"],
+  "update": ["PUT"], "change": ["PUT", "POST"], "edit": ["PUT", "POST"], "set": ["PUT", "POST"],
   "rename": ["PUT", "POST"], "modify": ["PUT", "POST"], "revise": ["PUT", "POST"], "rewrite": ["PUT", "POST"],
   "replace": ["PUT", "POST"], "move": ["PUT", "POST"], "transition": ["PUT", "POST"], "assign": ["PUT", "POST"],
   "reassign": ["PUT", "POST"], "reorder": ["PUT", "POST"], "rank": ["PUT", "POST"], "archive": ["PUT", "POST"],
@@ -303,7 +304,7 @@ Round 1 §11과 동일 + Round 2 섹션(성공 분기: 커밋 H/T/B/C/D; 실패 
 | AC-03 | 성공 | D 평문 sha256 == `round2_seal`; D에 테스트 코드 변경 없음 | 테스트 + git |
 | AC-04 | 공통 | gate 집합 origin ∈ {`held_out-r2`, `negative-r2`}, r0/r1 레코드 0개 — **B 봉인 과정의 체크포인트**로 검사해 결과를 `round2_seal`/readiness에 기록한다(F에서 평문을 다시 읽어 검사하는 것은 금지; 성공 분기는 D unseal 후 테스트로 재확인) | 봉인 스크립트 + 테스트(성공 분기) |
 | AC-05 | 공통 | `search.py` diff vs 95b8de0 비어 있음; `policy.py` diff는 notes-origin 규칙뿐; §5.1 도구·무결성 테스트 파일은 `housekeeping_commit` 이후 **종료 커밋까지** diff 비어 있음; `tooling_code_sha256` == 현재 파일 | git + 테스트 |
-| AC-06a | 공통 | 픽스처 r0 23/23·6/6 | 테스트 |
+| AC-06a | 공통 | 픽스처 r0 23/23·6/6; **v1.14**: 튜닝 파이프라인의 모든 후보(상수 격자점·alias 제안)에 대한 하드 제약 — 위반 후보는 선택 제외, 로그 `fixture_fail` | 테스트 |
 | AC-06b | 성공 | adopted run의 스냅샷 seed 39/39, regression 14/14 | 로그 + 테스트 |
 | AC-07 | 성공·실패 | §10.1 테스트 통과 | 테스트 |
 | AC-08 | 공통 | `POLICY_VERSIONS["search"] == 3`; `round_freeze` round 2 해시 10개 == 현재 파일; S 출처 필드 == 모든 영속 artifact의 provenance | 테스트 |
