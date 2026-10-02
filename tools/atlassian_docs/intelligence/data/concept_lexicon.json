@@ -1,0 +1,2720 @@
+{
+  "catalog_df": {
+    "ability": 0,
+    "abort": 0,
+    "acceptable": 0,
+    "accesslevel": 0,
+    "accessrule": 0,
+    "accessscheme": 0,
+    "accesssharing": 0,
+    "accountuser": 0,
+    "active": 0,
+    "activity": 0,
+    "addition": 0,
+    "administrator": 0,
+    "admission": 0,
+    "agent": 0,
+    "alerting": 0,
+    "alertrequest": 0,
+    "allocation": 0,
+    "alteration": 0,
+    "amount": 0,
+    "analysis": 0,
+    "applicativerole": 0,
+    "appraisal": 0,
+    "archivedtrash": 0,
+    "area": 0,
+    "argument": 0,
+    "arrangement": 0,
+    "article": 0,
+    "assessment": 0,
+    "associateditem": 0,
+    "associationmap": 0,
+    "asynchronous": 0,
+    "audience": 0,
+    "auditlog": 0,
+    "authoring": 0,
+    "availability": 0,
+    "backend": 0,
+    "background": 0,
+    "ballot": 0,
+    "ballpark": 0,
+    "baseline": 0,
+    "batch": 0,
+    "bespoke": 0,
+    "bin": 0,
+    "blend": 0,
+    "blueprint": 0,
+    "body": 0,
+    "bookmark": 0,
+    "boundary": 0,
+    "bridge": 0,
+    "bulletin": 0,
+    "calculation": 0,
+    "callback": 0,
+    "cancellation": 0,
+    "candidate": 0,
+    "capacity": 0,
+    "case": 0,
+    "casetype": 0,
+    "catalog": 0,
+    "catalogregistry": 0,
+    "ceiling": 0,
+    "changehistory": 0,
+    "changeupdate": 0,
+    "checking": 0,
+    "choice": 0,
+    "chooser": 0,
+    "circumstance": 0,
+    "class": 0,
+    "clean": 0,
+    "cleanup": 0,
+    "codecheck": 0,
+    "codestore": 0,
+    "coding": 0,
+    "cohort": 0,
+    "collaboration": 0,
+    "complex": 0,
+    "composer": 0,
+    "condition": 0,
+    "conditionstatus": 0,
+    "configurationdata": 0,
+    "configurationoption": 0,
+    "connected": 0,
+    "connecteditem": 0,
+    "connection": 0,
+    "constraint": 0,
+    "consumption": 0,
+    "container": 0,
+    "contentvalue": 0,
+    "contributor": 0,
+    "conversion": 0,
+    "correspondence": 0,
+    "coverage": 0,
+    "creation": 0,
+    "creationinfo": 0,
+    "creationmetadata": 0,
+    "crew": 0,
+    "criteria": 0,
+    "custodian": 0,
+    "customproperty": 0,
+    "cycle": 0,
+    "datastore": 0,
+    "delegation": 0,
+    "deletion": 0,
+    "deletionrequest": 0,
+    "delivery": 0,
+    "dependency": 0,
+    "descriptor": 0,
+    "designation": 0,
+    "destination": 0,
+    "detailsdata": 0,
+    "detailsinfo": 0,
+    "developer": 0,
+    "developerinfo": 0,
+    "devopsmodule": 0,
+    "devopspart": 0,
+    "directory": 0,
+    "directoryregistry": 0,
+    "discarded": 0,
+    "distribution": 0,
+    "distributionsharing": 0,
+    "documentfile": 0,
+    "drafting": 0,
+    "duplicatecopy": 0,
+    "duration": 0,
+    "editinfo": 0,
+    "editing": 0,
+    "editmetadata": 0,
+    "element": 0,
+    "eligible": 0,
+    "embedded": 0,
+    "embedding": 0,
+    "empty": 0,
+    "engineering": 0,
+    "engineeringdata": 0,
+    "engineeringwork": 0,
+    "entire": 0,
+    "entitlement": 0,
+    "entryitem": 0,
+    "entryrecord": 0,
+    "erased": 0,
+    "erasure": 0,
+    "error": 0,
+    "evaluation": 0,
+    "exchange": 0,
+    "exclusion": 0,
+    "existence": 0,
+    "expansion": 0,
+    "explorer": 0,
+    "extension": 0,
+    "external": 0,
+    "externallink": 0,
+    "extract": 0,
+    "fact": 0,
+    "failure": 0,
+    "fastfilter": 0,
+    "featuretoggle": 0,
+    "feedback": 0,
+    "fieldconfigscheme": 0,
+    "fieldconfigurationplan": 0,
+    "fieldplan": 0,
+    "fieldsetting": 0,
+    "fieldsetup": 0,
+    "file": 0,
+    "filetransfer": 0,
+    "finding": 0,
+    "fit": 0,
+    "flow": 0,
+    "follow": 0,
+    "follower": 0,
+    "following": 0,
+    "forecast": 0,
+    "form": 0,
+    "format": 0,
+    "formula": 0,
+    "fresh": 0,
+    "frontend": 0,
+    "functionality": 0,
+    "grade": 0,
+    "grouping": 0,
+    "guideline": 0,
+    "heading": 0,
+    "headline": 0,
+    "hint": 0,
+    "homepage": 0,
+    "host": 0,
+    "immediate": 0,
+    "importance": 0,
+    "inboxqueue": 0,
+    "inclusion": 0,
+    "indicator": 0,
+    "individual": 0,
+    "infrastructure": 0,
+    "initiative": 0,
+    "initiativeproject": 0,
+    "inplace": 0,
+    "input": 0,
+    "inspection": 0,
+    "inspectioncheck": 0,
+    "inspectionreview": 0,
+    "installation": 0,
+    "integration": 0,
+    "intelligent": 0,
+    "interface": 0,
+    "invitation": 0,
+    "issuesecuritymodel": 0,
+    "issuesecurityplan": 0,
+    "issueview": 0,
+    "iteration": 0,
+    "journal": 0,
+    "judgment": 0,
+    "kanban": 0,
+    "kind": 0,
+    "knowledge": 0,
+    "labelname": 0,
+    "lane": 0,
+    "language": 0,
+    "layout": 0,
+    "legitimate": 0,
+    "licensekey": 0,
+    "linkage": 0,
+    "listing": 0,
+    "logic": 0,
+    "mail": 0,
+    "map": 0,
+    "marker": 0,
+    "markerlabel": 0,
+    "mask": 0,
+    "masking": 0,
+    "mass": 0,
+    "material": 0,
+    "maximum": 0,
+    "measure": 0,
+    "message": 0,
+    "method": 0,
+    "mine": 0,
+    "miniature": 0,
+    "mix": 0,
+    "mockup": 0,
+    "model": 0,
+    "monitoring": 0,
+    "new": 0,
+    "newer": 0,
+    "newest": 0,
+    "newish": 0,
+    "news": 0,
+    "note": 0,
+    "nothing": 0,
+    "notice": 0,
+    "notificationplan": 0,
+    "notificationrequest": 0,
+    "notificationsetup": 0,
+    "number": 0,
+    "object": 0,
+    "occurrence": 0,
+    "offering": 0,
+    "offeringservice": 0,
+    "offlinecopy": 0,
+    "offsite": 0,
+    "offspring": 0,
+    "outage": 0,
+    "outcome": 0,
+    "output": 0,
+    "oversight": 0,
+    "overview": 0,
+    "package": 0,
+    "pane": 0,
+    "parser": 0,
+    "part": 0,
+    "participant": 0,
+    "participantmember": 0,
+    "pattern": 0,
+    "pending": 0,
+    "peoplepicker": 0,
+    "period": 0,
+    "permissionplan": 0,
+    "persistence": 0,
+    "person": 0,
+    "personal": 0,
+    "personalized": 0,
+    "personalpermission": 0,
+    "personalsetting": 0,
+    "personuser": 0,
+    "perspective": 0,
+    "picture": 0,
+    "platform": 0,
+    "platformsystem": 0,
+    "plugin": 0,
+    "position": 0,
+    "positionrole": 0,
+    "predecessor": 0,
+    "preferenceoption": 0,
+    "preferencevote": 0,
+    "presence": 0,
+    "preset": 0,
+    "previewimage": 0,
+    "prioritymodel": 0,
+    "priorityplan": 0,
+    "private": 0,
+    "privilege": 0,
+    "problem": 0,
+    "problemreport": 0,
+    "procedure": 0,
+    "process": 0,
+    "program": 0,
+    "projectassociation": 0,
+    "projectcheck": 0,
+    "projectmap": 0,
+    "projectspace": 0,
+    "projectvalidation": 0,
+    "propertyfield": 0,
+    "proprietor": 0,
+    "protection": 0,
+    "prototype": 0,
+    "publication": 0,
+    "publicationstate": 0,
+    "quantity": 0,
+    "querylanguage": 0,
+    "question": 0,
+    "rating": 0,
+    "reach": 0,
+    "reaction": 0,
+    "readonly": 0,
+    "ready": 0,
+    "realtime": 0,
+    "recommendation": 0,
+    "recovery": 0,
+    "recoveryarchive": 0,
+    "recyclebin": 0,
+    "redactiontool": 0,
+    "redundant": 0,
+    "region": 0,
+    "reinstatement": 0,
+    "relationship": 0,
+    "release": 0,
+    "releaseaction": 0,
+    "reload": 0,
+    "relocation": 0,
+    "relocationmove": 0,
+    "reminder": 0,
+    "renewal": 0,
+    "replacement": 0,
+    "replica": 0,
+    "replication": 0,
+    "responsibility": 0,
+    "responsible": 0,
+    "restorationarchive": 0,
+    "result": 0,
+    "revised": 0,
+    "revision": 0,
+    "revisionupdate": 0,
+    "right": 0,
+    "roadmap": 0,
+    "roleclass": 0,
+    "roledescription": 0,
+    "roleinfo": 0,
+    "rollout": 0,
+    "rough": 0,
+    "routine": 0,
+    "rulebook": 0,
+    "runtime": 0,
+    "safety": 0,
+    "sample": 0,
+    "schedule": 0,
+    "schemeplan": 0,
+    "screenmodel": 0,
+    "screenplan": 0,
+    "searchlanguage": 0,
+    "searchrequest": 0,
+    "sectionspace": 0,
+    "sectiontab": 0,
+    "securitylevelmodel": 0,
+    "securitylevelplan": 0,
+    "securitytier": 0,
+    "segment": 0,
+    "selection": 0,
+    "selector": 0,
+    "selectorpicker": 0,
+    "self": 0,
+    "settingoption": 0,
+    "settingvalue": 0,
+    "setup": 0,
+    "sheet": 0,
+    "shortcut": 0,
+    "shortcutfilter": 0,
+    "sizing": 0,
+    "sketchboard": 0,
+    "solution": 0,
+    "source": 0,
+    "sourcebase": 0,
+    "squad": 0,
+    "stage": 0,
+    "standard": 0,
+    "statechange": 0,
+    "stateclass": 0,
+    "statement": 0,
+    "statistic": 0,
+    "statusgroup": 0,
+    "step": 0,
+    "story": 0,
+    "straight": 0,
+    "structure": 0,
+    "subordinate": 0,
+    "subpage": 0,
+    "subscriber": 0,
+    "subscription": 0,
+    "subscriptionstate": 0,
+    "substitute": 0,
+    "summary": 0,
+    "summaryinfo": 0,
+    "support": 0,
+    "surrounding": 0,
+    "tag": 0,
+    "tailored": 0,
+    "target": 0,
+    "taskoperation": 0,
+    "taxonomy": 0,
+    "teammate": 0,
+    "thumbsup": 0,
+    "tickettype": 0,
+    "ticketview": 0,
+    "tier": 0,
+    "timeentry": 0,
+    "timeline": 0,
+    "timesheet": 0,
+    "timespent": 0,
+    "todo": 0,
+    "togglecontrol": 0,
+    "tool": 0,
+    "total": 0,
+    "trace": 0,
+    "tracker": 0,
+    "transfer": 0,
+    "transfermove": 0,
+    "transformation": 0,
+    "typeassociation": 0,
+    "typemap": 0,
+    "typeplan": 0,
+    "typescheme": 0,
+    "typescreenmapping": 0,
+    "typescreenplan": 0,
+    "unfollow": 0,
+    "unit": 0,
+    "unprocessed": 0,
+    "unpublished": 0,
+    "updatepost": 0,
+    "urgency": 0,
+    "url": 0,
+    "utility": 0,
+    "utilization": 0,
+    "verification": 0,
+    "verificationprocess": 0,
+    "viewpanel": 0,
+    "volume": 0,
+    "waitingline": 0,
+    "weakness": 0,
+    "weblink": 0,
+    "webpage": 0,
+    "widget": 0,
+    "withdrawal": 0,
+    "workarea": 0,
+    "workflowline": 0,
+    "workflowmodel": 0,
+    "workflowplan": 0,
+    "workingcopy": 0,
+    "workitem": 0,
+    "worklist": 0,
+    "workrelation": 0,
+    "workstream": 0,
+    "worktracker": 0
+  },
+  "generated_from": {
+    "inputs": {
+      "aliases": "c430e96177612510b94427fa80c1f98c2e6cb1b0e20872a4505964f5df055be3",
+      "bench": "c6660b57fcf445f3a941fbad359c888b1119ea765b7b8015fe929e21aec8862c",
+      "raw_generation": "2e1fb3d56bd7a09b1b1e5c366f5b9d69c0039413eaa01b3d7ce84af9a37c19a7",
+      "semantic_review": "c5ba256f8acd082febe06724d6646bff631e136dc437f4fa1528286117bd62f4",
+      "verb_inventory": "d66317db7a6a3d047f30197791eefdb93448747b913544da7545136f91dbffc0"
+    },
+    "registry_fingerprint": "f3c2e9d48aa85c96ca62cdd84ff700cc2714c888cf4148b3a91c604c45b47b62",
+    "spec_sha256": {
+      "confluence": "b3d010b6438677d864495ce15828f57080ff72afe190efdf7f86f0f5140b700d",
+      "jira-platform": "3d0edfb02ff91873f99421de579182b6d66f07b804063e9ae458a30d6901a2db",
+      "jira-software": "cb7e24b331ad9b31944fa9a588f70d4ea60d74d1dfb52d39a59770230b79207a"
+    },
+    "tool_version": "round2.1"
+  },
+  "generation_input_sha256": "9125fa8444453762076cdb5c6791f166f46a15579fd016bfcbb8cd4412bd857e",
+  "lexicon": {
+    "ability": [
+      "capability"
+    ],
+    "abort": [
+      "cancel"
+    ],
+    "acceptable": [
+      "valid"
+    ],
+    "accesslevel": [
+      "securitylevel"
+    ],
+    "accessrule": [
+      "permission"
+    ],
+    "accessscheme": [
+      "permissionscheme"
+    ],
+    "accesssharing": [
+      "sharing"
+    ],
+    "accountuser": [
+      "user"
+    ],
+    "active": [
+      "live"
+    ],
+    "activity": [
+      "action"
+    ],
+    "addition": [
+      "add"
+    ],
+    "administrator": [
+      "admin"
+    ],
+    "admission": [
+      "access"
+    ],
+    "agent": [
+      "actor"
+    ],
+    "alerting": [
+      "notification"
+    ],
+    "alertrequest": [
+      "notify"
+    ],
+    "allocation": [
+      "assignment"
+    ],
+    "alteration": [
+      "modification"
+    ],
+    "amount": [
+      "value"
+    ],
+    "analysis": [
+      "analyse"
+    ],
+    "applicativerole": [
+      "applicationrole"
+    ],
+    "appraisal": [
+      "evaluate"
+    ],
+    "archivedtrash": [
+      "trashed"
+    ],
+    "area": [
+      "space"
+    ],
+    "argument": [
+      "parameter"
+    ],
+    "arrangement": [
+      "configuration"
+    ],
+    "article": [
+      "blogpost"
+    ],
+    "assessment": [
+      "analyse"
+    ],
+    "associateditem": [
+      "related"
+    ],
+    "associationmap": [
+      "mapping"
+    ],
+    "asynchronous": [
+      "async"
+    ],
+    "audience": [
+      "group"
+    ],
+    "auditlog": [
+      "audit"
+    ],
+    "authoring": [
+      "editor"
+    ],
+    "availability": [
+      "accessible"
+    ],
+    "backend": [
+      "server"
+    ],
+    "background": [
+      "async"
+    ],
+    "ballot": [
+      "vote"
+    ],
+    "ballpark": [
+      "approximate"
+    ],
+    "baseline": [
+      "default"
+    ],
+    "batch": [
+      "bulk"
+    ],
+    "bespoke": [
+      "custom"
+    ],
+    "bin": [
+      "trash"
+    ],
+    "blend": [
+      "combination"
+    ],
+    "blueprint": [
+      "template"
+    ],
+    "body": [
+      "content"
+    ],
+    "bookmark": [
+      "favourite"
+    ],
+    "boundary": [
+      "scope"
+    ],
+    "bridge": [
+      "connect"
+    ],
+    "bulletin": [
+      "announcement"
+    ],
+    "calculation": [
+      "computation"
+    ],
+    "callback": [
+      "webhook"
+    ],
+    "cancellation": [
+      "cancel"
+    ],
+    "candidate": [
+      "assignable"
+    ],
+    "capacity": [
+      "capability"
+    ],
+    "case": [
+      "issue"
+    ],
+    "casetype": [
+      "issuetype"
+    ],
+    "catalog": [
+      "list"
+    ],
+    "catalogregistry": [
+      "registry"
+    ],
+    "ceiling": [
+      "limit"
+    ],
+    "changehistory": [
+      "changelog"
+    ],
+    "changeupdate": [
+      "update"
+    ],
+    "checking": [
+      "validation"
+    ],
+    "choice": [
+      "alternative"
+    ],
+    "chooser": [
+      "picker"
+    ],
+    "circumstance": [
+      "context"
+    ],
+    "class": [
+      "type"
+    ],
+    "clean": [
+      "sanitize"
+    ],
+    "cleanup": [
+      "removal"
+    ],
+    "codecheck": [
+      "review"
+    ],
+    "codestore": [
+      "repository"
+    ],
+    "coding": [
+      "development"
+    ],
+    "cohort": [
+      "group"
+    ],
+    "collaboration": [
+      "share"
+    ],
+    "complex": [
+      "advanced"
+    ],
+    "composer": [
+      "editor"
+    ],
+    "condition": [
+      "rule"
+    ],
+    "conditionstatus": [
+      "status"
+    ],
+    "configurationdata": [
+      "configuration"
+    ],
+    "configurationoption": [
+      "setting"
+    ],
+    "connected": [
+      "linked"
+    ],
+    "connecteditem": [
+      "related"
+    ],
+    "connection": [
+      "association"
+    ],
+    "constraint": [
+      "rule"
+    ],
+    "consumption": [
+      "usage"
+    ],
+    "container": [
+      "folder"
+    ],
+    "contentvalue": [
+      "value"
+    ],
+    "contributor": [
+      "actor"
+    ],
+    "conversion": [
+      "convert"
+    ],
+    "correspondence": [
+      "match"
+    ],
+    "coverage": [
+      "scope"
+    ],
+    "creation": [
+      "create"
+    ],
+    "creationinfo": [
+      "createmeta"
+    ],
+    "creationmetadata": [
+      "createmeta"
+    ],
+    "crew": [
+      "team"
+    ],
+    "criteria": [
+      "filter"
+    ],
+    "custodian": [
+      "owner"
+    ],
+    "customproperty": [
+      "property"
+    ],
+    "cycle": [
+      "sprint"
+    ],
+    "datastore": [
+      "database"
+    ],
+    "delegation": [
+      "assignment"
+    ],
+    "deletion": [
+      "delete"
+    ],
+    "deletionrequest": [
+      "removal"
+    ],
+    "delivery": [
+      "deployment"
+    ],
+    "dependency": [
+      "relatedwork"
+    ],
+    "descriptor": [
+      "meta"
+    ],
+    "designation": [
+      "name"
+    ],
+    "destination": [
+      "mergeto"
+    ],
+    "detailsdata": [
+      "information"
+    ],
+    "detailsinfo": [
+      "info"
+    ],
+    "developer": [
+      "dev"
+    ],
+    "developerinfo": [
+      "devinfo"
+    ],
+    "devopsmodule": [
+      "devopscomponent"
+    ],
+    "devopspart": [
+      "devopscomponent"
+    ],
+    "directory": [
+      "folder"
+    ],
+    "directoryregistry": [
+      "registry"
+    ],
+    "discarded": [
+      "trashed"
+    ],
+    "distribution": [
+      "share"
+    ],
+    "distributionsharing": [
+      "sharing"
+    ],
+    "documentfile": [
+      "attachment"
+    ],
+    "drafting": [
+      "createdraft"
+    ],
+    "duplicatecopy": [
+      "clone"
+    ],
+    "duration": [
+      "time"
+    ],
+    "editinfo": [
+      "editmeta"
+    ],
+    "editing": [
+      "edit"
+    ],
+    "editmetadata": [
+      "editmeta"
+    ],
+    "element": [
+      "component"
+    ],
+    "eligible": [
+      "assignable"
+    ],
+    "embedded": [
+      "inline"
+    ],
+    "embedding": [
+      "embed"
+    ],
+    "empty": [
+      "none"
+    ],
+    "engineering": [
+      "dev"
+    ],
+    "engineeringdata": [
+      "devinfo"
+    ],
+    "engineeringwork": [
+      "development"
+    ],
+    "entire": [
+      "full"
+    ],
+    "entitlement": [
+      "license"
+    ],
+    "entryitem": [
+      "item"
+    ],
+    "entryrecord": [
+      "record"
+    ],
+    "erased": [
+      "deleted"
+    ],
+    "erasure": [
+      "delete"
+    ],
+    "error": [
+      "failed"
+    ],
+    "evaluation": [
+      "eval"
+    ],
+    "exchange": [
+      "swap"
+    ],
+    "exclusion": [
+      "remove"
+    ],
+    "existence": [
+      "exist"
+    ],
+    "expansion": [
+      "expand"
+    ],
+    "explorer": [
+      "navigator"
+    ],
+    "extension": [
+      "addon"
+    ],
+    "external": [
+      "remote"
+    ],
+    "externallink": [
+      "remotelink"
+    ],
+    "extract": [
+      "export"
+    ],
+    "fact": [
+      "data"
+    ],
+    "failure": [
+      "failed"
+    ],
+    "fastfilter": [
+      "quickfilter"
+    ],
+    "featuretoggle": [
+      "featureflag"
+    ],
+    "fieldconfigscheme": [
+      "fieldconfigurationscheme"
+    ],
+    "fieldconfigurationplan": [
+      "fieldconfigurationscheme"
+    ],
+    "fieldplan": [
+      "fieldscheme"
+    ],
+    "fieldsetting": [
+      "fieldconfiguration"
+    ],
+    "fieldsetup": [
+      "fieldconfiguration"
+    ],
+    "file": [
+      "attachment"
+    ],
+    "filetransfer": [
+      "download"
+    ],
+    "finding": [
+      "search"
+    ],
+    "fit": [
+      "match"
+    ],
+    "flow": [
+      "workflow"
+    ],
+    "follow": [
+      "watch"
+    ],
+    "follower": [
+      "watcher"
+    ],
+    "following": [
+      "watching"
+    ],
+    "forecast": [
+      "estimation"
+    ],
+    "form": [
+      "screen"
+    ],
+    "format": [
+      "mode"
+    ],
+    "formula": [
+      "computation"
+    ],
+    "frontend": [
+      "ui"
+    ],
+    "functionality": [
+      "feature"
+    ],
+    "grade": [
+      "level"
+    ],
+    "grouping": [
+      "category"
+    ],
+    "guideline": [
+      "policy"
+    ],
+    "heading": [
+      "title"
+    ],
+    "headline": [
+      "title"
+    ],
+    "hint": [
+      "suggestion"
+    ],
+    "homepage": [
+      "dashboard"
+    ],
+    "host": [
+      "server"
+    ],
+    "immediate": [
+      "direct"
+    ],
+    "importance": [
+      "priority"
+    ],
+    "inboxqueue": [
+      "queue"
+    ],
+    "inclusion": [
+      "embed"
+    ],
+    "indicator": [
+      "flag"
+    ],
+    "individual": [
+      "human"
+    ],
+    "infrastructure": [
+      "system"
+    ],
+    "initiative": [
+      "epic"
+    ],
+    "initiativeproject": [
+      "project"
+    ],
+    "inplace": [
+      "inline"
+    ],
+    "input": [
+      "field"
+    ],
+    "inspection": [
+      "audit"
+    ],
+    "inspectioncheck": [
+      "check"
+    ],
+    "inspectionreview": [
+      "review"
+    ],
+    "installation": [
+      "instance"
+    ],
+    "integration": [
+      "connect"
+    ],
+    "intelligent": [
+      "smart"
+    ],
+    "interface": [
+      "ui"
+    ],
+    "invitation": [
+      "invite"
+    ],
+    "issuesecuritymodel": [
+      "issuesecurityscheme"
+    ],
+    "issuesecurityplan": [
+      "issuesecurityscheme"
+    ],
+    "issueview": [
+      "viewissue"
+    ],
+    "journal": [
+      "blog"
+    ],
+    "judgment": [
+      "evaluate"
+    ],
+    "kanban": [
+      "board"
+    ],
+    "kind": [
+      "type"
+    ],
+    "knowledge": [
+      "information"
+    ],
+    "labelname": [
+      "name"
+    ],
+    "lane": [
+      "column"
+    ],
+    "language": [
+      "locale"
+    ],
+    "layout": [
+      "mode"
+    ],
+    "legitimate": [
+      "valid"
+    ],
+    "licensekey": [
+      "license"
+    ],
+    "linkage": [
+      "association"
+    ],
+    "listing": [
+      "list"
+    ],
+    "logic": [
+      "expression"
+    ],
+    "mail": [
+      "email"
+    ],
+    "map": [
+      "mapping"
+    ],
+    "marker": [
+      "flag"
+    ],
+    "markerlabel": [
+      "label"
+    ],
+    "mask": [
+      "redaction"
+    ],
+    "masking": [
+      "redact"
+    ],
+    "mass": [
+      "bulk"
+    ],
+    "material": [
+      "content"
+    ],
+    "maximum": [
+      "limit"
+    ],
+    "measure": [
+      "metric"
+    ],
+    "message": [
+      "announcement"
+    ],
+    "method": [
+      "function"
+    ],
+    "mine": [
+      "my"
+    ],
+    "miniature": [
+      "thumbnail"
+    ],
+    "mix": [
+      "combination"
+    ],
+    "mockup": [
+      "preview"
+    ],
+    "model": [
+      "scheme"
+    ],
+    "monitoring": [
+      "tracking"
+    ],
+    "newer": [
+      "updated"
+    ],
+    "newest": [
+      "latest"
+    ],
+    "newish": [
+      "recent"
+    ],
+    "news": [
+      "blog"
+    ],
+    "note": [
+      "comment"
+    ],
+    "nothing": [
+      "none"
+    ],
+    "notice": [
+      "announcement"
+    ],
+    "notificationplan": [
+      "notificationscheme"
+    ],
+    "notificationrequest": [
+      "notify"
+    ],
+    "notificationsetup": [
+      "notificationscheme"
+    ],
+    "number": [
+      "count"
+    ],
+    "object": [
+      "item"
+    ],
+    "occurrence": [
+      "event"
+    ],
+    "offering": [
+      "product"
+    ],
+    "offeringservice": [
+      "service"
+    ],
+    "offlinecopy": [
+      "download"
+    ],
+    "offsite": [
+      "remote"
+    ],
+    "offspring": [
+      "children"
+    ],
+    "outage": [
+      "incident"
+    ],
+    "outcome": [
+      "resolution"
+    ],
+    "output": [
+      "export"
+    ],
+    "oversight": [
+      "auditing"
+    ],
+    "overview": [
+      "dashboard"
+    ],
+    "package": [
+      "module"
+    ],
+    "pane": [
+      "panel"
+    ],
+    "parser": [
+      "parse"
+    ],
+    "part": [
+      "component"
+    ],
+    "participant": [
+      "actor"
+    ],
+    "participantmember": [
+      "member"
+    ],
+    "pattern": [
+      "template"
+    ],
+    "pending": [
+      "unresolved"
+    ],
+    "peoplepicker": [
+      "groupuserpicker"
+    ],
+    "period": [
+      "time"
+    ],
+    "permissionplan": [
+      "permissionscheme"
+    ],
+    "persistence": [
+      "save"
+    ],
+    "person": [
+      "human"
+    ],
+    "personal": [
+      "my"
+    ],
+    "personalized": [
+      "custom"
+    ],
+    "personalpermission": [
+      "mypermission"
+    ],
+    "personalsetting": [
+      "mypreference"
+    ],
+    "personuser": [
+      "user"
+    ],
+    "perspective": [
+      "view"
+    ],
+    "picture": [
+      "avatar"
+    ],
+    "platform": [
+      "application"
+    ],
+    "platformsystem": [
+      "system"
+    ],
+    "plugin": [
+      "addon"
+    ],
+    "position": [
+      "rank"
+    ],
+    "positionrole": [
+      "role"
+    ],
+    "predecessor": [
+      "ancestor"
+    ],
+    "preferenceoption": [
+      "setting"
+    ],
+    "preferencevote": [
+      "vote"
+    ],
+    "presence": [
+      "exist"
+    ],
+    "preset": [
+      "default"
+    ],
+    "previewimage": [
+      "thumbnail"
+    ],
+    "prioritymodel": [
+      "priorityscheme"
+    ],
+    "priorityplan": [
+      "priorityscheme"
+    ],
+    "private": [
+      "internal"
+    ],
+    "privilege": [
+      "permission"
+    ],
+    "problem": [
+      "incident"
+    ],
+    "problemreport": [
+      "issue"
+    ],
+    "procedure": [
+      "operation"
+    ],
+    "process": [
+      "workflow"
+    ],
+    "program": [
+      "application"
+    ],
+    "projectassociation": [
+      "projectmapping"
+    ],
+    "projectcheck": [
+      "projectvalidate"
+    ],
+    "projectmap": [
+      "projectmapping"
+    ],
+    "projectspace": [
+      "workspace"
+    ],
+    "projectvalidation": [
+      "projectvalidate"
+    ],
+    "propertyfield": [
+      "field"
+    ],
+    "proprietor": [
+      "owner"
+    ],
+    "protection": [
+      "security"
+    ],
+    "prototype": [
+      "createdraft"
+    ],
+    "publication": [
+      "post"
+    ],
+    "publicationstate": [
+      "publish"
+    ],
+    "quantity": [
+      "count"
+    ],
+    "querylanguage": [
+      "jql"
+    ],
+    "question": [
+      "query"
+    ],
+    "rating": [
+      "eval"
+    ],
+    "reach": [
+      "access"
+    ],
+    "reaction": [
+      "like"
+    ],
+    "readonly": [
+      "read"
+    ],
+    "ready": [
+      "available"
+    ],
+    "realtime": [
+      "live"
+    ],
+    "recommendation": [
+      "suggestion"
+    ],
+    "recovery": [
+      "restore"
+    ],
+    "recoveryarchive": [
+      "unarchive"
+    ],
+    "recyclebin": [
+      "trash"
+    ],
+    "redactiontool": [
+      "redact"
+    ],
+    "redundant": [
+      "duplicate"
+    ],
+    "region": [
+      "locale"
+    ],
+    "reinstatement": [
+      "restore"
+    ],
+    "relationship": [
+      "association"
+    ],
+    "releaseaction": [
+      "publish"
+    ],
+    "reload": [
+      "refresh"
+    ],
+    "relocation": [
+      "migration"
+    ],
+    "relocationmove": [
+      "move"
+    ],
+    "reminder": [
+      "notification"
+    ],
+    "renewal": [
+      "refresh"
+    ],
+    "replacement": [
+      "swap"
+    ],
+    "replica": [
+      "clone"
+    ],
+    "replication": [
+      "copy"
+    ],
+    "responsibility": [
+      "role"
+    ],
+    "responsible": [
+      "assignee"
+    ],
+    "restorationarchive": [
+      "unarchive"
+    ],
+    "result": [
+      "resolution"
+    ],
+    "revised": [
+      "updated"
+    ],
+    "revision": [
+      "edit"
+    ],
+    "revisionupdate": [
+      "update"
+    ],
+    "right": [
+      "permission"
+    ],
+    "roadmap": [
+      "plan"
+    ],
+    "roleclass": [
+      "applicationrole"
+    ],
+    "roledescription": [
+      "roledetail"
+    ],
+    "roleinfo": [
+      "roledetail"
+    ],
+    "rollout": [
+      "deployment"
+    ],
+    "rough": [
+      "approximate"
+    ],
+    "routine": [
+      "function"
+    ],
+    "rulebook": [
+      "policy"
+    ],
+    "runtime": [
+      "environment"
+    ],
+    "safety": [
+      "security"
+    ],
+    "sample": [
+      "preview"
+    ],
+    "schedule": [
+      "plan"
+    ],
+    "schemeplan": [
+      "scheme"
+    ],
+    "screenmodel": [
+      "screenscheme"
+    ],
+    "screenplan": [
+      "screenscheme"
+    ],
+    "searchlanguage": [
+      "jql"
+    ],
+    "searchrequest": [
+      "query"
+    ],
+    "sectionspace": [
+      "space"
+    ],
+    "sectiontab": [
+      "tab"
+    ],
+    "securitylevelmodel": [
+      "issuesecuritylevelscheme"
+    ],
+    "securitylevelplan": [
+      "issuesecuritylevelscheme"
+    ],
+    "securitytier": [
+      "securitylevel"
+    ],
+    "segment": [
+      "classification"
+    ],
+    "selection": [
+      "option"
+    ],
+    "selector": [
+      "filter"
+    ],
+    "selectorpicker": [
+      "picker"
+    ],
+    "self": [
+      "myself"
+    ],
+    "settingoption": [
+      "option"
+    ],
+    "settingvalue": [
+      "parameter"
+    ],
+    "setup": [
+      "config"
+    ],
+    "sheet": [
+      "page"
+    ],
+    "shortcut": [
+      "link"
+    ],
+    "shortcutfilter": [
+      "quickfilter"
+    ],
+    "sizing": [
+      "estimation"
+    ],
+    "sketchboard": [
+      "whiteboard"
+    ],
+    "solution": [
+      "product"
+    ],
+    "source": [
+      "raw"
+    ],
+    "sourcebase": [
+      "repository"
+    ],
+    "squad": [
+      "team"
+    ],
+    "stage": [
+      "environment"
+    ],
+    "standard": [
+      "default"
+    ],
+    "statechange": [
+      "transition"
+    ],
+    "stateclass": [
+      "statuscategory"
+    ],
+    "statement": [
+      "expression"
+    ],
+    "statistic": [
+      "metric"
+    ],
+    "statusgroup": [
+      "statuscategory"
+    ],
+    "step": [
+      "action"
+    ],
+    "story": [
+      "blogpost"
+    ],
+    "straight": [
+      "direct"
+    ],
+    "structure": [
+      "hierarchy"
+    ],
+    "subordinate": [
+      "descendant"
+    ],
+    "subpage": [
+      "children"
+    ],
+    "subscriber": [
+      "watcher"
+    ],
+    "subscription": [
+      "watch"
+    ],
+    "subscriptionstate": [
+      "watching"
+    ],
+    "substitute": [
+      "alternative"
+    ],
+    "summaryinfo": [
+      "info"
+    ],
+    "support": [
+      "ops"
+    ],
+    "surrounding": [
+      "context"
+    ],
+    "tag": [
+      "label"
+    ],
+    "tailored": [
+      "custom"
+    ],
+    "target": [
+      "mergeto"
+    ],
+    "taskoperation": [
+      "operation"
+    ],
+    "taxonomy": [
+      "classification"
+    ],
+    "teammate": [
+      "member"
+    ],
+    "thumbsup": [
+      "like"
+    ],
+    "tickettype": [
+      "issuetype"
+    ],
+    "ticketview": [
+      "viewissue"
+    ],
+    "tier": [
+      "level"
+    ],
+    "timeentry": [
+      "worklog"
+    ],
+    "timeline": [
+      "history"
+    ],
+    "timesheet": [
+      "timetracking"
+    ],
+    "timespent": [
+      "worklog"
+    ],
+    "todo": [
+      "task"
+    ],
+    "togglecontrol": [
+      "switch"
+    ],
+    "tool": [
+      "app"
+    ],
+    "total": [
+      "count"
+    ],
+    "trace": [
+      "tracking"
+    ],
+    "tracker": [
+      "jira"
+    ],
+    "transfer": [
+      "migration"
+    ],
+    "transfermove": [
+      "move"
+    ],
+    "transformation": [
+      "convert"
+    ],
+    "typeassociation": [
+      "issuetypemapping"
+    ],
+    "typemap": [
+      "issuetypemapping"
+    ],
+    "typeplan": [
+      "issuetypescheme"
+    ],
+    "typescheme": [
+      "issuetypescheme"
+    ],
+    "typescreenmapping": [
+      "issuetypescreenscheme"
+    ],
+    "typescreenplan": [
+      "issuetypescreenscheme"
+    ],
+    "unfollow": [
+      "unwatch"
+    ],
+    "unit": [
+      "module"
+    ],
+    "unprocessed": [
+      "raw"
+    ],
+    "unpublished": [
+      "draft"
+    ],
+    "updatepost": [
+      "post"
+    ],
+    "urgency": [
+      "priority"
+    ],
+    "url": [
+      "link"
+    ],
+    "utility": [
+      "service"
+    ],
+    "utilization": [
+      "usage"
+    ],
+    "verification": [
+      "check"
+    ],
+    "verificationprocess": [
+      "validation"
+    ],
+    "viewpanel": [
+      "screen"
+    ],
+    "volume": [
+      "bulk"
+    ],
+    "waitingline": [
+      "queue"
+    ],
+    "weakness": [
+      "vulnerability"
+    ],
+    "weblink": [
+      "remotelink"
+    ],
+    "webpage": [
+      "page"
+    ],
+    "widget": [
+      "gadget"
+    ],
+    "withdrawal": [
+      "remove"
+    ],
+    "workarea": [
+      "workspace"
+    ],
+    "workflowline": [
+      "pipeline"
+    ],
+    "workflowmodel": [
+      "workflowscheme"
+    ],
+    "workflowplan": [
+      "workflowscheme"
+    ],
+    "workingcopy": [
+      "draft"
+    ],
+    "workitem": [
+      "task"
+    ],
+    "worklist": [
+      "backlog"
+    ],
+    "workrelation": [
+      "relatedwork"
+    ],
+    "workstream": [
+      "project"
+    ],
+    "worktracker": [
+      "jira"
+    ]
+  },
+  "prompt_template_sha256": "a5b7808fe6f3ac4da99f81173ac7ac8deae8c22d02f2854ac5c8c201617a577d",
+  "raw_sha256": "2e1fb3d56bd7a09b1b1e5c366f5b9d69c0039413eaa01b3d7ce84af9a37c19a7",
+  "rejected": {
+    "accessright": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "mypermission"
+      ]
+    },
+    "account": {
+      "catalog_df": 6,
+      "reason": "in_catalog",
+      "targets": [
+        "myself"
+      ]
+    },
+    "alert": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "banner"
+      ]
+    },
+    "analytic": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "report"
+      ]
+    },
+    "annotation": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "metadata"
+      ]
+    },
+    "approval": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "gating"
+      ]
+    },
+    "artifact": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "build"
+      ]
+    },
+    "associated": {
+      "catalog_df": 2,
+      "reason": "in_catalog",
+      "targets": [
+        "linked"
+      ]
+    },
+    "attribute": {
+      "catalog_df": 1,
+      "reason": "in_catalog",
+      "targets": [
+        "field"
+      ]
+    },
+    "attributevalue": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "property"
+      ]
+    },
+    "automated": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "smart"
+      ]
+    },
+    "bottom": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "footer"
+      ]
+    },
+    "browser": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "navigator"
+      ]
+    },
+    "canva": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "whiteboard"
+      ]
+    },
+    "capabilityflag": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "feature"
+      ]
+    },
+    "censorship": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "redaction"
+      ]
+    },
+    "change": {
+      "catalog_df": 4,
+      "reason": "verb",
+      "targets": [
+        "modification"
+      ]
+    },
+    "checkpoint": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "gating"
+      ]
+    },
+    "classification": {
+      "catalog_df": 21,
+      "reason": "in_catalog",
+      "targets": [
+        "category"
+      ]
+    },
+    "cleaner": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "pdcleaner"
+      ]
+    },
+    "code": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "key"
+      ]
+    },
+    "collection": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "bulkfetch"
+      ]
+    },
+    "complete": {
+      "catalog_df": 3,
+      "reason": "in_catalog",
+      "targets": [
+        "full"
+      ]
+    },
+    "completion": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "autocompletedata"
+      ]
+    },
+    "control": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "gadget"
+      ]
+    },
+    "copycat": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "duplicate"
+      ]
+    },
+    "current": {
+      "catalog_df": 1,
+      "reason": "function_word",
+      "targets": [
+        "latest"
+      ]
+    },
+    "dataset": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "bulkfetch"
+      ]
+    },
+    "default": {
+      "catalog_df": 33,
+      "reason": "in_catalog",
+      "targets": [
+        "reset"
+      ]
+    },
+    "deliveryline": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "pipeline"
+      ]
+    },
+    "descendant": {
+      "catalog_df": 5,
+      "reason": "in_catalog",
+      "targets": [
+        "descendant"
+      ]
+    },
+    "detail": {
+      "catalog_df": 7,
+      "reason": "in_catalog",
+      "targets": [
+        "expand"
+      ]
+    },
+    "directorypicker": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "groupuserpicker"
+      ]
+    },
+    "display": {
+      "catalog_df": 0,
+      "reason": "verb",
+      "targets": [
+        "view"
+      ]
+    },
+    "document": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "adf"
+      ]
+    },
+    "entry": {
+      "catalog_df": 1,
+      "reason": "in_catalog",
+      "targets": [
+        "access"
+      ]
+    },
+    "environment": {
+      "catalog_df": 3,
+      "reason": "in_catalog",
+      "targets": [
+        "context"
+      ]
+    },
+    "estimate": {
+      "catalog_df": 1,
+      "reason": "in_catalog",
+      "targets": [
+        "approximate"
+      ]
+    },
+    "exclusiveplan": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "planonly"
+      ]
+    },
+    "expert": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "advanced"
+      ]
+    },
+    "exposure": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "vulnerability"
+      ]
+    },
+    "favorite": {
+      "catalog_df": 3,
+      "reason": "in_catalog",
+      "targets": [
+        "favourite"
+      ]
+    },
+    "feedback": {
+      "catalog_df": 0,
+      "reason": "seed-incompatible",
+      "targets": [
+        "comment"
+      ]
+    },
+    "fieldscheme": {
+      "catalog_df": 15,
+      "reason": "in_catalog",
+      "targets": [
+        "fieldscheme"
+      ]
+    },
+    "footnote": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "footer"
+      ]
+    },
+    "framework": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "forge"
+      ]
+    },
+    "fresh": {
+      "catalog_df": 0,
+      "reason": "seed-incompatible",
+      "targets": [
+        "recent"
+      ]
+    },
+    "general": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "universal"
+      ]
+    },
+    "global": {
+      "catalog_df": 3,
+      "reason": "in_catalog",
+      "targets": [
+        "universal"
+      ]
+    },
+    "header": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "banner"
+      ]
+    },
+    "hour": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "timetracking"
+      ]
+    },
+    "icon": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "avatar"
+      ]
+    },
+    "identifier": {
+      "catalog_df": 1,
+      "reason": "in_catalog",
+      "targets": [
+        "ids",
+        "key"
+      ]
+    },
+    "inbox": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "email"
+      ]
+    },
+    "information": {
+      "catalog_df": 14,
+      "reason": "in_catalog",
+      "targets": [
+        "content"
+      ]
+    },
+    "inside": {
+      "catalog_df": 0,
+      "reason": "function_word",
+      "targets": [
+        "internal"
+      ]
+    },
+    "inventory": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "backlog"
+      ]
+    },
+    "iteration": {
+      "catalog_df": 0,
+      "reason": "seed-incompatible",
+      "targets": [
+        "sprint"
+      ]
+    },
+    "key": {
+      "catalog_df": 27,
+      "reason": "id_like",
+      "targets": [
+        "ids"
+      ]
+    },
+    "level": {
+      "catalog_df": 32,
+      "reason": "in_catalog",
+      "targets": [
+        "hierarchy"
+      ]
+    },
+    "listener": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "webhook"
+      ]
+    },
+    "log": {
+      "catalog_df": 2,
+      "reason": "verb",
+      "targets": [
+        "changelog"
+      ]
+    },
+    "lookup": {
+      "catalog_df": 1,
+      "reason": "verb",
+      "targets": [
+        "search"
+      ]
+    },
+    "manager": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "admin"
+      ]
+    },
+    "metric": {
+      "catalog_df": 3,
+      "reason": "in_catalog",
+      "targets": [
+        "dashboard"
+      ]
+    },
+    "module": {
+      "catalog_df": 5,
+      "reason": "in_catalog",
+      "targets": [
+        "component"
+      ]
+    },
+    "movement": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "transition"
+      ]
+    },
+    "multiple": {
+      "catalog_df": 1,
+      "reason": "in_catalog",
+      "targets": [
+        "multi"
+      ]
+    },
+    "new": {
+      "catalog_df": 0,
+      "reason": "seed-incompatible",
+      "targets": [
+        "create"
+      ]
+    },
+    "open": {
+      "catalog_df": 0,
+      "reason": "verb",
+      "targets": [
+        "unresolved"
+      ]
+    },
+    "operation": {
+      "catalog_df": 29,
+      "reason": "in_catalog",
+      "targets": [
+        "ops"
+      ]
+    },
+    "option": {
+      "catalog_df": 17,
+      "reason": "in_catalog",
+      "targets": [
+        "available"
+      ]
+    },
+    "order": {
+      "catalog_df": 1,
+      "reason": "in_catalog",
+      "targets": [
+        "rank"
+      ]
+    },
+    "owner": {
+      "catalog_df": 5,
+      "reason": "in_catalog",
+      "targets": [
+        "assignee"
+      ]
+    },
+    "panel": {
+      "catalog_df": 2,
+      "reason": "in_catalog",
+      "targets": [
+        "board"
+      ]
+    },
+    "panelet": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "tab"
+      ]
+    },
+    "parent": {
+      "catalog_df": 1,
+      "reason": "in_catalog",
+      "targets": [
+        "ancestor"
+      ]
+    },
+    "plural": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "multi"
+      ]
+    },
+    "preference": {
+      "catalog_df": 3,
+      "reason": "in_catalog",
+      "targets": [
+        "config",
+        "mypreference"
+      ]
+    },
+    "profile": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "avatar"
+      ]
+    },
+    "property": {
+      "catalog_df": 115,
+      "reason": "in_catalog",
+      "targets": [
+        "metadata"
+      ]
+    },
+    "provider": {
+      "catalog_df": 3,
+      "reason": "in_catalog",
+      "targets": [
+        "atlassian"
+      ]
+    },
+    "queue": {
+      "catalog_df": 1,
+      "reason": "in_catalog",
+      "targets": [
+        "backlog"
+      ]
+    },
+    "record": {
+      "catalog_df": 1,
+      "reason": "verb",
+      "targets": [
+        "data",
+        "history"
+      ]
+    },
+    "reference": {
+      "catalog_df": 2,
+      "reason": "in_catalog",
+      "targets": [
+        "link"
+      ]
+    },
+    "release": {
+      "catalog_df": 0,
+      "reason": "seed-incompatible",
+      "targets": [
+        "build"
+      ]
+    },
+    "removed": {
+      "catalog_df": 3,
+      "reason": "in_catalog",
+      "targets": [
+        "deleted"
+      ]
+    },
+    "reply": {
+      "catalog_df": 0,
+      "reason": "verb",
+      "targets": [
+        "comment"
+      ]
+    },
+    "repository": {
+      "catalog_df": 3,
+      "reason": "in_catalog",
+      "targets": [
+        "archive"
+      ]
+    },
+    "request": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "invite"
+      ]
+    },
+    "restart": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "reset"
+      ]
+    },
+    "restrictedplan": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "planonly"
+      ]
+    },
+    "review": {
+      "catalog_df": 4,
+      "reason": "in_catalog",
+      "targets": [
+        "auditing"
+      ]
+    },
+    "safe": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "sanitize"
+      ]
+    },
+    "sanitizer": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "pdcleaner"
+      ]
+    },
+    "schema": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "meta"
+      ]
+    },
+    "section": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "column"
+      ]
+    },
+    "selectorstate": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "switch"
+      ]
+    },
+    "setting": {
+      "catalog_df": 9,
+      "reason": "in_catalog",
+      "targets": [
+        "config"
+      ]
+    },
+    "site": {
+      "catalog_df": 2,
+      "reason": "in_catalog",
+      "targets": [
+        "instance"
+      ]
+    },
+    "software": {
+      "catalog_df": 10,
+      "reason": "in_catalog",
+      "targets": [
+        "app"
+      ]
+    },
+    "state": {
+      "catalog_df": 1,
+      "reason": "in_catalog",
+      "targets": [
+        "status"
+      ]
+    },
+    "storage": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "archive"
+      ]
+    },
+    "store": {
+      "catalog_df": 2,
+      "reason": "in_catalog",
+      "targets": [
+        "database"
+      ]
+    },
+    "suggestion": {
+      "catalog_df": 4,
+      "reason": "in_catalog",
+      "targets": [
+        "autocompletedata"
+      ]
+    },
+    "summary": {
+      "catalog_df": 0,
+      "reason": "seed-incompatible",
+      "targets": [
+        "report"
+      ]
+    },
+    "syntax": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "parse"
+      ]
+    },
+    "team": {
+      "catalog_df": 9,
+      "reason": "in_catalog",
+      "targets": [
+        "group"
+      ]
+    },
+    "theme": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "epic"
+      ]
+    },
+    "ticket": {
+      "catalog_df": 0,
+      "reason": "alias_conflict",
+      "targets": [
+        "issue"
+      ]
+    },
+    "toggle": {
+      "catalog_df": 2,
+      "reason": "verb",
+      "targets": [
+        "featureflag"
+      ]
+    },
+    "toolkit": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "forge"
+      ]
+    },
+    "trigger": {
+      "catalog_df": 0,
+      "reason": "verb",
+      "targets": [
+        "event"
+      ]
+    },
+    "unsubscribe": {
+      "catalog_df": 0,
+      "reason": "verb",
+      "targets": [
+        "unwatch"
+      ]
+    },
+    "upload": {
+      "catalog_df": 0,
+      "reason": "verb",
+      "targets": [
+        "attachment"
+      ]
+    },
+    "usability": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "accessible"
+      ]
+    },
+    "vendor": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "atlassian"
+      ]
+    },
+    "viewer": {
+      "catalog_df": 0,
+      "reason": "semantic-reject",
+      "targets": [
+        "read"
+      ]
+    },
+    "workspace": {
+      "catalog_df": 9,
+      "reason": "in_catalog",
+      "targets": [
+        "board"
+      ]
+    }
+  },
+  "review_input_sha256": "17efa0b87647cf89357fffe3c2aaf2f0effb24539ce1c44b399a0a574eb3a484",
+  "review_output_sha256": "c5ba256f8acd082febe06724d6646bff631e136dc437f4fa1528286117bd62f4",
+  "round": 2
+}

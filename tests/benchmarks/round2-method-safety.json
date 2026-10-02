@@ -1,0 +1,521 @@
+{
+  "generated_from": {
+    "inputs": {
+      "aliases": "c430e96177612510b94427fa80c1f98c2e6cb1b0e20872a4505964f5df055be3",
+      "bench": "c6660b57fcf445f3a941fbad359c888b1119ea765b7b8015fe929e21aec8862c",
+      "ranking": "3648e860a0ef8739d92bd1d88e305f46f7cbefb0dbc01230d95eaf6fbae8d555",
+      "verb_inventory": "d66317db7a6a3d047f30197791eefdb93448747b913544da7545136f91dbffc0"
+    },
+    "registry_fingerprint": "f3c2e9d48aa85c96ca62cdd84ff700cc2714c888cf4148b3a91c604c45b47b62",
+    "spec_sha256": {
+      "confluence": "b3d010b6438677d864495ce15828f57080ff72afe190efdf7f86f0f5140b700d",
+      "jira-platform": "3d0edfb02ff91873f99421de579182b6d66f07b804063e9ae458a30d6901a2db",
+      "jira-software": "cb7e24b331ad9b31944fa9a588f70d4ea60d74d1dfb52d39a59770230b79207a"
+    },
+    "tool_version": "round2.1"
+  },
+  "round": 2,
+  "rows": [
+    {
+      "allowed": [
+        "POST"
+      ],
+      "expected_methods": [
+        "POST"
+      ],
+      "id": "s-001",
+      "ok": true,
+      "verbs": [
+        "upload"
+      ]
+    },
+    {
+      "allowed": [
+        "POST"
+      ],
+      "expected_methods": [
+        "POST"
+      ],
+      "id": "s-002",
+      "ok": true,
+      "verbs": [
+        "create"
+      ]
+    },
+    {
+      "allowed": null,
+      "expected_methods": [
+        "POST"
+      ],
+      "id": "s-003",
+      "ok": true,
+      "verbs": []
+    },
+    {
+      "allowed": [
+        "POST",
+        "PUT"
+      ],
+      "expected_methods": [
+        "GET",
+        "POST"
+      ],
+      "id": "s-004",
+      "ok": true,
+      "verbs": [
+        "transition"
+      ]
+    },
+    {
+      "allowed": [
+        "PUT"
+      ],
+      "expected_methods": [
+        "PUT"
+      ],
+      "id": "s-005",
+      "ok": true,
+      "verbs": [
+        "update"
+      ]
+    },
+    {
+      "allowed": [
+        "GET"
+      ],
+      "expected_methods": [
+        "GET"
+      ],
+      "id": "s-006",
+      "ok": true,
+      "verbs": [
+        "get"
+      ]
+    },
+    {
+      "allowed": [
+        "POST"
+      ],
+      "expected_methods": [
+        "POST"
+      ],
+      "id": "s-007",
+      "ok": true,
+      "verbs": [
+        "create"
+      ]
+    },
+    {
+      "allowed": null,
+      "expected_methods": [
+        "GET",
+        "POST"
+      ],
+      "id": "s-008",
+      "ok": true,
+      "verbs": []
+    },
+    {
+      "allowed": null,
+      "expected_methods": [
+        "POST"
+      ],
+      "id": "s-009",
+      "ok": true,
+      "verbs": []
+    },
+    {
+      "allowed": [
+        "POST"
+      ],
+      "expected_methods": [
+        "POST"
+      ],
+      "id": "s-010",
+      "ok": true,
+      "verbs": [
+        "attach"
+      ]
+    },
+    {
+      "allowed": [
+        "POST",
+        "PUT"
+      ],
+      "expected_methods": [
+        "PUT"
+      ],
+      "id": "s-011",
+      "ok": true,
+      "verbs": [
+        "change"
+      ]
+    },
+    {
+      "allowed": [
+        "POST"
+      ],
+      "expected_methods": [
+        "POST"
+      ],
+      "id": "s-012",
+      "ok": true,
+      "verbs": [
+        "post",
+        "comment"
+      ]
+    },
+    {
+      "allowed": [
+        "POST"
+      ],
+      "expected_methods": [
+        "POST"
+      ],
+      "id": "s-013",
+      "ok": true,
+      "verbs": [
+        "create"
+      ]
+    },
+    {
+      "allowed": [
+        "GET"
+      ],
+      "expected_methods": [
+        "GET"
+      ],
+      "id": "s-014",
+      "ok": true,
+      "verbs": [
+        "fetch"
+      ]
+    },
+    {
+      "allowed": [
+        "POST"
+      ],
+      "expected_methods": [
+        "GET",
+        "POST"
+      ],
+      "id": "s-015",
+      "ok": true,
+      "verbs": [
+        "run",
+        "query"
+      ]
+    },
+    {
+      "allowed": [
+        "POST"
+      ],
+      "expected_methods": [
+        "POST"
+      ],
+      "id": "s-016",
+      "ok": true,
+      "verbs": [
+        "add"
+      ]
+    },
+    {
+      "allowed": [
+        "GET"
+      ],
+      "expected_methods": [
+        "GET"
+      ],
+      "id": "s-017",
+      "ok": true,
+      "verbs": [
+        "list"
+      ]
+    },
+    {
+      "allowed": [
+        "DELETE"
+      ],
+      "expected_methods": [
+        "DELETE"
+      ],
+      "id": "s-018",
+      "ok": true,
+      "verbs": [
+        "delete"
+      ]
+    },
+    {
+      "allowed": [
+        "GET"
+      ],
+      "expected_methods": [
+        "GET"
+      ],
+      "id": "s-019",
+      "ok": true,
+      "verbs": [
+        "get"
+      ]
+    },
+    {
+      "allowed": [
+        "PUT"
+      ],
+      "expected_methods": [
+        "PUT"
+      ],
+      "id": "s-020",
+      "ok": true,
+      "verbs": [
+        "update"
+      ]
+    },
+    {
+      "allowed": [
+        "POST",
+        "PUT"
+      ],
+      "expected_methods": [
+        "POST"
+      ],
+      "id": "s-021",
+      "ok": true,
+      "verbs": [
+        "move"
+      ]
+    },
+    {
+      "allowed": [
+        "PUT"
+      ],
+      "expected_methods": [
+        "PUT"
+      ],
+      "id": "s-022",
+      "ok": true,
+      "verbs": [
+        "update"
+      ]
+    },
+    {
+      "allowed": [
+        "GET"
+      ],
+      "expected_methods": [
+        "GET"
+      ],
+      "id": "s-023",
+      "ok": true,
+      "verbs": [
+        "get"
+      ]
+    },
+    {
+      "allowed": [
+        "DELETE",
+        "POST"
+      ],
+      "expected_methods": [
+        "POST"
+      ],
+      "id": "s-024",
+      "ok": true,
+      "verbs": [
+        "leave"
+      ]
+    },
+    {
+      "allowed": [
+        "DELETE"
+      ],
+      "expected_methods": [
+        "DELETE"
+      ],
+      "id": "s-025",
+      "ok": true,
+      "verbs": [
+        "remove"
+      ]
+    },
+    {
+      "allowed": [
+        "POST",
+        "PUT"
+      ],
+      "expected_methods": [
+        "PUT"
+      ],
+      "id": "s-026",
+      "ok": true,
+      "verbs": [
+        "revise"
+      ]
+    },
+    {
+      "allowed": [
+        "GET"
+      ],
+      "expected_methods": [
+        "GET"
+      ],
+      "id": "s-027",
+      "ok": true,
+      "verbs": [
+        "show"
+      ]
+    },
+    {
+      "allowed": [
+        "POST"
+      ],
+      "expected_methods": [
+        "POST"
+      ],
+      "id": "s-028",
+      "ok": true,
+      "verbs": [
+        "publish"
+      ]
+    },
+    {
+      "allowed": [
+        "DELETE"
+      ],
+      "expected_methods": [
+        "DELETE"
+      ],
+      "id": "s-029",
+      "ok": true,
+      "verbs": [
+        "discard"
+      ]
+    },
+    {
+      "allowed": [
+        "GET"
+      ],
+      "expected_methods": [
+        "GET"
+      ],
+      "id": "s-030",
+      "ok": true,
+      "verbs": [
+        "show"
+      ]
+    },
+    {
+      "allowed": [
+        "POST",
+        "PUT"
+      ],
+      "expected_methods": [
+        "POST"
+      ],
+      "id": "s-031",
+      "ok": true,
+      "verbs": [
+        "set"
+      ]
+    },
+    {
+      "allowed": [
+        "POST",
+        "PUT"
+      ],
+      "expected_methods": [
+        "PUT"
+      ],
+      "id": "s-032",
+      "ok": true,
+      "verbs": [
+        "revise"
+      ]
+    },
+    {
+      "allowed": null,
+      "expected_methods": [
+        "GET"
+      ],
+      "id": "s-033",
+      "ok": true,
+      "verbs": []
+    },
+    {
+      "allowed": [
+        "DELETE"
+      ],
+      "expected_methods": [
+        "DELETE"
+      ],
+      "id": "s-034",
+      "ok": true,
+      "verbs": [
+        "remove"
+      ]
+    },
+    {
+      "allowed": null,
+      "expected_methods": [
+        "POST"
+      ],
+      "id": "s-035",
+      "ok": true,
+      "verbs": []
+    },
+    {
+      "allowed": [
+        "POST",
+        "PUT"
+      ],
+      "expected_methods": [
+        "PUT"
+      ],
+      "id": "s-036",
+      "ok": true,
+      "verbs": [
+        "rewrite"
+      ]
+    },
+    {
+      "allowed": [
+        "DELETE"
+      ],
+      "expected_methods": [
+        "DELETE"
+      ],
+      "id": "s-037",
+      "ok": true,
+      "verbs": [
+        "trash"
+      ]
+    },
+    {
+      "allowed": [
+        "GET"
+      ],
+      "expected_methods": [
+        "GET"
+      ],
+      "id": "s-038",
+      "ok": true,
+      "verbs": [
+        "show"
+      ]
+    },
+    {
+      "allowed": [
+        "GET"
+      ],
+      "expected_methods": [
+        "GET"
+      ],
+      "id": "s-039",
+      "ok": true,
+      "verbs": [
+        "browse"
+      ]
+    }
+  ],
+  "violations": 0
+}

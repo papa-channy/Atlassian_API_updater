@@ -1,0 +1,399 @@
+{
+  "candidates": {
+    "attached": {
+      "allowed_targets": [
+        "attachment",
+        "page"
+      ],
+      "catalog_df": 0,
+      "seed_ids": [
+        "s-038"
+      ],
+      "targets_by_seed": {
+        "s-038": [
+          "attachment",
+          "page"
+        ]
+      }
+    },
+    "configuration": {
+      "allowed_targets": [
+        "project"
+      ],
+      "catalog_df": 32,
+      "seed_ids": [
+        "s-026"
+      ],
+      "targets_by_seed": {
+        "s-026": [
+          "project"
+        ]
+      }
+    },
+    "content": {
+      "allowed_targets": [
+        "page"
+      ],
+      "catalog_df": 71,
+      "seed_ids": [
+        "s-005"
+      ],
+      "targets_by_seed": {
+        "s-005": [
+          "page"
+        ]
+      }
+    },
+    "date": {
+      "allowed_targets": [],
+      "catalog_df": 0,
+      "seed_ids": [
+        "s-032"
+      ],
+      "targets_by_seed": {
+        "s-032": []
+      }
+    },
+    "detail": {
+      "allowed_targets": [
+        "project"
+      ],
+      "catalog_df": 7,
+      "seed_ids": [
+        "s-026"
+      ],
+      "targets_by_seed": {
+        "s-026": [
+          "project"
+        ]
+      }
+    },
+    "draft": {
+      "allowed_targets": [
+        "page"
+      ],
+      "catalog_df": 14,
+      "seed_ids": [
+        "s-035"
+      ],
+      "targets_by_seed": {
+        "s-035": [
+          "page"
+        ]
+      }
+    },
+    "entry": {
+      "allowed_targets": [
+        "blog",
+        "blogpost",
+        "issue",
+        "worklog"
+      ],
+      "catalog_df": 1,
+      "seed_ids": [
+        "s-030",
+        "s-036"
+      ],
+      "targets_by_seed": {
+        "s-030": [
+          "issue",
+          "worklog"
+        ],
+        "s-036": [
+          "blog",
+          "blogpost"
+        ]
+      }
+    },
+    "exist": {
+      "allowed_targets": [],
+      "catalog_df": 1,
+      "seed_ids": [
+        "s-033"
+      ],
+      "targets_by_seed": {
+        "s-033": []
+      }
+    },
+    "feedback": {
+      "allowed_targets": [
+        "issue"
+      ],
+      "catalog_df": 0,
+      "seed_ids": [
+        "s-024"
+      ],
+      "targets_by_seed": {
+        "s-024": [
+          "issue"
+        ]
+      }
+    },
+    "fresh": {
+      "allowed_targets": [
+        "page"
+      ],
+      "catalog_df": 0,
+      "seed_ids": [
+        "s-035"
+      ],
+      "targets_by_seed": {
+        "s-035": [
+          "page"
+        ]
+      }
+    },
+    "iteration": {
+      "allowed_targets": [],
+      "catalog_df": 0,
+      "seed_ids": [
+        "s-032"
+      ],
+      "targets_by_seed": {
+        "s-032": []
+      }
+    },
+    "multipart": {
+      "allowed_targets": [
+        "attachment",
+        "issue"
+      ],
+      "catalog_df": 0,
+      "seed_ids": [
+        "s-003"
+      ],
+      "targets_by_seed": {
+        "s-003": [
+          "attachment",
+          "issue"
+        ]
+      }
+    },
+    "new": {
+      "allowed_targets": [
+        "page",
+        "project",
+        "version"
+      ],
+      "catalog_df": 0,
+      "seed_ids": [
+        "s-013",
+        "s-028"
+      ],
+      "targets_by_seed": {
+        "s-013": [
+          "page"
+        ],
+        "s-028": [
+          "project",
+          "version"
+        ]
+      }
+    },
+    "planning": {
+      "allowed_targets": [],
+      "catalog_df": 0,
+      "seed_ids": [
+        "s-031"
+      ],
+      "targets_by_seed": {
+        "s-031": []
+      }
+    },
+    "release": {
+      "allowed_targets": [
+        "project",
+        "version"
+      ],
+      "catalog_df": 0,
+      "seed_ids": [
+        "s-028"
+      ],
+      "targets_by_seed": {
+        "s-028": [
+          "project",
+          "version"
+        ]
+      }
+    },
+    "space": {
+      "allowed_targets": [
+        "page"
+      ],
+      "catalog_df": 33,
+      "seed_ids": [
+        "s-013"
+      ],
+      "targets_by_seed": {
+        "s-013": [
+          "page"
+        ]
+      }
+    },
+    "starred": {
+      "allowed_targets": [
+        "favorite",
+        "favourite",
+        "filter"
+      ],
+      "catalog_df": 0,
+      "seed_ids": [
+        "s-027"
+      ],
+      "targets_by_seed": {
+        "s-027": [
+          "favorite",
+          "favourite",
+          "filter"
+        ]
+      }
+    },
+    "status": {
+      "allowed_targets": [
+        "do",
+        "issue"
+      ],
+      "catalog_df": 20,
+      "seed_ids": [
+        "s-004"
+      ],
+      "targets_by_seed": {
+        "s-004": [
+          "do",
+          "issue"
+        ]
+      }
+    },
+    "summary": {
+      "allowed_targets": [
+        "issue"
+      ],
+      "catalog_df": 0,
+      "seed_ids": [
+        "s-022"
+      ],
+      "targets_by_seed": {
+        "s-022": [
+          "issue"
+        ]
+      }
+    },
+    "time": {
+      "allowed_targets": [
+        "issue",
+        "worklog"
+      ],
+      "catalog_df": 5,
+      "seed_ids": [
+        "s-030"
+      ],
+      "targets_by_seed": {
+        "s-030": [
+          "issue",
+          "worklog"
+        ]
+      }
+    },
+    "uploaded": {
+      "allowed_targets": [
+        "attachment",
+        "issue"
+      ],
+      "catalog_df": 0,
+      "seed_ids": [
+        "s-029"
+      ],
+      "targets_by_seed": {
+        "s-029": [
+          "attachment",
+          "issue"
+        ]
+      }
+    },
+    "workspace": {
+      "allowed_targets": [
+        "page",
+        "space"
+      ],
+      "catalog_df": 9,
+      "seed_ids": [
+        "s-039"
+      ],
+      "targets_by_seed": {
+        "s-039": [
+          "page",
+          "space"
+        ]
+      }
+    }
+  },
+  "excluded": {
+    "add": "verb",
+    "agile": "product_hint",
+    "assignee": "expected_vocab",
+    "attach": "verb",
+    "attachment": "expected_vocab",
+    "backlog": "product_hint",
+    "blog": "expected_vocab",
+    "board": "product_hint",
+    "browse": "verb",
+    "change": "verb",
+    "comment": "verb",
+    "confluence": "product_hint",
+    "create": "verb",
+    "delete": "verb",
+    "discard": "verb",
+    "fetch": "verb",
+    "file": "existing_alias",
+    "get": "verb",
+    "id": "id_like",
+    "inside": "function_word",
+    "issue": "existing_alias",
+    "jira": "product_hint",
+    "jql": "existing_alias",
+    "key": "existing_alias",
+    "leave": "verb",
+    "list": "verb",
+    "move": "verb",
+    "my": "function_word",
+    "page": "existing_alias",
+    "post": "verb",
+    "project": "expected_vocab",
+    "publish": "verb",
+    "query": "verb",
+    "remove": "verb",
+    "revise": "verb",
+    "rewrite": "verb",
+    "run": "verb",
+    "search": "verb",
+    "set": "verb",
+    "show": "verb",
+    "sprint": "product_hint",
+    "ticket": "existing_alias",
+    "title": "expected_vocab",
+    "transition": "verb",
+    "trash": "verb",
+    "up": "function_word",
+    "update": "verb",
+    "upload": "verb",
+    "watcher": "expected_vocab",
+    "which": "function_word",
+    "wiki": "product_hint"
+  },
+  "generated_from": {
+    "inputs": {
+      "aliases": "20d94582413d6587ab2c68fa1c67552ea10fbbe931c1a77eb34a71e4dff55918",
+      "bench": "c6660b57fcf445f3a941fbad359c888b1119ea765b7b8015fe929e21aec8862c",
+      "ranking": "3648e860a0ef8739d92bd1d88e305f46f7cbefb0dbc01230d95eaf6fbae8d555",
+      "verb_inventory": "d66317db7a6a3d047f30197791eefdb93448747b913544da7545136f91dbffc0"
+    },
+    "registry_fingerprint": "f3c2e9d48aa85c96ca62cdd84ff700cc2714c888cf4148b3a91c604c45b47b62",
+    "spec_sha256": {
+      "confluence": "b3d010b6438677d864495ce15828f57080ff72afe190efdf7f86f0f5140b700d",
+      "jira-platform": "3d0edfb02ff91873f99421de579182b6d66f07b804063e9ae458a30d6901a2db",
+      "jira-software": "cb7e24b331ad9b31944fa9a588f70d4ea60d74d1dfb52d39a59770230b79207a"
+    },
+    "tool_version": "round2.1"
+  },
+  "round": 2
+}
