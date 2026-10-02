@@ -86,6 +86,22 @@ class TestCandidates(unittest.TestCase):
         # No inventory verb present -> R5 stays, but neither token should trigger R6.
         self.assertEqual(act.classify(b, CAT2, RANK, ALIASES)["s-005"], ["R5"])
 
+    def test_candidates_exclude_what_classify_treats_as_known(self):
+        """Review I-1: s-014 "fetch page by id" - id is id-like, so it is neither a candidate nor an R6 trigger."""
+        b = {"seed": [seed(14, "fetch page by id", G), seed(15, "list rest api 2024 boards", D)], "regression_negative": []}
+        verbs = {**VERBS, "fetch": ["GET"]}
+        doc = act.candidates(b, CAT2, {**RANK, "verb_methods": verbs}, ALIASES)
+        self.assertEqual(doc["candidates"], {})
+        self.assertEqual(doc["excluded"]["id"], "id_like"); self.assertEqual(doc["excluded"]["rest"], "path_noise")
+        self.assertEqual(doc["excluded"]["2024"], "digit")
+        cls = act.classify(b, CAT2, {**RANK, "verb_methods": verbs}, ALIASES)
+        self.assertEqual((cls["s-014"], cls["s-015"]), ([], []))
+        for bench in (BENCH, b):                          # a seed has a candidate word iff classify marks it R6
+            d, c = act.candidates(bench, CAT2, RANK, ALIASES), act.classify(bench, CAT2, RANK, ALIASES)
+            with_cand = {sid for w in d["candidates"].values() for sid in w["seed_ids"]}
+            self.assertEqual(with_cand, {sid for sid, k in c.items() if "R6" in k})
+
+
 class TestLexiconGate(unittest.TestCase):
     def test_gate_keeps_compatible_and_rejects_incompatible(self):
         lex = {"lexicon": {"workspace": ["page"], "document": ["issue"], "note": ["comment"]}, "rejected": {}}

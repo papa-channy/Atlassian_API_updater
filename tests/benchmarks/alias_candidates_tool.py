@@ -133,7 +133,9 @@ def _identifiers(internal) -> frozenset:
 
 
 def candidates(bench, internal, ranking_raw, aliases_raw, round=2) -> dict:
-    """spec §7.1: deterministic seed-derived candidate words with per-seed targets."""
+    """spec §7.1: deterministic seed-derived candidate words with per-seed targets. Excludes exactly the tokens that
+    classify() treats as known (id-like, path noise and digit tokens included), so a seed has a candidate word iff
+    it is R6."""
     by_key = {op["key"]: op for op in internal}
     verbs, noise, hints = ranking_raw["verb_methods"], frozenset(ranking_raw["path_noise"]), ranking_raw["product_hints"]
     idents = _identifiers(internal)
@@ -142,9 +144,10 @@ def candidates(bench, internal, ranking_raw, aliases_raw, round=2) -> dict:
     for rec in sorted(bench["seed"], key=lambda r: r["id"]):
         vocab = expected_vocab(rec, by_key, verbs, noise, hints)
         for tok in norm_tokens(rec["query"]):
-            reason = ("verb" if tok in verbs else "function_word" if tok in FUNCTION_WORDS else "product_hint" if tok in hints
+            reason = ("verb" if tok in verbs else "function_word" if tok in FUNCTION_WORDS or tok in STOPWORDS else "product_hint" if tok in hints
                       else "existing_alias" if tok in alias_words else "expected_vocab" if tok in vocab
-                      else "identifier" if tok in idents else None)
+                      else "identifier" if tok in idents else "id_like" if tok in ID_LIKE
+                      else "path_noise" if tok in noise else "digit" if tok.isdigit() else None)
             if reason:
                 reasons.setdefault(tok, reason); continue
             c = cands.setdefault(tok, {"seed_ids": [], "targets_by_seed": {}, "allowed_targets": [], "catalog_df": df.get(tok, 0)})

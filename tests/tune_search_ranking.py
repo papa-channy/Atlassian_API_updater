@@ -167,11 +167,13 @@ def strip_round_entries(raw, round) -> dict:
 
 def propose_aliases(eval_fn, bench, base_raw, cands, budget=BUDGET):
     """spec §7.2: seeds in id order; each seed is re-evaluated against the working state first (resolved_by_prior_change),
-    then the budget is checked; candidate words (sorted) x that seed's targets (sorted); direct alias first, then
-    one-context rules; accept the first trial that fixes the seed without breaking any passing record."""
+    then seeds whose bench failure_classes lack R6 are skipped (not_r6: §7.2 requires failure_classes ∋ R6, so a
+    change for such a seed could never be adopted), then the budget is checked; candidate words (sorted) x that seed's
+    targets (sorted); direct alias first, then one-context rules; accept the first trial that fixes the seed without
+    breaking any passing record."""
     working = copy.deepcopy(base_raw)
     seed_fail, _ = eval_fn(working)
-    patch = {"resolved_by_prior_change": [], "unresolved": [], "trials": 0}
+    patch = {"resolved_by_prior_change": [], "not_r6": [], "unresolved": [], "trials": 0}
     accepted_n, by_id = 0, {r["id"]: r for r in bench["seed"]}
 
     def ok(trial, sid, cur_fail, cur_reg):
@@ -183,6 +185,8 @@ def propose_aliases(eval_fn, bench, base_raw, cands, budget=BUDGET):
         cur_fail, cur_reg = eval_fn(working)
         if sid not in cur_fail:
             patch["resolved_by_prior_change"].append(sid); continue
+        if "R6" not in (by_id[sid].get("failure_classes") or ()):
+            patch["not_r6"].append(sid); continue
         if accepted_n >= budget:
             patch["unresolved"].append(sid); continue
         words = sorted(w for w, c in cands.items() if sid in c["seed_ids"])
@@ -217,8 +221,9 @@ def propose_aliases(eval_fn, bench, base_raw, cands, budget=BUDGET):
     return working, patch
 
 
-def validate_alias_change(before_raw, after_raw, cands, queries, budget=BUDGET) -> list:
-    """Pure shape check (spec §7.2); replay equality is verify_replay."""
+def validate_alias_change(before_raw, after_raw, cands, queries, classes, budget=BUDGET) -> list:
+    """Pure shape check (spec §7.2); replay equality is verify_replay. classes: {seed_id: bench failure_classes};
+    every added note and its seed must carry R6."""
     out = [f"top-level {k!r} changed" for k in ("version", "alias_damping", "rule_damping") if before_raw.get(k) != after_raw.get(k)]
     out += [f"unexpected top-level key {k!r}" for k in after_raw if k not in before_raw]
     for w, v in before_raw["aliases"].items():
@@ -238,6 +243,8 @@ def validate_alias_change(before_raw, after_raw, cands, queries, budget=BUDGET) 
         if cw not in cands:
             out.append(f"{key}: candidate_word {cw!r} not in frozen candidates"); continue
         per_seed[sid] = per_seed.get(sid, 0) + 1
+        if "R6" not in (note.get("failure_classes") or ()) or "R6" not in (classes.get(sid) or ()):
+            out.append(f"{key}: seed {sid!r} is not R6 (note and bench failure_classes must contain R6)")
         if sid not in cands[cw]["seed_ids"]:
             out.append(f"{key}: seed {sid!r} is not a seed of candidate {cw!r}"); continue
         if key.startswith("rule:"):
@@ -401,7 +408,8 @@ def main(argv=None) -> int:
             raise SystemExit(f"error: registry fingerprint {fp} != round{ROUND}_seal / alias_candidates provenance; wrong snapshot?")
         evaluate_fn = lambda point, raw: evaluate_point(state, rp, point, bench, _alias_policy(raw))
         results, selected, working, patch, seed_res, reg_res = run_pipeline(evaluate_fn, bench, aliases_raw, cands_doc, rp.tuning_grid, dict(rp.baseline))
-        violations = validate_alias_change(aliases_raw, working, cands_doc["candidates"], {r["id"]: r["query"] for r in bench["seed"]})
+        violations = validate_alias_change(aliases_raw, working, cands_doc["candidates"], {r["id"]: r["query"] for r in bench["seed"]},
+                                           {r["id"]: r["failure_classes"] for r in bench["seed"]})
         if violations:
             raise SystemExit("\n".join(f"VIOLATION {v}" for v in violations))
         for f in seed_res["failed"] + reg_res["failed"]:

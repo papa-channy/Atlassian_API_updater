@@ -466,7 +466,8 @@ class TestRound2AliasesAndLog(unittest.TestCase):
         from tests import tune_search_ranking as tune
         raw = json.loads(ALIASES.read_text(encoding="utf-8")); cands = json.loads(CANDIDATES.read_text(encoding="utf-8"))["candidates"]
         b = json.loads(BENCH.read_text(encoding="utf-8")); queries = {r["id"]: r["query"] for r in b["seed"]}
-        self.assertEqual(tune.validate_alias_change(tune.strip_round_entries(raw, rnd), raw, cands, queries), [])
+        classes = {r["id"]: r["failure_classes"] for r in b["seed"]}
+        self.assertEqual(tune.validate_alias_change(tune.strip_round_entries(raw, rnd), raw, cands, queries, classes), [])
         seeds = {r["id"]: r for r in b["seed"]}
         for n in raw["notes"].values():
             if n["origin"] == f"round{rnd}":

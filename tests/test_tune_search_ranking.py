@@ -74,9 +74,11 @@ CANDS = {"workspace": {"seed_ids": ["s-001"], "targets_by_seed": {"s-001": ["pag
                       "allowed_targets": ["comment", "issue"], "catalog_df": 0}}
 BASE_RAW = {"version": 1, "alias_damping": 0.5, "rule_damping": 1.0, "aliases": {"ticket": ["issue"]}, "rules": [],
             "notes": {"ticket": {"origin": "phase2.5", "seed_query_id": None, "failure_classes": [], "evidence": "x"}}}
-BENCH2 = {"seed": [{"id": "s-001", "query": "browse pages inside this workspace"}, {"id": "s-002", "query": "leave feedback on this ticket"},
-                   {"id": "s-003", "query": "read feedback on the issue"}], "regression_negative": [{"id": "rn-001", "query": "x"}]}
+BENCH2 = {"seed": [{"id": "s-001", "query": "browse pages inside this workspace", "failure_classes": ["R6"]},
+                   {"id": "s-002", "query": "leave feedback on this ticket", "failure_classes": ["R5", "R6"]},
+                   {"id": "s-003", "query": "read feedback on the issue", "failure_classes": ["R6"]}], "regression_negative": [{"id": "rn-001", "query": "x"}]}
 QUERIES = {r["id"]: r["query"] for r in BENCH2["seed"]}
+CLASSES = {r["id"]: r["failure_classes"] for r in BENCH2["seed"]}
 
 
 def fake_eval(rules):
@@ -119,6 +121,14 @@ class TestProposer(unittest.TestCase):
         _, patch1 = tune.propose_aliases(fn, BENCH2, BASE_RAW, CANDS, budget=1)
         self.assertEqual(patch1["aliases"], {"workspace": ["page"]}); self.assertEqual(patch1["unresolved"], ["s-002", "s-003"])
 
+    def test_seed_without_r6_is_skipped(self):
+        """Review I-1 (s-014 "fetch page by id" shape): a failing seed whose bench classes lack R6 never gets a change."""
+        bench = json.loads(json.dumps(BENCH2)); bench["seed"][0]["failure_classes"] = ["R5"]
+        fn = fake_eval({("workspace", "page"): ["s-001"], ("feedback", "comment"): ["s-002", "s-003"]})
+        _, patch = tune.propose_aliases(fn, bench, BASE_RAW, CANDS)
+        self.assertEqual(patch["aliases"], {"feedback": ["comment"]}); self.assertEqual(patch["not_r6"], ["s-001"])
+        self.assertEqual(patch["trials"], 1)                                  # no trial was spent on s-001
+
     def test_per_seed_one_and_used_word_skips_direct(self):
         fn = fake_eval({("workspace", "page"): ["s-001"], ("feedback", "comment"): ["s-002"], ("feedback", "issue"): ["s-003"]})
         _, patch = tune.propose_aliases(fn, BENCH2, BASE_RAW, CANDS)
@@ -133,7 +143,7 @@ class TestValidator(unittest.TestCase):
         return raw
 
     def v(self, after, **kw):
-        return tune.validate_alias_change(BASE_RAW, after, CANDS, QUERIES, **kw)
+        return tune.validate_alias_change(BASE_RAW, after, CANDS, QUERIES, CLASSES, **kw)
 
     def test_accepts_proposer_shape(self):
         self.assertEqual(self.v(self.after(workspace=("page", "s-001"))), [])
@@ -159,6 +169,10 @@ class TestValidator(unittest.TestCase):
         rule = json.loads(json.dumps(BASE_RAW)); rule["rules"] = [{"when_all": ["workspace", "browse", "page"], "add": ["page"]}]
         rule["notes"]["rule:0"] = tune.round2_note("workspace", "s-001", "page", "rule")
         self.assertTrue(any("context" in m for m in self.v(rule)))
+        not_r6 = self.after(workspace=("page", "s-001"))
+        self.assertTrue(any("not R6" in m for m in tune.validate_alias_change(BASE_RAW, not_r6, CANDS, QUERIES, {**CLASSES, "s-001": ["R5"]})))
+        bad_note = self.after(workspace=("page", "s-001")); bad_note["notes"]["workspace"]["failure_classes"] = []
+        self.assertTrue(any("not R6" in m for m in self.v(bad_note)))
         rule2 = json.loads(json.dumps(BASE_RAW)); rule2["rules"] = [{"when_all": ["workspace", "sprint"], "add": ["page"]}]
         rule2["notes"]["rule:0"] = tune.round2_note("workspace", "s-001", "page", "rule")
         self.assertTrue(any("context" in m for m in self.v(rule2)))                                   # sprint not in the query
