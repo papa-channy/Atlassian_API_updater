@@ -348,3 +348,42 @@ class TestFinalArtifact(unittest.TestCase):
             self.assertNotIn("sealed", res, sect)
             self.assertTrue({"passed", "failed", "total"} <= set(res), sect)
             self.assertEqual(res["total"], total, sect)
+
+
+CANDIDATES = RANKING.parent / "alias_candidates.json"
+TUNING_LOG_R2 = pathlib.Path(__file__).resolve().parent / "search-tuning-round2.jsonl"
+
+
+class TestRound2AliasesAndLog(unittest.TestCase):
+    def test_round2_aliases_within_frozen_candidates(self):
+        if not CANDIDATES.exists():
+            print("alias_candidates.json absent: checked after commit T"); return
+        from tests import tune_search_ranking as tune
+        raw = json.loads(ALIASES.read_text(encoding="utf-8")); cands = json.loads(CANDIDATES.read_text(encoding="utf-8"))["candidates"]
+        b = json.loads(BENCH.read_text(encoding="utf-8")); queries = {r["id"]: r["query"] for r in b["seed"]}
+        self.assertEqual(tune.validate_alias_change(tune.strip_round_entries(raw, 2), raw, cands, queries), [])
+        seeds = {r["id"]: r for r in b["seed"]}
+        for n in raw["notes"].values():
+            if n["origin"] == "round2":
+                self.assertIn("R6", seeds[n["seed_query_id"]]["failure_classes"])
+
+    def test_round2_tuning_log_one_way(self):
+        if not TUNING_LOG_R2.exists():
+            print("round 2 tuning log absent: checked after tuning"); return
+        from tests import tune_search_ranking as tune
+        lines = [json.loads(l) for l in TUNING_LOG_R2.read_text(encoding="utf-8").splitlines() if l.strip()]
+        self.assertEqual(len({l["run_id"] for l in lines}), len(lines))
+        for l in lines:
+            self.assertEqual(l["round"], 2); self.assertEqual(l["events"], list(tune.EVENTS))
+            self.assertRegex(l["baseline_sha256"], r"^[0-9a-f]{64}$"); self.assertRegex(l["result_sha256"], r"^[0-9a-f]{64}$")
+            self.assertIn(l["status"], ("pending", "adopted", "failed", "rejected")); self.assertEqual(l["adopted"], l["status"] == "adopted")
+            self.assertEqual(l["run_log_sha256"], ev.canonical_sha256(tune.log_core(l)))
+        self.assertEqual(len({l["baseline_sha256"] for l in lines}), 1)
+        valid = [l for l in lines if not l["tuning_failed"]]
+        self.assertLessEqual(len({l["result_sha256"] for l in valid}), 1)
+        adopted = [l for l in lines if l["adopted"]]
+        self.assertLessEqual(len(adopted), 1)
+        if adopted:
+            self.assertEqual(adopted[0], valid[0])
+            raw = json.loads(RANKING.read_text(encoding="utf-8")); self.assertEqual(adopted[0]["constants_selected"], raw["constants"])
+            self.assertEqual(tune._current_result_sha256(), adopted[0]["result_sha256"])     # files reproduce the adopted result
