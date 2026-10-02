@@ -1,5 +1,7 @@
 # Search Quality Round 2 Implementation Plan
 
+> **v10 (2026-10-02, after the H whole-branch code review; spec v1.14):** Task 8 gains Step 3b (fixture-compatibility check, narrow-only); the tuning pipeline treats the r0 fixture suite as a hard constraint (`fixture_fail`); brief/prompt freeze hashes are plain `sha256` of file bytes (= `shasum -a 256`), so Task 12's brief-sha comparison needs no conversion; `tests/benchmarks/round2_simulation.py` (T→B→C→D on a temp copy) must PASS before `housekeeping_commit` is declared. Rulings in the SDD ledger.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Repeat the sealed-evaluation procedure with vocabulary-only changes (general verb inventory, general concept lexicon, seed-derived alias candidates), all frozen before a fresh hidden set is generated, tune once through a deterministic one-way pipeline, and measure the sealed set exactly once.
@@ -2243,6 +2245,10 @@ python tests/benchmarks/alias_candidates_tool.py method-safety --cache-dir $S --
 ```
 
 Rule (fixed point): **whenever `verb_methods` changes for any reason** (a `VIOLATION`, or a `REVIEW` line the controller decides to widen), re-run BOTH commands. Finalize only when a full pass ends with the inventory unchanged AND `violations == 0`. `REVIEW` lines are diagnostic (verb vs noun usage); every widen/no-widen decision is ledgered. `tests/benchmarks/round2-method-safety.json` (the final pass, `violations: 0`, provenance with `inputs.verb_inventory`) is committed at T; the test `test_round2_method_safety_artifact` (Task 10) checks `violations == 0`, `generated_from.registry_fingerprint == freeze.source_registry_fingerprint` and `generated_from.inputs.verb_inventory == freeze.verb_inventory_sha256`. Then `python -m unittest discover -s tests -t .` (the §6 parity test added in Task 10 must see the same inventory in the spec block; update the spec block in the T commit if the inventory was widened).
+
+- [ ] **Step 3b: Fixture-compatibility check (spec v1.14)**
+
+Run `python -m unittest tests.intelligence.test_search tests.test_diag_search_queries` after method-safety passes. If an inventory row breaks an r0 fixture (23/23 seed, 6/6 negative), **narrow** that verb toward its Round 1 value and re-run method-safety (Step 3). Narrowing only; if method-safety wants to widen the same verb that the fixtures need narrow, STOP and ask the user. Spec §6 already carries `update: ["PUT"]` for this reason (fixture s-022). Ledger every narrowing with the failing fixture id.
 
 - [ ] **Step 4: Finalize**
 
