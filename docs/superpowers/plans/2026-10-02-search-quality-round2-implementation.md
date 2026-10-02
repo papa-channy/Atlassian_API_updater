@@ -2458,7 +2458,11 @@ D = pathlib.Path("tools/atlassian_docs/intelligence/data")
 tmp = pathlib.Path(tempfile.mkdtemp())
 run = lambda *a: subprocess.run([*a], check=True, capture_output=True, text=True)
 # 1. lexicon: prepare -> finalize -> gate from the frozen raw/review, against the pre-merge aliases (temporarily restored)
-shutil.copy(D / "search_aliases.json", tmp / "aliases-current.json"); shutil.copy(W / "aliases-premerge.json", D / "search_aliases.json")
+B = pathlib.Path("tests/benchmarks/search_queries.json")
+# v10.1: the lexicon's provenance records inputs.bench, and it was built BEFORE classify rewrote the bench — restore the
+# pre-classification bench (and the pre-merge aliases) for the lexicon stage, then put the classified bench back.
+shutil.copy(D / "search_aliases.json", tmp / "aliases-current.json"); shutil.copy(B, tmp / "bench-current.json")
+shutil.copy(W / "aliases-premerge.json", D / "search_aliases.json"); shutil.copy(W / "bench-preclassify.json", B)
 try:
     run("python", "tests/benchmarks/concept_lexicon_check.py", "prepare", "--cache-dir", str(S), "--raw", str(W / "lexicon_raw.json"), "--out", str(tmp / "structural.json"))
     run("python", "tests/benchmarks/concept_lexicon_check.py", "finalize", "--cache-dir", str(S), "--raw", str(W / "lexicon_raw.json"), "--structural", str(tmp / "structural.json"),
@@ -2468,11 +2472,11 @@ try:
     shutil.copy(W / "aliases-premerge.json", tmp / "aliases.json")
     run("python", "tests/benchmarks/concept_lexicon_check.py", "merge", "--lexicon", str(tmp / "lexicon.json"), "--aliases", str(tmp / "aliases.json"), "--round", "2")
 finally:
-    shutil.copy(tmp / "aliases-current.json", D / "search_aliases.json")
+    shutil.copy(tmp / "aliases-current.json", D / "search_aliases.json"); shutil.copy(tmp / "bench-current.json", B)
 j = lambda p: json.loads(pathlib.Path(p).read_text(encoding="utf-8"))
 assert ev.canonical_sha256(j(tmp / "lexicon.json")) == ev.canonical_sha256(j(D / "concept_lexicon.json")), "lexicon replay differs"
 assert ev.lexicon_aliases_sha256(j(tmp / "aliases.json"), 2) == ev.lexicon_aliases_sha256(j(D / "search_aliases.json"), 2), "merge replay differs"
-# 2. candidates + classification from the committed inputs
+# 2. candidates (generated from the pre-classification bench with the MERGED aliases in place) + classification from the committed inputs
 run("python", "tests/benchmarks/alias_candidates_tool.py", "candidates", "--cache-dir", str(S), "--bench", str(W / "bench-preclassify.json"), "--out", str(tmp / "cands.json"))
 assert ev.canonical_sha256(j(tmp / "cands.json")) == ev.canonical_sha256(j(D / "alias_candidates.json")), "candidates replay differs"
 _, internal, _, _ = __import__("tests.benchmarks.round_seal", fromlist=["x"]).load_catalogs_from_cache(S, 2)
