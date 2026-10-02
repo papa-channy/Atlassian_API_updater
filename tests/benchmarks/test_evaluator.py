@@ -86,8 +86,11 @@ RANKING = pathlib.Path(__file__).resolve().parents[2] / "tools" / "atlassian_doc
 # The ranking-table structure hash frozen at the current round's commit T lives in a data file, so a new round
 # re-freezes by editing round_freeze.json rather than test code (which is part of evaluation_code_sha256).
 ROUND_FREEZE = pathlib.Path(__file__).resolve().parent / "round_freeze.json"
-RANKING_STRUCTURE_SHA256 = json.loads(ROUND_FREEZE.read_text(encoding="utf-8"))["structure_sha256"]
-STRUCTURE_KEYS = ("verb_methods", "path_noise", "product_hints", "tuning_grid", "baseline")
+RANKING_STRUCTURE_SHA256 = ev.current_round()["structure_sha256"]
+STRUCTURE_KEYS = ev.STRUCTURE_KEYS
+ROUND2_HASH_KEYS = {"structure_sha256", "verb_inventory_sha256", "concept_lexicon_sha256", "lexicon_aliases_sha256",
+                    "alias_candidates_sha256", "worker_brief_sha256", "hidden_generation_prompt_sha256",
+                    "hidden_reviewer_prompt_sha256", "tooling_code_sha256", "evaluation_code_sha256_at_T"}
 
 
 def ranking_structure_sha256(raw: dict) -> str:
@@ -100,10 +103,26 @@ class TestRankingTablesFrozen(unittest.TestCase):
         self.assertEqual(ranking_structure_sha256(raw), RANKING_STRUCTURE_SHA256)
 
     def test_round_freeze_file_shape(self):
-        f = json.loads(ROUND_FREEZE.read_text(encoding="utf-8"))
-        self.assertEqual(set(f), {"round", "commit_T", "structure_sha256"})
-        self.assertIsInstance(f["round"], int); self.assertGreaterEqual(f["round"], 1)
-        self.assertRegex(f["commit_T"], r"^[0-9a-f]{7,40}$"); self.assertRegex(f["structure_sha256"], r"^[0-9a-f]{64}$")
+        f = ev.load_round_freeze()
+        self.assertIsInstance(f, list); self.assertEqual([e["round"] for e in f], list(range(1, len(f) + 1)))
+        self.assertEqual(set(f[0]), {"round", "commit_T", "structure_sha256"})
+        for e in f[1:]:
+            self.assertEqual(set(e), ROUND2_HASH_KEYS | {"round", "source_registry_fingerprint", "source_spec_sha256"})
+            for k in ROUND2_HASH_KEYS | {"source_registry_fingerprint"}:
+                self.assertRegex(e[k], r"^[0-9a-f]{64}$", k)
+            self.assertEqual(set(e["source_spec_sha256"]), {"jira-platform", "jira-software", "confluence"})
+        self.assertEqual(ev.current_round(), f[-1]); self.assertEqual(ev.freeze_for(1), f[0])
+
+    def test_round2_freeze_hashes_match_files(self):
+        e = ev.current_round()
+        if e["round"] < 2:
+            print("round 2 not frozen yet: hash equality checked after commit T"); return
+        got = ev.round_freeze_hashes(e["round"])
+        for k, v in got.items():
+            self.assertEqual(e[k], v, k)
+        raw = json.loads(RANKING.read_text(encoding="utf-8"))
+        self.assertEqual(e["verb_inventory_sha256"], ev.canonical_sha256(raw["verb_methods"]))
+        self.assertEqual(e["structure_sha256"], ranking_structure_sha256(raw))
 
     def test_constants_inside_grid(self):
         raw = json.loads(RANKING.read_text(encoding="utf-8"))
@@ -191,17 +210,56 @@ class TestAliasNotesAndTuningLog(unittest.TestCase):
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 EVAL_CODE_FILES = ("tests/benchmarks/evaluator.py", "tests/benchmarks/test_evaluator.py",
-                   "tests/diag_search_queries.py", "tests/tune_search_ranking.py")
+                   "tests/diag_search_queries.py", "tests/tune_search_ranking.py",
+                   "tests/benchmarks/round_seal.py", "tests/benchmarks/alias_candidates_tool.py")
+
+
+R1_FINAL_SHA256 = "b573ba0f8deeb826e4cdea88f83a45ae028871c836f02945c66af21d78d31090"      # pinned Step 3
+R1_TUNING_LOG_SHA256 = "7988b81ef010e42e18128878619df402a81a15743a43b43e027b47426f2f018f"
+R1_SEAL_SHA256 = "253869a09f0f588d0610ad00174c0b725651789ca95d1a84f146202c14b75b0c"
+R1_READINESS_SECTION_SHA256 = "319d1d535562952f29053b5d3cc554139cab3483618257ef91c001149409fbee"
+READINESS = ROOT / "docs" / "phase3-readiness.md"
+
+
+def readiness_round1_section(text: str) -> str:
+    start = text.index("## Search Quality Round 1 — decision record")
+    end = text.index("### Round 2 pre-work", start)
+    return text[start:end]
+
+
+class TestRound1Invariants(unittest.TestCase):
+    """AC-09: Round 1 artifacts never change after the pre-work merge 95b8de0."""
+    def test_round1_artifacts_unchanged(self):
+        self.assertEqual(ev.files_sha256(ROOT, ("tests/benchmarks/round1-final.json",)), R1_FINAL_SHA256)
+        self.assertEqual(ev.files_sha256(ROOT, ("tests/benchmarks/search-tuning-round1.jsonl",)), R1_TUNING_LOG_SHA256)
+        b = json.loads(BENCH.read_text(encoding="utf-8"))
+        self.assertEqual(ev.canonical_sha256(b["round1_seal"]), R1_SEAL_SHA256)
+        section = readiness_round1_section(READINESS.read_text(encoding="utf-8"))
+        self.assertEqual(ev.canonical_sha256(section), R1_READINESS_SECTION_SHA256)
+
+    def test_schema_accepts_r5_r6(self):
+        good = {"id": "s-001", "query": "a b", "expected_top1_any": ["k"], "forbidden_top1": [],
+                "origin": "seed-r0", "failure_classes": ["R5", "R6"], "ambiguous": False}
+        ev.check_schema("seed", [good])
+        with self.assertRaises(ValueError):
+            ev.check_schema("seed", [{**good, "failure_classes": ["R7"]}])
 
 
 class TestEvaluationCodeSha256(unittest.TestCase):
     def test_evaluation_code_sha256_is_stable_and_path_sensitive(self):
         import hashlib, shutil, tempfile
+        self.assertEqual(tuple(sorted(EVAL_CODE_FILES)), ev.EVALUATION_CODE_FILES)
+        self.assertTrue(set(ev.EVALUATION_CODE_FILES) <= set(ev.TOOLING_FILES))
+        if all((ROOT / p).exists() for p in ev.TOOLING_FILES):
+            self.assertEqual(ev.tooling_code_sha256(ROOT), ev.files_sha256(ROOT, ev.TOOLING_FILES))
+        else:
+            print("tooling incomplete")
+        if not all((ROOT / p).exists() for p in EVAL_CODE_FILES):
+            print("evaluation code files incomplete: checked once alias_candidates_tool.py exists (Task 4)"); return
         h = ev.evaluation_code_sha256(ROOT)
         self.assertRegex(h, r"^[0-9a-f]{64}$"); self.assertEqual(h, ev.evaluation_code_sha256(ROOT))
         blob = b"".join(p.encode() + b"\0" + (ROOT / p).read_bytes() + b"\0" for p in sorted(EVAL_CODE_FILES))
         self.assertEqual(h, hashlib.sha256(blob).hexdigest())
-        self.assertEqual(tuple(sorted(EVAL_CODE_FILES)), ev.EVALUATION_CODE_FILES)
         with tempfile.TemporaryDirectory() as td:
             tmp = pathlib.Path(td)
             for p in EVAL_CODE_FILES:

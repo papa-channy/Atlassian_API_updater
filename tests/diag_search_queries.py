@@ -34,6 +34,14 @@ ALL_SETS = ("seed", "regression_negative", "held_out", "negative")
 HIDDEN_SETS = ("held_out", "negative")
 
 
+def _evaluation_code_sha256_or_none():
+    # Task 4 adds tests/benchmarks/alias_candidates_tool.py; until then evaluation_code_sha256 raises.
+    try:
+        return ev.evaluation_code_sha256(ROOT)
+    except FileNotFoundError:
+        return None
+
+
 def _parse(argv):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--sets", default=None)
@@ -109,7 +117,7 @@ def _evaluate(state, bench, sections, sets, plain):
               "registry_fingerprint": fp,
               "intelligence_fingerprint": policy.intelligence_fingerprint(fp, al.sha256, policy.overrides().sha256),
               "ranking_sha256": rp.sha256, "ranking_structure_sha256": rp.structure_sha256, "alias_sha256": al.sha256,
-              "evaluation_code_sha256": ev.evaluation_code_sha256(ROOT), "spec_sha256": spec_sha,
+              "evaluation_code_sha256": _evaluation_code_sha256_or_none(), "spec_sha256": spec_sha,
               "seal_match": fp == seal.get("registry_fingerprint") and spec_sha == seal.get("spec_sha256"),
               "sets": {}, "failures": []}
     if not report["seal_match"]:

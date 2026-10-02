@@ -5,7 +5,7 @@ import hashlib, json, pathlib, re
 STOPWORDS = frozenset("a an the to of for in on at and or with by from is are be this that".split())
 _CAMEL_1 = re.compile(r"([a-z0-9])([A-Z])"); _CAMEL_2 = re.compile(r"([A-Z]{2,})([A-Z][a-z])"); _SPLIT = re.compile(r"[^a-z0-9]+")
 _ID = re.compile(r"^(s|rn|h|n)-\d{3}$"); _ORIGIN = re.compile(r"^(seed|held_out|negative)-r\d+$")
-_CLASSES = {"R1", "R2", "R3", "R4"}
+_CLASSES = {"R1", "R2", "R3", "R4", "R5", "R6"}
 NEGATIVE_SECTIONS = ("regression_negative", "negative")
 
 
@@ -70,19 +70,6 @@ def evaluate(records, search_fn):
     return {"passed": len(records) - len(failed), "failed": failed, "total": len(records)}
 
 
-EVALUATION_CODE_FILES = tuple(sorted(("tests/benchmarks/evaluator.py", "tests/benchmarks/test_evaluator.py",
-                                      "tests/diag_search_queries.py", "tests/tune_search_ranking.py")))
-
-
-def evaluation_code_sha256(root) -> str:
-    """spec §5.7: sha256 over path + NUL + raw bytes + NUL for the four evaluation files, sorted by relative path."""
-    root = pathlib.Path(root)
-    h = hashlib.sha256()
-    for rel in EVALUATION_CODE_FILES:
-        h.update(rel.encode() + b"\0" + (root / rel).read_bytes() + b"\0")
-    return h.hexdigest()
-
-
 IRREGULAR_SINGULAR = {"statuses": "status"}; UNCHANGED_PLURAL = frozenset({"series", "species", "news"})
 
 
@@ -96,28 +83,70 @@ def singular(t: str) -> str:
 
 
 STRUCTURE_KEYS = ("verb_methods", "path_noise", "product_hints", "tuning_grid", "baseline")
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 ROUND_FREEZE = pathlib.Path(__file__).resolve().parent / "round_freeze.json"
+DATA_REL = "tools/atlassian_docs/intelligence/data"
 
 
 def load_round_freeze(path=ROUND_FREEZE) -> list:
-    """round_freeze.json holds either a single round entry (Round 1) or a list of per-round entries; normalize to a list."""
-    raw = json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
-    return raw if isinstance(raw, list) else [raw]
+    freeze = json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
+    if not isinstance(freeze, list) or not freeze:
+        raise ValueError("round_freeze.json must be a non-empty list of round entries")
+    return freeze
 
 
 def current_round(freeze=None) -> dict:
-    """The most recently frozen round entry."""
     return (freeze if freeze is not None else load_round_freeze())[-1]
 
 
-def freeze_for(round, freeze=None) -> dict:
-    """The frozen entry for a specific round; raises KeyError when that round was never frozen."""
-    for entry in (freeze if freeze is not None else load_round_freeze()):
-        if entry.get("round") == round:
-            return entry
-    raise KeyError(round)
+def freeze_for(round: int, freeze=None) -> dict:
+    for e in freeze if freeze is not None else load_round_freeze():
+        if e.get("round") == round:
+            return e
+    raise KeyError(f"round {round} is not in round_freeze.json")
 
 
-def round_freeze_hashes(round, root=None) -> dict:
-    # completed in Task 3
-    return {}
+def files_sha256(root, files) -> str:
+    """sha256 over path + NUL + raw bytes + NUL for each file, sorted by relative path."""
+    root, h = pathlib.Path(root), hashlib.sha256()
+    for rel in sorted(files):
+        h.update(rel.encode() + b"\0" + (root / rel).read_bytes() + b"\0")
+    return h.hexdigest()
+
+
+EVALUATION_CODE_FILES = tuple(sorted(("tests/benchmarks/evaluator.py", "tests/benchmarks/test_evaluator.py",
+                                      "tests/diag_search_queries.py", "tests/tune_search_ranking.py",
+                                      "tests/benchmarks/round_seal.py", "tests/benchmarks/alias_candidates_tool.py")))
+TOOLING_FILES = tuple(sorted(EVALUATION_CODE_FILES + ("tests/benchmarks/concept_lexicon_check.py",
+                                                      "tests/benchmarks/test_round_seal.py", "tests/test_tune_search_ranking.py",
+                                                      "tests/test_diag_search_queries.py", "tests/intelligence/test_policy.py")))
+
+
+def evaluation_code_sha256(root) -> str:
+    return files_sha256(root, EVALUATION_CODE_FILES)
+
+
+def tooling_code_sha256(root) -> str:
+    return files_sha256(root, TOOLING_FILES)
+
+
+def lexicon_aliases_sha256(raw_aliases: dict, round: int) -> str:
+    """Canonical hash of the alias words whose notes.origin == lexicon-r{round} (aliases + notes subsets)."""
+    origin = f"lexicon-r{round}"
+    notes = raw_aliases.get("notes") or {}
+    words = sorted(w for w, n in notes.items() if isinstance(n, dict) and n.get("origin") == origin and w in (raw_aliases.get("aliases") or {}))
+    return canonical_sha256({"aliases": {w: raw_aliases["aliases"][w] for w in words}, "notes": {w: notes[w] for w in words}})
+
+
+def round_freeze_hashes(round: int, root=ROOT) -> dict:
+    root = pathlib.Path(root)
+    j = lambda rel: canonical_sha256(json.loads((root / rel).read_text(encoding="utf-8")))
+    aliases = json.loads((root / DATA_REL / "search_aliases.json").read_text(encoding="utf-8"))
+    return {"concept_lexicon_sha256": j(f"{DATA_REL}/concept_lexicon.json"),
+            "lexicon_aliases_sha256": lexicon_aliases_sha256(aliases, round),
+            "alias_candidates_sha256": j(f"{DATA_REL}/alias_candidates.json"),
+            "worker_brief_sha256": files_sha256(root, (f"tests/benchmarks/round{round}-worker-brief.md",)),
+            "hidden_generation_prompt_sha256": files_sha256(root, (f"tests/benchmarks/round{round}-hidden-generation-prompt.md",)),
+            "hidden_reviewer_prompt_sha256": files_sha256(root, (f"tests/benchmarks/round{round}-hidden-reviewer-prompt.md",)),
+            "tooling_code_sha256": tooling_code_sha256(root),
+            "evaluation_code_sha256_at_T": evaluation_code_sha256(root)}
