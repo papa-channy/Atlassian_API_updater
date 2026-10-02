@@ -214,3 +214,59 @@ seed 23/23, regression_negative 6/6, held_out 4/16, negative 5/8, gate failed) �
 - **라운드 독립 테스트** (`8f5078c`): `TestFinalArtifact`(`round1_seal`과의 내부 일관성만 검사; 현재 트리의 평가 코드 해시 비교와 평문 r1 섹션 요구는 D 전용이므로 제거), `RANKING_STRUCTURE_SHA256` → `tests/benchmarks/round_freeze.json`(`test_evaluator`·`test_policy`가 파일을 읽음), 정책 어휘 출처 검사(seed 단어는 all seed records (r0+r1)에서; 예외 목록은 `{"epic","find","read","rename"}`로 축소), 튜너 총계 테스트(번들 벤치 길이와 비교), `tests/test_diag_search_queries.py`(r0 레코드로 자체 벤치를 만들고 평문/봉인 숨김 섹션도 자체 생성 — 위 "커밋 D 직후 발견된 테스트 결함" 해소).
 - **policy 로더 수정** (`8ef0faf`): `verb_methods`/`product_hints`/`path_noise`/`tuning_grid`의 잘못된 원소(비문자열, 중첩 리스트)는 `TypeError`가 아니라 `ValueError`; 키 정규식은 `fullmatch`(`"get\n"` 거부); 상수 키 오류 메시지는 `len(CONSTANT_KEYS)`(6)에서 파생.
 - **저장소 밖 Round 1 파일 보관**: `~/.atlassian_api_updater/archive/round1/`에 봉인 평문(`sealed/round1-sealed.json`), 내부 카탈로그(`sealed/round1-internal-catalog.json`), 생성 프롬프트(`sealed/round1-generation-prompt.txt`), 캐시 스냅샷(`round1-cache/`). Round 2는 새 숨김 집합으로 A→T→B→C→D를 다시 수행한다.
+
+## Search Quality Round 2 — decision record (2026-10-03)
+
+**Outcome: F — tuning failed (spec v1.14 §5.5 / AC-21).** The one-way pipeline found no constants × alias combination that passes the snapshot seed set (39/39) and the regression negatives (14/14); the policy files stay at B, the hidden set was never evaluated or decrypted. Status: Round 2 completed, Discovery gate not attempted → Round 3.
+
+### Provenance
+
+| item | value |
+|---|---|
+| housekeeping_commit | 2edad7b (branch `round2`, H1..H7 + H′ wave; whole-branch code review before S) |
+| spec | v1.14; plan v10.1 |
+| S (source snapshot) | `~/.atlassian_api_updater/round2-cache/`, registry_fingerprint `f3c2e9d48aa85c96ca62cdd84ff700cc2714c888cf4148b3a91c604c45b47b62`, 943 operations |
+| spec_sha256 | confluence `b3d010b6438677d8…`; jira-platform `3d0edfb02ff91873…`; jira-software `cb7e24b331ad9b31…` |
+| verb inventory | spec §6 verbatim, 101 verbs (Round 1: 23); REVIEW lines replace, share, transition, trash, unwatch, update → no-widen; fixture-compatibility check OK; `verb_inventory_sha256` `d66317db7a6a3d047f30197791eefdb93448747b913544da7545136f91dbffc0` |
+| method-safety | 1 pass, 0 violations, artifact sha `0a8de4fe9182d1a2a70150d8e87e3f2b4af69e7f7e037c15421e390b05654778` |
+| lexicon template / generation input | `a5b7808fe6f3ac4da99f81173ac7ac8deae8c22d02f2854ac5c8c201617a577d` / `9125fa8444453762076cdb5c6791f166f46a15579fd016bfcbb8cd4412bd857e` (286 concept tokens) |
+| lexicon raw / review input / review output | `acc5cebeafc5c48236a9de5d685b888fb2a83532340405556d77b801468a6872` (584 synonyms, 1 attempt) / `17efa0b87647cf89357fffe3c2aaf2f0effb24539ce1c44b399a0a574eb3a484` / `c5ba256f8acd082febe06724d6646bff631e136dc437f4fa1528286117bd62f4` (1 attempt) |
+| lexicon counts | structural kept 524 / rejected 57 {'in_catalog': 42, 'verb': 11, 'function_word': 2, 'id_like': 1, 'alias_conflict': 1}; semantic rejected 56; seed gate rejected ['feedback', 'fresh', 'iteration', 'new', 'release', 'summary']; merged 462 `lexicon-r2` aliases, skipped [] |
+| concept_lexicon.json / aliases sha | `352b5921201d97de55e75ddbcbe6e048650168b89fcfa3d4c2939e442dd4e3df` / lexicon_aliases `6eb9d7b6ca9f90a8984fb0d4c11aede406a9d3f350df4e977171c910c2c74c29` |
+| candidates / R5 / R6 | 22 candidates (51 excluded), seeds with R5: 5, with R6: 18; alias_candidates sha `2e4aa64bb5a74b6b120b7ed737f9cdc577e8116bd810f7b785b2c4ce23bd7ef6` |
+| AC-13 replay | ok (lexicon, merge, candidates, classification reproduced from committed inputs) |
+| T | `29dba388fe5c9521a7a91ce68ee8f152ed94ffca` — suite OK (exit 0, output sha `59f073a97f126d90…`) |
+| structure / tooling / evaluation shas at T | `8106c8918b8271957f157fafcb1efdf83e0d7e14a17723afbeb8d0f00660c49b` / `5accdeaa15699d1e884e903172627efdb3e324a1393381e6cbf571ae3aebbdd6` / `974c0e54d2d7b7d9c097cc38abcdb9b21285cb8ec8b14f307940d689555d77a6` |
+| hidden generation | input `3c702962513e834c80220d03e4dc1c83cd633b5e96a89a9a2161ccacc79e7ba0`; attempt 1 output `4b868ca87ead72ae369df502b46487fbf105ada25be6e6141617afe096f5b7be` status valid; machine check 0 violations; re-requests: 0 machine, 1 reviewer |
+| hidden review | attempt 2: message `50b413e156e3abf99f096fb18dde6b81b569de7ee02b9b545d984c6eaeedf104` + catalog `b22de253515c88ac40f1c7672f36c3bdd4b9dc2f050080601565bc05ed51b282` (attached JSON lines, see deviation) → output `5a30746ae26a5b93575a817225c795251debd63450d65b09ec31c54c6af3312f` (23 accept, reject h-009); attempt 3 replacement h-009 (rule `reviewer`) output `86fe08b95bf35bee6173be47c179704e1f38840e6eed2a7576bf4c570dfc2b99` valid, machine check 0; attempt 4 review of h-009 → accept (`5a863a15977a99850fd720f7f92c165b91155612b14b0a9ca0bf469dba26454b`) |
+| coverage manifest | `ffa9d7ae3dfe7d424cdf85020b06c41bc66a2534a4a663349f98d8b03761b2b2`, verify_coverage [] |
+| temporary_chat_unpersonalized | true (generation + both reviews; UI-state screenshots in round2-work/) |
+| B | `4fc5fe7c676a81c96aa3b3c34c72fa10461413fb` — sealed held_out `0f990f2fc134cd41eca2061931c65cfdd4bc21819051f9ae8538c0258aaf3540`, negative `7750a2020923bcf8ddfa22e79f2c071001db9942194c3215cc03c60f363dde76`; suite OK (exit 0) |
+| .enc sha at B / at F | `c1a3794b0ac7563bee0ccdcc61e0ecb43026d0f778ec4773ef2695459cca369b` / `c1a3794b0ac7563bee0ccdcc61e0ecb43026d0f778ec4773ef2695459cca369b` (equal: True; plaintext absent; passphrase held by the user only) |
+| worker brief | `15be63e6fc7e1cf4e054f330c40a37b8581f92046f6143d3efb0aefdcb9c0fcf` (== freeze); runs: 1; replies: run the brief procedure |
+| tuning run | run_id `8127f83d-97d0-4eab-890c-fd7c55a18c63`, status `failed`, seed 34/39, regression_negative 10/14, passing_combos 0, result_sha256 `f8743eda516e06d83d1b9658b7b9c8dc1155fac90cd95d77e16cabbe64c46329`, commit `15653ebcb591ec22addd6e60c624080479c3c906` (log only) |
+| C / D / decryption / round2-final / held_out result | not_applicable (tuning failure) |
+| policy at F | aliases canonical `20d94582413d6587ab2c68fa1c67552ea10fbbe931c1a77eb34a71e4dff55918`, ranking canonical `3648e860a0ef8739d92bd1d88e305f46f7cbefb0dbc01230d95eaf6fbae8d555` — identical to B (worker commit touched only the log) |
+| terminal_commit | self (F; sha recorded in the ledger and the provenance report after the commit) |
+
+### Deviations ledgered
+
+- The hidden reviewer input materialized to 701,725 chars (catalog descriptions 462 KB), beyond a ChatGPT message; the frozen prompt and the records were sent inline and the catalog as an attached JSON-lines file with identical bytes (event `hidden_review_input_split`).
+- AC-13 replay restores the pre-classification bench for the lexicon stage (plan v10.1).
+- The ChatGPT personalization toggle had to be switched to "개인화되지 않음" by the user; it persisted across the Temporary chats used.
+
+### State model
+
+| field | value |
+|---|---|
+| branch | F |
+| adopted_runs | 0 |
+| rejected_runs | 0 |
+| failed_runs | 1 |
+| hidden_evaluated | false |
+| ciphertext_retained | true |
+| round3_required | true |
+
+### Attestation (spec §12)
+
+- AC-01a/b/c: H..T..B..F commits touch only the allowed files; no policy change after B. AC-05: tooling diff H..F empty, `tooling_code_sha256` unchanged. AC-18a-B/F: ciphertext sha unchanged, no plaintext. AC-21: tuning failure ends the round at B policy. AC-23: suite green at T and B (ledgered). AC-07/14/16: not reached (no evaluation). Controller evidence: `~/.atlassian_api_updater/round2-work/{controller-events,attempts}.jsonl`.
