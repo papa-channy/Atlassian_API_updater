@@ -217,7 +217,7 @@ seed 23/23, regression_negative 6/6, held_out 4/16, negative 5/8, gate failed) �
 
 ## Search Quality Round 2 — decision record (2026-10-03)
 
-**Outcome: F — tuning failed (spec v1.14 §5.5 / AC-21).** The one-way pipeline found no constants × alias combination that passes the snapshot seed set (39/39) and the regression negatives (14/14); the policy files stay at B, the hidden set was never evaluated or decrypted. Status: Round 2 completed, Discovery gate not attempted → Round 3.
+**Outcome: F — tuning failed (spec v1.14 §5.5 / AC-21).** The one-way pipeline found no constants × alias combination that passes the snapshot seed set (39/39) and the regression negatives (14/14); the policy files stay at B, the hidden set was never evaluated or decrypted. Status: **Round 2 tuning failed** (Round 2 completed, Discovery gate not attempted) → Round 3 with a new hidden set.
 
 ### Provenance
 
@@ -269,4 +269,4 @@ seed 23/23, regression_negative 6/6, held_out 4/16, negative 5/8, gate failed) �
 
 ### Attestation (spec §12)
 
-- AC-01a/b/c: H..T..B..F commits touch only the allowed files; no policy change after B. AC-05: tooling diff H..F empty, `tooling_code_sha256` unchanged. AC-18a-B/F: ciphertext sha unchanged, no plaintext. AC-21: tuning failure ends the round at B policy. AC-23: suite green at T and B (ledgered). AC-07/14/16: not reached (no evaluation). Controller evidence: `~/.atlassian_api_updater/round2-work/{controller-events,attempts}.jsonl`.
+- AC-01a/b/c: H..T..B..F commits touch only the allowed files; no policy change after B. AC-05: tooling diff H..F empty, `tooling_code_sha256` unchanged. AC-18a-B/F: ciphertext sha unchanged, no plaintext. AC-21: tuning failure ends the round at B policy. AC-23: suite green at T and B (ledgered). AC-07/14/16: apply on branch F and pass (no evaluation ran; no policy or evaluator change after B; ciphertext retained). **AC-18b: FAIL** — the post-terminal provenance review found that four working files under `~/.atlassian_api_updater/round2-work/` (the hidden-review inputs, the replacement output and the replacement-review message) held the hidden records in plaintext from before B through F, readable by the worker's account; they were never handed to the worker and the tuning run depends only on the B inputs and the frozen tooling (unchanged H..F), so the F result is unaffected, but the spec's claim that the plaintext was unreadable during tuning does not hold for Round 2. Remediation: the four files were deleted after F (`ac18b_finding_remediated` event, shas ledgered); Round 3 rule: review inputs that embed the records must be deleted or encrypted before B. Controller evidence: `~/.atlassian_api_updater/round2-work/{controller-events,attempts}.jsonl`.
