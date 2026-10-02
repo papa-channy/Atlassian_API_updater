@@ -12,6 +12,10 @@ tune_round(b_aliases, b_ranking, snapshot, frozen_candidates, seed, regression) 
   3. final_check: seed+regression perfect -> policy files written, log status "pending" (adoption needs --adopt after the
      canonical full test suite passed); else status "failed" (tuning_failed), nothing written but the log.
 No constant reselection after aliases, no second proposal. --dry-run writes nothing and prints the would-be log line.
+Fixture hard constraint (spec v1.14, AC-06a): every candidate - each constants grid point (with the B aliases) and each
+alias/rule trial of the proposer - must pass the r0 fixture suite (the 23 seed / 6 negative r0 records on
+make_state("jira-platform", "jira-software", "confluence"), as in tests/intelligence/test_search.py). A failing candidate
+is excluded from selection and logged under `fixture_fail`; it is a constraint, never an objective.
 """
 import argparse, copy, dataclasses, datetime, hashlib, itertools, json, os, pathlib, re, shutil, subprocess, sys, tempfile, uuid
 from types import MappingProxyType
@@ -38,6 +42,7 @@ _BENCH = json.loads(BENCH_PATH.read_text(encoding="utf-8"))
 SEED_TOTAL, REGRESSION_TOTAL = len(_BENCH["seed"]), len(_BENCH["regression_negative"])
 SOURCES = ("jira-platform", "jira-software", "confluence")
 BUDGET = 15
+FIXTURE_COUNTS = (23, 6)
 EVENTS = ("baseline_checked", "constants_selected", "aliases_proposed", "final_check")
 
 
@@ -107,6 +112,28 @@ def top5(state, rp, point, query, alias_policy):
         return [(r["key"], r["score"], r.get("signals")) for r in search_operations(state, query, limit=5).get("results", [])]
 
 
+def fixture_bench(bench) -> dict:
+    """The r0 fixture suite (spec v1.14 AC-06a): seed / regression_negative records with an -r0 origin."""
+    out = {"seed": [r for r in bench["seed"] if r["origin"].endswith("-r0")],
+           "regression_negative": [r for r in bench["regression_negative"] if r["origin"].endswith("-r0")]}
+    if (len(out["seed"]), len(out["regression_negative"])) != FIXTURE_COUNTS:
+        raise SystemExit(f"error: r0 fixture suite must have {FIXTURE_COUNTS} records, got "
+                         f"{(len(out['seed']), len(out['regression_negative']))}")
+    return out
+
+
+def fixture_state():
+    """The same fixture registry tests/intelligence/test_search.py::test_seed_passes_on_fixtures uses."""
+    from tests.intelligence.helpers import make_state
+    return make_state(*SOURCES)
+
+
+def fixture_failures(state, rp, point, bench_r0, alias_policy) -> list:
+    """Sorted ids of r0 fixture records that fail at `point` with `alias_policy` ([] = the candidate is admissible)."""
+    s, r = evaluate_point(state, rp, point, bench_r0, alias_policy)
+    return sorted(f["id"] for f in s["failed"] + r["failed"])
+
+
 def write_constants(point, path=RANKING_PATH) -> None:
     """Rewrite ONLY the `constants` object; verify the frozen structure hash is unchanged, else restore."""
     original = path.read_text(encoding="utf-8")
@@ -165,21 +192,27 @@ def strip_round_entries(raw, round) -> dict:
     return out
 
 
-def propose_aliases(eval_fn, bench, base_raw, cands, budget=BUDGET):
+def propose_aliases(eval_fn, bench, base_raw, cands, budget=BUDGET, fixture_fn=None):
     """spec §7.2: seeds in id order; each seed is re-evaluated against the working state first (resolved_by_prior_change),
     then seeds whose bench failure_classes lack R6 are skipped (not_r6: §7.2 requires failure_classes ∋ R6, so a
     change for such a seed could never be adopted), then the budget is checked; candidate words (sorted) x that seed's
     targets (sorted); direct alias first, then one-context rules; accept the first trial that fixes the seed without
-    breaking any passing record."""
+    breaking any passing record. fixture_fn(raw) -> failing r0 fixture ids: a trial that passes the snapshot check but
+    fails the fixture suite is not accepted (hard constraint, spec v1.14) and is recorded in patch["fixture_fail"]."""
     working = copy.deepcopy(base_raw)
     seed_fail, _ = eval_fn(working)
-    patch = {"resolved_by_prior_change": [], "not_r6": [], "unresolved": [], "trials": 0}
+    patch = {"resolved_by_prior_change": [], "not_r6": [], "unresolved": [], "fixture_fail": [], "trials": 0}
     accepted_n, by_id = 0, {r["id"]: r for r in bench["seed"]}
 
-    def ok(trial, sid, cur_fail, cur_reg):
+    def ok(trial, sid, cur_fail, cur_reg, desc):
         patch["trials"] += 1
         f, r = eval_fn(trial)
-        return sid not in f and f <= (cur_fail - {sid}) and r <= cur_reg
+        if not (sid not in f and f <= (cur_fail - {sid}) and r <= cur_reg):
+            return False
+        bad = list(fixture_fn(trial)) if fixture_fn is not None else []
+        if bad:
+            patch["fixture_fail"].append({**desc, "seed_query_id": sid, "failing": bad})
+        return not bad
 
     for sid in sorted(seed_fail):
         cur_fail, cur_reg = eval_fn(working)
@@ -197,7 +230,7 @@ def propose_aliases(eval_fn, bench, base_raw, cands, budget=BUDGET):
             for target in sorted(cands[word]["targets_by_seed"][sid]):
                 trial = copy.deepcopy(working)
                 trial["aliases"][word] = [target]; trial["notes"][word] = round2_note(word, sid, target, "alias")
-                if ok(trial, sid, cur_fail, cur_reg):
+                if ok(trial, sid, cur_fail, cur_reg, {"kind": "alias", "word": word, "target": target}):
                     found = trial; break
             if found:
                 break
@@ -208,7 +241,7 @@ def propose_aliases(eval_fn, bench, base_raw, cands, budget=BUDGET):
                         trial = copy.deepcopy(working)
                         trial["rules"].append({"when_all": [word, ctx], "add": [target]})
                         trial["notes"][f"rule:{len(trial['rules']) - 1}"] = round2_note(word, sid, target, "rule")
-                        if ok(trial, sid, cur_fail, cur_reg):
+                        if ok(trial, sid, cur_fail, cur_reg, {"kind": "rule", "when_all": [word, ctx], "target": target}):
                             found = trial; break
                     if found:
                         break
@@ -298,9 +331,10 @@ def result_sha256(final_constants, patch) -> str:
                                     "alias_patch": {k: patch[k] for k in ("aliases", "rules", "notes")}})
 
 
-def verify_replay(eval_fn, bench, base_raw, cands, constants, expected_result_sha256) -> list:
-    """AC-19: the committed alias additions must equal a fresh proposer run from the B state at the adopted constants."""
-    _, patch = propose_aliases(eval_fn, bench, base_raw, cands)
+def verify_replay(eval_fn, bench, base_raw, cands, constants, expected_result_sha256, fixture_fn=None) -> list:
+    """AC-19: the committed alias additions must equal a fresh proposer run from the B state at the adopted constants
+    (with the same fixture constraint as the pipeline)."""
+    _, patch = propose_aliases(eval_fn, bench, base_raw, cands, fixture_fn=fixture_fn)
     got = result_sha256(constants, patch)
     return [] if got == expected_result_sha256 else [f"replay result_sha256 {got} != adopted {expected_result_sha256}"]
 
@@ -314,21 +348,29 @@ def _alias_policy(raw):
         return policy.load_aliases(p)
 
 
-def run_pipeline(evaluate_fn, bench, aliases_raw, cands_doc, grid, baseline):
-    """Pure orchestration (tested with a fake evaluate_fn(point, raw_aliases) -> (seed_res, reg_res)):
-    constants exactly once with the B aliases, then the proposer exactly once at those constants."""
-    results = []
-    for point in grid_points(grid):
+def run_pipeline(evaluate_fn, bench, aliases_raw, cands_doc, grid, baseline, fixture_fn):
+    """Pure orchestration (tested with a fake evaluate_fn(point, raw_aliases) -> (seed_res, reg_res) and a fake
+    fixture_fn(point, raw_aliases) -> failing r0 fixture ids): constants exactly once with the B aliases over the
+    fixture-admissible grid points, then the proposer exactly once at those constants under the same fixture constraint.
+    Returns (results, selected, working, patch, seed_res, reg_res, fixture_fail) where fixture_fail =
+    {"constants": [grid_points indices excluded], "final": [ids failing with the final config]}."""
+    results, excluded = [], []
+    for i, point in enumerate(grid_points(grid)):
+        if fixture_fn(point, aliases_raw):
+            excluded.append(i); continue
         s, r = evaluate_fn(point, aliases_raw)
         results.append((point, s["passed"], r["passed"]))
+    if not results:
+        raise SystemExit("error: every constants grid point fails the r0 fixture suite (fixture_fail)")
     selected = select_candidate(results, baseline, grid)
 
     def eval_fn(raw):
         s, r = evaluate_fn(selected, raw)
         return frozenset(f["id"] for f in s["failed"]), frozenset(f["id"] for f in r["failed"])
-    working, patch = propose_aliases(eval_fn, bench, aliases_raw, cands_doc["candidates"])
+    working, patch = propose_aliases(eval_fn, bench, aliases_raw, cands_doc["candidates"],
+                                     fixture_fn=lambda raw: fixture_fn(selected, raw))
     seed_res, reg_res = evaluate_fn(selected, working)
-    return results, selected, working, patch, seed_res, reg_res
+    return results, selected, working, patch, seed_res, reg_res, {"constants": excluded, "final": list(fixture_fn(selected, working))}
 
 
 def _parse(argv):
@@ -407,7 +449,10 @@ def main(argv=None) -> int:
         if fp != seal.get("registry_fingerprint") or fp != cands_doc["generated_from"]["registry_fingerprint"]:
             raise SystemExit(f"error: registry fingerprint {fp} != round{ROUND}_seal / alias_candidates provenance; wrong snapshot?")
         evaluate_fn = lambda point, raw: evaluate_point(state, rp, point, bench, _alias_policy(raw))
-        results, selected, working, patch, seed_res, reg_res = run_pipeline(evaluate_fn, bench, aliases_raw, cands_doc, rp.tuning_grid, dict(rp.baseline))
+        fx_state, fx_bench = fixture_state(), fixture_bench(bench)
+        fixture_fn = lambda point, raw: fixture_failures(fx_state, rp, point, fx_bench, _alias_policy(raw))
+        results, selected, working, patch, seed_res, reg_res, fixture_fail = run_pipeline(
+            evaluate_fn, bench, aliases_raw, cands_doc, rp.tuning_grid, dict(rp.baseline), fixture_fn)
         violations = validate_alias_change(aliases_raw, working, cands_doc["candidates"], {r["id"]: r["query"] for r in bench["seed"]},
                                            {r["id"]: r["failure_classes"] for r in bench["seed"]})
         if violations:
@@ -416,21 +461,22 @@ def main(argv=None) -> int:
             print(f"  FAIL {f['id']} {f['query']!r}")
             for key, score, sig in top5(state, rp, selected, f["query"], _alias_policy(working)):
                 print(f"      {score:8.3f}  {key}  {json.dumps(sig, sort_keys=True)}")
-        return fp, results, selected, working, patch, seed_res, reg_res
+        return fp, results, selected, working, patch, seed_res, reg_res, fixture_fail
     try:
-        fp, results, selected, working, patch, seed_res, reg_res = _with_state(cache, body)
+        fp, results, selected, working, patch, seed_res, reg_res, fixture_fail = _with_state(cache, body)
     except SystemExit as e:
         print(e, file=sys.stderr); return 2
     return _finish(args, rp, fp, results, selected, patch, working, seed_res, reg_res,
-                   baseline_sha256(aliases_raw, ranking_raw, fp, cands_doc, bench))
+                   baseline_sha256(aliases_raw, ranking_raw, fp, cands_doc, bench), fixture_fail)
 
 
-def _finish(args, rp, fp, results, selected, patch, working, seed_res, reg_res, base_sha) -> int:
-    perfect = seed_res["passed"] == SEED_TOTAL and reg_res["passed"] == REGRESSION_TOTAL
+def _finish(args, rp, fp, results, selected, patch, working, seed_res, reg_res, base_sha, fixture_fail) -> int:
+    perfect = seed_res["passed"] == SEED_TOTAL and reg_res["passed"] == REGRESSION_TOTAL and not fixture_fail["final"]
     effects = plan_effects(args.dry_run, perfect)
     line = {"run_id": str(uuid.uuid4()), "run_at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "git_commit": _git("rev-parse", "HEAD").strip(), "round": ROUND, "registry_fingerprint": fp,
-            "baseline_sha256": base_sha, "events": list(EVENTS), "constants_selected": selected, "grid_size": len(results),
+            "baseline_sha256": base_sha, "events": list(EVENTS), "constants_selected": selected,
+            "grid_size": len(results) + len(fixture_fail["constants"]), "fixture_fail": fixture_fail,
             "passing_combos": sum(1 for _, s, r in results if s == SEED_TOTAL and r == REGRESSION_TOTAL),
             "aliases_proposed": patch, "seed": f"{seed_res['passed']}/{SEED_TOTAL}",
             "regression_negative": f"{reg_res['passed']}/{REGRESSION_TOTAL}", "tuning_failed": not perfect,
@@ -562,7 +608,9 @@ def _verify(cache, bench, rp, aliases_raw, ranking_raw, cands_doc) -> int:
         def eval_fn(raw):
             s, r = evaluate_point(state, rp, consts, bench, _alias_policy(raw))
             return frozenset(f["id"] for f in s["failed"]), frozenset(f["id"] for f in r["failed"])
-        return verify_replay(eval_fn, bench, base, cands_doc["candidates"], consts, target["result_sha256"])
+        fx_state, fx_bench = fixture_state(), fixture_bench(bench)
+        fixture_fn = lambda raw: fixture_failures(fx_state, rp, consts, fx_bench, _alias_policy(raw))
+        return verify_replay(eval_fn, bench, base, cands_doc["candidates"], consts, target["result_sha256"], fixture_fn)
     problems = _with_state(cache, body)
     if policy.canonical_sha256(base) != cands_doc["generated_from"]["inputs"]["aliases"]:
         problems.append("stripped alias file differs from the B baseline recorded in alias_candidates.json")

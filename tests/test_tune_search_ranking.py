@@ -246,8 +246,49 @@ class TestReplayAndHashes(unittest.TestCase):
         calls = []
         with mock.patch.object(tune, "select_candidate", side_effect=lambda *a, **k: calls.append("select") or dict(BASE)), \
              mock.patch.object(tune, "propose_aliases", side_effect=lambda *a, **k: calls.append("propose") or (json.loads(json.dumps(BASE_RAW)), {"aliases": {}, "rules": {}, "notes": {}, "resolved_by_prior_change": [], "unresolved": [], "trials": 0})):
-            tune.run_pipeline(lambda point, raw: ({"passed": S, "failed": []}, {"passed": R, "failed": []}), tune._BENCH, BASE_RAW, {"candidates": {}}, GRID, BASE)
+            tune.run_pipeline(lambda point, raw: ({"passed": S, "failed": []}, {"passed": R, "failed": []}), tune._BENCH, BASE_RAW, {"candidates": {}}, GRID, BASE,
+                              lambda point, raw: [])
         self.assertEqual(calls, ["select", "propose"])
+
+
+class TestFixtureConstraint(unittest.TestCase):
+    """spec v1.14 AC-06a: the r0 fixture suite is a hard constraint on every candidate (never an objective)."""
+
+    def test_constants_point_breaking_a_fixture_is_excluded_and_logged(self):
+        perfect = lambda point, raw: ({"passed": S, "failed": []}, {"passed": R, "failed": []})
+        pts = tune.grid_points(GRID)
+        base_i = pts.index(BASE)
+        breaks_base = lambda point, raw: ["s-022"] if point == BASE else []          # synthetic: BASE breaks a fixture
+        results, selected, _, _, _, _, ff = tune.run_pipeline(perfect, BENCH2, BASE_RAW, {"candidates": {}}, GRID, BASE, breaks_base)
+        self.assertNotEqual(selected, BASE); self.assertEqual(ff, {"constants": [base_i], "final": []})
+        self.assertEqual(len(results), len(pts) - 1)
+        self.assertEqual(selected, tune.select_candidate([(p, S, R) for p in pts if p != BASE], BASE, GRID))   # next by the same order
+        _, again, _, _, _, _, ff2 = tune.run_pipeline(perfect, BENCH2, BASE_RAW, {"candidates": {}}, GRID, BASE, breaks_base)
+        self.assertEqual((again, ff2), (selected, ff))                                                        # deterministic
+        with self.assertRaises(SystemExit):
+            tune.run_pipeline(perfect, BENCH2, BASE_RAW, {"candidates": {}}, GRID, BASE, lambda point, raw: ["s-001"])
+
+    def test_alias_trial_breaking_a_fixture_is_not_accepted(self):
+        fn = fake_eval({("workspace", "page"): ["s-001"], ("workspace", "space"): ["s-001"], ("feedback", "comment"): ["s-002", "s-003"]})
+        breaks = lambda raw: ["s-022"] if raw["aliases"].get("workspace") == ["page"] else []    # synthetic fixture breaker
+        _, patch = tune.propose_aliases(fn, BENCH2, BASE_RAW, CANDS, fixture_fn=breaks)
+        self.assertEqual(patch["aliases"], {"workspace": ["space"], "feedback": ["comment"]})      # page skipped, space adopted
+        self.assertEqual(patch["fixture_fail"], [{"kind": "alias", "word": "workspace", "target": "page", "seed_query_id": "s-001", "failing": ["s-022"]}])
+        self.assertEqual(tune.propose_aliases(fn, BENCH2, BASE_RAW, CANDS, fixture_fn=breaks)[1], patch)
+        _, unconstrained = tune.propose_aliases(fn, BENCH2, BASE_RAW, CANDS)
+        self.assertEqual(unconstrained["aliases"]["workspace"], ["page"])                          # the constraint made the difference
+
+    def test_real_fixture_suite_rejects_a_synthetic_breaking_alias(self):
+        """On the real fixtures: the live policy passes the r0 suite (23/6), a synthetic alias summary -> create breaks s-022."""
+        rp = policy.load_ranking(); state, fb = tune.fixture_state(), tune.fixture_bench(tune._BENCH)
+        self.assertEqual((len(fb["seed"]), len(fb["regression_negative"])), (23, 6))
+        raw = json.loads(tune.ALIASES_PATH.read_text(encoding="utf-8"))
+        self.assertEqual(tune.fixture_failures(state, rp, dict(rp.constants), fb, tune._alias_policy(raw)), [])
+        raw["aliases"]["summary"] = ["create"]
+        raw["notes"]["summary"] = {"origin": "phase2.5", "seed_query_id": None, "failure_classes": [], "evidence": "synthetic"}
+        self.assertIn("s-022", tune.fixture_failures(state, rp, dict(rp.constants), fb, tune._alias_policy(raw)))
+        with self.assertRaises(SystemExit):
+            tune.fixture_bench({"seed": fb["seed"][1:], "regression_negative": fb["regression_negative"]})
 
 
 class TestRequireRound(unittest.TestCase):
