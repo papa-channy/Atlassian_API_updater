@@ -513,3 +513,52 @@ class TestRound2FinalArtifact(unittest.TestCase):
         self.assertEqual(set(art["held_out_top3"]), {"passed", "total"}); self.assertEqual(art["held_out_top3"]["total"], 16)
         for sect, total in (("held_out", 16), ("negative", 8)):
             self.assertEqual(art["sets"][sect]["total"], total)
+
+
+class TestRound2PreTProvenance(unittest.TestCase):
+    """AC-08 / AC-13 / spec §10.1 "pre-T order" / §10.2: the persisted pre-T artifacts were built from S and after the
+    verb inventory was fixed. Guarded: checked once the round >= 2 freeze entry and the artifact exist."""
+
+    def _doc(self, path):
+        e = ev.current_round()
+        if e["round"] < 2 or not path.exists():
+            print(f"{path.name} or the round >= 2 freeze absent: checked after commit T"); return None, e
+        return json.loads(path.read_text(encoding="utf-8")), e
+
+    def test_registry_fingerprint_matches_freeze_source(self):
+        for path in (LEXICON, CANDIDATES_DOC):
+            doc, e = self._doc(path)
+            if doc is not None:
+                self.assertEqual(doc["generated_from"]["registry_fingerprint"], e["source_registry_fingerprint"], path.name)
+
+    def test_lexicon_generated_from_frozen_verb_inventory(self):
+        doc, e = self._doc(LEXICON)
+        if doc is not None:
+            self.assertEqual(doc["generated_from"]["inputs"]["verb_inventory"], e["verb_inventory_sha256"])
+
+
+class TestLexiconAliasesSha256(unittest.TestCase):
+    """spec §10.1: lexicon_aliases_sha256 covers only the lexicon-r{N} subset (aliases + notes)."""
+
+    def test_unchanged_by_round_alias_changed_by_lexicon_edit(self):
+        import shutil, tempfile
+        with tempfile.TemporaryDirectory() as td:
+            p = pathlib.Path(td) / "search_aliases.json"
+            shutil.copyfile(ALIASES, p)                                   # never the live file
+            raw = json.loads(p.read_text(encoding="utf-8"))
+            raw["aliases"]["zzsynonym"] = ["issue"]
+            raw["notes"]["zzsynonym"] = {"origin": "lexicon-r2", "seed_query_id": None, "failure_classes": [], "evidence": "concept lexicon r2"}
+            p.write_text(json.dumps(raw), encoding="utf-8")
+            base = ev.lexicon_aliases_sha256(json.loads(p.read_text(encoding="utf-8")), 2)
+            self.assertNotEqual(base, ev.lexicon_aliases_sha256(json.loads(p.read_text(encoding="utf-8")), 3))   # other round: empty subset
+            raw["aliases"]["zzcandidate"] = ["page"]                      # a round2 alias added in B..C
+            raw["notes"]["zzcandidate"] = {"origin": "round2", "seed_query_id": "s-001", "candidate_word": "zzcandidate",
+                                           "failure_classes": ["R6"], "evidence": "x"}
+            raw["rules"].append({"when_all": ["zzcandidate", "issue"], "add": ["page"]})
+            raw["notes"][f"rule:{len(raw['rules']) - 1}"] = dict(raw["notes"]["zzcandidate"])
+            p.write_text(json.dumps(raw), encoding="utf-8")
+            self.assertEqual(ev.lexicon_aliases_sha256(json.loads(p.read_text(encoding="utf-8")), 2), base)
+            for edit in (lambda r: r["aliases"].__setitem__("zzsynonym", ["page"]),
+                         lambda r: r["notes"]["zzsynonym"].__setitem__("evidence", "edited")):
+                edited = json.loads(p.read_text(encoding="utf-8")); edit(edited)
+                self.assertNotEqual(ev.lexicon_aliases_sha256(edited, 2), base)
