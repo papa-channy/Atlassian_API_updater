@@ -412,6 +412,17 @@ def cmd_seal(args):
     if key in bench:
         print(f"REFUSED: bench already has a {key} key")
         return 1
+    try:                                                     # T < B mechanically: the round must be frozen first
+        ev.freeze_for(args.round)
+    except KeyError:
+        print(f"REFUSED: round_freeze.json has no round {args.round} entry; freeze (commit T) before sealing")
+        return 1
+    problems = verify_freeze(args.round, args.cache_dir)
+    if problems:
+        for m in problems:
+            print(f"MISMATCH {m}")
+        print("REFUSED: the snapshot differs from round_freeze")
+        return 1
     _, internal, fp, shas = load_catalogs_from_cache(args.cache_dir, args.round)
     violations = machine_check(plain, bench, internal, round=args.round)
     if violations:

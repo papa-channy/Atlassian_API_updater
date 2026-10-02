@@ -37,14 +37,6 @@ ALL_SETS = ("seed", "regression_negative", "held_out", "negative")
 HIDDEN_SETS = ("held_out", "negative")
 
 
-def _evaluation_code_sha256_or_none():
-    # Task 4 adds tests/benchmarks/alias_candidates_tool.py; until then evaluation_code_sha256 raises.
-    try:
-        return ev.evaluation_code_sha256(ROOT)
-    except FileNotFoundError:
-        return None
-
-
 def _data_sha(filename):
     """Canonical sha256 of a Round 2 data file under policy.DATA_DIR, or None before it exists."""
     path = policy.DATA_DIR / filename
@@ -145,7 +137,7 @@ def _evaluate(state, bench, sections, sets, plain, rnd):
               "ranking_sha256": rp.sha256, "ranking_structure_sha256": rp.structure_sha256, "alias_sha256": al.sha256,
               "alias_candidates_sha256": _data_sha("alias_candidates.json"),
               "concept_lexicon_sha256": _data_sha("concept_lexicon.json"),
-              "evaluation_code_sha256": _evaluation_code_sha256_or_none(), "spec_sha256": spec_sha,
+              "evaluation_code_sha256": ev.evaluation_code_sha256(ROOT), "spec_sha256": spec_sha,
               "seal_match": fp == seal.get("registry_fingerprint") and spec_sha == seal.get("spec_sha256"),
               "held_out_top3": None,
               "sets": {}, "failures": []}

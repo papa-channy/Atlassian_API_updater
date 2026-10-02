@@ -138,15 +138,23 @@ def lexicon_aliases_sha256(raw_aliases: dict, round: int) -> str:
     return canonical_sha256({"aliases": {w: raw_aliases["aliases"][w] for w in words}, "notes": {w: notes[w] for w in words}})
 
 
+def file_sha256(path) -> str:
+    """Plain sha256 of the file bytes - the value `shasum -a 256 FILE` prints."""
+    return hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()
+
+
 def round_freeze_hashes(round: int, root=ROOT) -> dict:
+    """The hashes of round_freeze.json computed from files (spec §4). JSON data files: canonical_sha256 of the parsed
+    object; the worker brief and the two hidden prompts: plain sha256 of the file bytes (file_sha256, equal to
+    `shasum -a 256`, so a controller can check the brief it forwards); tooling/evaluation code: files_sha256."""
     root = pathlib.Path(root)
     j = lambda rel: canonical_sha256(json.loads((root / rel).read_text(encoding="utf-8")))
     aliases = json.loads((root / DATA_REL / "search_aliases.json").read_text(encoding="utf-8"))
     return {"concept_lexicon_sha256": j(f"{DATA_REL}/concept_lexicon.json"),
             "lexicon_aliases_sha256": lexicon_aliases_sha256(aliases, round),
             "alias_candidates_sha256": j(f"{DATA_REL}/alias_candidates.json"),
-            "worker_brief_sha256": files_sha256(root, (f"tests/benchmarks/round{round}-worker-brief.md",)),
-            "hidden_generation_prompt_sha256": files_sha256(root, (f"tests/benchmarks/round{round}-hidden-generation-prompt.md",)),
-            "hidden_reviewer_prompt_sha256": files_sha256(root, (f"tests/benchmarks/round{round}-hidden-reviewer-prompt.md",)),
+            "worker_brief_sha256": file_sha256(root / f"tests/benchmarks/round{round}-worker-brief.md"),
+            "hidden_generation_prompt_sha256": file_sha256(root / f"tests/benchmarks/round{round}-hidden-generation-prompt.md"),
+            "hidden_reviewer_prompt_sha256": file_sha256(root / f"tests/benchmarks/round{round}-hidden-reviewer-prompt.md"),
             "tooling_code_sha256": tooling_code_sha256(root),
             "evaluation_code_sha256_at_T": evaluation_code_sha256(root)}

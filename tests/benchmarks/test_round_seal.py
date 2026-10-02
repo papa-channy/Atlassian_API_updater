@@ -160,8 +160,18 @@ class TestRoundParameter(unittest.TestCase):
             bp, pp = pathlib.Path(td) / "b.json", pathlib.Path(td) / "p.json"
             bp.write_text(json.dumps(bench)); pp.write_text(json.dumps(plain))
             fake = lambda cache_dir, round=1: (rs.generator_view(CAT), CAT, "f" * 64, {"jira-platform": "a" * 64})
+            argv = ["seal", "--round", "2", "--plain", str(pp), "--bench", str(bp), "--cache-dir", td]
+            entry = {"round": 2, "source_registry_fingerprint": "f" * 64, "source_spec_sha256": {"jira-platform": "a" * 64}}
             with mock.patch.object(rs, "load_catalogs_from_cache", fake), mock.patch("builtins.print"):
-                self.assertEqual(rs.main(["seal", "--round", "2", "--plain", str(pp), "--bench", str(bp), "--cache-dir", td]), 0)
+                # M-9: no round 2 freeze entry -> refused; a snapshot that differs from the freeze -> refused
+                with mock.patch.object(rs.ev, "freeze_for", side_effect=KeyError("round 2")):
+                    self.assertEqual(rs.main(argv), 1)
+                with mock.patch.object(rs.ev, "freeze_for", return_value={**entry, "source_registry_fingerprint": "0" * 64}):
+                    self.assertEqual(rs.main(argv), 1)
+                self.assertNotIn("round2_seal", json.loads(bp.read_text()))
+            with mock.patch.object(rs, "load_catalogs_from_cache", fake), mock.patch("builtins.print"), \
+                 mock.patch.object(rs.ev, "freeze_for", return_value=entry):
+                self.assertEqual(rs.main(argv), 0)
                 out = json.loads(bp.read_text())
                 self.assertIn("round2_seal", out); self.assertIn("round1_seal", out)
                 self.assertEqual(out["round2_seal"]["machine_check"], "passed")

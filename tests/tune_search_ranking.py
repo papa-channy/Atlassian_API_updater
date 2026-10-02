@@ -1,7 +1,8 @@
 """One-way, deterministic Round-N tuning (Round 2 spec §5.5/§7.2):
 
     python tests/tune_search_ranking.py --cache-dir S [--dry-run] [--note TEXT]     # pipeline, exit 0 pending / 1 failed / 2 error
-    python tests/tune_search_ranking.py --adopt RUN_ID                               # after the full suite passed
+    python tests/tune_search_ranking.py --adopt RUN_ID                               # after the full suite passed: marks the
+                                                                                     # log line adopted only (the worker commits)
     python tests/tune_search_ranking.py --verify --cache-dir S                       # replay the adopted run
 
 tune_round(b_aliases, b_ranking, snapshot, frozen_candidates, seed, regression) -> (final_constants, alias_patch, log):
@@ -438,6 +439,10 @@ def main(argv=None) -> int:
     cands_doc = json.loads(CANDIDATES_PATH.read_text(encoding="utf-8"))
     if args.verify:
         return _verify(cache, bench, rp, aliases_raw, ranking_raw, cands_doc)
+    decided = [l["run_id"] for l in _read_log() if l.get("status") in ("pending", "rejected", "adopted")]
+    if decided and not args.dry_run:
+        print(f"error: {LOG_REL} already holds a pending/rejected/adopted run {decided}; the first AC-valid output is "
+              f"final and a rejected run ends the round - no new pipeline run", file=sys.stderr); return 2
     bad = baseline_mismatch(aliases_raw, ranking_raw, cands_doc)
     if bad:
         print(f"error: dirty round state: {bad} differ from the B baseline recorded in alias_candidates.json; "
@@ -515,6 +520,9 @@ def _adopt(run_id) -> int:
         print(f"error: run {run_id} is not a pending run", file=sys.stderr); return 2
     if any(l["adopted"] for l in lines):
         print("error: a run is already adopted", file=sys.stderr); return 2
+    first = next((l for l in lines if l["status"] != "failed"), None)
+    if first is None or first["run_id"] != run_id:
+        print(f"error: run {run_id} is not the first non-failed run of the log (AC-20b)", file=sys.stderr); return 2
     if _current_result_sha256() != mine[0]["result_sha256"]:
         print("error: policy files no longer reproduce this run's result_sha256", file=sys.stderr); return 2
     mine[0]["status"], mine[0]["adopted"] = "adopted", True
@@ -524,6 +532,8 @@ def _adopt(run_id) -> int:
 
 
 FAILING_TEST = re.compile(r"^(?:FAIL|ERROR): (\S+) \(([^)]+)\)", re.M)
+EXIT_CODE_LINE = re.compile(r"^(?:exit[_ ]code|EXIT_CODE)\s*[:=]\s*(\d+)\s*$", re.M | re.I)
+UNITTEST_FAILED = re.compile(r"^FAILED \(", re.M)
 
 
 def _test_id(name: str, qual: str) -> str:
@@ -532,9 +542,13 @@ def _test_id(name: str, qual: str) -> str:
 
 
 def suite_evidence(text: str) -> dict:
-    """Failure signature of a captured unittest run: canonical failing test ids (sorted, deduped) + sha of the output."""
+    """Failure signature of a captured unittest run: exit code, canonical failing test ids (sorted, deduped) and the
+    sha of the output. exit_code comes from the evidence: an explicit `exit_code: N` / `EXIT_CODE=N` line (the last
+    one) when the capture recorded it, else unittest's own summary (`FAILED (` -> 1, otherwise 0)."""
     ids = sorted({_test_id(name, qual) for name, qual in FAILING_TEST.findall(text)})
-    return {"failing_tests": ids, "output_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest()}
+    explicit = EXIT_CODE_LINE.findall(text)
+    code = int(explicit[-1]) if explicit else (1 if UNITTEST_FAILED.search(text) else 0)
+    return {"exit_code": code, "failing_tests": ids, "output_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest()}
 
 
 def materialize_candidate(line: dict, b_aliases_raw: dict, b_ranking_raw: dict) -> tuple:
@@ -572,8 +586,8 @@ def _reject(run_id, reason, evidence_path) -> int:
         print(f"error: run {run_id} is not a pending run", file=sys.stderr); return 2
     text = pathlib.Path(evidence_path).expanduser().read_text(encoding="utf-8", errors="replace")
     ev_sig = suite_evidence(text)
-    if not ev_sig["failing_tests"]:
-        print("error: evidence file contains no FAIL/ERROR lines; refusing to reject a green run", file=sys.stderr); return 2
+    if not ev_sig["failing_tests"] or ev_sig["exit_code"] == 0:
+        print("error: evidence shows no FAIL/ERROR lines or a zero exit code; refusing to reject a green run", file=sys.stderr); return 2
     if _current_result_sha256() != mine[0]["result_sha256"]:
         print("error: policy files no longer reproduce this run's result_sha256; evidence would not belong to this candidate", file=sys.stderr); return 2
     subprocess.run(["git", "checkout", "--", str(ALIASES_PATH.relative_to(ROOT)), str(RANKING_PATH.relative_to(ROOT))], cwd=ROOT, check=True)
@@ -582,7 +596,7 @@ def _reject(run_id, reason, evidence_path) -> int:
     if bad:
         print(f"error: B baseline not restored: {bad}", file=sys.stderr); return 2
     mine[0]["status"], mine[0]["reject_reason"] = "rejected", reason
-    mine[0]["reject_evidence"] = {"exit_code": 1, **ev_sig, "evidence_path": str(evidence_path)}
+    mine[0]["reject_evidence"] = {**ev_sig, "evidence_path": str(evidence_path)}
     _write_log(lines)
     print(json.dumps({"run_id": run_id, "status": "rejected", "reason": reason, "failing_tests": ev_sig["failing_tests"], "output_sha256": ev_sig["output_sha256"]}))
     return 0
@@ -616,6 +630,8 @@ def _verify(cache, bench, rp, aliases_raw, ranking_raw, cands_doc) -> int:
         problems.append("stripped alias file differs from the B baseline recorded in alias_candidates.json")
     if adopted and consts != adopted[0]["constants_selected"]:
         problems.append("constants on disk differ from the adopted run")
+    if adopted and _current_result_sha256() != target["result_sha256"]:     # AC-19b: the files carry exactly the adopted delta
+        problems.append("policy files on disk do not reproduce the adopted run's result_sha256")
     print("replay ok" if not problems else "\n".join(f"MISMATCH {m}" for m in problems))
     return 1 if problems else 0
 

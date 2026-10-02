@@ -38,7 +38,7 @@ def normalize_raw(raw) -> dict:
 def structural_check(lex, concept_set, catalog_set, verbs, hints, alias_keys):
     kept, rej = {}, {}
     for syn, targets in lex.items():
-        reason = ("shape" if not _SHAPE.fullmatch(syn) or syn in STOPWORDS
+        reason = ("shape" if not _SHAPE.fullmatch(syn) or len(syn) < 2 or syn in STOPWORDS
                   else "id_like" if not any(c.isalpha() for c in syn) or syn in act.ID_LIKE
                   else "function_word" if syn in act.FUNCTION_WORDS
                   else "verb" if syn in verbs else "product_hint" if syn in hints else "in_catalog" if syn in catalog_set

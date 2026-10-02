@@ -32,6 +32,11 @@ class TestChecks(unittest.TestCase):
         self.assertEqual(rej["key"]["reason"], "id_like")
         self.assertNotEqual(rej.get("w3", {}).get("reason"), "id_like")  # has a letter, not in ID_LIKE: id_like does not reject it
 
+    def test_one_letter_synonym_rejected_as_shape(self):
+        """Review M-6: tokenize_unigrams drops tokens shorter than 2, so such an alias could never fire."""
+        kept, rej = clc.prepare_review({"x": ["issue"], "Q": ["page"], "xy": ["issue"]}, *ARGS)
+        self.assertEqual(rej["x"]["reason"], "shape"); self.assertEqual(rej["q"]["reason"], "shape"); self.assertIn("xy", kept)
+
     def test_prepare_review_does_not_cap(self):
         raw = {f"w{i}": ["issue"] for i in range(8)}
         kept, _ = clc.prepare_review(raw, *ARGS)

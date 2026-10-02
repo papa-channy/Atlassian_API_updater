@@ -315,12 +315,7 @@ class TestEvaluationCodeSha256(unittest.TestCase):
         import hashlib, shutil, tempfile
         self.assertEqual(tuple(sorted(EVAL_CODE_FILES)), ev.EVALUATION_CODE_FILES)
         self.assertTrue(set(ev.EVALUATION_CODE_FILES) <= set(ev.TOOLING_FILES))
-        if all((ROOT / p).exists() for p in ev.TOOLING_FILES):
-            self.assertEqual(ev.tooling_code_sha256(ROOT), ev.files_sha256(ROOT, ev.TOOLING_FILES))
-        else:
-            print("tooling incomplete")
-        if not all((ROOT / p).exists() for p in EVAL_CODE_FILES):
-            print("evaluation code files incomplete: checked once alias_candidates_tool.py exists (Task 4)"); return
+        self.assertEqual(ev.tooling_code_sha256(ROOT), ev.files_sha256(ROOT, ev.TOOLING_FILES))   # every tooling file exists
         h = ev.evaluation_code_sha256(ROOT)
         self.assertRegex(h, r"^[0-9a-f]{64}$"); self.assertEqual(h, ev.evaluation_code_sha256(ROOT))
         blob = b"".join(p.encode() + b"\0" + (ROOT / p).read_bytes() + b"\0" for p in sorted(EVAL_CODE_FILES))
@@ -535,6 +530,16 @@ class TestRound2PreTProvenance(unittest.TestCase):
         doc, e = self._doc(LEXICON)
         if doc is not None:
             self.assertEqual(doc["generated_from"]["inputs"]["verb_inventory"], e["verb_inventory_sha256"])
+
+
+class TestFreezeFileHashes(unittest.TestCase):
+    def test_brief_and_prompt_hashes_are_plain_file_sha256(self):
+        """Review M-3: worker brief / prompt shas equal `shasum -a 256` of the file (no path prefix)."""
+        import hashlib, tempfile
+        with tempfile.TemporaryDirectory() as td:
+            p = pathlib.Path(td) / "brief.md"; p.write_bytes(b"brief\n")
+            self.assertEqual(ev.file_sha256(p), hashlib.sha256(b"brief\n").hexdigest())
+            self.assertNotEqual(ev.file_sha256(p), ev.files_sha256(td, ("brief.md",)))
 
 
 class TestLexiconAliasesSha256(unittest.TestCase):

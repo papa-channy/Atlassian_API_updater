@@ -234,7 +234,10 @@ class TestReplayAndHashes(unittest.TestCase):
                 "ERROR: test_b (tests.y.TestB)\n\nRan 3 tests in 0.010s\n\nFAILED (failures=1, errors=1)\n")   # 3.12 and pre-3.12 header forms
         ev_sig = tune.suite_evidence(text)
         self.assertEqual(ev_sig["failing_tests"], ["tests.x.TestA.test_a", "tests.y.TestB.test_b"]); self.assertRegex(ev_sig["output_sha256"], r"^[0-9a-f]{64}$")
+        self.assertEqual(ev_sig["exit_code"], 1)                                                   # from unittest's FAILED summary
         self.assertEqual(tune.suite_evidence("Ran 3 tests\n\nOK\n")["failing_tests"], [])
+        self.assertEqual(tune.suite_evidence("Ran 3 tests\n\nOK\n")["exit_code"], 0)
+        self.assertEqual(tune.suite_evidence(text + "exit_code: 3\n")["exit_code"], 3)            # explicit capture line wins (M-8)
         line = {"constants_selected": {**BASE, "method_match_bonus": 3.0}, "aliases_proposed": {"aliases": {"workspace": ["page"]}, "rules": [], "notes": {"workspace": tune.round2_note("workspace", "s-001", "page", "alias")}}}
         ranking, aliases = tune.materialize_candidate(line, BASE_RAW, {"constants": dict(BASE), "version": 1})
         self.assertEqual(ranking["constants"]["method_match_bonus"], 3.0); self.assertEqual(aliases["aliases"]["workspace"], ["page"])
@@ -309,3 +312,46 @@ class TestRequireRound(unittest.TestCase):
             for argv in argvs:
                 self.assertNotEqual(tune.main(argv), 0, argv)
         self.assertEqual(hashlib.sha256(r1_log.read_bytes()).hexdigest(), before)
+
+
+class TestRunLifecycleGuards(unittest.TestCase):
+    """Review M-1 / M-2: --verify compares the files with the adopted sha; one decided run per log; adopt only the first."""
+
+    def line(self, run_id, status):
+        return {"run_id": run_id, "status": status, "adopted": status == "adopted", "tuning_failed": status == "failed",
+                "constants_selected": dict(BASE), "result_sha256": "a" * 64}
+
+    def test_adopt_requires_first_non_failed_run(self):
+        from unittest import mock
+        lines = [self.line("f1", "failed"), self.line("p1", "pending"), self.line("p2", "pending")]
+        with mock.patch.object(tune, "_read_log", return_value=lines), mock.patch.object(tune, "_write_log") as wl, \
+             mock.patch.object(tune, "_current_result_sha256", return_value="a" * 64), mock.patch("sys.stderr"), mock.patch("builtins.print"):
+            self.assertEqual(tune._adopt("p2"), 2); wl.assert_not_called()
+            self.assertEqual(tune._adopt("p1"), 0); wl.assert_called_once()
+
+    def test_new_pipeline_run_refused_when_log_has_a_decided_run(self):
+        import tempfile
+        from unittest import mock
+        for status in ("pending", "rejected", "adopted"):
+            with tempfile.TemporaryDirectory() as td:
+                for src in tune.SOURCES:
+                    (pathlib.Path(td) / f"{src}.json").write_text("{}")
+                cands = pathlib.Path(td) / "c.json"; cands.write_text(json.dumps({"generated_from": {"inputs": {}}, "candidates": {}}))
+                with mock.patch.object(tune.ev, "current_round", return_value={"round": 2}), mock.patch.object(tune.rs, "verify_freeze", return_value=[]), \
+                     mock.patch.object(tune, "CANDIDATES_PATH", cands), mock.patch.object(tune, "_read_log", return_value=[self.line("x", status)]), \
+                     mock.patch.object(tune, "baseline_mismatch", side_effect=AssertionError("must refuse first")), mock.patch("sys.stderr"):
+                    self.assertEqual(tune.main(["--cache-dir", td]), 2, status)
+
+    def test_verify_success_branch_compares_files_with_adopted_sha(self):
+        from unittest import mock
+        adopted = self.line("a1", "adopted")
+        rp = policy.load_ranking()
+        cands = {"generated_from": {"inputs": {"aliases": policy.canonical_sha256(BASE_RAW)}}, "candidates": {}}
+        adopted["constants_selected"] = dict(rp.constants)
+        with mock.patch.object(tune, "_read_log", return_value=[adopted]), mock.patch.object(tune, "_with_state", return_value=[]), \
+             mock.patch.object(tune, "_current_result_sha256", return_value="b" * 64), mock.patch("builtins.print") as out:
+            self.assertEqual(tune._verify(pathlib.Path("unused"), tune._BENCH, rp, BASE_RAW, {}, cands), 1)
+        self.assertTrue(any("do not reproduce the adopted run" in str(c) for c in out.call_args_list))
+        with mock.patch.object(tune, "_read_log", return_value=[adopted]), mock.patch.object(tune, "_with_state", return_value=[]), \
+             mock.patch.object(tune, "_current_result_sha256", return_value="a" * 64), mock.patch("builtins.print"):
+            self.assertEqual(tune._verify(pathlib.Path("unused"), tune._BENCH, rp, BASE_RAW, {}, cands), 0)

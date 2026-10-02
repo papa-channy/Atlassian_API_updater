@@ -290,7 +290,11 @@ fingerprint·spec sha를 `round1_seal`과 비교해 다르면 경고하고, 그 
 (held_out 4/16, negative 5/8) 이후 사전·후보 도구와 결정적 튜닝 파이프라인을 추가한다. 도구는
 `tests/benchmarks/round_seal.py --round 2`(`freeze`/`verify-freeze` 포함), `tests/benchmarks/alias_candidates_tool.py`,
 `tests/benchmarks/concept_lexicon_check.py prepare/finalize/merge`, 그리고 한-방향(one-way) 파이프라인인
-`tests/tune_search_ranking.py`(상수·alias 패치를 커밋하는 `--adopt`, 결정성을 재확인하는 `--verify`)이다.
+`tests/tune_search_ranking.py`(전체 테스트 통과 후 pending run의 로그 라인만 adopted로 표시하는 `--adopt` — 정책 파일
+커밋은 worker가 한다 —, 결정성을 재확인하는 `--verify`)이다. 튜닝의 모든 후보(상수 격자점·alias 제안)는 r0 fixture
+스위트(seed 23·negative 6)를 통과해야 하며(하드 제약, 위반 후보는 선택에서 빠지고 로그 `fixture_fail`에 남는다), 로그에
+pending/rejected/adopted run이 이미 있으면 새 파이프라인 실행은 거부된다. `round_freeze.json`의 worker 브리프·hidden
+생성/검토 프롬프트 해시는 파일 바이트의 plain sha256(`shasum -a 256` 출력과 같은 값)이다.
 소스 스냅샷은 커밋 H 직후 한 번만 만들어 `$ATLASSIAN_DOCS_ROUND2_CACHE`(존재 시 거부)에 두고, T 이후 재스냅샷은
 없다. 라운드는 세 종료 상태 중 하나로 끝난다: 성공(커밋 D), 튜닝 실패(커밋 F, 정책 파일은 B 상태로 유지), abort
 (커밋 X, 튜닝 통과 후 전체 테스트 실패로 run이 거부된 경우). `tests/diag_search_queries.py --round N`이 해당
