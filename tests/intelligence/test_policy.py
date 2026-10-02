@@ -6,6 +6,17 @@ import unittest
 from tools.atlassian_docs.intelligence import policy
 
 
+LEGACY_ALIAS_SUBSET_SHA256 = "c430e96177612510b94427fa80c1f98c2e6cb1b0e20872a4505964f5df055be3"   # canonical sha of legacy_alias_subset(file at 95b8de0); equals the Round 1 alias_sha256 because the file has no Round 2 entries yet
+
+
+def legacy_alias_subset(raw: dict) -> dict:
+    keep = {k for k, n in raw["notes"].items() if n.get("origin") in ("phase2.5", "round1")}
+    rules = [r for i, r in enumerate(raw["rules"]) if f"rule:{i}" in keep]
+    return {"version": raw["version"], "alias_damping": raw["alias_damping"], "rule_damping": raw["rule_damping"],
+            "aliases": {w: v for w, v in raw["aliases"].items() if w in keep}, "rules": rules,
+            "notes": {k: n for k, n in raw["notes"].items() if k in keep}}
+
+
 class TestCanonicalHash(unittest.TestCase):
     def test_whitespace_invariant(self):
         a = policy.canonical_sha256(json.loads('{"b": 1, "a": [1, 2]}'))
@@ -56,6 +67,30 @@ class TestAliases(unittest.TestCase):
             with self.assertRaises(ValueError, msg=repr(bad)):
                 policy.load_aliases(self._write(bad))
         self.assertIsNotNone(policy.load_aliases().sha256)
+
+    def test_round_note_schema_is_round_aware(self):
+        ph = {"origin": "phase2.5", "seed_query_id": None, "failure_classes": [], "evidence": "phase2.5 §6.1"}
+        base = {"version": 1, "alias_damping": 0.5, "rule_damping": 1.0, "aliases": {"feedback": ["comment"]},
+                "rules": [{"when_all": ["issue", "key"], "add": ["getissue"]}]}
+        r1 = {"origin": "round1", "seed_query_id": "s-015", "failure_classes": ["R4"], "evidence": "x"}
+        r2 = {"origin": "round2", "seed_query_id": "s-024", "candidate_word": "feedback", "failure_classes": ["R6"], "evidence": "x"}
+        lx = {"origin": "lexicon-r2", "seed_query_id": None, "failure_classes": [], "evidence": "concept lexicon r2"}
+        for good in (r1, r2, lx):
+            policy.load_aliases(self._write({**base, "notes": {"feedback": good, "rule:0": ph}}))
+        bads = [{**r2, "candidate_word": None}, {k: v for k, v in r2.items() if k != "candidate_word"},
+                {**r2, "failure_classes": ["R4"]}, {**r2, "seed_query_id": None}, {**r2, "origin": "round0"},
+                {**r2, "origin": "round02"}, {**r2, "origin": "round9x"}, {**lx, "seed_query_id": "s-001"},
+                {**lx, "failure_classes": ["R6"]}, {**lx, "origin": "lexicon-r0"}, {**r1, "candidate_word": 3}]
+        for bad in bads:
+            with self.assertRaises(ValueError, msg=repr(bad)):
+                policy.load_aliases(self._write({**base, "notes": {"feedback": bad, "rule:0": ph}}))
+
+    def test_legacy_alias_subset_unchanged_by_schema_change(self):
+        """AC-17: the phase2.5 + round1 subset of search_aliases.json (aliases, rules, notes) is pinned; Round 2 additions
+        (lexicon-r2, round2) are stripped before hashing, so the test survives commit T."""
+        raw = json.loads((policy.DATA_DIR / "search_aliases.json").read_text(encoding="utf-8"))
+        self.assertEqual(policy.canonical_sha256(legacy_alias_subset(raw)), LEGACY_ALIAS_SUBSET_SHA256)
+        policy.load_aliases()                                   # the whole file still loads under the new schema
 
 
 class TestOverrides(unittest.TestCase):

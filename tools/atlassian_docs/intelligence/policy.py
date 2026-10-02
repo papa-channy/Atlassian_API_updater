@@ -54,24 +54,39 @@ class AliasPolicy:
     sha256: str
 
 
-_NOTE_ORIGINS = ("phase2.5", "round1")
+_NOTE_ORIGIN = re.compile(r"^(phase2\.5|round([1-9]\d*)|lexicon-r([1-9]\d*))$")
 _SEED_ID = re.compile(r"s-\d{3}")               # always fullmatch
 
 
 def _check_alias_notes(notes, expected_keys: set) -> None:
-    """Round 1 spec §7: every alias word and rule:<index> carries provenance notes; round1 entries are R4-only."""
+    """Round 2 spec §8: provenance notes per alias word / rule:<index>, schema branched by origin:
+    phase2.5 (legacy), round1 (seed_query_id + R4), round>=2 (seed_query_id + candidate_word + R6),
+    lexicon-rN (seed_query_id null, failure_classes empty)."""
     if not isinstance(notes, dict) or set(notes) != expected_keys:
         raise ValueError("alias 'notes' must cover exactly the alias words and rule:<index> keys")
     for key, n in notes.items():
-        if not isinstance(n, dict) or n.get("origin") not in _NOTE_ORIGINS \
+        if not isinstance(n, dict) or not isinstance(n.get("origin"), str) \
                 or not isinstance(n.get("failure_classes"), list) or not isinstance(n.get("evidence"), str):
             raise ValueError(f"alias note {key!r} must have origin, failure_classes and evidence")
-        if n["origin"] == "round1":
-            sid = n.get("seed_query_id")
-            if not isinstance(sid, str) or not _SEED_ID.fullmatch(sid) or "R4" not in n["failure_classes"]:
-                raise ValueError(f"round1 alias note {key!r} needs seed_query_id s-NNN and R4 in failure_classes")
-        elif n.get("seed_query_id") is not None:
-            raise ValueError(f"phase2.5 alias note {key!r} must have seed_query_id null")
+        m = _NOTE_ORIGIN.fullmatch(n["origin"])
+        if m is None:
+            raise ValueError(f"alias note {key!r} has unknown origin {n['origin']!r}")
+        cw, sid = n.get("candidate_word"), n.get("seed_query_id")
+        if cw is not None and (not isinstance(cw, str) or not cw):
+            raise ValueError(f"alias note {key!r}: candidate_word must be a non-empty string")
+        if m.group(2):                                          # round N
+            if not isinstance(sid, str) or not _SEED_ID.fullmatch(sid):
+                raise ValueError(f"{n['origin']} alias note {key!r} needs seed_query_id s-NNN")
+            if int(m.group(2)) == 1:
+                if "R4" not in n["failure_classes"]:
+                    raise ValueError(f"round1 alias note {key!r} needs R4 in failure_classes")
+            elif "R6" not in n["failure_classes"] or cw is None:
+                raise ValueError(f"{n['origin']} alias note {key!r} needs candidate_word and R6 in failure_classes")
+        else:                                                   # phase2.5 / lexicon-rN
+            if sid is not None:
+                raise ValueError(f"{n['origin']} alias note {key!r} must have seed_query_id null")
+            if m.group(3) and n["failure_classes"] != []:
+                raise ValueError(f"{n['origin']} alias note {key!r} must have empty failure_classes")
 
 
 def load_aliases(path: Optional[pathlib.Path] = None) -> AliasPolicy:
