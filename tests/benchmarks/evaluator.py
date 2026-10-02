@@ -81,3 +81,43 @@ def evaluation_code_sha256(root) -> str:
     for rel in EVALUATION_CODE_FILES:
         h.update(rel.encode() + b"\0" + (root / rel).read_bytes() + b"\0")
     return h.hexdigest()
+
+
+IRREGULAR_SINGULAR = {"statuses": "status"}; UNCHANGED_PLURAL = frozenset({"series", "species", "news"})
+
+
+def singular(t: str) -> str:
+    if t in IRREGULAR_SINGULAR: return IRREGULAR_SINGULAR[t]
+    if t in UNCHANGED_PLURAL or len(t) <= 3: return t
+    if t.endswith("ies"): return t[:-3] + "y"
+    if t.endswith(("sses", "shes", "ches", "xes")): return t[:-2]
+    if t.endswith(("ss", "us", "is")): return t
+    return t[:-1] if t.endswith("s") else t
+
+
+STRUCTURE_KEYS = ("verb_methods", "path_noise", "product_hints", "tuning_grid", "baseline")
+ROUND_FREEZE = pathlib.Path(__file__).resolve().parent / "round_freeze.json"
+
+
+def load_round_freeze(path=ROUND_FREEZE) -> list:
+    """round_freeze.json holds either a single round entry (Round 1) or a list of per-round entries; normalize to a list."""
+    raw = json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
+    return raw if isinstance(raw, list) else [raw]
+
+
+def current_round(freeze=None) -> dict:
+    """The most recently frozen round entry."""
+    return (freeze if freeze is not None else load_round_freeze())[-1]
+
+
+def freeze_for(round, freeze=None) -> dict:
+    """The frozen entry for a specific round; raises KeyError when that round was never frozen."""
+    for entry in (freeze if freeze is not None else load_round_freeze()):
+        if entry.get("round") == round:
+            return entry
+    raise KeyError(round)
+
+
+def round_freeze_hashes(round, root=None) -> dict:
+    # completed in Task 3
+    return {}

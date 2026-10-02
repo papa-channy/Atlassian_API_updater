@@ -126,7 +126,7 @@ class TestSealIntegrity(unittest.TestCase):
                 self.assertRegex(section["sha256"], r"^[0-9a-f]{64}$"); self.assertEqual(section["sha256"], seal[f"{sect}_sha256"])
                 self.assertEqual(section["distribution"], seal[f"{sect}_distribution"])
             elif section:                       # plaintext after commit D
-                from tests.benchmarks import round1_seal as rs
+                from tests.benchmarks import round_seal as rs
                 self.assertIsNotNone(seal, "plaintext hidden sets require round1_seal")
                 self.assertEqual(len(section), expected_count)
                 self.assertEqual(ev.canonical_sha256(section), seal[f"{sect}_sha256"])
@@ -134,7 +134,7 @@ class TestSealIntegrity(unittest.TestCase):
             # empty list before commit B: nothing to check
 
     def test_hidden_plaintext_machine_rules(self):
-        from tests.benchmarks import round1_seal as rs
+        from tests.benchmarks import round_seal as rs
         if ev.is_sealed(self.b["held_out"]) or not self.b["held_out"]:
             print("hidden sets sealed or absent: machine rules checked at commit D"); return
         cache = os.environ.get("ATLASSIAN_DOCS_ROUND1_CACHE")

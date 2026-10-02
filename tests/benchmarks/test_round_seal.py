@@ -1,5 +1,5 @@
 import json, unittest
-from tests.benchmarks import round1_seal as rs
+from tests.benchmarks import round_seal as rs
 
 CAT = [  # A..H: 8 synthetic ops covering jira-platform / jira-software / confluence and GET/POST/PUT/DELETE
     {"key": "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}", "source": "jira-platform", "method": "GET",
@@ -138,3 +138,118 @@ class TestHiddenOriginAndIds(unittest.TestCase):
     def test_duplicate_id_across_sections_rejected(self):
         msgs = self._msgs(lambda p: p["negative"][0].__setitem__("id", "h-001"))
         self.assertTrue(any(m.startswith("h-001") and "duplicate id" in m for m in msgs))
+
+
+class TestRoundParameter(unittest.TestCase):
+    def test_origin_and_seal_key_follow_round(self):
+        self.assertEqual(rs.section_origin(2), {"held_out": "held_out-r2", "negative": "negative-r2"})
+        self.assertEqual(rs.seal_key(2), "round2_seal")
+        plain = valid_plain()
+        self.assertEqual(rs.machine_check(plain, BENCH, CAT, round=1), [])
+        msgs = rs.machine_check(plain, BENCH, CAT, round=2)
+        self.assertTrue(all("origin" in m for m in msgs) and len(msgs) == 24)
+
+    def test_seal_key_is_per_round(self):
+        import json, pathlib, tempfile
+        from unittest import mock
+        plain = valid_plain()
+        for r in plain["held_out"] + plain["negative"]:
+            r["origin"] = r["origin"].replace("-r1", "-r2")
+        bench = {**BENCH, "held_out": [], "negative": [], "round1_seal": {"held_out_sha256": "0" * 64}}
+        with tempfile.TemporaryDirectory() as td:
+            bp, pp = pathlib.Path(td) / "b.json", pathlib.Path(td) / "p.json"
+            bp.write_text(json.dumps(bench)); pp.write_text(json.dumps(plain))
+            fake = lambda cache_dir, round=1: (rs.generator_view(CAT), CAT, "f" * 64, {"jira-platform": "a" * 64})
+            with mock.patch.object(rs, "load_catalogs_from_cache", fake), mock.patch("builtins.print"):
+                self.assertEqual(rs.main(["seal", "--round", "2", "--plain", str(pp), "--bench", str(bp), "--cache-dir", td]), 0)
+                out = json.loads(bp.read_text())
+                self.assertIn("round2_seal", out); self.assertIn("round1_seal", out)
+                self.assertEqual(out["round2_seal"]["machine_check"], "passed")
+                self.assertEqual(out["round2_seal"]["origins"], rs.section_origin(2))
+                self.assertEqual(out["held_out"]["round"], 2)
+                self.assertEqual(rs.main(["seal", "--round", "2", "--plain", str(pp), "--bench", str(bp), "--cache-dir", td]), 1)
+
+
+I = {"key": "jira-software:GET:/rest/agile/1.0/board/list", "source": "jira-software", "method": "GET",
+     "operation_id": "listBoards", "summary": "Show all boards", "tags": ["Board"], "description": "Lists boards."}
+CAT_R2 = CAT + [I]
+
+
+class TestRound2NegativePhraseRule(unittest.TestCase):
+    def _plain(self):
+        plain = valid_plain()
+        for r in plain["held_out"] + plain["negative"]:
+            r["origin"] = r["origin"].replace("-r1", "-r2")
+        return plain
+
+    def test_phrase_tokens(self):
+        self.assertEqual(rs.phrase_tokens("Show all the Boards"), ("show", "all", "board"))
+        self.assertEqual(rs.phrase_tokens("Board"), ("board",)); self.assertEqual(rs._last_literal_segment(D), "board")
+        self.assertEqual(rs.phrase_tokens("1.0"), ("1", "0"))                           # digits are tokens; only the LAST segment is compared
+
+    def test_negative_equal_to_summary_phrase_rejected(self):
+        # I: summary phrase ("show","all","board") but operationId words {list, boards}: the Round 1 operationId rule does
+        # NOT fire for "show all boards", so Round 1 = 0 violations and Round 2 = exactly the new negative-phrase rule.
+        plain = self._plain(); plain["negative"][0]["query"] = "show all boards"
+        msgs = rs.machine_check(plain, BENCH, CAT_R2, round=2)
+        self.assertTrue(any(m.startswith("n-001") and "summary phrase" in m for m in msgs), msgs)
+        plain1 = valid_plain(); plain1["negative"][0]["query"] = "show all boards"
+        self.assertEqual(rs.machine_check(plain1, BENCH, CAT_R2, round=1), [])          # Round 1 rule set unchanged
+
+    def test_negative_equal_to_last_path_segment_rejected(self):
+        plain = self._plain(); plain["negative"][1]["query"] = "assignee of this"       # 3 words; of/this are STOPWORDS
+        self.assertEqual(rs.phrase_tokens(plain["negative"][1]["query"]), rs.phrase_tokens(rs._last_literal_segment(F)))
+        msgs = rs.machine_check(plain, BENCH, CAT, round=2)
+        self.assertTrue(any(m.startswith("n-002") and "path phrase" in m for m in msgs), msgs)
+
+    def test_valid_round2_plain_has_no_violations(self):
+        self.assertEqual(rs.machine_check(self._plain(), BENCH, CAT, round=2), [])
+
+
+class TestReviewerOutputValidator(unittest.TestCase):
+    def test_exact_keys_and_schema(self):
+        ids = ["h-001", "n-001"]
+        good = {"h-001": {"accept": True, "reason": "ok"}, "n-001": {"accept": False, "reason": "answerable"}}
+        self.assertEqual(rs.validate_reviewer_output(good, ids), [])
+        self.assertTrue(rs.validate_reviewer_output({"h-001": good["h-001"]}, ids))                         # missing
+        self.assertTrue(rs.validate_reviewer_output({**good, "h-999": good["h-001"]}, ids))                 # extra
+        self.assertTrue(rs.validate_reviewer_output({**good, "n-001": {"accept": "no", "reason": "x"}}, ids))  # non-bool
+        self.assertTrue(rs.validate_reviewer_output({**good, "n-001": "reject"}, ids))                       # non-object
+        self.assertTrue(rs.validate_reviewer_output(["h-001"], ids))
+
+
+class TestVerifyFreeze(unittest.TestCase):
+    def test_verify_freeze_compares_fingerprint_and_spec_shas(self):
+        from unittest import mock
+        shas = {"jira-platform": "a" * 64, "jira-software": "b" * 64, "confluence": "c" * 64}
+        entry = {"round": 2, "source_registry_fingerprint": "f" * 64, "source_spec_sha256": dict(shas)}
+        fake = lambda cache_dir, round=1: ([], CAT, "f" * 64, dict(shas))
+        with mock.patch.object(rs, "load_catalogs_from_cache", fake), mock.patch.object(rs.ev, "freeze_for", lambda r: entry):
+            self.assertEqual(rs.verify_freeze(2, "x"), [])
+        bad = lambda cache_dir, round=1: ([], CAT, "f" * 64, {**shas, "confluence": "d" * 64})
+        with mock.patch.object(rs, "load_catalogs_from_cache", bad), mock.patch.object(rs.ev, "freeze_for", lambda r: entry):
+            self.assertEqual(rs.verify_freeze(2, "x"), ["spec_sha256[confluence] differs from round_freeze"])
+
+class TestReplacementHelpers(unittest.TestCase):
+    def test_validate_and_merge_replacements(self):
+        plain = valid_plain()
+        new = [{**plain["held_out"][2], "query": "wipe out the whole ticket"}]
+        self.assertEqual(rs.validate_replacement_output(new, ["h-003"]), [])
+        self.assertTrue(rs.validate_replacement_output(new, ["h-003", "h-004"]))                 # missing
+        self.assertTrue(rs.validate_replacement_output(new + [plain["held_out"][0]], ["h-003"]))  # unexpected
+        self.assertTrue(rs.validate_replacement_output({"h-003": new[0]}, ["h-003"]))            # not a list
+        merged = rs.merge_replacements(plain, new)
+        self.assertEqual(merged["held_out"][2]["query"], "wipe out the whole ticket")
+        self.assertEqual([r["id"] for r in merged["held_out"]], [r["id"] for r in plain["held_out"]])
+        self.assertEqual(merged["negative"], plain["negative"])
+        manifest = rs.coverage_manifest(merged, {r["id"]: 1 for s in ("held_out", "negative") for r in merged[s]})
+        self.assertEqual(len(manifest), 24); self.assertEqual(manifest["h-003"]["record_sha256"], rs.canonical_sha256(new[0]))
+        ids = [r["id"] for s in ("held_out", "negative") for r in merged[s]]
+        shas = {r["id"]: rs.canonical_sha256(r) for s in ("held_out", "negative") for r in merged[s]}
+        attempts = [{"attempt_no": 1, "stage": "review", "status": "valid", "reviewed_record_shas": shas, "accepted_ids": ids}]
+        self.assertEqual(rs.verify_coverage(manifest, merged, attempts), [])
+        self.assertTrue(rs.verify_coverage(manifest, merged, [{**attempts[0], "status": "invalid"}]))
+        self.assertTrue(rs.verify_coverage(manifest, merged, [{**attempts[0], "accepted_ids": [i for i in ids if i != "h-003"]}]))   # reviewed but rejected
+        old = {**shas, "h-003": rs.canonical_sha256(plain["held_out"][2])}
+        self.assertTrue(rs.verify_coverage(manifest, merged, [{**attempts[0], "reviewed_record_shas": old}]))                  # reviewed the OLD h-003
+        self.assertTrue(rs.verify_coverage(manifest, plain, attempts))                                                        # stale manifest sha

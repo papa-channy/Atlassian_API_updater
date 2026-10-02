@@ -248,7 +248,7 @@ class TestSeedBenchmark(unittest.TestCase):
         cache = os.environ.get("ATLASSIAN_DOCS_ROUND1_CACHE")
         if not cache or not pathlib.Path(cache).is_dir():
             print("r1 key check: ATLASSIAN_DOCS_ROUND1_CACHE not set or missing; schema only"); return
-        from tests.benchmarks import round1_seal as rs
+        from tests.benchmarks import round_seal as rs
         try:
             _, internal, fingerprint, _ = rs.load_catalogs_from_cache(pathlib.Path(cache))
         except SystemExit as e:

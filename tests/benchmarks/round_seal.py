@@ -1,10 +1,12 @@
-"""Round 1 seal tooling (spec §5.4/§5.5): operation catalogs, machine checks, seal/unseal.
+"""Round N seal tooling (spec §5.4/§5.5): operation catalogs, machine checks, seal/unseal, freeze.
 
 CLI (run from the repo root):
-  python tests/benchmarks/round1_seal.py catalog --cache-dir DIR --out GEN.json --internal-out INTERNAL.json
-  python tests/benchmarks/round1_seal.py check  --plain PLAIN.json --bench BENCH.json --internal-catalog INTERNAL.json
-  python tests/benchmarks/round1_seal.py seal   --plain PLAIN.json --bench BENCH.json --cache-dir DIR
-  python tests/benchmarks/round1_seal.py unseal --plain PLAIN.json --bench BENCH.json
+  python tests/benchmarks/round_seal.py catalog --round N --cache-dir DIR --out GEN.json --internal-out INTERNAL.json
+  python tests/benchmarks/round_seal.py check  --round N --plain PLAIN.json --bench BENCH.json --internal-catalog INTERNAL.json
+  python tests/benchmarks/round_seal.py seal   --round N --plain PLAIN.json --bench BENCH.json --cache-dir DIR
+  python tests/benchmarks/round_seal.py unseal --round N --plain PLAIN.json --bench BENCH.json
+  python tests/benchmarks/round_seal.py freeze --round N --cache-dir DIR
+  python tests/benchmarks/round_seal.py verify-freeze --round N --cache-dir DIR
 Uses tools.atlassian_docs read-only (only to build catalogs from a cache snapshot)."""
 import argparse, json, os, pathlib, re, sys
 
@@ -12,11 +14,19 @@ if __package__ in (None, ""):  # executed as a script: make `tests.benchmarks` i
     sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
 from tests.benchmarks.evaluator import STOPWORDS, canonical_sha256, check_schema, is_sealed, unigram_set
+from tests.benchmarks import evaluator as ev
 
-ROUND = 1
+
+def section_origin(round: int) -> dict:
+    return {"held_out": f"held_out-r{round}", "negative": f"negative-r{round}"}
+
+
+def seal_key(round: int) -> str:
+    return f"round{round}_seal"
+
+
 HIDDEN = (("held_out", 16), ("negative", 8))
 SECTION_ID_PREFIX = {"held_out": "h-", "negative": "n-"}
-SECTION_ORIGIN = {"held_out": f"held_out-r{ROUND}", "negative": f"negative-r{ROUND}"}
 GENERATOR_FIELDS = ("key", "source", "method", "summary", "tags")
 MIN_SOURCE = {"jira-platform": 6, "jira-software": 4, "confluence": 5}
 MIN_METHOD = {"GET": 4, "POST": 4, "PUT": 2, "DELETE": 2}
@@ -36,7 +46,7 @@ def generator_view(internal_records) -> list:
     return [{f: r.get(f) for f in GENERATOR_FIELDS} for r in internal_records]
 
 
-def load_catalogs_from_cache(cache_dir):
+def load_catalogs_from_cache(cache_dir, round=1):
     """-> (generator_records, internal_records, registry_fingerprint, spec_sha256_by_source)."""
     from tools.atlassian_docs import sources, storage
     from tools.atlassian_docs.intelligence import normalizer, registry
@@ -52,7 +62,7 @@ def load_catalogs_from_cache(cache_dir):
                                                         storage.sha256_of_spec(spec))
     finally:
         storage.CACHE_DIR = saved
-    reg = registry.build_registry(srcs, "round1-snapshot")
+    reg = registry.build_registry(srcs, f"round{round}-snapshot")
     internal = sorted((_catalog_record(op) for sr in reg.sources.values() for op in sr.operations),
                       key=lambda r: r["key"])
     shas = {name: sr.spec_sha256 for name, sr in sorted(reg.sources.items())}
@@ -149,6 +159,135 @@ def _reuse_checks(hidden, bench):
     return out
 
 
+def phrase_tokens(text) -> tuple:
+    return tuple(ev.singular(t) for t in _TOKEN_SPLIT.split((text or "").lower()) if t and t not in STOPWORDS)
+
+
+def _last_literal_segment(key) -> str:
+    for seg in reversed(key.split(":", 2)[2].split("/")):
+        if seg and not (seg.startswith("{") and seg.endswith("}")):
+            return seg
+    return ""
+
+
+def _negative_phrase_checks(rec, internal_catalog):
+    # Round 2 spec 5.3 machine rule: a negative query must not equal an op summary or last-path-segment phrase.
+    q, out = phrase_tokens(rec.get("query") or ""), []
+    for op in internal_catalog:
+        if q == phrase_tokens(op.get("summary")):
+            out.append(f"{rec.get('id', '?')}: negative query equals summary phrase of {op['key']}"); break
+        if q == phrase_tokens(_last_literal_segment(op["key"])):
+            out.append(f"{rec.get('id', '?')}: negative query equals path phrase of {op['key']}"); break
+    return out
+
+
+def validate_reviewer_output(obj, ids) -> list:
+    # Hidden semantic reviewer output: exactly the record ids, each {"accept": bool, "reason": str}.
+    if not isinstance(obj, dict):
+        return ["reviewer output must be a JSON object keyed by record id"]
+    wanted = set(ids)
+    out = [f"missing id {i}" for i in ids if i not in obj] + [f"extra key {k!r}" for k in obj if k not in wanted]
+    for k, v in obj.items():
+        if k in wanted and (not isinstance(v, dict) or not isinstance(v.get("accept"), bool) or not isinstance(v.get("reason"), str)):
+            out.append(f"{k}: value must be {{accept: bool, reason: str}}")
+    return out
+
+
+def validate_replacement_output(obj, expected_ids) -> list:
+    """A replacement response must contain exactly the requested record ids (as a list of records) and nothing else."""
+    if not isinstance(obj, list) or not all(isinstance(r, dict) for r in obj):
+        return ["replacement output must be a JSON list of records"]
+    got = [r.get("id") for r in obj]
+    out = [f"missing replacement {i}" for i in expected_ids if i not in got] + [f"unexpected record {i!r}" for i in got if i not in set(expected_ids)]
+    if len(set(got)) != len(got):
+        out.append("duplicate ids in replacement output")
+    return out
+
+
+def merge_replacements(plain, replacements) -> dict:
+    """Deterministic: replace records in place by id (section inferred from the id prefix); other records untouched."""
+    by_id = {r["id"]: r for r in replacements}
+    out = {sect: [by_id.get(r.get("id"), r) for r in plain.get(sect, [])] for sect, _ in HIDDEN}
+    return out
+
+
+def verify_coverage(manifest, plain, attempts) -> list:
+    """Every final record must be covered by a valid review attempt whose input contained exactly this record
+    (same canonical sha) and whose output accepted its id. Review attempts in the ledger carry
+    reviewed_record_shas {id: sha} and accepted_ids [...] (both derived from the attempt's input/output files)."""
+    by_no = {a["attempt_no"]: a for a in attempts if a.get("stage") == "review" and a.get("status") == "valid"}
+    out = []
+    for sect, _ in HIDDEN:
+        for r in plain[sect]:
+            m, sha = manifest.get(r["id"]), canonical_sha256(r)
+            if m is None or m["record_sha256"] != sha:
+                out.append(f"{r['id']}: manifest missing or stale"); continue
+            a = by_no.get(m["accepted_review_attempt"])
+            if a is None:
+                out.append(f"{r['id']}: accepting review attempt {m['accepted_review_attempt']} is not a valid review attempt")
+            elif a.get("reviewed_record_shas", {}).get(r["id"]) != sha:
+                out.append(f"{r['id']}: review attempt {a['attempt_no']} did not review this exact record")
+            elif r["id"] not in (a.get("accepted_ids") or []):
+                out.append(f"{r['id']}: review attempt {a['attempt_no']} did not accept this id")
+    return out
+
+
+def coverage_manifest(plain, review_attempt_by_id) -> dict:
+    """B-time evidence: every final record -> its canonical sha and the review attempt that accepted it."""
+    return {r["id"]: {"record_sha256": canonical_sha256(r), "accepted_review_attempt": review_attempt_by_id[r["id"]]}
+            for sect, _ in HIDDEN for r in plain[sect]}
+
+
+def verify_freeze(round: int, cache_dir) -> list:
+    # S integrity checkpoint (spec 5.7): the snapshot still matches the round_freeze source fields.
+    _, _, fp, shas = load_catalogs_from_cache(cache_dir, round)
+    entry, out = ev.freeze_for(round), []
+    if fp != entry.get("source_registry_fingerprint"):
+        out.append("registry fingerprint differs from round_freeze")
+    want = entry.get("source_spec_sha256") or {}
+    for name in sorted(set(shas) | set(want)):
+        if shas.get(name) != want.get(name):
+            out.append(f"spec_sha256[{name}] differs from round_freeze")
+    return out
+
+
+def cmd_verify_freeze(args):
+    problems = verify_freeze(args.round, args.cache_dir)
+    for m in problems:
+        print(f"MISMATCH {m}")
+    print("freeze ok" if not problems else f"{len(problems)} mismatch(es)")
+    return 1 if problems else 0
+
+
+ROUND_FREEZE = pathlib.Path(__file__).resolve().parent / "round_freeze.json"
+RANKING_PATH = pathlib.Path(__file__).resolve().parents[2] / "tools" / "atlassian_docs" / "intelligence" / "data" / "search_ranking.json"
+
+
+def freeze_entry(round: int, cache_dir) -> dict:
+    """Round 2 spec §4: the per-round freeze record (hashes completed in evaluator.round_freeze_hashes)."""
+    _, _, fp, shas = load_catalogs_from_cache(cache_dir, round)
+    raw = _read_json(RANKING_PATH)
+    entry = {"round": round, "structure_sha256": canonical_sha256({k: raw[k] for k in ev.STRUCTURE_KEYS}),
+             "verb_inventory_sha256": canonical_sha256(raw["verb_methods"]),
+             "source_registry_fingerprint": fp, "source_spec_sha256": shas}
+    entry.update(ev.round_freeze_hashes(round))
+    return entry
+
+
+def cmd_freeze(args):
+    freeze = _read_json(ROUND_FREEZE)
+    if not isinstance(freeze, list):
+        freeze = [freeze]
+    if any(e.get("round") == args.round for e in freeze):
+        print(f"REFUSED: round_freeze.json already has a round {args.round} entry")
+        return 1
+    entry = freeze_entry(args.round, args.cache_dir)
+    _write_json(ROUND_FREEZE, freeze + [entry])
+    for k, v in entry.items():
+        print(f"{k}: {v}")
+    return 0
+
+
 def _distribution_checks(records):
     d, out = distribution(records, "held_out"), []
     for s, lo in MIN_SOURCE.items():
@@ -165,10 +304,11 @@ def _distribution_checks(records):
     return out
 
 
-def machine_check(plain, bench, internal_catalog) -> list:
+def machine_check(plain, bench, internal_catalog, round=1) -> list:
     """All machine-checkable §5.4 violations; each message starts with the record id (or section name)."""
     by_key = {r["key"]: r for r in internal_catalog}
     opid_sets = [(r["operation_id"], unigram_set(r["operation_id"])) for r in internal_catalog if r.get("operation_id")]
+    origins = section_origin(round)
     out, hidden, seen_ids = [], [], {}
     for sect, count in HIDDEN:
         recs = plain.get(sect)
@@ -188,9 +328,11 @@ def machine_check(plain, bench, internal_catalog) -> list:
                 seen_ids[rid] = sect
             if not str(rid).startswith(SECTION_ID_PREFIX[sect]):
                 out.append(f"{rid}: id in {sect} must start with {SECTION_ID_PREFIX[sect]!r}")
-            if rec.get("origin") != SECTION_ORIGIN[sect]:
-                out.append(f"{rid}: origin {rec.get('origin')!r} in {sect} must be {SECTION_ORIGIN[sect]!r}")
+            if rec.get("origin") != origins[sect]:
+                out.append(f"{rid}: origin {rec.get('origin')!r} in {sect} must be {origins[sect]!r}")
             out += _record_checks(sect, rec, by_key, opid_sets)
+            if sect == "negative" and round >= 2:
+                out += _negative_phrase_checks(rec, internal_catalog)
             hidden.append(rec)
         if sect == "held_out":
             out += _distribution_checks([r for r in recs if isinstance(r, dict)])
@@ -244,7 +386,7 @@ def _print_violations(violations):
 
 
 def cmd_catalog(args):
-    gen, internal, fp, shas = load_catalogs_from_cache(args.cache_dir)
+    gen, internal, fp, shas = load_catalogs_from_cache(args.cache_dir, args.round)
     _write_json(args.out, gen)
     pathlib.Path(args.internal_out).parent.mkdir(parents=True, exist_ok=True)
     _write_json(args.internal_out, internal)
@@ -256,7 +398,7 @@ def cmd_catalog(args):
 
 
 def cmd_check(args):
-    violations = machine_check(_read_json(args.plain), _read_json(args.bench), _read_json(args.internal_catalog))
+    violations = machine_check(_read_json(args.plain), _read_json(args.bench), _read_json(args.internal_catalog), round=args.round)
     _print_violations(violations)
     return 1 if violations else 0
 
@@ -266,22 +408,24 @@ def cmd_seal(args):
     if any(is_sealed(bench.get(s)) or bench.get(s) for s, _ in HIDDEN):
         print("REFUSED: bench held_out/negative are not empty (already sealed or plaintext)")
         return 1
-    if "round1_seal" in bench:
-        print("REFUSED: bench already has a round1_seal key (Round 1 was sealed before)")
+    key = seal_key(args.round)
+    if key in bench:
+        print(f"REFUSED: bench already has a {key} key")
         return 1
-    _, internal, fp, shas = load_catalogs_from_cache(args.cache_dir)
-    violations = machine_check(plain, bench, internal)
+    _, internal, fp, shas = load_catalogs_from_cache(args.cache_dir, args.round)
+    violations = machine_check(plain, bench, internal, round=args.round)
     if violations:
         _print_violations(violations)
         print("REFUSED: fix the violations before sealing")
         return 1
     held, negs = plain["held_out"], plain["negative"]
-    bench["held_out"] = seal_metadata(held, ROUND, "held_out")
-    bench["negative"] = seal_metadata(negs, ROUND, "negative")
-    bench["round1_seal"] = {"held_out_sha256": bench["held_out"]["sha256"], "negative_sha256": bench["negative"]["sha256"],
-                            "held_out_distribution": bench["held_out"]["distribution"],
-                            "negative_distribution": bench["negative"]["distribution"],
-                            "registry_fingerprint": fp, "spec_sha256": shas}
+    bench["held_out"] = seal_metadata(held, args.round, "held_out")
+    bench["negative"] = seal_metadata(negs, args.round, "negative")
+    bench[key] = {"held_out_sha256": bench["held_out"]["sha256"], "negative_sha256": bench["negative"]["sha256"],
+                  "held_out_distribution": bench["held_out"]["distribution"],
+                  "negative_distribution": bench["negative"]["distribution"],
+                  "registry_fingerprint": fp, "spec_sha256": shas,
+                  "machine_check": "passed", "origins": section_origin(args.round)}
     _write_bench(args.bench, bench)
     print(f"sealed held_out sha256={bench['held_out']['sha256']}")
     print(f"sealed negative sha256={bench['negative']['sha256']}")
@@ -291,7 +435,8 @@ def cmd_seal(args):
 
 def cmd_unseal(args):
     plain, bench = _read_json(args.plain), _read_json(args.bench)
-    seal, errors = bench.get("round1_seal") or {}, []
+    key = seal_key(args.round)
+    seal, errors = bench.get(key) or {}, []
     for sect, _ in HIDDEN:
         section, recs = bench.get(sect), plain.get(sect)
         if not is_sealed(section):
@@ -307,22 +452,28 @@ def cmd_unseal(args):
     for sect, _ in HIDDEN:
         bench[sect] = plain[sect]
     _write_bench(args.bench, bench)
-    print("unsealed held_out/negative (round1_seal kept)")
+    print(f"unsealed held_out/negative ({key} kept)")
     return 0
+
+
+def _round(p):
+    p.add_argument("--round", type=int, default=1)
 
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    p = sub.add_parser("catalog"); p.add_argument("--cache-dir", required=True)
+    p = sub.add_parser("catalog"); _round(p); p.add_argument("--cache-dir", required=True)
     p.add_argument("--out", required=True); p.add_argument("--internal-out", required=True)
     p.set_defaults(fn=cmd_catalog)
-    p = sub.add_parser("check"); p.add_argument("--plain", required=True); p.add_argument("--bench", required=True)
+    p = sub.add_parser("check"); _round(p); p.add_argument("--plain", required=True); p.add_argument("--bench", required=True)
     p.add_argument("--internal-catalog", required=True); p.set_defaults(fn=cmd_check)
-    p = sub.add_parser("seal"); p.add_argument("--plain", required=True); p.add_argument("--bench", required=True)
+    p = sub.add_parser("seal"); _round(p); p.add_argument("--plain", required=True); p.add_argument("--bench", required=True)
     p.add_argument("--cache-dir", required=True); p.set_defaults(fn=cmd_seal)
-    p = sub.add_parser("unseal"); p.add_argument("--plain", required=True); p.add_argument("--bench", required=True)
+    p = sub.add_parser("unseal"); _round(p); p.add_argument("--plain", required=True); p.add_argument("--bench", required=True)
     p.set_defaults(fn=cmd_unseal)
+    p = sub.add_parser("freeze"); _round(p); p.add_argument("--cache-dir", required=True); p.set_defaults(fn=cmd_freeze)
+    p = sub.add_parser("verify-freeze"); _round(p); p.add_argument("--cache-dir", required=True); p.set_defaults(fn=cmd_verify_freeze)
     args = ap.parse_args(argv)
     return args.fn(args)
 

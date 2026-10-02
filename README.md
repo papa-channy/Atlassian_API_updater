@@ -280,3 +280,6 @@ fingerprint·spec sha를 `round1_seal`과 비교해 다르면 경고하고, 그 
 주어졌으면 평가 없이 exit 2.
 실패마다 top-5(key, score, signals)와 `git_commit`·fingerprint·`evaluation_code_sha256`·`sealed_sha256`을 보고한다.
 벤치마크 파일은 수정하지 않는다.
+
+봉인 도구는 `tests/benchmarks/round_seal.py`이며 모든 하위 명령이 `--round N`을 받는다(기본 1);
+`freeze --round N --cache-dir S`는 `tests/benchmarks/round_freeze.json`에 라운드 동결 항목을 추가한다.
