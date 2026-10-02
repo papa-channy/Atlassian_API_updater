@@ -283,3 +283,15 @@ fingerprint·spec sha를 `round1_seal`과 비교해 다르면 경고하고, 그 
 
 봉인 도구는 `tests/benchmarks/round_seal.py`이며 모든 하위 명령이 `--round N`을 받는다(기본 1);
 `freeze --round N --cache-dir S`는 `tests/benchmarks/round_freeze.json`에 라운드 동결 항목을 추가한다.
+
+**검색 품질 라운드 2**
+
+설계: [Round 2 spec](docs/superpowers/specs/2026-10-02-search-quality-round2-design.md). Round 1 게이트 실패
+(held_out 4/16, negative 5/8) 이후 사전·후보 도구와 결정적 튜닝 파이프라인을 추가한다. 도구는
+`tests/benchmarks/round_seal.py --round 2`(`freeze`/`verify-freeze` 포함), `tests/benchmarks/alias_candidates_tool.py`,
+`tests/benchmarks/concept_lexicon_check.py prepare/finalize/merge`, 그리고 한-방향(one-way) 파이프라인인
+`tests/tune_search_ranking.py`(상수·alias 패치를 커밋하는 `--adopt`, 결정성을 재확인하는 `--verify`)이다.
+소스 스냅샷은 커밋 H 직후 한 번만 만들어 `$ATLASSIAN_DOCS_ROUND2_CACHE`(존재 시 거부)에 두고, T 이후 재스냅샷은
+없다. 라운드는 세 종료 상태 중 하나로 끝난다: 성공(커밋 D), 튜닝 실패(커밋 F, 정책 파일은 B 상태로 유지), abort
+(커밋 X, 튜닝 통과 후 전체 테스트 실패로 run이 거부된 경우). `tests/diag_search_queries.py --round N`이 해당
+라운드의 `round{N}_seal`을 사용하고, 평문 hidden 레코드는 origin이 `held_out-r{N}`/`negative-r{N}`이어야 한다.

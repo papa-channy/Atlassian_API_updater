@@ -44,3 +44,11 @@ produces server URLs or credentials. Without the MCP SDK, fall back to the Phase
 - Prefer the `key` from an exact identifier search (operationId or canonical key, no spaces) — that result is pinned first.
 - Each `search_operations` result's `signals` explains why it ranked; add a product word (`jira`/`confluence`) to the query to disambiguate between products.
 - If `check_request` returns `body_check: "structural"`, the body was not fully validated (see `body_check_reason`); template headers with `effective_required: true` (including spec-external quirk headers) must be sent.
+
+## Search quality tooling freeze (Round 2)
+
+The files listed in `tests.benchmarks.evaluator.TOOLING_FILES` (the benchmark evaluator, the diagnostic script,
+the tuning pipeline, the seal/alias-candidates/concept-lexicon tools, and their integrity tests) are immutable
+from each round's `housekeeping_commit` through that round's terminal commit (D on success, F on a failed tuning
+run, or X on an aborted one). Do not edit any of them in that window, even for an apparently unrelated fix — a
+tool defect found before T must be corrected in an H′ commit instead, and one found after T ends the round.

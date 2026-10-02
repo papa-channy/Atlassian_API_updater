@@ -1,13 +1,16 @@
-"""Manual, offline diagnostic: evaluate the benchmark sets against a cache snapshot (Round 1 spec §9).
+"""Manual, offline diagnostic: evaluate the benchmark sets against a cache snapshot (Round 1 spec §9; Round 2 adds
+--round, held_out_top3, and the candidates/lexicon data hashes).
 
     python tests/diag_search_queries.py [--sets seed,regression_negative] [--cache-dir DIR]
-                                        [--bench PLAINTEXT] [--bench-file BENCH] [--json OUT]
+                                        [--bench PLAINTEXT] [--bench-file BENCH] [--json OUT] [--round N]
 
 --cache-dir   cache snapshot (default: storage.CACHE_DIR); a temporary copy is used, the snapshot is never written.
---bench       plaintext hidden sets {"held_out": [...], "negative": [...]} (commit D); replaces the sealed sections.
+--bench       plaintext hidden sets {"held_out": [...], "negative": [...]} for round N; replaces the sealed sections.
+              Every record's origin must be "held_out-r{N}" / "negative-r{N}" or the run is refused (exit 2).
 --bench-file  benchmark metadata file (default tests/benchmarks/search_queries.json; read-only).
 --sets        comma list; default every set that is not sealed.
-On start the loaded registry fingerprint and per-source spec sha256 are compared with `round1_seal`: a mismatch
+--round       which round's seal to compare against (default: the current round from round_freeze.json).
+On start the loaded registry fingerprint and per-source spec sha256 are compared with `round{N}_seal`: a mismatch
 only warns, unless --bench is given or a hidden set (held_out/negative) is requested; then nothing is evaluated and the exit code is 2.
 Exit 0 otherwise (the numbers are for docs/phase3-readiness.md). The benchmark file is never edited.
 """
@@ -42,6 +45,18 @@ def _evaluation_code_sha256_or_none():
         return None
 
 
+def _data_sha(filename):
+    """Canonical sha256 of a Round 2 data file under policy.DATA_DIR, or None before it exists."""
+    path = policy.DATA_DIR / filename
+    if not path.exists():
+        return None
+    return ev.canonical_sha256(json.loads(path.read_text(encoding="utf-8")))
+
+
+class _WrongRoundOrigin(Exception):
+    pass
+
+
 def _parse(argv):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--sets", default=None)
@@ -49,6 +64,7 @@ def _parse(argv):
     ap.add_argument("--bench-file", type=pathlib.Path, default=BENCH)
     ap.add_argument("--cache-dir", type=pathlib.Path, default=None)
     ap.add_argument("--json", type=pathlib.Path, default=None)
+    ap.add_argument("--round", type=int, default=None)
     return ap.parse_args(argv)
 
 
@@ -71,11 +87,15 @@ def top5(state, query):
             for r in search_operations(state, query, limit=5).get("results", [])]
 
 
-def _sections(bench, plain):
+def _sections(bench, plain, rnd):
     sections = {name: bench[name] for name in ALL_SETS}
     if plain is not None:
         for name in HIDDEN_SETS:
             ev.check_schema(name, plain[name])
+            for rec in plain[name]:
+                want = f"{name}-r{rnd}"
+                if rec.get("origin") != want:
+                    raise _WrongRoundOrigin(f"{name}/{rec.get('id')}: origin {rec.get('origin')!r} != {want!r}")
             sections[name] = plain[name]
     return sections
 
@@ -85,7 +105,12 @@ def run(argv=None):
     args = _parse(argv)
     bench = json.loads(args.bench_file.read_text(encoding="utf-8"))
     plain = json.loads(args.bench.expanduser().read_text(encoding="utf-8")) if args.bench else None
-    sections = _sections(bench, plain)
+    rnd = args.round if args.round is not None else ev.current_round()["round"]
+    try:
+        sections = _sections(bench, plain, rnd)
+    except _WrongRoundOrigin as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2, {"error": "wrong_round_origin", "sets": {}}
     sets = args.sets.split(",") if args.sets else [n for n in ALL_SETS if not ev.is_sealed(sections[n])]
     unknown = [n for n in sets if n not in ALL_SETS]
     if unknown:
@@ -100,39 +125,49 @@ def run(argv=None):
         copy = pathlib.Path(td) / "cache"
         shutil.copytree(cache, copy)                            # the snapshot itself is never written
         with mock.patch.object(storage, "CACHE_DIR", copy):
-            code, report = _evaluate(build_state(), bench, sections, sets, plain)
+            code, report = _evaluate(build_state(), bench, sections, sets, plain, rnd)
     if args.json and code == 0:                                # no artifact from a refused run
         args.json.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     return code, report
 
 
-def _evaluate(state, bench, sections, sets, plain):
-    seal = bench.get("round1_seal") or {}
+def _evaluate(state, bench, sections, sets, plain, rnd):
+    seal = bench.get(f"round{rnd}_seal") or {}
     fp = state.registry.fingerprint
     spec_sha = {n: p.active_spec_sha256 for n, p in state.provenance.items()}
     rp, al = policy.ranking(), policy.aliases()
     report = {"run_at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
               "git_commit": _git("rev-parse", "HEAD"),
               "git_dirty": bool(_git("status", "--porcelain", "--untracked-files=no")),
+              "round": rnd,
               "registry_fingerprint": fp,
               "intelligence_fingerprint": policy.intelligence_fingerprint(fp, al.sha256, policy.overrides().sha256),
               "ranking_sha256": rp.sha256, "ranking_structure_sha256": rp.structure_sha256, "alias_sha256": al.sha256,
+              "alias_candidates_sha256": _data_sha("alias_candidates.json"),
+              "concept_lexicon_sha256": _data_sha("concept_lexicon.json"),
               "evaluation_code_sha256": _evaluation_code_sha256_or_none(), "spec_sha256": spec_sha,
               "seal_match": fp == seal.get("registry_fingerprint") and spec_sha == seal.get("spec_sha256"),
+              "held_out_top3": None,
               "sets": {}, "failures": []}
     if not report["seal_match"]:
-        print(f"WARNING: snapshot differs from round1_seal (registry {fp} vs {seal.get('registry_fingerprint')}; "
+        print(f"WARNING: snapshot differs from round{rnd}_seal (registry {fp} vs {seal.get('registry_fingerprint')}; "
               f"spec {spec_sha} vs {seal.get('spec_sha256')})", file=sys.stderr)
         if plain is not None or any(n in HIDDEN_SETS for n in sets):
-            print("error: hidden sets requested on a snapshot that does not match round1_seal; nothing evaluated",
+            print(f"error: hidden sets requested on a snapshot that does not match round{rnd}_seal; nothing evaluated",
                   file=sys.stderr)
             return 2, report
     if plain is not None:
         report["sealed_sha256"] = {n: ev.canonical_sha256(sections[n]) for n in HIDDEN_SETS}
         want = {n: seal.get(f"{n}_sha256") for n in HIDDEN_SETS}
         if report["sealed_sha256"] != want:
-            print(f"WARNING: plaintext sha256 {report['sealed_sha256']} != round1_seal {want}", file=sys.stderr)
-    fn = lambda q: [r["key"] for r in search_operations(state, q, limit=5).get("results", [])]
+            print(f"WARNING: plaintext sha256 {report['sealed_sha256']} != round{rnd}_seal {want}", file=sys.stderr)
+    ranked = {}
+
+    def fn(q):
+        keys = [r["key"] for r in search_operations(state, q, limit=5).get("results", [])]
+        ranked[q] = keys
+        return keys
+
     for name in sets:
         res = ev.evaluate(sections[name], fn)
         report["sets"][name] = res
@@ -140,6 +175,11 @@ def _evaluate(state, bench, sections, sets, plain):
             print(f"[{name:19}] sealed ({res['count']} records)")
             continue
         print(f"[{name:19}] {res['passed']}/{res['total']}")
+        if name == "held_out":
+            records = sections[name]
+            passed3 = sum(1 for rec in records
+                          if any(k in ranked.get(rec["query"], [])[:3] for k in (rec.get("expected_top1_any") or [])))
+            report["held_out_top3"] = {"passed": passed3, "total": len(records)}
         for f in res["failed"]:
             report["failures"].append({"set": name, **f, "top5": top5(state, f["query"])})
             print(f"    FAIL {f['id']} {f['query']!r}: top1={f['top1']}")

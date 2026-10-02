@@ -94,7 +94,7 @@ class TestDiagScript(unittest.TestCase):
 
     def run_diag(self, *args):
         with mock.patch("builtins.print"):
-            return diag.run(["--cache-dir", str(self.cache), *args])
+            return diag.run(["--cache-dir", str(self.cache), "--round", "1", *args])
 
     def test_cache_dir_is_used_and_restored(self):
         before = storage.CACHE_DIR
@@ -185,3 +185,27 @@ class TestDiagScript(unittest.TestCase):
         f = rep["failures"][0]
         self.assertEqual(f["set"], "held_out"); self.assertTrue(1 <= len(f["top5"]) <= 5)
         self.assertEqual(set(f["top5"][0]), {"key", "score", "signals"})
+
+    def test_round_selects_seal_key_and_reports_round(self):
+        code, rep = self.run_diag("--bench-file", str(self.good_bench), "--sets", "seed")
+        self.assertEqual(rep["round"], 1); self.assertTrue(rep["seal_match"])
+        with mock.patch("builtins.print"):
+            code2, rep2 = diag.run(["--cache-dir", str(self.cache), "--round", "2", "--bench-file", str(self.good_bench), "--sets", "seed"])
+        self.assertEqual(code2, 0); self.assertFalse(rep2["seal_match"])               # no round2_seal in this bench
+
+    def test_plaintext_origin_must_match_round(self):
+        plain = {"held_out": [{**self.plain["held_out"][0], "origin": "held_out-r2"}], "negative": []}
+        p = self.tmp / "wrong_round.json"; p.write_text(json.dumps(plain), encoding="utf-8")
+        code, rep = self.run_diag("--bench-file", str(self.good_bench), "--bench", str(p), "--sets", "held_out")
+        self.assertEqual(code, 2); self.assertEqual(rep["sets"], {})
+
+    def test_round2_final_fields(self):
+        code, rep = self.run_diag("--bench-file", str(self.good_bench), "--bench", str(self.plain_path))
+        self.assertEqual(rep["held_out_top3"], {"passed": 2, "total": 2})
+        for k in ("alias_sha256", "alias_candidates_sha256", "concept_lexicon_sha256"):
+            self.assertIn(k, rep)
+        for k in ("alias_candidates_sha256", "concept_lexicon_sha256"):
+            path = diag.policy.DATA_DIR / f"{k[:-7]}.json"
+            self.assertEqual(rep[k], ev.canonical_sha256(json.loads(path.read_text(encoding="utf-8"))) if path.exists() else None)
+        code2, rep2 = self.run_diag("--bench-file", str(self.good_bench), "--sets", "seed")
+        self.assertIsNone(rep2["held_out_top3"])

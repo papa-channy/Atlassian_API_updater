@@ -387,3 +387,23 @@ class TestRound2AliasesAndLog(unittest.TestCase):
             self.assertEqual(adopted[0], valid[0])
             raw = json.loads(RANKING.read_text(encoding="utf-8")); self.assertEqual(adopted[0]["constants_selected"], raw["constants"])
             self.assertEqual(tune._current_result_sha256(), adopted[0]["result_sha256"])     # files reproduce the adopted result
+
+
+FINAL_R2 = pathlib.Path(__file__).resolve().parent / "round2-final.json"
+
+
+class TestRound2FinalArtifact(unittest.TestCase):
+    def test_round2_final_artifact(self):
+        if not FINAL_R2.exists():
+            print("round2-final.json absent: checked after commit D"); return
+        art = json.loads(FINAL_R2.read_text(encoding="utf-8")); b = json.loads(BENCH.read_text(encoding="utf-8")); seal = b["round2_seal"]
+        e = ev.freeze_for(2)
+        self.assertEqual(art["round"], 2); self.assertRegex(art["git_commit"], r"^[0-9a-f]{40}$")
+        self.assertEqual(art["sealed_sha256"], {"held_out": seal["held_out_sha256"], "negative": seal["negative_sha256"]})
+        self.assertEqual(art["registry_fingerprint"], e["source_registry_fingerprint"]); self.assertEqual(art["spec_sha256"], e["source_spec_sha256"])
+        self.assertEqual(art["alias_candidates_sha256"], e["alias_candidates_sha256"]); self.assertEqual(art["concept_lexicon_sha256"], e["concept_lexicon_sha256"])
+        self.assertEqual(art["alias_sha256"], ev.canonical_sha256(json.loads(ALIASES.read_text(encoding="utf-8"))))
+        self.assertEqual(art["evaluation_code_sha256"], e["evaluation_code_sha256_at_T"])
+        self.assertEqual(set(art["held_out_top3"]), {"passed", "total"}); self.assertEqual(art["held_out_top3"]["total"], 16)
+        for sect, total in (("held_out", 16), ("negative", 8)):
+            self.assertEqual(art["sets"][sect]["total"], total)
