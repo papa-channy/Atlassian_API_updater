@@ -128,11 +128,15 @@ def alias_source_words(aliases_raw) -> frozenset:
     return frozenset(words)
 
 
+def _identifiers(internal) -> frozenset:
+    return frozenset((op.get("operation_id") or "").lower() for op in internal)
+
+
 def candidates(bench, internal, ranking_raw, aliases_raw, round=2) -> dict:
     """spec §7.1: deterministic seed-derived candidate words with per-seed targets."""
     by_key = {op["key"]: op for op in internal}
     verbs, noise, hints = ranking_raw["verb_methods"], frozenset(ranking_raw["path_noise"]), ranking_raw["product_hints"]
-    idents = {(op.get("operation_id") or "").lower() for op in internal}
+    idents = _identifiers(internal)
     alias_words, df = alias_source_words(aliases_raw), catalog_df(internal)
     cands, reasons = {}, {}
     for rec in sorted(bench["seed"], key=lambda r: r["id"]):
@@ -157,12 +161,13 @@ def classify(bench, internal, ranking_raw, aliases_raw) -> dict:
     product hints / function words (id-like, noise and digits are ignored)."""
     by_key = {op["key"]: op for op in internal}
     verbs, noise, hints = ranking_raw["verb_methods"], frozenset(ranking_raw["path_noise"]), ranking_raw["product_hints"]
-    alias_words, out = alias_source_words(aliases_raw), {}
+    alias_words, idents, out = alias_source_words(aliases_raw), _identifiers(internal), {}
     for rec in bench["seed"]:
         allowed, classes = allowed_methods(rec["query"], verbs), []
         if allowed is None or not (allowed & expected_methods(rec)):
             classes.append("R5")
-        known = expected_vocab(rec, by_key, verbs, noise, hints) | set(verbs) | alias_words | set(hints) | FUNCTION_WORDS | STOPWORDS | ID_LIKE | noise
+        known = (expected_vocab(rec, by_key, verbs, noise, hints) | set(verbs) | alias_words | set(hints)
+                 | FUNCTION_WORDS | STOPWORDS | ID_LIKE | noise | idents)
         if any(t not in known and not t.isdigit() for t in norm_tokens(rec["query"])):
             classes.append("R6")
         out[rec["id"]] = classes

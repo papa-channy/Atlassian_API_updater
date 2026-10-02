@@ -80,6 +80,12 @@ class TestCandidates(unittest.TestCase):
         no_verb = {"seed": [seed(7, "ticket details overview", A)], "regression_negative": []}
         self.assertEqual(act.classify(no_verb, CAT2, RANK, ALIASES)["s-007"], ["R5", "R6"])   # ticket is an alias; details/overview are not
 
+    def test_classify_recognizes_identifiers_like_candidates_does(self):
+        b = {"seed": [seed(5, "getissue for my ticket", A)], "regression_negative": []}
+        # getissue is an identifier (candidates() excludes it as "identifier"); ticket is an existing alias.
+        # No inventory verb present -> R5 stays, but neither token should trigger R6.
+        self.assertEqual(act.classify(b, CAT2, RANK, ALIASES)["s-005"], ["R5"])
+
 class TestLexiconGate(unittest.TestCase):
     def test_gate_keeps_compatible_and_rejects_incompatible(self):
         lex = {"lexicon": {"workspace": ["page"], "document": ["issue"], "note": ["comment"]}, "rejected": {}}
