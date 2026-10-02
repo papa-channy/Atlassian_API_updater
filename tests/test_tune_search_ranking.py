@@ -234,3 +234,23 @@ class TestReplayAndHashes(unittest.TestCase):
              mock.patch.object(tune, "propose_aliases", side_effect=lambda *a, **k: calls.append("propose") or (json.loads(json.dumps(BASE_RAW)), {"aliases": {}, "rules": {}, "notes": {}, "resolved_by_prior_change": [], "unresolved": [], "trials": 0})):
             tune.run_pipeline(lambda point, raw: ({"passed": S, "failed": []}, {"passed": R, "failed": []}), tune._BENCH, BASE_RAW, {"candidates": {}}, GRID, BASE)
         self.assertEqual(calls, ["select", "propose"])
+
+
+class TestRequireRound(unittest.TestCase):
+    """main() must refuse every subcommand before the Round 2 freeze entry exists, before any file/log I/O."""
+
+    def test_main_refuses_every_subcommand_before_round_2_freeze_and_touches_no_file(self):
+        import hashlib
+        from unittest import mock
+        with mock.patch.object(tune.ev, "current_round", return_value={"round": 1}):
+            with self.assertRaises(SystemExit):
+                tune.require_round()   # the underlying guard, checked fresh (not the cached module-level ROUND)
+        r1_log = tune.ROOT / "tests" / "benchmarks" / "search-tuning-round1.jsonl"
+        before = hashlib.sha256(r1_log.read_bytes()).hexdigest()
+        argvs = [["--cache-dir", "/nonexistent-snapshot"], ["--adopt", "some-run-id"],
+                 ["--reject", "some-run-id", "--evidence", "/nonexistent-evidence.txt"],
+                 ["--materialize", "some-run-id"], ["--verify", "--cache-dir", "/nonexistent-snapshot"]]
+        with mock.patch.object(tune.ev, "current_round", return_value={"round": 1}), mock.patch("sys.stderr"):
+            for argv in argvs:
+                self.assertNotEqual(tune.main(argv), 0, argv)
+        self.assertEqual(hashlib.sha256(r1_log.read_bytes()).hexdigest(), before)

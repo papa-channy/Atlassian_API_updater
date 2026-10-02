@@ -353,8 +353,22 @@ def _with_state(cache, fn):
             return fn(build_state(copy_dir))
 
 
+def require_round(min_round=2) -> None:
+    """Refuse to run before round_freeze.json has a round >= min_round entry (checked fresh, not from the
+    module-level ROUND computed at import time): every subcommand does file/log I/O keyed by ROUND/LOG_PATH,
+    and until the Round-N freeze entry exists those resolve to an earlier round's (frozen) paths."""
+    current = ev.current_round()["round"]
+    if current < min_round:
+        raise SystemExit(f"error: tuning CLI requires round_freeze.json to have a round >= {min_round} entry "
+                          f"(currently round {current}); freeze round {min_round} first")
+
+
 def main(argv=None) -> int:
     args = _parse(argv)
+    try:
+        require_round()
+    except SystemExit as e:
+        print(e, file=sys.stderr); return 2
     if args.adopt:
         return _adopt(args.adopt)
     if args.reject:
