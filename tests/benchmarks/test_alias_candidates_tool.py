@@ -1,5 +1,6 @@
 import copy, json, unittest
 from tests.benchmarks import alias_candidates_tool as act
+from tests.benchmarks.evaluator import canonical_sha256
 from tests.benchmarks.test_round_seal import CAT, A, B, C, D, E, F, G, H
 
 WS = {"key": "jira-platform:GET:/rest/api/3/workspace", "source": "jira-platform", "method": "GET", "operation_id": "getLinkedWorkspaces",
@@ -51,9 +52,38 @@ class TestMethodSafety(unittest.TestCase):
 
 
 class TestCandidates(unittest.TestCase):
-    def test_expected_vocab_excludes_verbs_noise_hints_ids(self):
-        v = act.expected_vocab(BENCH["seed"][1], BY_KEY, VERBS, frozenset(RANK["path_noise"]), RANK["product_hints"])
-        self.assertIn("issue", v); self.assertNotIn("get", v); self.assertNotIn("rest", v); self.assertNotIn("id", v); self.assertNotIn("key", v)
+    def test_expected_vocab_is_resource_evidence_minus_function_noise_id(self):
+        """Round 3 spec §6: targets must appear in the expected op's path/terminal/tag tokens; verbs and hint keys are allowed."""
+        op = {"key": "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/comment", "source": "jira-platform", "method": "POST",
+              "operation_id": "addComment", "summary": "Add comment", "tags": ["Issue comments"]}
+        rec = {"expected_top1_any": [op["key"]]}
+        self.assertEqual(act.resource_vocab(op), frozenset({"rest", "api", "issue", "comment"}))
+        vocab = act.expected_vocab(rec, {op["key"]: op}, ["rest", "api"])
+        self.assertEqual(vocab, frozenset({"issue", "comment"}))                       # comment is a verb-inventory key and still a target
+        self.assertNotIn("add", vocab)                                                   # summary/operationId words are not resource evidence
+        sprint = {"key": "jira-software:POST:/rest/agile/1.0/sprint", "source": "jira-software", "method": "POST", "operation_id": "createSprint",
+                  "summary": "Create sprint", "tags": ["Sprint"]}
+        self.assertEqual(act.expected_vocab({"expected_top1_any": [sprint["key"]]}, {sprint["key"]: sprint}, ["rest", "agile"]), frozenset({"sprint"}))   # hint key allowed; "1.0" dropped (digits), "create" absent
+
+    def test_resource_vocab_targets_on_real_fixtures(self):
+        from tests.benchmarks import round_seal as rs
+        from tests.intelligence.helpers import make_state
+        state = make_state("jira-platform", "jira-software", "confluence")
+        internal = {op.key: rs._catalog_record(op) for sr in state.registry.sources.values() for op in sr.operations}
+        noise = ["rest", "api", "agile", "software", "wiki"]
+        ev_ = lambda key: act.expected_vocab({"expected_top1_any": [key]}, internal, noise)
+        self.assertIn("comment", ev_("jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/comment"))     # feedback -> comment (s-024 shape)
+        self.assertIn("sprint", ev_("jira-software:POST:/rest/agile/1.0/sprint"))                         # iteration -> sprint (s-032 shape)
+        self.assertIn("post", ev_("confluence:POST:/blogposts"))                                           # blog entry -> post via tag "Blog Post"
+        for key in ("jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/comment", "confluence:POST:/blogposts"):
+            self.assertFalse({"get", "create", "add", "rest", "api", "id"} & ev_(key), key)                 # pure action tokens / noise / id-like never qualify
+
+    def test_allowed_methods_is_the_production_helper(self):
+        from tools.atlassian_docs.intelligence import search
+        vm = {"get": ["GET"], "delete": ["DELETE"], "change": ["PUT", "POST"], "add": ["POST"]}
+        for q in ("get the issue", "issue status", "get and delete issue", "change add x"):
+            self.assertEqual(act.allowed_methods(q, vm), search.method_intent(search.tokenize_unigrams(q), vm)[1], q)
+        self.assertIsNone(act.allowed_methods("issue status", vm)); self.assertEqual(act.allowed_methods("get and delete issue", vm), frozenset())
 
     def test_candidate_relative_to_expected_vocab_not_global_catalog(self):
         doc = act.candidates(BENCH, CAT2, RANK, ALIASES)
@@ -108,3 +138,22 @@ class TestLexiconGate(unittest.TestCase):
         out, rejected = act.lexicon_gate(copy.deepcopy(lex), BENCH, BY_KEY, RANK)
         self.assertIn("workspace", out["lexicon"]); self.assertNotIn("document", out["lexicon"]); self.assertIn("note", out["lexicon"])
         self.assertEqual(out["rejected"]["document"]["reason"], "seed-incompatible"); self.assertEqual(rejected, ["document"])
+
+
+class TestVerbPrefixInvariant(unittest.TestCase):
+    """AC-R3-12: the live inventory keeps Round 2's rows and each Round 2 list as an exact prefix; suffixes sorted."""
+    def test_live_inventory_satisfies_prefix_invariant(self):
+        base = act.round2_verb_inventory()
+        self.assertEqual(canonical_sha256(base), "d66317db7a6a3d047f30197791eefdb93448747b913544da7545136f91dbffc0")   # Round 2 verb_inventory_sha256
+        live = json.loads((act.DATA / "search_ranking.json").read_text(encoding="utf-8"))["verb_methods"]
+        self.assertEqual(act.verb_prefix_violations(base, live), [])
+
+    def test_verb_prefix_invariant_rejects_reorder_and_truncation(self):                                   # review focus 5
+        base = {"change": ["PUT", "POST"], "get": ["GET"], "leave": ["POST", "DELETE"]}
+        self.assertEqual(act.verb_prefix_violations(base, {"change": ["PUT", "POST", "DELETE"], "get": ["GET"], "leave": ["POST", "DELETE"]}), [])
+        self.assertTrue(act.verb_prefix_violations(base, {"change": ["POST", "PUT"], "get": ["GET"], "leave": ["POST", "DELETE"]}))       # same set, reordered
+        self.assertTrue(act.verb_prefix_violations(base, {"change": ["PUT"], "get": ["GET"], "leave": ["POST", "DELETE"]}))              # truncated
+        self.assertTrue(act.verb_prefix_violations(base, {"change": ["PUT", "POST"], "get": ["GET"]}))                                   # row removed
+        self.assertTrue(act.verb_prefix_violations(base, {**base, "zz": ["GET"]}))                                                       # row added
+        self.assertTrue(act.verb_prefix_violations(base, {**base, "get": ["GET", "POST", "DELETE"]}))                                    # suffix not sorted
+        self.assertEqual(act.verb_prefix_violations(base, {**base, "get": ["GET", "DELETE", "POST"]}), [])

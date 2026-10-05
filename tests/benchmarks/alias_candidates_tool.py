@@ -1,29 +1,33 @@
-"""Round 2 pre-T tooling (spec §5.1/§5.2/§7.1): concept tokens, verb report, method-safety, alias candidates,
-R5/R6 classification, lexicon-seed gate. Every command reads only the source snapshot S (--cache-dir).
+"""Round 2 pre-T tooling (spec §5.1/§5.2/§7.1, extended by Round 3 spec §6/AC-R3-12): concept tokens, verb report,
+method-safety, alias candidates, R5/R6 classification, lexicon-seed gate. Every --cache-dir command reads only the
+source snapshot S.
 
-  python tests/benchmarks/alias_candidates_tool.py concept-tokens --cache-dir S --out concept_tokens.json
-  python tests/benchmarks/alias_candidates_tool.py verb-report    --cache-dir S --out verb_report.json
-  python tests/benchmarks/alias_candidates_tool.py method-safety  --cache-dir S --out method_safety.json
-  python tests/benchmarks/alias_candidates_tool.py lexicon-gate   --cache-dir S --lexicon tools/.../concept_lexicon.json
-  python tests/benchmarks/alias_candidates_tool.py candidates     --cache-dir S --out tools/.../alias_candidates.json
-  python tests/benchmarks/alias_candidates_tool.py classify       --cache-dir S
+  python tests/benchmarks/alias_candidates_tool.py concept-tokens     --cache-dir S --out concept_tokens.json
+  python tests/benchmarks/alias_candidates_tool.py verb-report        --cache-dir S --out verb_report.json
+  python tests/benchmarks/alias_candidates_tool.py method-safety      --cache-dir S --out method_safety.json
+  python tests/benchmarks/alias_candidates_tool.py lexicon-gate       --cache-dir S --lexicon tools/.../concept_lexicon.json
+  python tests/benchmarks/alias_candidates_tool.py candidates         --cache-dir S --out tools/.../alias_candidates.json
+  python tests/benchmarks/alias_candidates_tool.py classify           --cache-dir S
+  python tests/benchmarks/alias_candidates_tool.py verb-prefix-check
 """
 import argparse, collections, json, pathlib, sys
 
 if __package__ in (None, ""):
     sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
+from tests.benchmarks import evaluator as ev
 from tests.benchmarks import round_seal as rs
 from tests.benchmarks.evaluator import STOPWORDS, canonical_sha256
-from tools.atlassian_docs.intelligence.search import singular, tokenize_unigrams
+from tools.atlassian_docs.intelligence.search import method_intent, singular, tokenize_unigrams
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 DATA = ROOT / "tools" / "atlassian_docs" / "intelligence" / "data"
 BENCH_PATH = ROOT / "tests" / "benchmarks" / "search_queries.json"
-TOOL_VERSION = "round2.1"
+TOOL_VERSION = "round3.1"
 FUNCTION_WORDS = frozenset("my me this that these those another every which what who now today please into onto brand own "
                            "current some any all one two few several inside up".split())
 ID_LIKE = frozenset({"id", "ids", "key", "keys"})
+TARGET_EXCLUDE = FUNCTION_WORDS | ID_LIKE | STOPWORDS
 
 
 def norm_tokens(text) -> tuple:
@@ -85,14 +89,9 @@ def verb_report(internal, verb_methods) -> dict:
 
 
 def allowed_methods(query, verb_methods):
-    """None when the query has no inventory verb; else the intersection (may be empty = intent 0)."""
-    verbs = [t for t in tokenize_unigrams(query) if t in verb_methods]
-    if not verbs:
-        return None
-    allowed = set(verb_methods[verbs[0]])
-    for v in verbs[1:]:
-        allowed &= set(verb_methods[v])
-    return frozenset(allowed)
+    """None when the query has no inventory verb; else the intersection (may be empty = intent 0). The production helper
+    (search.method_intent) so the machine check, the evaluator's inputs and the scorer agree (Round 3 spec §4)."""
+    return method_intent(tokenize_unigrams(query), verb_methods)[1]
 
 
 def expected_methods(rec) -> frozenset:
@@ -110,15 +109,28 @@ def method_safety(bench, verb_methods) -> list:
     return rows
 
 
-def expected_vocab(rec, by_key, verb_methods, noise, hints) -> frozenset:
-    """spec §7.1.2: vocabulary of the seed's expected ops minus verbs, function words, noise, id-like and product hints."""
+def resource_vocab(op) -> frozenset:
+    """Round 3 spec §6: resource evidence of an operation = normalized tokens of its literal path segments (terminal segment
+    included) and of its tags. summary / operationId words are NOT resource evidence."""
+    toks = set(path_literal_tokens(op["key"].split(":", 2)[2]))
+    for tag in op.get("tags") or []:
+        toks |= set(norm_tokens(tag))
+    return frozenset(toks)
+
+
+def expected_vocab(rec, by_key, noise) -> frozenset:
+    """Round 3 spec §6 target eligibility: tokens of the seed's expected ops' resource vocabulary minus function words, path
+    noise, id-like tokens, stopwords and digits. Verb-inventory and product_hints membership are not exclusion reasons."""
     toks = set()
     for key in rec.get("expected_top1_any") or []:
         op = by_key.get(key)
         if op is not None:
-            toks |= op_vocab(op)
-    drop = set(verb_methods) | FUNCTION_WORDS | set(noise) | set(hints) | ID_LIKE | STOPWORDS
+            toks |= resource_vocab(op)
+    drop = TARGET_EXCLUDE | set(noise)
     return frozenset(t for t in toks if t not in drop and not t.isdigit())
+
+
+round2_verb_inventory, verb_prefix_violations = ev.round2_verb_inventory, ev.verb_prefix_violations      # defined in the stdlib-only evaluator (Task 1)
 
 
 def alias_source_words(aliases_raw) -> frozenset:
@@ -142,7 +154,7 @@ def candidates(bench, internal, ranking_raw, aliases_raw, round=2) -> dict:
     alias_words, df = alias_source_words(aliases_raw), catalog_df(internal)
     cands, reasons = {}, {}
     for rec in sorted(bench["seed"], key=lambda r: r["id"]):
-        vocab = expected_vocab(rec, by_key, verbs, noise, hints)
+        vocab = expected_vocab(rec, by_key, noise)
         for tok in norm_tokens(rec["query"]):
             reason = ("verb" if tok in verbs else "function_word" if tok in FUNCTION_WORDS or tok in STOPWORDS else "product_hint" if tok in hints
                       else "existing_alias" if tok in alias_words else "expected_vocab" if tok in vocab
@@ -169,7 +181,7 @@ def classify(bench, internal, ranking_raw, aliases_raw) -> dict:
         allowed, classes = allowed_methods(rec["query"], verbs), []
         if allowed is None or not (allowed & expected_methods(rec)):
             classes.append("R5")
-        known = (expected_vocab(rec, by_key, verbs, noise, hints) | set(verbs) | alias_words | set(hints)
+        known = (expected_vocab(rec, by_key, noise) | set(verbs) | alias_words | set(hints)
                  | FUNCTION_WORDS | STOPWORDS | ID_LIKE | noise | idents)
         if any(t not in known and not t.isdigit() for t in norm_tokens(rec["query"])):
             classes.append("R6")
@@ -184,7 +196,7 @@ def lexicon_gate(lexicon_doc, bench, by_key, ranking_raw):
         seeds = [r for r in bench["seed"] if syn in norm_tokens(r["query"])]
         if not seeds:
             continue
-        allowed = set().union(*(expected_vocab(r, by_key, verbs, noise, hints) for r in seeds))
+        allowed = set().union(*(expected_vocab(r, by_key, noise) for r in seeds))
         if not set(lexicon_doc["lexicon"][syn]) & allowed:
             lexicon_doc["rejected"][syn] = {"reason": "seed-incompatible", "targets": lexicon_doc["lexicon"].pop(syn),
                                             "catalog_df": lexicon_doc.get("catalog_df", {}).get(syn, 0)}
@@ -272,6 +284,15 @@ def cmd_classify(args):
     return 0
 
 
+def cmd_verb_prefix_check(args):
+    live = _read(DATA / "search_ranking.json")["verb_methods"]
+    problems = verb_prefix_violations(round2_verb_inventory(), live)
+    for m in problems:
+        print(f"VIOLATION {m}")
+    print("prefix ok" if not problems else f"{len(problems)} violation(s)")
+    return 1 if problems else 0
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -283,6 +304,7 @@ def main(argv=None):
         for e in extra:
             p.add_argument(f"--{e.rstrip('?')}", required=not e.endswith("?"))
         p.set_defaults(fn=fn)
+    p = sub.add_parser("verb-prefix-check"); p.set_defaults(fn=cmd_verb_prefix_check)
     args = ap.parse_args(argv)
     return args.fn(args)
 

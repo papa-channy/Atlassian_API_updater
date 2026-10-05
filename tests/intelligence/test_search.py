@@ -505,17 +505,14 @@ class TestRound3Signals(unittest.TestCase):
             self.assertEqual(out["recommended_operation"], out["results"][0]["key"] if out["actionable"] and out["results"] else None)
 
 
-class TestRound2SpecParity(unittest.TestCase):
-    """spec §6 parity (added at T): the frozen verb inventory equals the JSON block under '## 6.' of the Round 2 spec."""
-    SPEC = pathlib.Path(__file__).resolve().parents[2] / "docs" / "superpowers" / "specs" / "2026-10-02-search-quality-round2-design.md"
-
-    def test_verb_inventory_matches_spec_section_6(self):
-        lines = self.SPEC.read_text(encoding="utf-8").split("\n")
-        start = next(i for i, l in enumerate(lines) if l.startswith("## 6."))
-        fence = next(i for i in range(start, len(lines)) if lines[i].startswith("```json"))
-        end = next(i for i in range(fence + 1, len(lines)) if lines[i].startswith("```"))
-        block = json.loads("{" + "\n".join(lines[fence + 1:end]) + "}")
-        self.assertEqual(policy.load_ranking().verb_methods, {k: frozenset(v) for k, v in block["verb_methods"].items()})
+class TestVerbInventoryPrefixInvariant(unittest.TestCase):
+    """AC-R3-12 (replaces the Round 2 §6 parity test): the live inventory extends the Round 2 §6 block by sorted suffixes only."""
+    def test_verb_inventory_is_round2_block_plus_sorted_suffixes(self):
+        from tests.benchmarks import alias_candidates_tool as act
+        base, rp = act.round2_verb_inventory(), policy.load_ranking()
+        self.assertEqual(act.verb_prefix_violations(base, {v: list(o) for v, o in rp.verb_method_order.items()}), [])
+        for v, methods in base.items():
+            self.assertEqual(rp.verb_method_order[v][0], methods[0], v)                                    # §3.1: first method never changes
 
 
 class TestRound2MethodSafetyArtifact(unittest.TestCase):
