@@ -263,3 +263,207 @@ class TestReplacementHelpers(unittest.TestCase):
         old = {**shas, "h-003": rs.canonical_sha256(plain["held_out"][2])}
         self.assertTrue(rs.verify_coverage(manifest, merged, [{**attempts[0], "reviewed_record_shas": old}]))                  # reviewed the OLD h-003
         self.assertTrue(rs.verify_coverage(manifest, plain, attempts))                                                        # stale manifest sha
+
+
+VERBS = {"get": ["GET"], "show": ["GET"], "list": ["GET"], "create": ["POST"], "publish": ["POST"], "start": ["POST"],
+         "delete": ["DELETE"], "erase": ["DELETE"], "remove": ["DELETE"], "update": ["PUT"], "rename": ["PUT", "POST"], "assign": ["PUT", "POST"]}
+
+
+def rec3(i, q, key):
+    return {**rec(i, q, key), "origin": "held_out-r3"}
+
+
+def neg3(i, q, key):
+    return {**neg(i, q, key), "origin": "negative-r3"}
+
+
+def valid_plain_r3():
+    """Round 3 shape of valid_plain(): same expected keys/distribution; every held_out query carries a verb whose method matches
+    its expected op; negatives: n1-n4 actionable with the forbidden op's method inside the intent, n5-n8 verb-less."""
+    held = [rec3(1, "show me the ticket details", A), rec3(2, "publish a brand new document", B), rec3(3, "erase the whole ticket", C),
+            rec3(4, "list every jira board", D), rec3(5, "rename the current jira sprint", E), rec3(6, "assign the ticket to someone", F),
+            rec3(7, "show the confluence document", G), rec3(8, "start a fresh sprint", H), rec3(9, "get my ticket now", A),
+            rec3(10, "publish a fresh wiki entry", B), rec3(11, "remove the ticket record", C), rec3(12, "list which agile boards exist", D),
+            rec3(13, "create a document today", B), rec3(14, "start another sprint now", H), rec3(15, "show one wiki document", G),
+            rec3(16, "get a jira ticket", A)]
+    negs = [neg3(1, "delete the ticket status field", C), neg3(2, "update the issue type scheme", E), neg3(3, "show the document space overview", G),
+            neg3(4, "assign jira ticket owner", F), neg3(5, "confluence document tree", B), neg3(6, "sprint board settings", D),
+            neg3(7, "ticket record archive", C), neg3(8, "page tree layout", G)]
+    return {"held_out": held, "negative": negs}
+
+
+class TestRound3ActionabilityRules(unittest.TestCase):
+    def check(self, plain):
+        return rs.machine_check(plain, BENCH, CAT, round=3, verb_methods=VERBS)
+
+    def test_valid_round3_plain_has_no_violations(self):
+        self.assertEqual(self.check(valid_plain_r3()), [])
+        self.assertEqual(rs.negative_distribution(valid_plain_r3()["negative"], VERBS), (4, 4))
+        with self.assertRaises(ValueError):
+            rs.machine_check(valid_plain_r3(), BENCH, CAT, round=3)                                  # round >= 3 needs the inventory
+        self.assertEqual(rs.machine_check(valid_plain(), BENCH, CAT), [])                            # round 1 unchanged
+
+    def test_actionable_rule_three_branches(self):                                                     # review focus 1
+        p = valid_plain_r3(); p["held_out"][0]["expected_top1_any"] = [C]                              # show (GET) vs DELETE op: intent non-empty, expected outside
+        msgs = self.check(p); self.assertEqual([rs.rule_id(m) for m in msgs], ["actionable"]); self.assertTrue(msgs[0].startswith("h-001: actionable:"))
+        p = valid_plain_r3(); p["held_out"][0]["query"] = "create and delete the ticket"              # empty intersection
+        self.assertEqual([rs.rule_id(m) for m in self.check(p)], ["actionable"])
+        p = valid_plain_r3(); p["held_out"][0]["query"] = "the ticket details please"                 # no verb
+        self.assertEqual([rs.rule_id(m) for m in self.check(p)], ["actionable"])
+        self.assertEqual(self.check(valid_plain_r3()), [])                                           # non-empty + expected inside -> pass
+
+    def test_negative_method_rule_applies_to_actionable_negatives_only(self):
+        p = valid_plain_r3(); p["negative"][0]["forbidden_top1"] = [A]                                  # delete (DELETE) vs GET op
+        msgs = self.check(p); self.assertEqual([rs.rule_id(m) for m in msgs], ["negative-method"]); self.assertTrue(msgs[0].startswith("n-001: negative-method:"))
+        p = valid_plain_r3(); p["negative"][4]["forbidden_top1"] = [A]                                  # abstained n-005: rule does not apply
+        self.assertEqual(self.check(p), [])
+
+    def test_negative_distribution_must_be_exactly_four_four(self):
+        # NOTE (task-6 concern): brief's literal query "show the document tree" makes n-005 actionable via "show" (GET),
+        # but forbidden_top1 is still B (confluence:POST:/pages) -> that also trips negative-method (GET vs POST), which
+        # this test does not expect. "publish" (POST) keeps the intent inside the forbidden method, isolating the
+        # negative-distribution violation this test targets; see task-6-report.md for the computation.
+        p = valid_plain_r3(); p["negative"][4]["query"] = "publish the document tree"                  # 5 actionable / 3 abstained
+        msgs = self.check(p); self.assertEqual([rs.rule_id(m) for m in msgs], ["negative-distribution"])
+        self.assertIn("5 actionable / 3 abstained", msgs[0])
+        p = valid_plain_r3(); p["negative"][0]["query"] = "ticket status field values"                # 3 / 5
+        self.assertEqual([rs.rule_id(m) for m in self.check(p)], ["negative-distribution"])
+
+    def test_rule_id_covers_every_checker_message(self):
+        mutations = [lambda p: p["held_out"][0].update(query="two words"), lambda p: p["held_out"][0].update(expected_top1_any=["nope:GET:/x"]),
+                     lambda p: p["held_out"][0].update(query="get issue"), lambda p: p["held_out"][1].update(query="publish a create page now"),
+                     lambda p: p["negative"][6].update(query="delete issue"), lambda p: p["held_out"][1].update(query="get issue by key"),
+                     lambda p: p["held_out"][0].update(origin="held_out-r2"), lambda p: p["negative"][0].update(expected_top1_any=[A]),
+                     lambda p: p["held_out"].__setitem__(3, rec3(4, "get my ticket now", A)), lambda p: p["negative"][4].update(query="show the document tree")]
+        for mutate in mutations:
+            p = valid_plain_r3(); mutate(p)
+            msgs = self.check(p); self.assertTrue(msgs)
+            for m in msgs:
+                self.assertIn(rs.rule_id(m), rs.HIDDEN_RULES_R3, m)
+        self.assertEqual(rs.HIDDEN_RULES_R3, ("schema", "catalog", "words", "ascii", "actionable", "negative-method", "operationId", "summary/tags",
+                                              "negative-phrase", "reuse", "distribution", "negative-distribution"))
+        p = valid_plain_r3(); p["held_out"][0]["query"] = "show me the tïcket details"                                      # non-ASCII letter
+        self.assertEqual([rs.rule_id(m) for m in self.check(p)], ["ascii"])
+        p = valid_plain_r3(); p["held_out"][0]["query"] = "show me the ticket's details"                                     # apostrophe allowed
+        self.assertEqual(self.check(p), [])
+
+
+class TestReplacementStateMachine(unittest.TestCase):
+    def test_record_lines_by_priority_then_sections_in_frozen_order(self):
+        p = valid_plain_r3()
+        v = ["h-002: query has 2 words (must be 3-7)", "h-002: copies consecutive tokens 'create page' from expected op summary (summary/tags rule)",
+             "held_out: method DELETE=1 (need >= 2)", "negative: negative-distribution: 5 actionable / 3 abstained (need 4/4)", "n-003: negative-method: forbidden methods ['GET'] outside intent ['POST']"]
+        self.assertEqual(rs.record_rejections(v), ["record h-002 rejected: words", "record n-003 rejected: negative-method"])     # words beats summary/tags
+        self.assertEqual(rs.section_rejections(v), ["distribution", "negative-distribution"])
+        self.assertEqual(rs.next_request(v, p, {})[0], "records")
+        only_sections = v[2:4]
+        kind, section, text = rs.next_request(only_sections, p, {})
+        self.assertEqual((kind, section), ("section", "held_out")); self.assertEqual(text.split("\n"), ["distribution rejected"] + [r["id"] for r in p["held_out"]])
+        kind, section, text = rs.next_request(only_sections[1:], p, {"negative_section_replacements": 0})
+        self.assertEqual((kind, section), ("section", "negative")); self.assertEqual(text.split("\n"), ["negative distribution rejected"] + [r["id"] for r in p["negative"]])
+        self.assertEqual(rs.next_request(only_sections[1:], p, {"negative_section_replacements": 1})[0], "invalid")           # second section replacement forbidden
+        self.assertEqual(rs.next_request([], p, {}), ("ok", None))
+
+    def test_render_generation_input_is_deterministic_and_pins_the_inventory(self):
+        tpl = "RULES\nVERB_METHODS:\n<verb methods json>\nCATALOG:\n<generator catalog lines>\n"
+        gen = rs.generator_view(CAT)
+        a, b = rs.render_generation_input(tpl, gen, VERBS), rs.render_generation_input(tpl, gen, VERBS)
+        self.assertEqual(a, b)
+        block = a.split("VERB_METHODS:\n")[1].split("\nCATALOG:")[0]
+        self.assertEqual(json.loads(block), VERBS); self.assertEqual(rs.canonical_sha256(json.loads(block)), rs.canonical_sha256(VERBS))
+        self.assertIn(f"{CAT[0]['key']}\t{CAT[0]['source']}\t{CAT[0]['method']}\t{CAT[0]['summary']}\tIssues", a)
+        with self.assertRaises(ValueError):
+            rs.render_generation_input("no placeholders", gen, VERBS)
+
+    def test_annotate_for_review_adds_machine_fields(self):
+        ann = rs.annotate_for_review(valid_plain_r3(), VERBS)
+        h1, n5 = ann["held_out"][0], ann["negative"][4]
+        self.assertEqual(h1["machine"], {"matched_verbs": ["show"], "intent_methods": ["GET"], "machine_actionable": True})
+        self.assertEqual(n5["machine"], {"matched_verbs": [], "intent_methods": [], "machine_actionable": False})
+        self.assertEqual({k: v for k, v in h1.items() if k != "machine"}, valid_plain_r3()["held_out"][0])          # records untouched
+        self.assertEqual(sum(r["machine"]["machine_actionable"] for r in ann["negative"]), 4)
+
+    def test_needle_manifest_and_scan(self):
+        import tempfile, pathlib, json
+        queries = ["show me the ticket details", "Delete the ticket status field"]
+        m = rs.needle_manifest(queries)
+        self.assertEqual([e["words"] for e in m], [5, 5]); self.assertTrue(all(len(e["sha256"]) == 64 for e in m))
+        self.assertNotIn("ticket", json.dumps(m))                                                           # no plaintext in the manifest
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td); (root / "a.txt").write_text("notes: Show   me the\nticket details!", encoding="utf-8")     # whitespace / case variant
+            (root / "b.json").write_text(json.dumps({"q": "delete the ticket status field"}), encoding="utf-8")
+            (root / "c.md").write_text("ticket details are shown here", encoding="utf-8")                   # partial: no hit
+            (root / "esc.json").write_text('{"q": "Delete the\\\\nticket status \\\\u0066ield"}', encoding="utf-8")       # escaped newline + \\u0066 ('f'): still a hit
+            self.assertEqual(m[0]["sha256"], __import__("hashlib").sha256(b"show me the ticket details").hexdigest())   # spec byte contract
+            (root / "allowed.json").write_text(json.dumps({"q": "show me the ticket details"}), encoding="utf-8")
+            hits = rs.scan_for_needles([root], m)
+            self.assertEqual(sorted(pathlib.Path(h).name for h in hits), ["a.txt", "allowed.json", "b.json", "esc.json"])
+            self.assertEqual(sorted(pathlib.Path(h).name for h in rs.scan_for_needles([root], m, allow=[root / "allowed.json"])), ["a.txt", "b.json", "esc.json"])
+            mp = root / "m.json"; mp.write_text(json.dumps(m), encoding="utf-8"); good = rs.ev.file_sha256(mp)
+            from unittest import mock
+            with mock.patch("builtins.print"):
+                self.assertEqual(rs.main(["scan", "--manifest", str(mp), "--root", str(root), "--expect-sha256", good]), 1)             # hits present
+                mp.write_text(json.dumps(rs.needle_manifest(["nothing"])), encoding="utf-8")                                      # tampered manifest
+                self.assertEqual(rs.main(["scan", "--manifest", str(mp), "--root", str(root), "--expect-sha256", good]), 2)             # refused
+            self.assertEqual(rs.scan_for_needles([root], rs.needle_manifest(["totally absent phrase here"])), [])
+
+    def test_seal_verifies_manifest_against_sealed_queries(self):
+        """spec §5 v1.22: round >= 3 seal binds needle_manifest_sha256 only when the manifest equals needle_manifest(sealed queries)."""
+        import tempfile, pathlib, json
+        from unittest import mock
+        plain = valid_plain_r3(); queries = [r["query"] for r in plain["held_out"] + plain["negative"]]
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td); pl = root / "plain.json"; pl.write_text(json.dumps(plain), encoding="utf-8")
+            bench = {"version": 2, "seed": BENCH["seed"], "regression_negative": [], "held_out": [], "negative": []}
+            good, bad = root / "good.json", root / "bad.json"
+            good.write_text(json.dumps(rs.needle_manifest(queries)), encoding="utf-8"); bad.write_text(json.dumps(rs.needle_manifest(queries[:-1] + ["something else entirely"])), encoding="utf-8")
+            def run(manifest):
+                b = root / "bench.json"; b.write_text(json.dumps(bench), encoding="utf-8")
+                argv = ["seal", "--round", "3", "--plain", str(pl), "--bench", str(b), "--cache-dir", "x"] + (["--needle-manifest", str(manifest)] if manifest else [])
+                with mock.patch.object(rs, "load_catalogs_from_cache", lambda cache_dir, round=1: ([], CAT, "f" * 64, {})), mock.patch.object(rs, "verify_freeze", lambda r, c: []), \
+                     mock.patch.object(rs.ev, "freeze_for", lambda r: {"round": 3}), mock.patch.object(rs, "RANKING_PATH", root / "ranking.json"), mock.patch("builtins.print"):
+                    (root / "ranking.json").write_text(json.dumps({"verb_methods": VERBS}), encoding="utf-8")
+                    code = rs.main(argv)
+                return code, json.loads(b.read_text(encoding="utf-8"))
+            code, out = run(good); self.assertEqual(code, 0); self.assertEqual(out["round3_seal"]["needle_manifest_sha256"], rs.ev.file_sha256(good))
+            self.assertEqual(run(bad)[0], 1)                                                              # wrong queries -> refused
+            self.assertEqual(run(None)[0], 1)                                                             # missing manifest -> refused
+
+    def test_verify_reference_ciphertext(self):
+        import tempfile, pathlib
+        from unittest import mock
+        from tests.benchmarks import evaluator as ev
+        with tempfile.TemporaryDirectory() as td:
+            enc = pathlib.Path(td) / "round2-sealed.json.enc"; enc.write_bytes(b"ciphertext")
+            entry = {"round": 3, "reference_set": {"enc_sha256": ev.file_sha256(enc)}}
+            with mock.patch.object(rs.ev, "freeze_for", lambda r: entry):
+                self.assertEqual(rs.verify_reference_ciphertext(enc, 3), [])
+                enc.write_bytes(b"tampered")
+                self.assertEqual(len(rs.verify_reference_ciphertext(enc, 3)), 1)
+
+
+class TestRound3FreezeEntry(unittest.TestCase):
+    def test_round3_entry_has_the_canonical_key_set(self):
+        import tempfile, pathlib
+        from unittest import mock
+        from tests.benchmarks import evaluator as ev
+        shas = {"jira-platform": "a" * 64, "jira-software": "b" * 64, "confluence": "c" * 64}
+        hashes = {k: "0" * 64 for k in ("concept_lexicon_sha256", "lexicon_aliases_sha256", "alias_candidates_sha256", "worker_brief_sha256", "hidden_generation_prompt_sha256",
+                                         "hidden_reviewer_prompt_sha256", "tooling_code_sha256", "evaluation_code_sha256_at_T", "regression_reference_sha256", "tuning_grid_sha256")}
+        # NOTE (task-6 concern): brief's indentation closes the TemporaryDirectory before the `ev.file_sha256(enc)`
+        # assertion below, which would raise FileNotFoundError; widened to keep `enc` alive through the read. See
+        # task-6-report.md for the computation.
+        with tempfile.TemporaryDirectory() as td:
+            enc = pathlib.Path(td) / "round2-sealed.json.enc"; enc.write_bytes(b"ciphertext")
+            with mock.patch.object(rs, "load_catalogs_from_cache", lambda cache_dir, round=1: ([], CAT, "f" * 64, dict(shas))), \
+                 mock.patch.object(rs.ev, "round_freeze_hashes", lambda r: dict(hashes)):
+                e = rs.freeze_entry(3, "x", reference_enc=enc)
+            self.assertEqual(set(e), ev.freeze_key_set(3)); self.assertNotIn("commit_T", e)
+            self.assertEqual(e["reference_set"]["origin"], "round2"); self.assertEqual(e["reference_set"]["enc_sha256"], ev.file_sha256(enc))
+        b = json.loads(rs.BENCH_PATH.read_text(encoding="utf-8"))["round2_seal"]
+        self.assertEqual((e["reference_set"]["held_out_sha256"], e["reference_set"]["negative_sha256"]), (b["held_out_sha256"], b["negative_sha256"]))
+        self.assertEqual(e["hidden_generation_rules"], list(rs.HIDDEN_RULES_R3)); self.assertEqual(e["hidden_set_origin"], "round3")
+        with self.assertRaises(SystemExit):
+            with mock.patch.object(rs, "load_catalogs_from_cache", lambda cache_dir, round=1: ([], CAT, "f" * 64, dict(shas))), \
+                 mock.patch.object(rs.ev, "round_freeze_hashes", lambda r: dict(hashes)):
+                rs.freeze_entry(3, "x")                                                               # round >= 3 needs --reference-enc
