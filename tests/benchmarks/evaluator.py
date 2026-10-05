@@ -163,7 +163,8 @@ EVALUATION_CODE_FILES = tuple(sorted(("tests/benchmarks/evaluator.py", "tests/be
 TOOLING_FILES = tuple(sorted(EVALUATION_CODE_FILES + ("tests/benchmarks/concept_lexicon_check.py",
                                                       "tests/benchmarks/test_round_seal.py", "tests/test_tune_search_ranking.py",
                                                       "tests/test_diag_search_queries.py", "tests/intelligence/test_policy.py",
-                                                      "tests/benchmarks/test_regression_reference.py")))
+                                                      "tests/benchmarks/test_regression_reference.py",
+                                                      "tests/benchmarks/round3_simulation.py", "tests/benchmarks/test_round3_simulation.py")))
 
 
 def evaluation_code_sha256(root) -> str:

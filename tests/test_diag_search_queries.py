@@ -17,6 +17,15 @@ FMT = "%Y-%m-%dT%H:%M:%SZ"
 SEALED_COUNTS = {"held_out": 16, "negative": 8}
 
 
+def assert_no_query_key(tc, obj):
+    """Recursive exact-key check: a `query` key is forbidden anywhere; `query_sha256` is allowed (a substring test on the JSON would always trip on it)."""
+    if isinstance(obj, dict):
+        tc.assertNotIn("query", obj)
+        for v in obj.values(): assert_no_query_key(tc, v)
+    elif isinstance(obj, list):
+        for v in obj: assert_no_query_key(tc, v)
+
+
 def base_bench() -> dict:
     """Bundled bench reduced to what is independent of any round's hidden-set state: seed/regression_negative
     records with an r0 origin (their answers are in the fixtures), empty held_out/negative and only round1_seal (the
@@ -207,3 +216,35 @@ class TestDiagScript(unittest.TestCase):
             self.assertEqual(rep[k], ev.canonical_sha256(json.loads(path.read_text(encoding="utf-8"))) if path.exists() else None)
         code2, rep2 = self.run_diag("--bench-file", str(self.good_bench), "--sets", "seed")
         self.assertIsNone(rep2["held_out_top3"])
+
+    def test_round3_report_fields_raw_effective_and_actionable_failures(self):
+        code, rep = self.run_diag("--bench-file", str(self.good_bench), "--bench", str(self.plain_path))
+        self.assertEqual(rep["evaluation_domain"], "actionable recommendation queries"); self.assertEqual(rep["policy_version"], 4)
+        self.assertEqual(rep["tuning_grid_sha256"], ev.tuning_grid_sha256(json.loads((diag.policy.DATA_DIR / "search_ranking.json").read_text(encoding="utf-8"))))
+        for name in ("regression_negative", "negative"):
+            self.assertEqual(set(rep["sets"][name]) >= {"passed", "raw_passed", "effective_passed", "actionable", "abstained"}, True, name)
+        self.assertEqual(rep["negative_actionable"], rep["sets"]["negative"]["actionable"]); self.assertEqual(rep["negative_abstained"], rep["sets"]["negative"]["abstained"])
+        plain = {"held_out": [{**self.plain["held_out"][0], "query": "issue attachment details"}], "negative": []}      # verb-less held_out fails as abstained
+        p = self.tmp / "abstained.json"; p.write_text(json.dumps(plain), encoding="utf-8")
+        code, rep = self.run_diag("--bench-file", str(self.good_bench), "--bench", str(p), "--sets", "held_out")
+        self.assertEqual(rep["sets"]["held_out"]["passed"], 0); self.assertEqual(rep["failures"][0]["actionable"], False); self.assertTrue(rep["failures"][0]["raw_ok"])
+        self.assertNotIn("query", rep["failures"][0]); self.assertEqual(rep["failures"][0]["query_sha256"], ev.canonical_sha256(plain["held_out"][0]["query"]))   # hidden failures never carry the text
+        self.assertNotIn("query", rep["sets"]["held_out"]["failed"][0]); assert_no_query_key(self, rep["sets"]["held_out"]); assert_no_query_key(self, rep["failures"])
+        self.assertEqual(set(rep["failures"][0]["top5"][0]["signals"]) >= {"method_order", "path_coverage"}, True)
+
+    def test_reference_block_is_appended_once_and_only_to_the_current_artifact(self):
+        out = self.tmp / "final.json"
+        code, rep = self.run_diag("--bench-file", str(self.good_bench), "--bench", str(self.plain_path), "--json", str(out))
+        ref = {"held_out": [self.plain["held_out"][0], {**self.plain["held_out"][0], "id": "h-098", "query": "issue attachment details"},                 # valid keys, verb-less → fails
+                            {**self.plain["held_out"][0], "id": "h-099", "expected_top1_any": ["nope:GET:/x"]}], "negative": list(self.plain["negative"])}
+        rp = self.tmp / "ref.json"; rp.write_text(json.dumps(ref), encoding="utf-8")
+        code, _ = self.run_diag("--bench-file", str(self.good_bench), "--reference", str(rp), "--reference-round", "1", "--append-to", str(out))
+        self.assertEqual(code, 0)
+        art = json.loads(out.read_text(encoding="utf-8")); blk = art["reference_round1"]
+        self.assertEqual(blk["invalid_key"], [{"id": "h-099", "keys": ["nope:GET:/x"]}]); self.assertEqual(blk["held_out"]["total"], 2); self.assertEqual(blk["held_out"]["passed"], 1)
+        fail = blk["held_out"]["failed"][0]; self.assertEqual(fail["id"], "h-098"); self.assertNotIn("query", fail)                     # reference failures are sanitized too
+        self.assertEqual(fail["query_sha256"], ev.canonical_sha256("issue attachment details")); assert_no_query_key(self, blk)
+        self.assertEqual(set(blk["negative"]) >= {"raw_passed", "effective_passed"}, True); self.assertEqual(set(blk["plaintext_sha256"]), {"held_out", "negative"})
+        self.assertEqual(art["sets"], rep["sets"])                                                                  # current-round results untouched
+        code2, _ = self.run_diag("--bench-file", str(self.good_bench), "--reference", str(rp), "--reference-round", "1", "--append-to", str(out))
+        self.assertEqual(code2, 2)                                                                                  # second append refused

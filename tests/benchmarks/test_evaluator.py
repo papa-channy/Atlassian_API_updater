@@ -534,6 +534,29 @@ class TestRound2FinalArtifact(unittest.TestCase):
             self.assertEqual(art["sets"][sect]["total"], total)
 
 
+FINAL_R3 = pathlib.Path(__file__).resolve().parent / "round3-final.json"
+
+
+class TestRound3FinalArtifact(unittest.TestCase):
+    """Guarded (mirrors TestRound2FinalArtifact): checked once tests/benchmarks/round3-final.json exists (after
+    round3_simulation.py --phase H's commit D, or the real Round 3 commit D)."""
+
+    def test_round3_final_artifact(self):
+        if not FINAL_R3.exists():
+            print("round3-final.json absent: checked after commit D"); return
+        art = json.loads(FINAL_R3.read_text(encoding="utf-8")); b = json.loads(BENCH.read_text(encoding="utf-8")); seal = b["round3_seal"]
+        e = ev.freeze_for(3)
+        self.assertEqual(art["round"], 3)
+        self.assertEqual(art["sealed_sha256"], {"held_out": seal["held_out_sha256"], "negative": seal["negative_sha256"]})
+        self.assertEqual(art["evaluation_code_sha256"], e["evaluation_code_sha256_at_T"])
+        self.assertEqual(art["tuning_grid_sha256"], e["tuning_grid_sha256"])
+        self.assertEqual(set(art["sets"]["negative"]) >= {"raw_passed", "effective_passed"}, True)
+        self.assertEqual(art["negative_actionable"]["total"], 4); self.assertEqual(art["negative_abstained"]["total"], 4)
+        ref = art["reference_round2"]
+        self.assertIsInstance(ref["invalid_key"], list); self.assertEqual(ref["enc_sha256"], e["reference_set"]["enc_sha256"])
+        self.assertEqual(art["evaluation_domain"], "actionable recommendation queries")
+
+
 class TestRound2PreTProvenance(unittest.TestCase):
     """AC-08 / AC-13 / spec §10.1 "pre-T order" / §10.2: the persisted pre-T artifacts were built from S and after the
     verb inventory was fixed. Guarded: checked once the round >= 2 freeze entry and the artifact exist."""

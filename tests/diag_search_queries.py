@@ -57,6 +57,9 @@ def _parse(argv):
     ap.add_argument("--cache-dir", type=pathlib.Path, default=None)
     ap.add_argument("--json", type=pathlib.Path, default=None)
     ap.add_argument("--round", type=int, default=None)
+    ap.add_argument("--reference", type=pathlib.Path, default=None)
+    ap.add_argument("--reference-round", type=int, default=None)
+    ap.add_argument("--append-to", type=pathlib.Path, default=None)
     return ap.parse_args(argv)
 
 
@@ -117,10 +120,53 @@ def run(argv=None):
         copy = pathlib.Path(td) / "cache"
         shutil.copytree(cache, copy)                            # the snapshot itself is never written
         with mock.patch.object(storage, "CACHE_DIR", copy):
-            code, report = _evaluate(build_state(), bench, sections, sets, plain, rnd)
-    if args.json and code == 0:                                # no artifact from a refused run
+            state = build_state()
+            if args.reference:
+                code, report = _append_reference(state, args, bench)
+            else:
+                code, report = _evaluate(state, bench, sections, sets, plain, rnd)
+    if args.json and code == 0 and not args.reference:          # no artifact from a refused run
         args.json.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     return code, report
+
+
+def _hide_queries(res):
+    """Round 3 spec §4 v1.22: hidden/reference failure records never carry a `query` key; they carry `query_sha256`
+    instead (diagnostic fields without the text are allowed). Sealed-section stubs pass through unchanged."""
+    if res.get("sealed"):
+        return res
+    out = dict(res)
+    out["failed"] = [{**{k: v for k, v in f.items() if k != "query"}, "query_sha256": ev.canonical_sha256(f["query"])}
+                     for f in res.get("failed", [])]
+    return out
+
+
+def _append_reference(state, args, bench):
+    art_path = args.append_to; art = json.loads(art_path.read_text(encoding="utf-8"))
+    key = f"reference_round{args.reference_round}"
+    if art.get("git_commit") != _git("rev-parse", "HEAD") or art.get("registry_fingerprint") != state.registry.fingerprint or key in art:
+        print(f"error: {art_path} is not the current artifact or already has {key}", file=sys.stderr); return 2, art
+    plain = json.loads(args.reference.expanduser().read_text(encoding="utf-8"))
+    for name in HIDDEN_SETS:
+        ev.check_schema(name, plain[name])
+        for rec in plain[name]:
+            if rec.get("origin") != f"{name}-r{args.reference_round}":
+                print(f"error: {name}/{rec.get('id')}: origin {rec.get('origin')!r} != {name}-r{args.reference_round}", file=sys.stderr); return 2, art
+    keys = {op.key for sr in state.registry.sources.values() for op in sr.operations}
+    fn = lambda q: (lambda out: ([r["key"] for r in out.get("results", [])], out["actionable"]))(search_operations(state, q, limit=5))
+    block, invalid = {}, []
+    for name in HIDDEN_SETS:
+        valid = []
+        for rec in plain[name]:
+            bad = [k for k in rec["expected_top1_any"] + rec["forbidden_top1"] if k not in keys]
+            (invalid.append({"id": rec["id"], "keys": bad}) if bad else valid.append(rec))
+        block[name] = _hide_queries(ev.evaluate(valid, fn, section=name))
+    block["invalid_key"] = invalid
+    block["plaintext_sha256"] = {n: ev.canonical_sha256(plain[n]) for n in HIDDEN_SETS}
+    block["enc_sha256"] = (ev.current_round().get("reference_set") or {}).get("enc_sha256")
+    art[key] = block
+    art_path.write_text(json.dumps(art, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    return 0, art
 
 
 def _evaluate(state, bench, sections, sets, plain, rnd):
@@ -138,8 +184,11 @@ def _evaluate(state, bench, sections, sets, plain, rnd):
               "alias_candidates_sha256": _data_sha("alias_candidates.json"),
               "concept_lexicon_sha256": _data_sha("concept_lexicon.json"),
               "evaluation_code_sha256": ev.evaluation_code_sha256(ROOT), "spec_sha256": spec_sha,
+              "evaluation_domain": "actionable recommendation queries",
+              "policy_version": policy.POLICY_VERSIONS["search"],
+              "tuning_grid_sha256": ev.tuning_grid_sha256(json.loads((policy.DATA_DIR / "search_ranking.json").read_text(encoding="utf-8"))),
               "seal_match": fp == seal.get("registry_fingerprint") and spec_sha == seal.get("spec_sha256"),
-              "held_out_top3": None,
+              "held_out_top3": None, "negative_actionable": None, "negative_abstained": None,
               "sets": {}, "failures": []}
     if not report["seal_match"]:
         print(f"WARNING: snapshot differs from round{rnd}_seal (registry {fp} vs {seal.get('registry_fingerprint')}; "
@@ -156,26 +205,39 @@ def _evaluate(state, bench, sections, sets, plain, rnd):
     ranked = {}
 
     def fn(q):
-        keys = [r["key"] for r in search_operations(state, q, limit=5).get("results", [])]
+        out = search_operations(state, q, limit=5)
+        keys = [r["key"] for r in out.get("results", [])]
         ranked[q] = keys
-        return keys
+        return keys, out["actionable"]
 
     for name in sets:
-        res = ev.evaluate(sections[name], fn)
-        report["sets"][name] = res
+        res = ev.evaluate(sections[name], fn, section=name)
+        hidden = name in HIDDEN_SETS
+        report["sets"][name] = _hide_queries(res) if hidden else res
         if res.get("sealed"):
             print(f"[{name:19}] sealed ({res['count']} records)")
             continue
-        print(f"[{name:19}] {res['passed']}/{res['total']}")
+        if name in ev.NEGATIVE_SECTIONS:
+            print(f"[{name:19}] effective {res['effective_passed']}/{res['total']} (raw {res['raw_passed']}/{res['total']})")
+        else:
+            print(f"[{name:19}] {res['passed']}/{res['total']}")
         if name == "held_out":
             records = sections[name]
             passed3 = sum(1 for rec in records
                           if any(k in ranked.get(rec["query"], [])[:3] for k in (rec.get("expected_top1_any") or [])))
             report["held_out_top3"] = {"passed": passed3, "total": len(records)}
+        if name == "negative":
+            report["negative_actionable"], report["negative_abstained"] = res["actionable"], res["abstained"]
         for f in res["failed"]:
-            report["failures"].append({"set": name, **f, "top5": top5(state, f["query"])})
-            print(f"    FAIL {f['id']} {f['query']!r}: top1={f['top1']}")
-            for r in report["failures"][-1]["top5"]:
+            entry = {"set": name, **f, "top5": top5(state, f["query"])}
+            if hidden:
+                query = entry.pop("query")
+                entry["query_sha256"] = ev.canonical_sha256(query)
+                print(f"    FAIL {f['id']} <hidden>")
+            else:
+                print(f"    FAIL {f['id']} {f['query']!r}: top1={f['top1']}")
+            report["failures"].append(entry)
+            for r in entry["top5"]:
                 print(f"        {r['score']:8.3f}  {r['key']}  {json.dumps(r['signals'], sort_keys=True)}")
     return 0, report
 
