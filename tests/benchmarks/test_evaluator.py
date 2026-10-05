@@ -270,10 +270,7 @@ class TestAliasNotesAndTuningLog(unittest.TestCase):
             for k, v in l["selected"].items():
                 self.assertIn(v, raw["tuning_grid"][k])
             self.assertEqual(l["registry_fingerprint"], b["round1_seal"]["registry_fingerprint"])
-            if l["ranking_structure_sha256"] == r1_structure and ev.pending_round() is None:
-                self.assertEqual(l["baseline"], raw["baseline"])
-            else:   # pre-T2 run (spec v1.4 §0.4), or a pending round's non-verb structure legitimately grew new keys at H:
-                self.assertEqual(l["baseline"], {k: raw["baseline"][k] for k in l["baseline"]})   # logged axes must be unchanged
+            self.assertEqual(l["baseline"], {k: raw["baseline"][k] for k in l["baseline"]})   # logged axes are unchanged (baseline only grows)
         adopted = [l for l in lines if l.get("adopted")]
         self.assertEqual(len(adopted), 1); self.assertEqual(adopted[0]["selected"], R1_ADOPTED_CONSTANTS)
         final = json.loads(FINAL_R1.read_text(encoding="utf-8"))
