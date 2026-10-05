@@ -50,6 +50,23 @@ class TestChecks(unittest.TestCase):
         self.assertTrue(clc.validate_review({"w0": True, "w1": "no"}, keys))           # non-bool
         self.assertTrue(clc.validate_review([True, False], keys))                      # non-object
 
+    def test_validate_review_tolerates_extra_keys_that_are_structurally_rejected(self):
+        """Round 3 re-gate (spec §5): the archived Round 2 review also judged words that the current structural stage
+        now rejects (alias_conflict: merged as lexicon-r2). Those extra keys are tolerated; unknown extras still fail."""
+        keys = ["w0", "w1"]
+        review = {"w0": True, "w1": False, "ticket": True}
+        self.assertTrue(clc.validate_review(review, keys))                                     # strict by default
+        self.assertEqual(clc.validate_review(review, keys, structurally_rejected={"ticket"}), [])
+        self.assertTrue(clc.validate_review({**review, "w9": True}, keys, structurally_rejected={"ticket"}))  # unknown extra
+        self.assertTrue(clc.validate_review({"w0": True, "ticket": True}, keys, structurally_rejected={"ticket"}))  # still missing w1
+
+    def test_build_regates_prior_round_review_with_structurally_rejected_extras(self):
+        raw = {"note": ["comment"], "ticket": ["issue"], "get": ["issue"]}
+        review = {"note": True, "ticket": True, "get": False}                                   # judged in a prior round
+        lexicon, rej = clc.build(raw, review, *ARGS)
+        self.assertEqual(lexicon, {"note": ["comment"]})
+        self.assertEqual(rej["ticket"]["reason"], "alias_conflict"); self.assertEqual(rej["get"]["reason"], "verb")
+
     def test_review_then_cap_recovers_sixth_synonym(self):
         kept = {f"w{i}": ["issue"] for i in range(7)}
         review = {f"w{i}": i not in (0, 1, 2) for i in range(7)}

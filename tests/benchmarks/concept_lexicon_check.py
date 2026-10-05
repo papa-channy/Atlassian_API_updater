@@ -56,17 +56,19 @@ def prepare_review(raw, concept_set, catalog_set, verbs, hints, alias_keys):
     return structural_check(normalize_raw(raw), concept_set, catalog_set, verbs, hints, alias_keys)
 
 
-def validate_review(review, keys) -> list:
+def validate_review(review, keys, structurally_rejected=()) -> list:
+    """Exact keys and booleans. `structurally_rejected`: synonyms the current structural stage rejected; a review that
+    also judged them (a prior round's review re-gated on a later catalog/alias state, Round 3 spec §5) is still valid."""
     if not isinstance(review, dict):
         return ["review must be a JSON object keyed by synonym"]
-    wanted = set(keys)
-    out = [f"missing key {k!r}" for k in keys if k not in review] + [f"extra key {k!r}" for k in review if k not in wanted]
+    wanted, tolerated = set(keys), set(structurally_rejected)
+    out = [f"missing key {k!r}" for k in keys if k not in review] + [f"extra key {k!r}" for k in review if k not in wanted and k not in tolerated]
     out += [f"{k!r}: value must be true/false" for k, v in review.items() if k in wanted and not isinstance(v, bool)]
     return out
 
 
-def apply_review(lex, review):
-    problems = validate_review(review, list(lex))
+def apply_review(lex, review, structurally_rejected=()):
+    problems = validate_review(review, list(lex), structurally_rejected)
     if problems:
         raise ValueError("invalid semantic review: " + "; ".join(problems))
     kept, rej = {}, {}
@@ -94,7 +96,7 @@ def cap_per_concept(lex, limit=MAX_PER_CONCEPT):
 def finalize(kept, rejected, review):
     """review (validated) -> per-concept cap; rejected entries accumulate."""
     rejected = dict(rejected)
-    kept, r2 = apply_review(kept, review); rejected.update(r2)
+    kept, r2 = apply_review(kept, review, rejected); rejected.update(r2)
     kept, r3 = cap_per_concept(kept); rejected.update(r3)
     return kept, dict(sorted(rejected.items()))
 
@@ -147,7 +149,7 @@ def cmd_finalize(args):
     kept, rejected = prepare_review(raw, *ctx)
     if kept != structural["lexicon"]:
         print("REFUSED: structural file does not match prepare_review(raw) on the current catalog"); return 1
-    problems = validate_review(review, list(kept))
+    problems = validate_review(review, list(kept), rejected)
     if problems:
         print("\n".join(f"INVALID REVIEW {m}" for m in problems)); return 1
     lexicon, rejected = finalize(kept, rejected, review)
