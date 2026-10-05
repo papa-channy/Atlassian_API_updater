@@ -8,20 +8,20 @@
 
 **Tech Stack:** Python ≥ 3.10 stdlib only under `tools/`; `unittest`; no new dependencies.
 
-**Spec:** `docs/superpowers/specs/2026-10-05-search-quality-round3-design.md` **v1.13** (v1.12 passed 12 external reviews with "구현 계획으로 진행 가능"; v1.13 = the plan-stage corrections listed in its §14, made while writing this plan — grid count 23,328 and measured runtime, memoized grid evaluator, ranking structure committed at H, `verb_method_order`, seed = raw top-1, AC-R3-02 "full" = `MAX_LIMIT`, direct-alias proposer, pre-freeze structure-hash window). The spec v1.13 is binding; this plan is its argument. Round 2 spec v1.14 is inherited where v1.13 is silent.
+**Spec:** `docs/superpowers/specs/2026-10-05-search-quality-round3-design.md` **v1.14** (v1.12 passed 12 external reviews with "구현 계획으로 진행 가능"; v1.13 = the plan-stage corrections listed in its §14, made while writing this plan — grid count 23,328 and measured runtime, memoized grid evaluator, ranking structure committed at H, `verb_method_order`, seed = raw top-1, AC-R3-02 "full" = `MAX_LIMIT`, direct-alias proposer, pre-freeze structure-hash window; v1.14 = plan review 1 corrections). The spec v1.14 is binding; this plan is its argument. Round 2 spec v1.14 is inherited where v1.13 is silent.
 
-**Plan version:** v1 (2026-10-05; external plan review pending).
+**Plan version:** v2 (2026-10-05; after external plan review 1 — P0 5 / P1 7, see Plan revision notes).
 
 ## Global Constraints
 
 - Canonical test command: `python -m unittest discover -s tests -t .` (**476 OK** at `93bf458`, Python 3.11.15; omitting `-t .` makes `tests/mcp` shadow the SDK and gives spurious ImportErrors). `canonical_full_suite_pass := exit code 0 of exactly this command`; the controller ledgers the command string and the sha256 of its output at every checkpoint; a timeout or infrastructure error is recorded as `not pass` (never as pass).
 - `round3_start_commit := e16c073` (main after the Round 2 merge). Spec/plan docs commits after it (`9683dc8..93bf458`) touch only `docs/`. AC-01a: `e16c073 < housekeeping_commit < T < B`.
 - **Byte-invariant from now to the terminal commit** (spec §2 "불변", AC-09): Round 1·2 logs (`tests/benchmarks/search-tuning-round1.jsonl`, `search-tuning-round2.jsonl`), the round 1 and round 2 entries of `tests/benchmarks/round_freeze.json`, `tests/benchmarks/round1-final.json`, every `tests/benchmarks/round2-*` file (`round2-worker-brief.md`, `round2-hidden-generation-prompt.md`, `round2-hidden-reviewer-prompt.md`, `round2-lexicon-generation-prompt.md`, `round2-lexicon-review-prompt.md`, `round2-method-safety.json`), the `round1_seal`/`round2_seal` objects and the 29 r0 fixture records inside `tests/benchmarks/search_queries.json`, the Round 1 and Round 2 sections of `docs/phase3-readiness.md` (from `## Search Quality Round 1 — decision record` to the end of the file as of `93bf458`), `tests/fixtures/**`, every Phase 1 file, and every Phase 2 core module except `tools/atlassian_docs/intelligence/search.py`, `tools/atlassian_docs/intelligence/policy.py`, `tools/atlassian_docs/intelligence/data/search_ranking.json`, `search_aliases.json`, `alias_candidates.json`, `concept_lexicon.json`, `tools/atlassian_docs/mcp/server.py` (tool description text only).
-- **Constrained changes** (spec §2): `verb_methods` row set identical to Round 2 and each Round 2 list an exact prefix of the Round 3 list (AC-R3-12); suffixes only at T, sorted. `search_ranking.json` structure (8 constant keys with the two new baselines 0, the final grid, `method_mismatch_penalty` grid `[0,1,2,3,4,5]`, `version: 2`) is committed at **H1** and frozen at T; after T the structure never changes; B..C changes only the selected constant values and `origin=round3` aliases. `policy.py` changes only in H and only in the four declared kinds (CONSTANT_KEYS +2, origins — already general, `POLICY_VERSIONS["search"]` 3→4, `RankingPolicy.verb_method_order`).
+- **Constrained changes** (spec §2): `verb_methods` row set identical to Round 2 and each Round 2 list an exact prefix of the Round 3 list (AC-R3-12); suffixes only at T, sorted. Between H1 and T the structure check is two invariants (spec §8 v1.14): non-verb structure sha == `PRE_FREEZE_NONVERB_STRUCTURE_SHA256[3]` and the prefix invariant on `verb_methods`. `search_ranking.json` structure (8 constant keys with the two new baselines 0, the final grid, `method_mismatch_penalty` grid `[0,1,2,3,4,5]`, `version: 2`) is committed at **H1** and frozen at T; after T the structure never changes; B..C changes only the selected constant values and `origin=round3` aliases. `policy.py` changes only in H and only in the four declared kinds (CONSTANT_KEYS +2, origins — already general, `POLICY_VERSIONS["search"]` 3→4, `RankingPolicy.verb_method_order`).
 - `TOOLING_FILES` (Task 3) are immutable from `housekeeping_commit` to the terminal commit (D, F or X). A pre-T tooling defect is fixed as H′ and the affected pre-T artifacts are regenerated in dependency order.
-- Commit naming: Tasks 1–8 produce development commits H1..H8 on branch `round3` in `.worktrees/round3`; **`housekeeping_commit` = H8** (or the last H′). Commit order: H1..H8 → S → inventory → lexicon → candidates → pre-T checkpoint → T → generation/review (stateless) → B → user encrypts → tuning (frozen brief) → (C → D | F | X). **terminal commit := D | F | X**.
-- **Session separation (AC-R3-08):** the session that wrote the Round 3 spec and this plan (`5edca2ca…`, 2026-10-02..05) saw the Round 2 hidden plaintext. It may implement Tasks 1–8 (tooling) but **must not** act as Round 3 generator, reviewer, tuning worker or D controller. Tasks 9–17 are run by a fresh controller session; the tuning worker is a fresh subagent; the D gate controller is a fresh actor that did not touch tuning; the Round 2 reference set is opened only by the D controller after the gate checkpoint, and that actor is then `reference-aware`. Every actor's session/agent id is ledgered.
-- Sealed plaintext path `~/.atlassian_api_updater/sealed/round3-sealed.json` is never given to an implementer or a tuning worker. After B only `round3-sealed.json.enc` exists; no agent knows the passphrase. **AC-18b(R3):** any review input that embeds the hidden records (`hidden-review-input.txt`, replacement outputs, replacement-review messages) is written under `~/.atlassian_api_updater/round3-work/plain/` and that directory is deleted before commit B; only sha256 values survive in the ledgers. The B-time scan of `~/.atlassian_api_updater/` for record plaintext is ledgered.
+- Commit naming: Tasks 1–8 produce development commits H1..H8 on branch `round3` in `.worktrees/round3`; **`housekeeping_commit` = H8** (or the last H′). Commit order: H1..H8 → S → inventory → lexicon → candidates → pre-T checkpoint → T → generation/review (stateless) → seal metadata → **user encrypts + plaintext deleted + scan `[]`** → B → tuning (frozen brief) → (C → D | F | X). **terminal commit := D | F | X**.
+- **Session separation (AC-R3-08):** the session that wrote the Round 3 spec and this plan (`5edca2ca…`, 2026-10-02..05) saw the Round 2 hidden plaintext. It may implement Tasks 1–8 (tooling) but **must not** act as Round 3 generator, reviewer, tuning worker or D controller. Tasks 9–17 are run by a fresh controller session; the tuning worker is a fresh subagent; the D gate controller is a fresh actor that did not touch tuning; the Round 2 reference set is opened only by the D controller after the gate checkpoint, and that actor is then `reference-aware`. Every actor's session/agent id is ledgered; every model-call attempt carries `actor_id`/`session_id`; before B the controller machine-checks `generator_actor_id != reviewer_actor_id` and before dispatch `worker_actor_id` differs from both.
+- Sealed plaintext path `~/.atlassian_api_updater/sealed/round3-sealed.json` is never given to an implementer or a tuning worker. The plaintext is encrypted and deleted **before** commit B, so at B and after only `round3-sealed.json.enc` exists; no agent knows the passphrase. **AC-18b(R3):** any review input that embeds the hidden records (`hidden-review-input.txt`, replacement outputs, replacement-review messages) is written under `~/.atlassian_api_updater/round3-work/plain/` and that directory is deleted before commit B; only sha256 values survive in the ledgers. The B-time scan of `~/.atlassian_api_updater/` for record plaintext is ledgered.
 - Source snapshot S: `~/.atlassian_api_updater/round3-cache/` (`$ATLASSIAN_DOCS_ROUND3_CACHE`), created once after H (Task 9): a copy of the archived Round 2 S iff its registry fingerprint `f3c2e9d48aa85c96ca62cdd84ff700cc2714c888cf4148b3a91c604c45b47b62` **and** all three spec shas (`confluence b3d010b6…`, `jira-platform 3d0edfb0…`, `jira-software cb7e24b3…`) equal a fresh live fetch; otherwise the fresh fetch. Every catalog-dependent step reads only S.
 - Round 2 archive (read-only inputs): `~/.atlassian_api_updater/archive/round2/round2-cache/` (S2), `round2-work/lexicon_raw.json` (sha `acc5cebeafc5c48236a9de5d685b888fb2a83532340405556d77b801468a6872`), `round2-work/lexicon_review.json` (`c5ba256f8acd082febe06724d6646bff631e136dc437f4fa1528286117bd62f4`), `round2-work/lexicon-generation-input.txt`, `round2-work/lexicon-review-input.txt`, `sealed/round2-sealed.json.enc` (`c1a3794b0ac7563bee0ccdcc61e0ecb43026d0f778ec4773ef2695459cca369b`; held_out `0f990f2fc134cd41eca2061931c65cfdd4bc21819051f9ae8538c0258aaf3540`, negative `7750a2020923bcf8ddfa22e79f2c071001db9942194c3215cc03c60f363dde76`). Round 2 reference commit for AC-R3-02: `29dba38` (T; the B/F policy files equal T's).
 - `POLICY_VERSIONS["search"]` becomes 4 in H1 and never changes again this round. `search_aliases.json` changes only at T (lexicon-r3 merge) and inside the tuning run (round3 entries). `constants` change only inside the tuning run.
@@ -46,11 +46,11 @@
 **Files:**
 - Modify: `tools/atlassian_docs/intelligence/policy.py:14` (`POLICY_VERSIONS`), `:165-167` (`CONSTANT_KEYS`), `:177-186` (`RankingPolicy`), `load_ranking` return
 - Modify: `tools/atlassian_docs/intelligence/data/search_ranking.json` (`version`, `tuning_grid`, `baseline`, `constants` only; `verb_methods`, `path_noise`, `product_hints` byte-identical)
-- Modify: `tests/benchmarks/evaluator.py` (add `PRE_FREEZE_STRUCTURE_SHA256`, `expected_structure_sha256`, `tuning_grid_sha256`)
+- Modify: `tests/benchmarks/evaluator.py` (add `PRE_FREEZE_NONVERB_STRUCTURE_SHA256`, `NONVERB_STRUCTURE_KEYS`, `nonverb_structure_sha256`, `pending_round`, `round2_verb_inventory`, `verb_prefix_violations`, `structure_check_problems`, `tuning_grid_sha256`)
 - Test: `tests/intelligence/test_policy.py`, `tests/benchmarks/test_evaluator.py:125-157`, `tests/intelligence/test_search.py:264-269` (`versions.search == 3` → 4), `tests/test_tune_search_ranking.py:27-30` (grid cardinality)
 
 **Interfaces:**
-- Produces: `policy.CONSTANT_KEYS == ("method_match_bonus", "method_mismatch_penalty", "path_unmatched_penalty", "path_unmatched_cap", "product_hint_bonus", "resource_match_bonus", "method_order_bonus", "path_coverage_bonus")`; `policy.POLICY_VERSIONS["search"] == 4`; `RankingPolicy.verb_method_order: Mapping[str, tuple]` (file order, same keys as `verb_methods`); `ev.tuning_grid_sha256(raw) -> str` (= `canonical_sha256(raw["tuning_grid"])`); `ev.expected_structure_sha256(raw) -> str`.
+- Produces: `policy.CONSTANT_KEYS == ("method_match_bonus", "method_mismatch_penalty", "path_unmatched_penalty", "path_unmatched_cap", "product_hint_bonus", "resource_match_bonus", "method_order_bonus", "path_coverage_bonus")`; `policy.POLICY_VERSIONS["search"] == 4`; `RankingPolicy.verb_method_order: Mapping[str, tuple]` (file order, same keys as `verb_methods`); `ev.tuning_grid_sha256(raw) -> str` (= `canonical_sha256(raw["tuning_grid"])`); `ev.pending_round() -> int | None`; `ev.nonverb_structure_sha256(raw)`; `ev.round2_verb_inventory() -> dict` (the Round 2 spec §6 block; stdlib parse); `ev.verb_prefix_violations(base, live) -> list[str]`; `ev.structure_check_problems(raw) -> list[str]` (spec §8 v1.14: while Round 3 is pending, non-verb structure == H1 constant AND verb prefix invariant; after T, full `structure_sha256` == the Round 3 freeze).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -59,7 +59,7 @@ In `tests/intelligence/test_policy.py`, replace the two assertions in `TestRanki
 ```python
         self.assertEqual(policy.CONSTANT_KEYS, ("method_match_bonus", "method_mismatch_penalty", "path_unmatched_penalty", "path_unmatched_cap",
                                                 "product_hint_bonus", "resource_match_bonus", "method_order_bonus", "path_coverage_bonus"))
-        self.assertEqual(rp.structure_sha256, ev.expected_structure_sha256(self._raw()))          # Round 3: H structure until T refreezes
+        self.assertEqual(ev.structure_check_problems(self._raw()), [])                                  # Round 3: H1 non-verb structure + verb prefix until T refreezes
         self.assertEqual(rp.verb_method_order["change"], ("PUT", "POST")); self.assertEqual(rp.verb_method_order["leave"], ("POST", "DELETE"))
         self.assertEqual(set(rp.verb_method_order), set(rp.verb_methods))
         for v, order in rp.verb_method_order.items():
@@ -100,13 +100,21 @@ In `tests/benchmarks/test_evaluator.py` replace `RANKING_STRUCTURE_SHA256 = ev.c
 
 ```python
     def test_structure_hash_matches_commit_t_or_pre_freeze_window(self):
-        """Round 3 (spec §8 v1.13): between H1 and T the structure equals the H constant; from T it equals the Round 3 freeze."""
+        """Round 3 (spec §8 v1.14): between H1 and T the NON-VERB structure equals the H1 constant and verb_methods satisfies the
+        Round 2 prefix invariant (suffixes may be added before T); from T the full structure equals the Round 3 freeze."""
         raw = json.loads(RANKING.read_text(encoding="utf-8"))
-        self.assertEqual(ranking_structure_sha256(raw), ev.expected_structure_sha256(raw))
+        self.assertEqual(ev.structure_check_problems(raw), [])
         if ev.current_round()["round"] >= 3:
-            self.assertEqual(ev.expected_structure_sha256(raw), ev.freeze_for(3)["structure_sha256"])
+            self.assertIsNone(ev.pending_round()); self.assertEqual(ranking_structure_sha256(raw), ev.freeze_for(3)["structure_sha256"])
         else:
-            self.assertEqual(raw["version"], 2); self.assertEqual(ev.expected_structure_sha256(raw), ev.PRE_FREEZE_STRUCTURE_SHA256[3])
+            self.assertEqual(ev.pending_round(), 3); self.assertEqual(raw["version"], 2)
+            self.assertEqual(ev.nonverb_structure_sha256(raw), ev.PRE_FREEZE_NONVERB_STRUCTURE_SHA256[3])
+            suffixed = json.loads(json.dumps(raw)); suffixed["verb_methods"]["get"] = ["GET", "POST"]            # a T-style suffix is allowed before T
+            self.assertEqual(ev.structure_check_problems(suffixed), [])
+            reordered = json.loads(json.dumps(raw)); reordered["verb_methods"]["change"] = ["POST", "PUT"]
+            self.assertTrue(ev.structure_check_problems(reordered))
+            moved = json.loads(json.dumps(raw)); moved["path_noise"] = moved["path_noise"] + ["zz"]
+            self.assertTrue(ev.structure_check_problems(moved))
 
     def test_tuning_grid_sha256_helper(self):
         raw = json.loads(RANKING.read_text(encoding="utf-8"))
@@ -120,7 +128,7 @@ and in `test_constants_inside_grid` nothing changes.
 - [ ] **Step 2: Run the tests to verify they fail**
 
 Run: `python -m unittest tests.intelligence.test_policy tests.benchmarks.test_evaluator -v 2>&1 | tail -20`
-Expected: FAIL (`CONSTANT_KEYS` tuple mismatch, `verb_method_order` AttributeError, `expected_structure_sha256` AttributeError).
+Expected: FAIL (`CONSTANT_KEYS` tuple mismatch, `verb_method_order` AttributeError, `structure_check_problems` AttributeError).
 
 - [ ] **Step 3: Implement `policy.py`**
 
@@ -172,7 +180,9 @@ and `"version": 2` on line 2. The `constants` object layout (four lines) is what
 - [ ] **Step 5: Evaluator helpers (append to `tests/benchmarks/evaluator.py` after `freeze_for`)**
 
 ```python
-PRE_FREEZE_STRUCTURE_SHA256 = {3: "<canonical sha of {k: raw[k] for k in STRUCTURE_KEYS} after Step 4 — fill in from the command below>"}
+PRE_FREEZE_NONVERB_STRUCTURE_SHA256 = {3: "<canonical sha of {k: raw[k] for k in NONVERB_STRUCTURE_KEYS} after Step 4 — computed by the command below>"}
+NONVERB_STRUCTURE_KEYS = tuple(k for k in STRUCTURE_KEYS if k != "verb_methods")
+ROUND2_SPEC = ROOT / "docs" / "superpowers" / "specs" / "2026-10-02-search-quality-round2-design.md"
 
 
 def tuning_grid_sha256(raw: dict) -> str:
@@ -180,25 +190,58 @@ def tuning_grid_sha256(raw: dict) -> str:
     return canonical_sha256(raw["tuning_grid"])
 
 
+def nonverb_structure_sha256(raw: dict) -> str:
+    return canonical_sha256({k: raw[k] for k in NONVERB_STRUCTURE_KEYS})
+
+
 def pending_round(freeze=None):
     """The round whose H structure/tooling is committed but whose freeze entry (commit T) does not exist yet, or None.
     While a round is pending, the previous round's freeze entry is history: its file hashes are no longer compared with the
     live tree (the tooling and the ranking structure legitimately changed at H)."""
     cur = current_round(freeze)["round"]
-    return next((r for r in sorted(PRE_FREEZE_STRUCTURE_SHA256) if r > cur), None)
+    return next((r for r in sorted(PRE_FREEZE_NONVERB_STRUCTURE_SHA256) if r > cur), None)
 
 
-def expected_structure_sha256(raw: dict, freeze=None) -> str:
-    """spec §8 (v1.13): the structure a round's tables must have. Round N's structure is committed at its H1, before its
-    freeze entry exists; until commit T it must equal PRE_FREEZE_STRUCTURE_SHA256[N], afterwards the round-N freeze's
-    structure_sha256 (they differ by the T verb suffix only)."""
+def round2_verb_inventory() -> dict:
+    """The frozen Round 2 inventory: the JSON block under '## 6.' of the Round 2 spec (verb_inventory_sha256 d66317db…)."""
+    lines = ROUND2_SPEC.read_text(encoding="utf-8").split("\n")
+    start = next(i for i, l in enumerate(lines) if l.startswith("## 6."))
+    fence = next(i for i in range(start, len(lines)) if lines[i].startswith("```json"))
+    end = next(i for i in range(fence + 1, len(lines)) if lines[i].startswith("```"))
+    return json.loads("{" + "\n".join(lines[fence + 1:end]) + "}")["verb_methods"]
+
+
+def verb_prefix_violations(base: dict, live: dict) -> list:
+    """AC-R3-12: same row set; each base list is an exact prefix of the live list; the appended suffix is sorted, no duplicates."""
+    out = [f"verb {v!r} removed" for v in base if v not in live] + [f"verb {v!r} added" for v in live if v not in base]
+    for v, methods in base.items():
+        cur = list(live.get(v) or [])
+        if not cur:
+            continue
+        if cur[:len(methods)] != list(methods):
+            out.append(f"verb {v!r}: Round 2 list {list(methods)} is not an exact prefix of {cur}")
+            continue
+        suffix = cur[len(methods):]
+        if suffix != sorted(suffix):
+            out.append(f"verb {v!r}: suffix {suffix} is not sorted")
+        if len(set(cur)) != len(cur):
+            out.append(f"verb {v!r}: duplicate methods in {cur}")
+    return out
+
+
+def structure_check_problems(raw: dict, freeze=None) -> list:
+    """spec §8 (v1.14). Pending round N (H committed, no T yet): the non-verb structure must equal PRE_FREEZE_NONVERB_STRUCTURE_SHA256[N]
+    and verb_methods must satisfy the Round 2 prefix invariant (T may append sorted suffixes). Otherwise the full structure hash
+    must equal the current round's freeze."""
     p = pending_round(freeze)
-    if p is not None:
-        return PRE_FREEZE_STRUCTURE_SHA256[p]
-    return current_round(freeze)["structure_sha256"]
+    if p is None:
+        want, got = current_round(freeze)["structure_sha256"], canonical_sha256({k: raw[k] for k in STRUCTURE_KEYS})
+        return [] if got == want else [f"structure_sha256 {got} != current freeze {want}"]
+    out = [] if nonverb_structure_sha256(raw) == PRE_FREEZE_NONVERB_STRUCTURE_SHA256[p] else ["non-verb ranking structure differs from the H1 constant"]
+    return out + verb_prefix_violations(round2_verb_inventory(), raw["verb_methods"])
 ```
 
-Fill the constant: `python -c "import json; from tests.benchmarks.evaluator import canonical_sha256 as c, STRUCTURE_KEYS as K; r=json.load(open('tools/atlassian_docs/intelligence/data/search_ranking.json')); print(c({k: r[k] for k in K}))"`.
+Fill the constant: `python -c "import json; from tests.benchmarks.evaluator import canonical_sha256 as c, STRUCTURE_KEYS as K; r=json.load(open('tools/atlassian_docs/intelligence/data/search_ranking.json')); print(c({k: r[k] for k in K if k != 'verb_methods'}))"`. (`round2_verb_inventory` lives in the stdlib-only evaluator so that the structure check needs no `tools/` import; Task 5 re-exports it.)
 
 Guard the historical freeze comparison in `tests/benchmarks/test_evaluator.py::test_round2_freeze_hashes_match_files` (rename to `test_current_round_freeze_hashes_match_files`): after the existing `if e["round"] < 2:` guard add
 
@@ -219,7 +262,7 @@ Expected: OK. (`test_round2_freeze_hashes_match_files` still passes: the round 2
 ```bash
 git add tools/atlassian_docs/intelligence/policy.py tools/atlassian_docs/intelligence/data/search_ranking.json tests/benchmarks/evaluator.py \
   tests/intelligence/test_policy.py tests/intelligence/test_search.py tests/benchmarks/test_evaluator.py tests/test_tune_search_ranking.py
-git commit -m "H1: Round 3 ranking structure v2 (two baseline-0 constants, mismatch grid 0..5), POLICY_VERSIONS 4, verb_method_order, pre-freeze structure window
+git commit -m "H1: Round 3 ranking structure v2 (two baseline-0 constants, mismatch grid 0..5), POLICY_VERSIONS 4, verb_method_order, pre-freeze non-verb structure window + verb prefix invariant
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
@@ -870,7 +913,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 - Test: `tests/benchmarks/test_alias_candidates_tool.py`, `tests/intelligence/test_search.py:426-437` (replace `TestRound2SpecParity`)
 
 **Interfaces:**
-- Produces: `act.resource_vocab(op) -> frozenset` (normalized literal path segments incl. terminal + tag tokens; summary/operationId excluded); `act.expected_vocab(rec, by_key, noise) -> frozenset` (**new signature**: resource vocabulary minus `FUNCTION_WORDS ∪ noise ∪ ID_LIKE ∪ STOPWORDS ∪ digits`; verbs/hints no longer excluded); `act.allowed_methods(query, verb_methods)` delegates to `search.method_intent`; `act.round2_verb_inventory() -> dict` (the Round 2 spec §6 block); `act.verb_prefix_violations(base, live) -> list[str]`; `TOOL_VERSION = "round3.1"`.
+- Produces: `act.resource_vocab(op) -> frozenset` (normalized literal path segments incl. terminal + tag tokens; summary/operationId excluded); `act.expected_vocab(rec, by_key, noise) -> frozenset` (**new signature**: resource vocabulary minus `FUNCTION_WORDS ∪ noise ∪ ID_LIKE ∪ STOPWORDS ∪ digits`; verbs/hints no longer excluded); `act.allowed_methods(query, verb_methods)` delegates to `search.method_intent`; `act.round2_verb_inventory` / `act.verb_prefix_violations` (re-exports of the Task 1 evaluator helpers); `TOOL_VERSION = "round3.1"`.
 - Consumes: `search.method_intent` (Task 2).
 
 - [ ] **Step 1: Write the failing tests**
@@ -953,7 +996,7 @@ Expected: FAIL (`resource_vocab`/`round2_verb_inventory` missing; old `expected_
 
 - [ ] **Step 3: Implement**
 
-Imports: `from tools.atlassian_docs.intelligence.search import method_intent, singular, tokenize_unigrams`; `TOOL_VERSION = "round3.1"`; add `ROUND2_SPEC = ROOT / "docs" / "superpowers" / "specs" / "2026-10-02-search-quality-round2-design.md"` and `TARGET_EXCLUDE = FUNCTION_WORDS | ID_LIKE | STOPWORDS`.
+Imports: `from tools.atlassian_docs.intelligence.search import method_intent, singular, tokenize_unigrams` and `from tests.benchmarks import evaluator as ev`; `TOOL_VERSION = "round3.1"`; add `TARGET_EXCLUDE = FUNCTION_WORDS | ID_LIKE | STOPWORDS`.
 
 ```python
 def allowed_methods(query, verb_methods):
@@ -983,31 +1026,7 @@ def expected_vocab(rec, by_key, noise) -> frozenset:
     return frozenset(t for t in toks if t not in drop and not t.isdigit())
 
 
-def round2_verb_inventory() -> dict:
-    """The frozen Round 2 inventory: the JSON block under '## 6.' of the Round 2 spec (verb_inventory_sha256 d66317db…)."""
-    lines = ROUND2_SPEC.read_text(encoding="utf-8").split("\n")
-    start = next(i for i, l in enumerate(lines) if l.startswith("## 6."))
-    fence = next(i for i in range(start, len(lines)) if lines[i].startswith("```json"))
-    end = next(i for i in range(fence + 1, len(lines)) if lines[i].startswith("```"))
-    return json.loads("{" + "\n".join(lines[fence + 1:end]) + "}")["verb_methods"]
-
-
-def verb_prefix_violations(base: dict, live: dict) -> list:
-    """AC-R3-12: same row set; each base list is an exact prefix of the live list; the appended suffix is sorted, no duplicates."""
-    out = [f"verb {v!r} removed" for v in base if v not in live] + [f"verb {v!r} added" for v in live if v not in base]
-    for v, methods in base.items():
-        cur = list(live.get(v) or [])
-        if not cur:
-            continue
-        if cur[:len(methods)] != list(methods):
-            out.append(f"verb {v!r}: Round 2 list {list(methods)} is not an exact prefix of {cur}")
-            continue
-        suffix = cur[len(methods):]
-        if suffix != sorted(suffix):
-            out.append(f"verb {v!r}: suffix {suffix} is not sorted")
-        if len(set(cur)) != len(cur):
-            out.append(f"verb {v!r}: duplicate methods in {cur}")
-    return out
+round2_verb_inventory, verb_prefix_violations = ev.round2_verb_inventory, ev.verb_prefix_violations      # defined in the stdlib-only evaluator (Task 1)
 ```
 
 Callers: in `candidates` → `vocab = expected_vocab(rec, by_key, noise)`; in `classify` → `expected_vocab(rec, by_key, noise)`; in `lexicon_gate` → `expected_vocab(r, by_key, noise)` (the `verbs`/`hints` locals stay for the other reasons). CLI: add
@@ -1044,7 +1063,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 - Test: `tests/benchmarks/test_round_seal.py`
 
 **Interfaces:**
-- Produces: `rs.HIDDEN_RULES_R3` (frozen ordered tuple), `rs.RECORD_RULES`, `rs.SECTION_RULES`, `rs.NEGATIVE_SPLIT == (4, 4)`; `rs.intent_of(query, verb_methods)`; `rs.record_actionable(rec, verb_methods) -> bool`; `rs.negative_distribution(records, verb_methods) -> (actionable, abstained)`; `rs.machine_check(plain, bench, internal, round=1, verb_methods=None)` (round ≥ 3 requires `verb_methods`, else `ValueError`); `rs.rule_id(message) -> str`; `rs.record_rejections(violations) -> list[str]`; `rs.section_rejections(violations) -> list[str]`; `rs.section_request(section, plain) -> str`; `rs.next_request(violations, plain, state) -> tuple`; `rs.render_generation_input(template, generator_records, verb_methods) -> str`; `rs.freeze_entry(round, cache_dir, reference_enc=None)`; CLI `freeze --round 3 --cache-dir S --reference-enc PATH`, `check/seal --round 3` read `verb_methods` from `search_ranking.json`.
+- Produces: `rs.HIDDEN_RULES_R3` (frozen ordered tuple), `rs.RECORD_RULES`, `rs.SECTION_RULES`, `rs.NEGATIVE_SPLIT == (4, 4)`; `rs.intent_of(query, verb_methods)`; `rs.record_actionable(rec, verb_methods) -> bool`; `rs.negative_distribution(records, verb_methods) -> (actionable, abstained)`; `rs.machine_check(plain, bench, internal, round=1, verb_methods=None)` (round ≥ 3 requires `verb_methods`, else `ValueError`); `rs.rule_id(message) -> str`; `rs.record_rejections(violations) -> list[str]`; `rs.section_rejections(violations) -> list[str]`; `rs.section_request(section, plain) -> str`; `rs.next_request(violations, plain, state) -> tuple`; `rs.render_generation_input(template, generator_records, verb_methods) -> str`; `rs.annotate_for_review(plain, verb_methods) -> dict` (same records plus `machine: {matched_verbs, intent_methods, machine_actionable}` per record); `rs.verify_reference_ciphertext(enc_path, round=3) -> list[str]` (`[]` iff `file_sha256(enc) == freeze_for(round)["reference_set"]["enc_sha256"]`); CLI `reference-check --round 3 --reference-enc PATH` (prints `reference ciphertext ok` / `MISMATCH …`, exit 0/1); `rs.freeze_entry(round, cache_dir, reference_enc=None)`; CLI `freeze --round 3 --cache-dir S --reference-enc PATH`, `check/seal --round 3` read `verb_methods` from `search_ranking.json`.
 - Consumes: `search.method_intent`, `search.tokenize_unigrams` (Task 2); `ev.freeze_key_set`, `ev.round_freeze_hashes` (Task 3).
 
 - [ ] **Step 1: Write the failing tests**
@@ -1153,6 +1172,26 @@ class TestReplacementStateMachine(unittest.TestCase):
         self.assertIn(f"{CAT[0]['key']}\t{CAT[0]['source']}\t{CAT[0]['method']}\t{CAT[0]['summary']}\tIssues", a)
         with self.assertRaises(ValueError):
             rs.render_generation_input("no placeholders", gen, VERBS)
+
+    def test_annotate_for_review_adds_machine_fields(self):
+        ann = rs.annotate_for_review(valid_plain_r3(), VERBS)
+        h1, n5 = ann["held_out"][0], ann["negative"][4]
+        self.assertEqual(h1["machine"], {"matched_verbs": ["show"], "intent_methods": ["GET"], "machine_actionable": True})
+        self.assertEqual(n5["machine"], {"matched_verbs": [], "intent_methods": [], "machine_actionable": False})
+        self.assertEqual({k: v for k, v in h1.items() if k != "machine"}, valid_plain_r3()["held_out"][0])          # records untouched
+        self.assertEqual(sum(r["machine"]["machine_actionable"] for r in ann["negative"]), 4)
+
+    def test_verify_reference_ciphertext(self):
+        import tempfile, pathlib
+        from unittest import mock
+        from tests.benchmarks import evaluator as ev
+        with tempfile.TemporaryDirectory() as td:
+            enc = pathlib.Path(td) / "round2-sealed.json.enc"; enc.write_bytes(b"ciphertext")
+            entry = {"round": 3, "reference_set": {"enc_sha256": ev.file_sha256(enc)}}
+            with mock.patch.object(rs.ev, "freeze_for", lambda r: entry):
+                self.assertEqual(rs.verify_reference_ciphertext(enc, 3), [])
+                enc.write_bytes(b"tampered")
+                self.assertEqual(len(rs.verify_reference_ciphertext(enc, 3)), 1)
 
 
 class TestRound3FreezeEntry(unittest.TestCase):
@@ -1300,6 +1339,32 @@ def next_request(violations, plain, state) -> tuple:
     return ("ok", None)
 
 
+def annotate_for_review(plain, verb_methods) -> dict:
+    """Reviewer input (spec §4 v1.14): each record plus the machine's verdict so the reviewer judges verb USE, not the mapping."""
+    out = {}
+    for sect, _ in HIDDEN:
+        rows = []
+        for rec in plain.get(sect, []):
+            verbs, allowed = method_intent(tokenize_unigrams(rec.get("query") or ""), verb_methods)
+            rows.append({**rec, "machine": {"matched_verbs": list(verbs), "intent_methods": sorted(allowed) if allowed else [], "machine_actionable": bool(allowed)}})
+        out[sect] = rows
+    return out
+
+
+def verify_reference_ciphertext(enc_path, round=3) -> list:
+    """AC-R3-06 checkpoint helper (B, before the D decryption, terminal D/F/X): archive ciphertext sha == freeze reference_set.enc_sha256."""
+    want, got = ev.freeze_for(round)["reference_set"]["enc_sha256"], ev.file_sha256(enc_path)
+    return [] if got == want else [f"reference ciphertext sha {got} != freeze reference_set.enc_sha256 {want}"]
+
+
+def cmd_reference_check(args):
+    problems = verify_reference_ciphertext(args.reference_enc, args.round)
+    for m in problems:
+        print(f"MISMATCH {m}")
+    print("reference ciphertext ok" if not problems else f"{len(problems)} mismatch(es)")
+    return 1 if problems else 0
+
+
 def render_generation_input(template: str, generator_records, verb_methods) -> str:
     """The exact generator input: catalog TSV lines and the canonical VERB_METHODS JSON (sha == verb_inventory_sha256)."""
     if "<generator catalog lines>" not in template or "<verb methods json>" not in template:
@@ -1322,7 +1387,7 @@ def render_generation_input(template: str, generator_records, verb_methods) -> s
         entry["hidden_set_origin"] = f"round{round}"
 ```
 
-`cmd_freeze` passes `reference_enc=getattr(args, "reference_enc", None)`; the `freeze` parser gains `p.add_argument("--reference-enc", default=None)`. `cmd_check`/`cmd_seal`: `vm = _read_json(RANKING_PATH)["verb_methods"] if args.round >= 3 else None` and pass `verb_methods=vm` to `machine_check`.
+`cmd_freeze` passes `reference_enc=getattr(args, "reference_enc", None)`; the `freeze` parser gains `p.add_argument("--reference-enc", default=None)`; new parser `p = sub.add_parser("reference-check"); _round(p); p.add_argument("--reference-enc", required=True); p.set_defaults(fn=cmd_reference_check)`. `cmd_check`/`cmd_seal`: `vm = _read_json(RANKING_PATH)["verb_methods"] if args.round >= 3 else None` and pass `verb_methods=vm` to `machine_check`.
 
 - [ ] **Step 4: Run the full suite, commit**
 
@@ -1330,7 +1395,7 @@ Run: `python -m unittest discover -s tests -t .` → OK.
 
 ```bash
 git add tests/benchmarks/round_seal.py tests/benchmarks/test_round_seal.py
-git commit -m "H6: round_seal Round 3 rules (actionable, negative-method, negative-distribution), rule ids and replacement state machine, rendered generation input, Round 3 freeze entry
+git commit -m "H6: round_seal Round 3 rules, rule ids and replacement state machine, rendered generation input, reviewer annotations, reference ciphertext check, Round 3 freeze entry
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
@@ -1805,7 +1870,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 - Test: `tests/test_diag_search_queries.py`
 
 **Interfaces:**
-- Produces: diag report fields `evaluation_domain: "actionable recommendation queries"`, `policy_version`, `tuning_grid_sha256`, per-set evaluator dicts (`raw_passed`/`effective_passed` on negative sets, `actionable`/`abstained` sub-dicts), `negative_actionable`, `negative_abstained`, failures with `actionable`; CLI mode `--reference PLAIN --reference-round N --append-to ARTIFACT [--cache-dir S]` that appends `reference_round{N}` (`held_out`/`negative` evaluator dicts over valid-key records, `invalid_key: [{id, keys}]`, `plaintext_sha256`, `enc_sha256` from the current freeze's `reference_set`) to an existing artifact whose `git_commit` is HEAD, without evaluating the current round's sets. `round3_simulation.py --phase pre-T --cache-dir S --work DIR` (binding AC-R3-01; appends `pre_t_checkpoint` to `DIR/controller-events.jsonl`; exit 0 iff seed ≥ 36/39, fixture failing == [], regression raw ≥ 10/14, effective == 14/14); `--phase H` (synthetic T→B then C→D / F / X on throwaway copies, full suite after each; `ALL STEPS PASS`); `round3_simulation.pre_t_verdict(seed_passed, reg_raw, reg_eff, fixture_failing) -> bool`; `round3_simulation.synthetic_hidden_records(internal, verb_methods) -> plain`.
+- Produces: diag report fields `evaluation_domain: "actionable recommendation queries"`, `policy_version`, `tuning_grid_sha256`, per-set evaluator dicts (`raw_passed`/`effective_passed` on negative sets, `actionable`/`abstained` sub-dicts), `negative_actionable`, `negative_abstained`, failures with `actionable`; CLI mode `--reference PLAIN --reference-round N --append-to ARTIFACT [--cache-dir S]` that appends `reference_round{N}` (`held_out`/`negative` evaluator dicts over valid-key records, `invalid_key: [{id, keys}]`, `plaintext_sha256`, `enc_sha256` from the current freeze's `reference_set`) to an existing artifact whose `git_commit` is HEAD, without evaluating the current round's sets. `round3_simulation.py --phase pre-T --cache-dir S --work DIR` (binding AC-R3-01; appends `pre_t_checkpoint` to `DIR/controller-events.jsonl`; exit 0 iff seed ≥ 36/39, fixture failing == [], regression raw ≥ 10/14, effective == 14/14 **and** the memoized-evaluator preflight passes: `random.Random(20261005).sample(grid_points, 20)` plus the baseline point, every seed/regression query on S and every fixture query on the fixture registry, `GridEvaluator.ranked == search_operations` keys and `actionable` exactly — `equivalence_mismatches: []` in the event); `--phase H` (synthetic T→B then C→D / F / X on throwaway copies, full suite after each; `ALL STEPS PASS`); `round3_simulation.pre_t_verdict(seed_passed, reg_raw, reg_eff, fixture_failing) -> bool`; `round3_simulation.synthetic_hidden_records(internal, verb_methods) -> plain`.
 - Consumes: Tasks 1–7.
 
 - [ ] **Step 1: Write the failing tests**
@@ -1930,6 +1995,29 @@ def pre_t_event(seed_res, reg_res, fixture_failing, inputs, at=None) -> dict:
             "at": at or datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
 
 
+def equivalence_mismatches(state, rp, bench, ap, n=20, seed=20261005) -> list:
+    """spec §5 v1.14 preflight: the memoized grid evaluator must rank exactly like search_operations on the ACTUAL S and fixture
+    registry for a deterministic sample of grid points (plus the baseline) and every seed/regression/fixture query."""
+    import random
+    from unittest import mock
+    from tests import tune_search_ranking as tune
+    from tools.atlassian_docs.intelligence import policy, search
+    pts = random.Random(seed).sample(tune.grid_points(rp.tuning_grid), n) + [dict(rp.baseline)]
+    fx_state, fx_bench = tune.fixture_state(), tune.fixture_bench(bench)
+    pairs = [(state, [r["query"] for r in bench["seed"] + bench["regression_negative"]]), (fx_state, [r["query"] for r in fx_bench["seed"] + fx_bench["regression_negative"]])]
+    out = []
+    for st, queries in pairs:
+        ge = tune.GridEvaluator(st, queries, ap)
+        for p in pts:
+            rpp = tune.ranking_with(rp, p)
+            with mock.patch.object(policy, "ranking", return_value=rpp), mock.patch.object(policy, "aliases", return_value=ap):
+                for q in queries:
+                    o = search.search_operations(st, q, limit=5)
+                    if ge.ranked(q, rpp) != ([r["key"] for r in o["results"]], o["actionable"]):
+                        out.append({"point": p, "query": q})
+    return out
+
+
 def run_pre_t(cache: pathlib.Path, work: pathlib.Path) -> int:
     """Binding checkpoint on the EXACT working-tree policy (ranking, aliases, inventory) against S; appends the event to the ledger."""
     from tests import tune_search_ranking as tune
@@ -1948,6 +2036,8 @@ def run_pre_t(cache: pathlib.Path, work: pathlib.Path) -> int:
               "fixture_benchmark_sha256": policy.canonical_sha256(tune.fixture_bench(bench)), "evaluation_code_sha256": ev.evaluation_code_sha256(ROOT),
               "tuning_grid_sha256": ev.tuning_grid_sha256(ranking_raw)}
     e = pre_t_event(seed_res, reg_res, failing, inputs)
+    e["equivalence_mismatches"] = tune._with_state(cache, lambda state: equivalence_mismatches(state, rp, bench, ap))
+    e["pass"] = e["pass"] and not e["equivalence_mismatches"]
     work.mkdir(parents=True, exist_ok=True)
     with open(work / "controller-events.jsonl", "a", encoding="utf-8") as fh:
         fh.write(json.dumps(e) + "\n")
@@ -1972,7 +2062,7 @@ git commit -m "H8: diag raw/effective + reference block, round3_simulation (bind
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
-Dispatch the whole-branch code reviewer (most capable model) over `e16c073..HEAD` with the spec v1.13 and this plan; fix findings as H′ commits; re-run the suite and `--phase H`. The last green commit is **`housekeeping_commit`**. Record its sha, the suite count and the `ALL STEPS PASS` output in the SDD ledger. Measure once more on this machine: `python - <<'EOF'` timing 40 random grid points through `GridEvaluator` on the archived S2 (the probe used while writing this plan gave 0.0454 s/point) and ledger `grid_runtime_probe` (machine, Python, s/point, projected minutes for 23,328 points). From here `TOOLING_FILES` are immutable until the terminal commit.
+Dispatch the whole-branch code reviewer (most capable model) over `e16c073..HEAD` with the spec v1.13 and this plan; fix findings as H′ commits; re-run the suite and `--phase H`. The last green commit is **`housekeeping_commit`**. Record its sha, the suite count and the `ALL STEPS PASS` output in the SDD ledger; the controller later pins it as `$W/housekeeping_commit` (Task 9 Step 1). Measure once more on this machine: `python - <<'EOF'` timing 40 random grid points through `GridEvaluator` on the archived S2 (the probe used while writing this plan gave 0.0454 s/point) and ledger `grid_runtime_probe` (machine, Python, s/point, projected minutes for 23,328 points). From here `TOOLING_FILES` are immutable until the terminal commit.
 
 ---
 
@@ -1990,6 +2080,8 @@ The controller session for Tasks 9–17 must be a new session (Global Constraint
 ```bash
 test ! -e ~/.atlassian_api_updater/round3-cache || { echo "S exists"; exit 1; }
 mkdir -p ~/.atlassian_api_updater/round3-work
+test -z "$(git status --porcelain --untracked-files=no)" || { echo "dirty tree"; exit 1; }
+git rev-parse HEAD > ~/.atlassian_api_updater/round3-work/housekeeping_commit      # HEAD == the reviewed last H/H′ commit (branch round3)
 python -m tools.atlassian_docs                                                    # refresh the live cache once (network)
 python tests/benchmarks/round_seal.py catalog --round 3 --cache-dir "$(python -c 'from tools.atlassian_docs import storage; print(storage.CACHE_DIR)')" \
   --out /tmp/live-gen.json --internal-out /tmp/live-internal.json                 # prints registry_fingerprint + 3 spec shas of the live cache
@@ -2078,9 +2170,45 @@ python -m unittest discover -s tests -t .
 
 Ledger the candidate count, `preclassify_bench_sha256`, R5/R6 counts; confirm in the ledger that `comment` ∈ `targets_by_seed["s-024"]` of `feedback` and `sprint` ∈ the s-032 targets (the Round 2 blockers, spec §0).
 
-- [ ] **Step 2: AC-13 deterministic replay (Round 2 Task 10 Step 4b, `--round 3`, archive inputs)**
+- [ ] **Step 2: AC-13 deterministic replay (archive inputs, `--round 3`)**
 
-Run the Round 2 replay script with `--round 3`, the archived raw/review/input files, `tests/benchmarks/round2-lexicon-generation-prompt.md` as template, `$W/aliases-premerge.json` and `$W/bench-preclassify.json` restored for the lexicon stage; assert lexicon sha, `lexicon_aliases_sha256(…, 3)`, candidates sha and R5/R6 equal the committed working tree. Ledger `{"event": "ac13_replay", "status": "ok"}`; a mismatch is a tool defect → H′ → redo Tasks 9–11 from the affected step.
+```bash
+W=~/.atlassian_api_updater/round3-work; S=~/.atlassian_api_updater/round3-cache; A=~/.atlassian_api_updater/archive/round2/round2-work
+python - "$W" "$S" "$A" <<'EOF2'
+import json, pathlib, shutil, subprocess, sys, tempfile
+from tests.benchmarks import evaluator as ev, alias_candidates_tool as act, round_seal as rs
+W, S, A = (pathlib.Path(p).expanduser() for p in sys.argv[1:4]); D = pathlib.Path("tools/atlassian_docs/intelligence/data"); B = pathlib.Path("tests/benchmarks/search_queries.json")
+tmp = pathlib.Path(tempfile.mkdtemp(prefix="ac13-"))
+run = lambda *a: subprocess.run([sys.executable, *a], check=True, capture_output=True, text=True)
+j = lambda p: json.loads(pathlib.Path(p).read_text(encoding="utf-8"))
+shutil.copy(D / "search_aliases.json", tmp / "aliases-current.json"); shutil.copy(B, tmp / "bench-current.json")
+shutil.copy(W / "aliases-premerge.json", D / "search_aliases.json"); shutil.copy(W / "bench-preclassify.json", B)      # lexicon stage inputs
+try:
+    run("tests/benchmarks/concept_lexicon_check.py", "prepare", "--cache-dir", str(S), "--round", "3", "--raw", str(A / "lexicon_raw.json"), "--out", str(tmp / "structural.json"))
+    run("tests/benchmarks/concept_lexicon_check.py", "finalize", "--cache-dir", str(S), "--round", "3", "--raw", str(A / "lexicon_raw.json"), "--structural", str(tmp / "structural.json"),
+        "--review", str(A / "lexicon_review.json"), "--generation-input", str(A / "lexicon-generation-input.txt"), "--review-input", str(A / "lexicon-review-input.txt"),
+        "--template", "tests/benchmarks/round2-lexicon-generation-prompt.md", "--out", str(tmp / "lexicon.json"))
+    run("tests/benchmarks/alias_candidates_tool.py", "lexicon-gate", "--cache-dir", str(S), "--round", "3", "--lexicon", str(tmp / "lexicon.json"))
+    shutil.copy(W / "aliases-premerge.json", tmp / "aliases.json")
+    run("tests/benchmarks/concept_lexicon_check.py", "merge", "--lexicon", str(tmp / "lexicon.json"), "--aliases", str(tmp / "aliases.json"), "--round", "3")
+finally:
+    shutil.copy(tmp / "aliases-current.json", D / "search_aliases.json"); shutil.copy(tmp / "bench-current.json", B)
+assert ev.canonical_sha256(j(tmp / "lexicon.json")) == ev.canonical_sha256(j(D / "concept_lexicon.json")), "lexicon replay differs"
+assert ev.lexicon_aliases_sha256(j(tmp / "aliases.json"), 3) == ev.lexicon_aliases_sha256(j(D / "search_aliases.json"), 3), "merge replay differs"
+run("tests/benchmarks/alias_candidates_tool.py", "candidates", "--cache-dir", str(S), "--round", "3", "--bench", str(W / "bench-preclassify.json"), "--out", str(tmp / "cands.json"))
+assert ev.canonical_sha256(j(tmp / "cands.json")) == ev.canonical_sha256(j(D / "alias_candidates.json")), "candidates replay differs"
+_, internal, _, _ = rs.load_catalogs_from_cache(S, 3)
+bench, ranking, aliases = j(B), j(D / "search_ranking.json"), j(D / "search_aliases.json")
+cls = act.classify(bench, internal, ranking, aliases)
+for rec in bench["seed"]:
+    assert [c for c in rec["failure_classes"] if c in ("R5", "R6")] == cls[rec["id"]], rec["id"]
+with open(W / "controller-events.jsonl", "a") as fh:
+    fh.write(json.dumps({"event": "ac13_replay", "status": "ok", "lexicon_sha256": ev.canonical_sha256(j(D / "concept_lexicon.json")), "candidates_sha256": ev.canonical_sha256(j(D / "alias_candidates.json"))}) + "\n")
+print("AC-13 replay ok")
+EOF2
+```
+
+A mismatch is a tool defect → H′ → redo Tasks 9–11 from the affected step.
 
 - [ ] **Step 3: Binding pre-T checkpoint (AC-R3-01)**
 
@@ -2088,7 +2216,7 @@ Run the Round 2 replay script with `--round 3`, the archived raw/review/input fi
 python tests/benchmarks/round3_simulation.py --phase pre-T --cache-dir $S --work $W
 ```
 
-Exit 0 is required to continue: seed ≥ 36/39, fixture failing `[]`, regression raw ≥ 10/14, effective 14/14; the event carries the input shas (ranking, aliases, verb inventory, S, fixture bench, evaluation code, tuning grid). Exit 1 → do not freeze; the structural change is insufficient on the real catalog → report to the user (the spec's expectation came from the archived-S simulation, 36/39).
+Exit 0 is required to continue: seed ≥ 36/39, fixture failing `[]`, regression raw ≥ 10/14, effective 14/14, and `equivalence_mismatches: []` (memoized grid evaluator == `search_operations` on the actual S, 20 sampled points + baseline, every query); the event carries the input shas (ranking, aliases, verb inventory, S, fixture bench, evaluation code, tuning grid). An equivalence mismatch is a tooling defect → H′. Exit 1 on the thresholds → do not freeze; the structural change is insufficient on the real catalog → report to the user (the spec's expectation came from the archived-S simulation, 36/39).
 
 - [ ] **Step 4: Worker brief (frozen text) — `tests/benchmarks/round3-worker-brief.md`**
 
@@ -2165,6 +2293,9 @@ negative: the query must have NO correct operation in the catalog; forbidden_top
 Replacement contract: if a later message consists only of lines "record <id> rejected: <rule-id>" (one rule id per record, chosen by the
 fixed priority schema > catalog > words > actionable > negative-method > operationId > summary/tags > negative-phrase > reuse), respond
 ONLY with a JSON array containing exactly one replacement record for each listed id, in the same record schema and with the same id.
+A later message may also contain lines "record <id> rejected: reviewer": "reviewer" is a valid semantic-review replacement request (a
+human-language review found the expected answer not the single best one, the verb used as a noun, or a negative that has a correct
+answer); it is not a machine rule id and takes no part in the priority above; respond with the same JSON array of replacement records.
 Do not repeat or modify any other record. If a later message starts with "distribution rejected" and lists all 16 held_out ids, return a
 JSON array of 16 replacement held_out records (same ids) that satisfy the distribution rule. If a later message starts with
 "negative distribution rejected" and lists all eight negative ids, reply ONLY with a JSON array of exactly eight replacement negative
@@ -2185,11 +2316,15 @@ CATALOG:
 You review candidate evaluation records against an API catalog. The catalog is the ATTACHED file round3-internal-catalog.jsonl:
 JSON lines, one operation per line, with the fields key, source, method, operation_id, summary, tags, description (full text, not
 truncated). Read the attachment as the catalog; nothing in this message replaces it.
-For each held_out record decide (a) whether the expected operation is the single best answer to the query (reject if another
-operation answers it at least as well, or if the query is unanswerable) and (b) whether the query's action verb is used as a request
-for an action — reject when the only verb-like word is used as a noun or modifier (for example "comment history", "post details").
-For each negative record decide whether the catalog truly has NO correct operation for the query (reject if one exists) and whether
-forbidden_top1 is really a wrong answer. Do not judge HTTP methods or the verb inventory: a program already did.
+Each record below carries a "machine" object computed by a program: matched_verbs (the recognized action verbs found in the query),
+intent_methods (the HTTP methods those verbs allow) and machine_actionable. Do not re-judge that mapping.
+For every record whose matched_verbs is non-empty (held_out records and the actionable negative records alike), verify that each
+listed verb is used in the query as a request for an action, not as a noun or modifier ("comment history", "post details" are noun
+uses): reject the record if any listed verb is a noun use.
+For each held_out record also decide whether the expected operation is the single best answer to the query (reject if another
+operation answers it at least as well, or if the query is unanswerable).
+For each negative record also decide whether the catalog truly has NO correct operation for the query (reject if one exists) and
+whether forbidden_top1 is really a wrong answer.
 Reply ONLY with {"<id>": {"accept": true|false, "reason": "<short>"}, ...} for every record.
 Never rewrite queries, never propose replacements.
 
@@ -2203,20 +2338,21 @@ CATALOG: attached file round3-internal-catalog.jsonl
 ```bash
 python tests/benchmarks/round_seal.py freeze --round 3 --cache-dir $S --reference-enc ~/.atlassian_api_updater/archive/round2/sealed/round2-sealed.json.enc
 python -m unittest discover -s tests -t .
-git diff --stat <housekeeping_commit> -- $(python -c "from tests.benchmarks import evaluator as ev; print(' '.join(ev.TOOLING_FILES))") tools/atlassian_docs/intelligence/search.py tools/atlassian_docs/intelligence/policy.py   # must be empty
+HK=$(cat $W/housekeeping_commit); TF=$(python -c "from tests.benchmarks import evaluator as ev; print(' '.join(ev.TOOLING_FILES))")
+git diff --exit-code "$HK" -- $TF tools/atlassian_docs/intelligence/search.py tools/atlassian_docs/intelligence/policy.py   # exit 0 required (AC-05)
 git add tools/atlassian_docs/intelligence/data tests/benchmarks/round_freeze.json tests/benchmarks/search_queries.json tests/benchmarks/round3-*.md tests/benchmarks/round3-method-safety.json
 git commit -m "T: Round 3 freeze (verb suffixes, lexicon-r3, candidates, R5/R6, worker brief, hidden prompts, reference set, regression reference, grid)
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
-The freeze printout must show `reference_set.enc_sha256 == c1a3794b…`, `hidden_generation_rules` == the 11 rule ids, `tuning_grid_sha256`, `regression_reference_sha256`; `git diff <housekeeping_commit> T -- tools/atlassian_docs/intelligence/data/search_ranking.json` must touch `verb_methods` lines only (AC-01a/AC-R3-13b). Then the AC-23 evidence step of the Round 2 plan (suite on the clean committed HEAD, event `ac23_test_checkpoint` with `checkpoint: "T"`, command, exit code, output sha) — the paths read `round3-work`.
+The freeze printout must show `reference_set.enc_sha256 == c1a3794b…`, `hidden_generation_rules` == the 11 rule ids, `tuning_grid_sha256`, `regression_reference_sha256`; `git diff "$HK" HEAD -- tools/atlassian_docs/intelligence/data/search_ranking.json` must touch `verb_methods` lines only (AC-01a/AC-R3-13b). Then the AC-23 evidence step of the Round 2 plan (suite on the clean committed HEAD, event `ac23_test_checkpoint` with `checkpoint: "T"`, command, exit code, output sha) — the paths read `round3-work`.
 
 ---
 
 ### Task 12: **[controller]** Hidden-set generation, machine check (Round 3 rules), stateless review with attached catalog, AC-18b hygiene, commit B, encryption
 
-Evidence goes to `$W/controller-events.jsonl` and `$W/attempts.jsonl` (one line per model call: `attempt_no, stage ∈ {generation, replacement, section-replacement, review}, input_sha256, output_sha256, status, reason_code`, plus for generation `rendered_generation_prompt_sha256`, for review `catalog_attachment_sha256`, `reviewed_record_shas`, `accepted_ids`). **Every file that embeds the records** (`hidden-review-input.txt`, replacement outputs, replacement-review messages, UI screenshots that show records) is written under `$W/plain/` and that directory is deleted before commit B (AC-18b(R3)); only hashes survive.
+Evidence goes to `$W/controller-events.jsonl` and `$W/attempts.jsonl` — one line per model call: `{"attempt_no", "stage": "generation"|"replacement"|"section-replacement"|"review", "actor_id", "session_id", "input_sha256", "output_sha256", "transport_status": "ok"|"error", "parse_status": "ok"|"parse_error", "valid_status": "valid"|"invalid", "reason_code"}`, plus for generation `rendered_generation_prompt_sha256`, for review `catalog_attachment_sha256`, `reviewed_record_shas`, `accepted_ids`. `actor_id` of a Temporary chat = the chat's URL id at the time of the call; generation and review use different chats. Retry lifecycle for every stage (inherited §5.3): transport error / parse error / invalid shape → retry the identical input in the same chat; never a semantic re-run after a valid output. **Every file that embeds the records** (`hidden-review-input.txt`, replacement outputs, replacement-review messages, screenshots that show records) is written under `$W/plain/` and that directory is deleted before the seal (AC-18b(R3)); only hashes survive.
 
 - [ ] **Step 1: Render the exact generation input and generate**
 
@@ -2235,54 +2371,72 @@ print("rendered_generation_prompt_sha256", hashlib.sha256(text.encode()).hexdige
 EOF2
 ```
 
-Open a new **Unpersonalized Temporary chat** (confirm the toggle; screenshot of the toggle only, no records), paste the file byte-for-byte, take the first output; store it as `~/.atlassian_api_updater/sealed/round3-sealed.json` (mode 600) only if it parses as JSON with `held_out`/`negative` lists; ledger the attempt (`parse_error` → retry with the identical input). Re-rendering the template must reproduce the same sha (ledger `rendered_prompt_reproduced: true`).
+Open a new **Unpersonalized Temporary chat** (confirm the toggle; screenshot of the toggle only, no records), paste the file byte-for-byte, take the first output; store it as `~/.atlassian_api_updater/sealed/round3-sealed.json` (mode 600) only if it parses as JSON with `held_out`/`negative` lists; ledger the attempt. Re-rendering the template must reproduce the same sha (ledger `rendered_prompt_reproduced: true`).
 
-- [ ] **Step 2: Machine check with the frozen rule order**
+- [ ] **Step 2: Machine check with the frozen rule order (one state machine for machine and semantic rejections)**
 
 ```bash
 python tests/benchmarks/round_seal.py check --round 3 --plain ~/.atlassian_api_updater/sealed/round3-sealed.json --bench tests/benchmarks/search_queries.json --internal-catalog $W/round3-internal-catalog.json
 ```
 
-On violations the next message is computed, never composed: `rs.next_request(violations, plain, state)` with `state = {"negative_section_replacements": n}` → `("records", lines)` are sent verbatim; `("section", "held_out", text)` / `("section", "negative", text)` likewise (the negative section at most once, then `state["negative_section_replacements"] = 1`); `("invalid", reason)` ends the attempt: ledger it and start a **new** Unpersonalized Temporary chat with the identical rendered input (Round 2 attempt cap). Responses pass `validate_replacement_output(obj, requested_ids)`, are merged with `merge_replacements`, and the whole set is re-checked after every merge (the 4/4 distribution is re-checked after record-level replacements too, spec §4).
+The controller keeps one state `state = {"negative_section_replacements": 0}` for the whole attempt. On violations the next message is computed, never composed: `rs.next_request(violations, plain, state)` → `("records", lines)` sent verbatim; `("section", "held_out", text)` / `("section", "negative", text)` likewise (after a negative section replacement `state["negative_section_replacements"] = 1`); `("invalid", reason)` ends the attempt: ledger it and start a **new** Unpersonalized Temporary chat with the identical rendered input (Round 2 attempt cap). Responses pass `validate_replacement_output(obj, requested_ids)`, are merged with `merge_replacements`, and the whole set is re-checked after every merge (the 4/4 distribution included). Semantic rejections from Step 3 re-enter this same loop with the same `state`.
 
-- [ ] **Step 3: Semantic review (stateless, attached catalog, hygiene)**
+- [ ] **Step 3: Semantic review (stateless, attached catalog, machine annotations, hygiene)**
 
 ```bash
 mkdir -p $W/plain && chmod 700 $W/plain
 python - <<'EOF2'
 import json, pathlib, hashlib
+from tests.benchmarks import round_seal as rs
 w = pathlib.Path.home() / ".atlassian_api_updater" / "round3-work"
 tpl = pathlib.Path("tests/benchmarks/round3-hidden-reviewer-prompt.md").read_text(encoding="utf-8")
 plain = json.load(open(pathlib.Path.home() / ".atlassian_api_updater" / "sealed" / "round3-sealed.json"))
+vm = json.load(open("tools/atlassian_docs/intelligence/data/search_ranking.json"))["verb_methods"]
 cat = json.load(open(w / "round3-internal-catalog.json"))
 lines = "\n".join(json.dumps({k: r.get(k) for k in ("key", "source", "method", "operation_id", "summary", "tags", "description")}, ensure_ascii=False) for r in cat)
 (w / "round3-internal-catalog.jsonl").write_text(lines, encoding="utf-8")
-msg = tpl.replace("<plaintext records>", json.dumps(plain, ensure_ascii=False, indent=1))
+msg = tpl.replace("<plaintext records>", json.dumps(rs.annotate_for_review(plain, vm), ensure_ascii=False, indent=1))
 (w / "plain" / "hidden-review-input.txt").write_text(msg, encoding="utf-8")
 print("review_message_sha256", hashlib.sha256(msg.encode()).hexdigest()); print("catalog_attachment_sha256", hashlib.sha256(lines.encode()).hexdigest())
 EOF2
 ```
 
-New Unpersonalized Temporary chat → attach `round3-internal-catalog.jsonl` → paste the message → first output → `$W/plain/hidden-review-output.json` → validate with `rs.validate_reviewer_output(out, ids)`; ledger `reviewed_record_shas`/`accepted_ids`. Rejected ids → one `record <id> rejected: reviewer` request to the generator chat, replacement validated/merged/machine-checked/reviewed (replacement records only, same frozen prompt, new review attempt). The controller never decides accept/reject. Build `$W/coverage-manifest.json = coverage_manifest(plain, accepted_attempt_by_id)`; `verify_coverage(manifest, plain, attempts) == []` or B is blocked (the manifest holds hashes only and stays).
+New Unpersonalized Temporary chat (a different chat from the generator's; its id is the `reviewer_actor_id`) → attach `round3-internal-catalog.jsonl` → paste the message → first output → `$W/plain/hidden-review-output.json` → validate with `rs.validate_reviewer_output(out, ids)` (invalid/parse/transport → retry the identical input, each attempt ledgered); ledger `reviewed_record_shas`/`accepted_ids`. Rejected ids → one request to the generator chat with lines `record <id> rejected: reviewer` (the frozen prompt's semantic replacement contract); the response is validated (`validate_replacement_output`), merged, and the **whole set re-enters Step 2** (full machine check with the same `state`; a broken 4/4 may trigger the single negative section replacement, whose 8 new records are machine-checked and then reviewed in full; a second need is `invalid`). Replacement records are reviewed with the same frozen prompt (annotated the same way), in a new review attempt. The controller never decides accept/reject. Build `$W/coverage-manifest.json = coverage_manifest(plain, accepted_attempt_by_id)`; `verify_coverage(manifest, plain, attempts) == []` or the seal is blocked (hashes only). Then the actor check: `generator_actor_id != reviewer_actor_id` (ledger `actor_separation_check: ok`).
 
-- [ ] **Step 4: AC-18b hygiene, then seal (commit B)**
+- [ ] **Step 4: Seal metadata, hygiene, [user] encryption, scan — then commit B**
 
 ```bash
 rm -rf $W/plain
+python tests/benchmarks/round_seal.py seal --round 3 --plain ~/.atlassian_api_updater/sealed/round3-sealed.json --bench tests/benchmarks/search_queries.json --cache-dir $S
+```
+
+(The seal command only rewrites the bench's hidden sections and `round3_seal`; nothing is committed yet.) Ask the user to run in their own terminal:
+
+```bash
+cd ~/.atlassian_api_updater/sealed && openssl enc -aes-256-cbc -pbkdf2 -in round3-sealed.json -out round3-sealed.json.enc && rm round3-sealed.json
+```
+
+Controller, after the user confirms:
+
+```bash
+test ! -e ~/.atlassian_api_updater/sealed/round3-sealed.json && shasum -a 256 ~/.atlassian_api_updater/sealed/round3-sealed.json.enc
+python tests/benchmarks/round_seal.py reference-check --round 3 --reference-enc ~/.atlassian_api_updater/archive/round2/sealed/round2-sealed.json.enc   # AC-R3-06 checkpoint B
 python - <<'EOF2'
-import json, pathlib, hashlib
+import json, pathlib
 root = pathlib.Path.home() / ".atlassian_api_updater"
-plain = json.load(open(root / "sealed" / "round3-sealed.json"))
-needles = [r["query"] for r in plain["held_out"] + plain["negative"]]
-hits = [str(p) for p in root.rglob("*") if p.is_file() and p != root / "sealed" / "round3-sealed.json" and p.suffix in (".txt", ".json", ".jsonl", ".md") and any(n in p.read_text(encoding="utf-8", errors="ignore") for n in needles)]
+hits = []
+for p in root.rglob("*"):
+    if p.is_file() and p.suffix in (".txt", ".json", ".jsonl", ".md"):
+        t = p.read_text(encoding="utf-8", errors="ignore")
+        if '"origin": "held_out-r3"' in t or '"origin": "negative-r3"' in t:          # a record body, never just a sha
+            hits.append(str(p))
 print(json.dumps({"event": "ac18b_scan_before_B", "plaintext_copies": hits}))
 EOF2
 ```
 
-`plaintext_copies` must be `[]` (ledger the event). Then:
+`plaintext_copies` must be `[]` (ledger the event with the `.enc` sha as AC-18a-B). Then:
 
 ```bash
-python tests/benchmarks/round_seal.py seal --round 3 --plain ~/.atlassian_api_updater/sealed/round3-sealed.json --bench tests/benchmarks/search_queries.json --cache-dir $S
 python -m unittest discover -s tests -t .
 git add tests/benchmarks/search_queries.json
 git commit -m "B: Round 3 seal (held_out 16 / negative 8 sha256 + distributions, 4/4 actionable split)
@@ -2290,11 +2444,7 @@ git commit -m "B: Round 3 seal (held_out 16 / negative 8 sha256 + distributions,
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
-AC-23 evidence (checkpoint `B`) as in Task 11; ledger `negative_distribution` (4/4) from the seal output as the AC-R3-09a B check.
-
-- [ ] **Step 5: [user] Encrypt and delete the plaintext**
-
-The user runs in their own terminal: `cd ~/.atlassian_api_updater/sealed && openssl enc -aes-256-cbc -pbkdf2 -in round3-sealed.json -out round3-sealed.json.enc && rm round3-sealed.json`. Controller: `test ! -e ~/.atlassian_api_updater/sealed/round3-sealed.json && shasum -a 256 ~/.atlassian_api_updater/sealed/round3-sealed.json.enc` → ledger AC-18a-B, and re-run the AC-18b scan (now including the sealed dir) → `[]`.
+AC-23 evidence (checkpoint `B`) as in Task 11 on the clean committed HEAD; ledger `negative_distribution` (4/4) from the seal output as the AC-R3-09a B check and re-run the AC-18b scan after the commit (`[]`).
 
 ---
 
@@ -2309,10 +2459,10 @@ The user runs in their own terminal: `cd ~/.atlassian_api_updater/sealed && open
 
 ### Task 14: **[controller]** Provenance check, then commit C (success), F (tuning failure) or X (abort)
 
-- [ ] **Step 1: Hash/provenance check (all branches)** — `git diff --stat <housekeeping_commit> -- <TOOLING_FILES> search.py policy.py` empty; `tooling_code_sha256` unchanged; the worker commit touches only the brief's allowed files; the log matches exactly one branch (one `adopted` | `failed ≥ 1` and no adopted/rejected | one `rejected`). `python tests/tune_search_ranking.py --verify --cache-dir $S` → `replay ok` on every branch.
+- [ ] **Step 1: Hash/provenance check (all branches)** — `HK=$(cat $W/housekeeping_commit); TF=$(python -c "from tests.benchmarks import evaluator as ev; print(' '.join(ev.TOOLING_FILES))"); git diff --exit-code "$HK" -- $TF tools/atlassian_docs/intelligence/search.py tools/atlassian_docs/intelligence/policy.py` exits 0; `tooling_code_sha256` unchanged; the worker commit touches only the brief's allowed files; the log matches exactly one branch (one `adopted` | `failed ≥ 1` and no adopted/rejected | one `rejected`). `python tests/tune_search_ranking.py --verify --cache-dir $S` → `replay ok` on every branch.
 - [ ] **Step 2a: Success** — `verify-freeze`, the `evaluation_code_sha256 == freeze_for(3)["evaluation_code_sha256_at_T"]` assertion, suite, empty commit `C: Round 3 freeze before final evaluation (evaluation_code_sha256 == at_T)`; continue with Task 15.
-- [ ] **Step 2b: Tuning failure** — AC-18a-F checkpoint (`.enc` sha unchanged, no plaintext, no decryption; the Round 2 archive ciphertext is NOT opened either), render readiness (Task 16, failure branch: `D_controller_actor_id: not_applicable`, hidden `not_evaluated`, `reference_round2: not_applicable`), commit `F: Round 3 tuning failed` touching only `docs/phase3-readiness.md`. Skip Task 15; continue with Task 17.
-- [ ] **Step 2c: Abort** — ledger `rejected_suite_evidence`, AC-18a-X checkpoint, render readiness (abort branch, B-vs-X policy shas), commit `X: Round 3 aborted (rejected tuning run)` touching only `docs/phase3-readiness.md`. Skip Task 15; continue with Task 17.
+- [ ] **Step 2b: Tuning failure** — AC-18a-F checkpoint (`.enc` sha unchanged, no plaintext, no decryption) and the AC-R3-06 terminal check `python tests/benchmarks/round_seal.py reference-check --round 3 --reference-enc ~/.atlassian_api_updater/archive/round2/sealed/round2-sealed.json.enc` (hash only, never opened), render readiness (Task 16, failure branch: `D_controller_actor_id: not_applicable`, hidden `not_evaluated`, `reference_round2: not_applicable`), commit `F: Round 3 tuning failed` touching only `docs/phase3-readiness.md`. Skip Task 15; continue with Task 17.
+- [ ] **Step 2c: Abort** — ledger `rejected_suite_evidence`, AC-18a-X checkpoint, AC-R3-06 terminal `reference-check` (hash only), render readiness (abort branch, B-vs-X policy shas), commit `X: Round 3 aborted (rejected tuning run)` touching only `docs/phase3-readiness.md`. Skip Task 15; continue with Task 17.
 
 ---
 
@@ -2352,16 +2502,16 @@ open(root / "round3-work" / "controller-events.jsonl", "a").write(json.dumps(e) 
 EOF2
 ```
 
-- [ ] **Round 2 reference observation (AC-R3-07)** — only after the event above exists in the ledger. **[user]** decrypts the archive copy to a temporary path: `openssl enc -d -aes-256-cbc -pbkdf2 -in ~/.atlassian_api_updater/archive/round2/sealed/round2-sealed.json.enc -out ~/.atlassian_api_updater/round3-work/reference-round2-plain.json` (the ciphertext file itself is never modified). Controller: assert its canonical shas equal the freeze's `reference_set` values, ledger `decrypt_at` + `plaintext_sha256`, then:
+- [ ] **Round 2 reference observation (AC-R3-07)** — only after the event above exists in the ledger. First the AC-R3-06 pre-decrypt checkpoint: `python tests/benchmarks/round_seal.py reference-check --round 3 --reference-enc ~/.atlassian_api_updater/archive/round2/sealed/round2-sealed.json.enc` → `reference ciphertext ok` (ledger). Then **[user]** decrypts the archive copy to a temporary path: `openssl enc -d -aes-256-cbc -pbkdf2 -in ~/.atlassian_api_updater/archive/round2/sealed/round2-sealed.json.enc -out ~/.atlassian_api_updater/round3-work/reference-round2-plain.json` (the ciphertext file itself is never modified). Controller: assert its canonical shas equal the freeze's `reference_set` values, ledger `decrypt_at` + `plaintext_sha256`, then:
 
 ```bash
 python tests/diag_search_queries.py --round 3 --cache-dir $S --reference ~/.atlassian_api_updater/round3-work/reference-round2-plain.json --reference-round 2 --append-to tests/benchmarks/round3-final.json
 rm ~/.atlassian_api_updater/round3-work/reference-round2-plain.json
 ```
 
-Ledger `deleted_at` and mark this actor `reference-aware`; it performs no further Round 3 evaluation. The Round 3 gate is never re-run or re-interpreted after this point (the checkpoint event is the evidence).
+Ledger `deleted_at` and mark this actor `reference-aware`; it performs no further Round 3 evaluation. The Round 3 gate is never re-run or re-interpreted after this point (the checkpoint event is the evidence). Run the terminal AC-R3-06 `reference-check` once more (hash unchanged after the user's decryption step).
 
-- [ ] Unseal, suite, readiness, commit D:
+- [ ] Unseal, suite, **render readiness (Task 16, success branch)**, commit D:
 
 ```bash
 python tests/benchmarks/round_seal.py unseal --round 3 --plain ~/.atlassian_api_updater/sealed/round3-sealed.json --bench tests/benchmarks/search_queries.json
@@ -2376,9 +2526,9 @@ AC-18b scan of `~/.atlassian_api_updater/` after D (the only plaintext allowed t
 
 ---
 
-### Task 16: **[controller]** Render the readiness Round 3 section from the ledgers (before the terminal commit)
+### Task 16: **[controller]** Subroutine — render the readiness Round 3 section from the ledgers (called by Task 14 Step 2b/2c before F/X and by Task 15 before commit D; never its own commit)
 
-Append `## Search Quality Round 3 — decision record (<date>)` after the Round 2 section of `docs/phase3-readiness.md` (never inside it), rendered from `controller-events.jsonl` + `attempts.jsonl`: `round3_start_commit e16c073`, `housekeeping_commit`, spec v1.13 / plan version, `evaluation_domain: actionable recommendation queries`, S (`s_reused_from_round2`, fingerprint, spec shas, op count) as `round3_operational_snapshot`, the AC-R3-02 reference provenance as `round2_regression_snapshot` (29dba38, fingerprint, reference sha), verb inventory decisions (suffixes, prefix check), method-safety, lexicon re-gate counts and the newly merged `lexicon-r3` words, candidates/R5/R6, AC-13 replay, **pre-T checkpoint** numbers and input shas, T/B/C shas (terminal commit `self`), `structure/tooling/evaluation/tuning_grid/regression_reference` shas at T, `reference_set` (enc sha), hidden generation attempts (`rendered_generation_prompt_sha256`, outputs, `next_request` kinds sent, section replacements used), review attempts (`catalog_attachment_sha256`), coverage manifest sha, `temporary_chat_unpersonalized: true`, AC-18b scans (before B, after encryption, at the terminal), `.enc` sha at B/terminal, worker brief sha + `worker_actor_id` + runs (`run_id`, `status`, `tuning_accept`, `seed`, `regression_negative` effective, `regression_raw`, `fixture_positive`, `fixture_negative_raw`, `grid_runtime_s`, `result_sha256`), `--verify` result, actor table (`controller_actor_id`, generator/reviewer chat attestation, `worker_actor_id`, `D_controller_actor_id` or `not_applicable`, `reference-aware` actor), the gate row with raw/effective for `seed`, `regression_negative`, `held_out`, `negative` (+ `negative_actionable`/`negative_abstained`) or `not_evaluated`, `round3_gate_result_sha256`, `reference_round2` (raw/effective, `invalid_key`, `plaintext_sha256`, `decrypt_at`, `deleted_at`) or `not_applicable`, the state model table (branch D/F/X; `adopted_runs`, `failed_runs`, `rejected_runs`, `hidden_evaluated`, `ciphertext_retained`), and the attestation list over spec v1.13 §10 (AC-01a/b, 02–05, 06b, 07, 08 with the two provenance domains, 09, 10, 12, 13, 15a/15b split, 19c, 21/22, 23, AC-R3-01..13b, AC-18b(R3)). This task never produces its own commit.
+Append `## Search Quality Round 3 — decision record (<date>)` after the Round 2 section of `docs/phase3-readiness.md` (never inside it), rendered from `controller-events.jsonl` + `attempts.jsonl`: `round3_start_commit e16c073`, `housekeeping_commit`, spec v1.13 / plan version, `evaluation_domain: actionable recommendation queries`, S (`s_reused_from_round2`, fingerprint, spec shas, op count) as `round3_operational_snapshot`, the AC-R3-02 reference provenance as `round2_regression_snapshot` (29dba38, fingerprint, reference sha), verb inventory decisions (suffixes, prefix check), method-safety, lexicon re-gate counts and the newly merged `lexicon-r3` words, candidates/R5/R6, AC-13 replay, **pre-T checkpoint** numbers and input shas, T/B/C shas (terminal commit `self`), `structure/tooling/evaluation/tuning_grid/regression_reference` shas at T, `reference_set` (enc sha), hidden generation attempts (`rendered_generation_prompt_sha256`, outputs, `next_request` kinds sent, section replacements used), review attempts (`catalog_attachment_sha256`), coverage manifest sha, `temporary_chat_unpersonalized: true`, AC-18b scans (before B, after encryption, at the terminal), `.enc` sha at B/terminal, worker brief sha + `worker_actor_id` + runs (`run_id`, `status`, `tuning_accept`, `seed`, `regression_negative` effective, `regression_raw`, `fixture_positive`, `fixture_negative_raw`, `grid_runtime_s`, `result_sha256`), `--verify` result, actor table (`controller_actor_id`, generator/reviewer chat attestation, `worker_actor_id`, `D_controller_actor_id` or `not_applicable`, `reference-aware` actor), the result rows in the spec §13 schema — `seed.top1_correct`, `regression_negative.{raw, effective}`, `fixture_positive.top1_correct`, `fixture_negative.{raw, effective_diagnostic}`, `hidden.held_out_pass`, `hidden.negative.{raw, effective}` (+ `negative_actionable`/`negative_abstained`) or `not_evaluated` on F/X, `round3_gate_result_sha256`, `reference_round2` (raw/effective, `invalid_key`, `plaintext_sha256`, `decrypt_at`, `deleted_at`) or `not_applicable`, the state model table (branch D/F/X; `adopted_runs`, `failed_runs`, `rejected_runs`, `hidden_evaluated`, `ciphertext_retained`), and the attestation list over spec v1.13 §10 (AC-01a/b, 02–05, 06b, 07, 08 with the two provenance domains, 09, 10, 12, 13, 15a/15b split, 19c, 21/22, 23, AC-R3-01..13b, AC-18b(R3)). This task never produces its own commit.
 
 ---
 
@@ -2388,7 +2538,7 @@ Append `## Search Quality Round 3 — decision record (<date>)` after the Round 
 - Update memory (`search-quality-round3-design-status.md` → outcome; MEMORY.md index); archive `round3-cache`, `round3-work` and `sealed/round3-sealed.json.enc` under `~/.atlassian_api_updater/archive/round3/` after the user confirms.
 - Use `superpowers:finishing-a-development-branch` (the user chooses merge/push; push only on instruction).
 
-## AC coverage map (spec v1.13)
+## AC coverage map (spec v1.14)
 
 | AC | Where |
 |---|---|
@@ -2406,7 +2556,7 @@ Append `## Search Quality Round 3 — decision record (<date>)` after the Round 
 | AC-R3-02 | Task 4 (isolated generation, verifier, test), Task 11 freeze `regression_reference_sha256` |
 | AC-R3-03 | Task 2 `test_actionable_does_not_change_scores_or_order`, Task 4 regression reference |
 | AC-R3-04 | Task 5 tests (resource vocabulary, real fixtures, candidates ⇔ R6) |
-| AC-R3-06, AC-R3-07 | Task 6 `reference_set`, Task 15 gate checkpoint → decrypt → observe → delete (ledger order) |
+| AC-R3-06, AC-R3-07 | Task 6 `reference_set` + `reference-check`; checkpoints at B (Task 12), before decrypt and terminal (Task 15), F/X terminal (Task 14); Task 15 gate checkpoint → decrypt → observe → delete (ledger order) |
 | AC-R3-08 | Global Constraints session separation; actor ids ledgered in Tasks 9, 12, 13, 15 |
 | AC-R3-09a/b | Task 6 rules + Task 3 evaluator (T), Task 12 seal distribution (B), Task 15 single evaluation (D) |
 | AC-R3-10 | Task 7 `--verify` on success/failure/abort |
@@ -2423,4 +2573,6 @@ Append `## Search Quality Round 3 — decision record (<date>)` after the Round 
 
 ## Plan revision notes
 
-v1 (2026-10-05): initial plan written against spec v1.13; external plan review pending.
+v1 (2026-10-05): initial plan written against spec v1.13.
+
+v2 (after external plan review 1 — P0 5 / P1 7; spec v1.14): P0: (1) pre-freeze structure check split into non-verb structure sha + verb prefix invariant (`ev.structure_check_problems`; helpers moved into the stdlib evaluator, Task 1/5); (2) seal → user encryption + deletion + scan → commit B (Global Constraints, Task 12); (3) `record <id> rejected: reviewer` added to the frozen generation prompt as the semantic replacement contract, semantic rejections re-enter the single `next_request` state machine (Tasks 11, 12); (4) reviewer prompt checks verb USE for held_out and actionable negatives with machine annotations `rs.annotate_for_review` (Tasks 6, 11, 12); (5) AC-R3-06 `reference-check` at B, before the D decryption, and at every terminal commit (Tasks 6, 12, 14, 15). P1: AC-09/§7 spec wording; memoized-evaluator equivalence preflight on the actual S inside `--phase pre-T` (Tasks 8, 11); AC-13 replay as an executable script (Task 11); `$W/housekeeping_commit` pinned in Task 9 and used instead of placeholders (Tasks 11, 14); Task 16 declared a subroutine called before D/F/X; readiness result rows in the §13 schema; attempts ledger carries actor/session ids and transport/parse/valid status with the actor-separation check (Task 12).
