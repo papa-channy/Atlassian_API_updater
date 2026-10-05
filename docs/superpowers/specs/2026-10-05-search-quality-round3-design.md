@@ -1,6 +1,6 @@
 # Search Quality Round 3 — Technical Specification
 
-**문서 버전:** v1.2 (v1.0 = brainstorming 2026-10-05, 사용자 승인 섹션 1–6; v1.1 = 외부 검수 1차 반영: P0 8건·P1 6건 — 새 hidden set, abstention 계약과 대칭 게이트, S 재사용 조건, AC-R3-02 참조 고정, 동사 순서 동결, 제안기 원자 액션 계약, freeze 불변, 보수적 tie-break, 타깃 자원 증거; v1.2 = 외부 검수 2차 반영: P0 4건·P1 6건 — hidden actionability 분포·검사 계약, verb_methods prefix 불변, fixture negative raw 6/6, recommended_operation, resource_vocab 정규화, 참조 생성 격리, 게이트 결과 해시 체크포인트, 역할 분리; v1.3 = 외부 검수 3차 반영: P0 4건·P1 6건 — 규칙명 정합(actionable·negative-distribution만), held_out expected-method 정합, negative 섹션 교체 계약·수명주기, recommended_operation 빈 결과 정의, negative 프롬프트 문구, actionable negative 강도 규칙, legacy 어댑터 기본값, B 정책 문구, 참조 평문 수명주기, 게이트 체크포인트 바인딩)
+**문서 버전:** v1.4 (v1.0 = brainstorming 2026-10-05, 사용자 승인 섹션 1–6; v1.1 = 외부 검수 1차 반영: P0 8건·P1 6건 — 새 hidden set, abstention 계약과 대칭 게이트, S 재사용 조건, AC-R3-02 참조 고정, 동사 순서 동결, 제안기 원자 액션 계약, freeze 불변, 보수적 tie-break, 타깃 자원 증거; v1.2 = 외부 검수 2차 반영: P0 4건·P1 6건 — hidden actionability 분포·검사 계약, verb_methods prefix 불변, fixture negative raw 6/6, recommended_operation, resource_vocab 정규화, 참조 생성 격리, 게이트 결과 해시 체크포인트, 역할 분리; v1.3 = 외부 검수 3차 반영: P0 4건·P1 6건 — 규칙명 정합(actionable·negative-distribution만), held_out expected-method 정합, negative 섹션 교체 계약·수명주기, recommended_operation 빈 결과 정의, negative 프롬프트 문구, actionable negative 강도 규칙, legacy 어댑터 기본값, B 정책 문구, 참조 평문 수명주기, 게이트 체크포인트 바인딩; v1.4 = 외부 검수 4차 반영: P0 3건·P1 6건 — 버전 라벨, policy.py 허용 diff 계약, AC-R3-01 pre-T 체크포인트, negative-method 기계 규칙, 생성 입력에 VERB_METHODS 블록, 섹션 교체 상태기계, generator≠reviewer actor, AC-R3-07 삭제 요건, 네 필드, 격자 축소 pre-T 한정)
 **기준일:** 2026-10-05
 **선행 구현:** Round 2 (spec v1.14, 종료 커밋 F `770eb63`: 튜닝 실패, hidden set 미평가; `main` e16c073). 오프라인 테스트 476.
 **상속:** 이 문서에 적지 않은 절차·AC·상태 모델은 **Round 2 스펙 v1.14를 그대로 상속**한다(§5 봉인 절차 전부 — S, pre-T 순서, §5.3 stateless 생성·검토 계약, §5.4 봉인, §5.5 one-way 파이프라인·두 단계 채택, §5.6 워커 계약, abort X; §8 alias_notes 스키마; §11 상태 모델; §12 AC 전부). 이 문서는 **델타**만 규정하며, 충돌 시 이 문서가 우선한다.
@@ -35,7 +35,7 @@ negative 측: B 정책에서 이미 10/14였고, 깨진 4건(rn-010/011/012/014)
 ## 2. 범위
 
 **변경:** `tools/atlassian_docs/intelligence/search.py`(신호 2개, `method_intent_consistent`/`actionable` 필드), `data/search_ranking.json`(상수 2개, 격자, 버전 2), `tests/benchmarks/alias_candidates_tool.py`(타깃 자격 규칙), `tests/tune_search_ranking.py`(예산 2 원자 액션 제안기, 새 상수, 보수적 tie-break, fixture 캐시), `tests/benchmarks/evaluator.py`(대칭 판정식), `tests/benchmarks/round_seal.py`(생성 프롬프트 `actionable`·`negative-distribution` 규칙, 섹션 교체 계약, Round 2 참조 세트 등록), diag, MCP 응답 테스트, 스펙·계획·readiness.
-**유지(동결):** Round 1·2 로그·freeze 항목·readiness 섹션·`round1-final.json`; fixture 23/6(내용 불변, 하드 제약); Phase 1 파일; `verb_methods`의 **행 집합과 각 행의 Round 2 리스트를 exact prefix로 보존**(§3.1 prefix 불변); `policy.py`는 alias_notes origin `lexicon-r3`·`round3` 외 변경 없음.
+**유지(동결):** Round 1·2 로그·freeze 항목·readiness 섹션·`round1-final.json`; fixture 23/6(내용 불변, 하드 제약); Phase 1 파일; `verb_methods`의 **행 집합과 각 행의 Round 2 리스트를 exact prefix로 보존**(§3.1 prefix 불변); `policy.py`의 H 변경 허용 범위는 ① `CONSTANT_KEYS`에 `method_order_bonus`, `path_coverage_bonus` 추가, ② alias_notes origin `round3`·`lexicon-r3` 허용(regex는 이미 일반형)으로 한정하고 그 외 스키마·검증 의미는 Round 2와 동일하다(AC-R3-13: H의 `policy.py` diff가 이 두 종류에 한정됨을 테스트).
 **해제:** Round 2의 "`search.py` 불변" 조항. `search.py` 변경은 H에서 끝나고 T에서 `evaluation_code_sha256_at_T`로 재동결된다.
 **하지 않음:** alias_damping 변경, 어휘 규칙(`when_all`) 자동 제안, 지시어 신호, `verb_methods` 기존 메서드의 삭제·재배열, Round 2 봉인 세트의 게이트 사용.
 
@@ -61,9 +61,10 @@ negative 측: B 정책에서 이미 10/14였고, 깨진 4건(rn-010/011/012/014)
 - **대칭 판정식(evaluator):** `held_out pass := top1 ∈ expected_top1_any AND actionable == true`; `negative pass := top1 ∉ forbidden_top1 OR actionable == false`. `search_fn`은 `(ranked_keys, actionable)`을 돌려주며, Round 1·2 호출 형태(ranked_keys만)는 어댑터가 `(ranked_keys, actionable=True)`로 해석해 계속 지원된다(과거 판정이 abstention으로 바뀌지 않음; Round 1 테스트 불변). readiness와 diag는 항상 `negative_raw_top1`(top1 ∉ forbidden만)과 `negative_effective`(판정식) 두 수치를 기록한다(AC-R3-11).
 - **hidden set(게이트):** T 이후 Round 2 §5.3 계약(Temporary chat + Unpersonalized, 동결 프롬프트, 기계 검사, stateless 검토, 교체 계약, coverage manifest)으로 **새로 생성**한다. **actionability 계약(사전 등록, 기계 검사는 production과 동일한 `allowed_methods()` 헬퍼와 동결 인벤토리 사용):**
   - 규칙 `actionable`(held_out): ① 질의가 동결 동사 인벤토리 토큰을 1개 이상 포함하고, ② 발견된 모든 동사의 허용 메서드 교집합 `intent_methods`가 비어 있지 않으며(evaluator의 `actionable == true`와 동일), ③ `expected_top1_any` 중 최소 하나의 HTTP 메서드가 `intent_methods`에 속해야 한다(라벨과 동결 메서드 의도 표의 정합 — 스코어링 신호인 `verb_methods`와 구조적으로 충돌하는 레코드는 봉인되지 않는다). 프롬프트 문구: "Every held_out query must express a single actionable API intent using at least one action verb whose HTTP method matches the expected operation; if several recognized verbs occur, their allowed-method intersection must be non-empty." 위반은 `record h-00N rejected: actionable`. 테스트 3분기: 교집합 비공집합+expected 메서드 포함 → 통과; 교집합 비공집합+expected 메서드 전부 불일치 → 거부; 교집합 공집합 → 거부.
-  - 규칙 `negative-distribution`: negative 8건 중 **정확히 4건은 actionable == true, 정확히 4건은 actionable == false**(같은 헬퍼로 판정). 프롬프트 문구: "Exactly 4 negative queries must be actionable under the frozen verb-method inventory (a recognized action verb is present and the allowed-method intersection is non-empty) and exactly 4 must be non-actionable; prefer no recognized verb for the non-actionable half — do not manufacture conflicting multi-verb phrasings merely to force abstention." **섹션 교체 계약(동결 프롬프트에 포함):** "If a later message starts with `negative distribution rejected` and lists all eight negative ids, reply ONLY with a JSON array of exactly eight replacement negative records, one per listed id, preserving those ids; together they must satisfy exactly 4 actionable / 4 non-actionable. Do not return held_out records or the outer object." 응답은 `validate_replacement_output(obj, 8 ids)` + 분포 검사를 통과해야 한다. **수명주기:** 개별 레코드 교체 뒤에도 4/4 분포를 재검사한다; 깨졌으면 개별 레코드를 임의로 고르지 않고 섹션 교체를 **정확히 1회** 수행하며, 새 8건은 기계 검사·의미 검토를 처음부터 다시 거친다. 섹션 교체 후에도 분포가 깨지면 Round 2 §5.3의 first-valid 수명주기에 따라 생성 attempt 전체를 `invalid`로 기록하고 동일 입력으로 새 attempt를 시작한다(attempt 상한은 Round 2와 동일).
-  - 권장 규칙 `negative-method`(의미 검토자 지시, 기계 규칙 아님): actionable negative 4건은 `forbidden_top1` 중 최소 하나의 HTTP 메서드가 `intent_methods`에 속하도록 한다(메서드만으로 밀려나는 쉬운 negative 방지); 검토자는 미충족 시 reject.
-  - **동결 규칙 목록(순서 고정, freeze `hidden_generation_rules`):** `schema, catalog, words, actionable, operationId, summary/tags, negative-phrase, reuse, distribution, negative-distribution`. 레코드 단위 우선순위 `schema > catalog > words > actionable > operationId > summary/tags > negative-phrase > reuse`; `distribution`(held_out 16 전체)·`negative-distribution`(negative 8 전체)은 섹션 단위. 기존 `verb` 규칙은 존재하지 않는다.
+  - 규칙 `negative-distribution`: negative 8건 중 **정확히 4건은 actionable == true, 정확히 4건은 actionable == false**(같은 헬퍼로 판정). 프롬프트 문구: "Exactly 4 negative queries must be actionable under the frozen verb-method inventory (a recognized action verb is present and the allowed-method intersection is non-empty) and exactly 4 must be non-actionable; prefer no recognized verb for the non-actionable half — do not manufacture conflicting multi-verb phrasings merely to force abstention." **섹션 교체 계약(동결 프롬프트에 포함):** "If a later message starts with `negative distribution rejected` and lists all eight negative ids, reply ONLY with a JSON array of exactly eight replacement negative records, one per listed id, preserving those ids; together they must satisfy exactly 4 actionable / 4 non-actionable. Do not return held_out records or the outer object." 응답은 `validate_replacement_output(obj, 8 ids)` + 분포 검사를 통과해야 한다. **수명주기:** 개별 레코드 교체 뒤에도 4/4 분포를 재검사한다; 깨졌으면 개별 레코드를 임의로 고르지 않고 섹션 교체를 **정확히 1회** 수행하며, 새 8건은 기계 검사·의미 검토를 처음부터 다시 거친다. 섹션 교체를 이미 사용한 뒤 개별 교체로 다시 4/4가 깨지면 두 번째 섹션 교체는 하지 않고 즉시 생성 attempt 전체를 `invalid`로 기록하며, 새 attempt는 **새 stateless/Unpersonalized 호출**(기존 chat 이력 미승계)에서 동일 입력으로 시작한다(attempt 상한은 Round 2와 동일).
+  - 규칙 `negative-method`(기계 규칙, actionable negative에만 적용): `methods(forbidden_top1) ∩ intent_methods ≠ ∅`(메서드만으로 밀려나는 쉬운 negative 방지). 위반은 `record n-00N rejected: negative-method`. 의미 검토자는 "정말 잘못된 operation인가"에만 집중한다.
+  - **생성 입력의 동결 블록:** 생성 프롬프트에 기계 판독 가능한 `VERB_METHODS:` 블록(동결 `verb_methods` JSON, canonical sha == `verb_inventory_sha256`)을 포함해 generator가 recognized verb와 메서드 교집합을 정확히 알 수 있게 한다(§5.3 stateless 계약 유지; 블록은 템플릿의 자리표시자로 T에 동결).
+  - **동결 규칙 목록(순서 고정, freeze `hidden_generation_rules`):** `schema, catalog, words, actionable, negative-method, operationId, summary/tags, negative-phrase, reuse, distribution, negative-distribution`. 레코드 단위 우선순위 `schema > catalog > words > actionable > negative-method > operationId > summary/tags > negative-phrase > reuse`; `distribution`(held_out 16 전체)·`negative-distribution`(negative 8 전체)은 섹션 단위. 기존 `verb` 규칙은 존재하지 않는다.
   - 의미 검토자 프롬프트에 추가: 매칭된 동사가 문장에서 **행위 요청의 동사**로 쓰였는지 확인하고 명사적 용법만 있으면(`comment history`, `post details`) reject.
 - **Round 2 봉인 세트(참조):** `archive/round2/sealed/round2-sealed.json.enc`(sha `c1a3794b…`)를 T freeze에 `reference_set: {"origin": "round2", "enc_sha256": …, "held_out_sha256": "0f990f2f…", "negative_sha256": "7750a202…"}`로 기록만 한다. **D에서 Round 3 게이트 판정이 끝나고** 게이트 체크포인트 이벤트 `{round3_gate_result_sha256(held_out·negative 결과와 pass/fail의 canonical sha), commit_C, round3_seal_sha256, evaluation_code_sha256, ranking_sha256, aliases_sha256}`를 controller ledger에 먼저 기록한 **뒤에만** D 컨트롤러가 1회 복호화해 `round3-final.json`의 `reference_round2` 블록(held_out/negative raw·effective, `invalid_key` 레코드 id·key 목록)에 관찰값으로 기록한다. 참조 세트를 본 뒤 Round 3 게이트를 재실행·재해석하지 않으며(ledger 순서가 증거), 그 actor는 이후 `reference-aware`로 표시한다. 참조 평문은 `reference_round2` 블록 계산 직후 삭제하고 평문 sha·복호화 시각·삭제 확인을 ledger에 기록하며, 종료 커밋 시점에 평문이 존재해서는 안 된다(AC-18b 스캔 범위에 포함). 게이트·튜닝·설계에 쓰지 않는다. 복호화 전 평가는 없으며, key 소실은 기록만 한다.
 - **fixture 하드 제약:** Round 2 v1.14 그대로.
@@ -75,10 +76,10 @@ negative 측: B 정책에서 이미 10/14였고, 깨진 4건(rn-010/011/012/014)
 - S: 새 스냅샷. Round 2 S 아카이브 복사는 `registry_fingerprint` **와** 소스별 `spec_sha256` 3개가 모두 Round 2 S와 동일할 때만 허용(ledger `s_reused_from_round2`); 하나라도 다르면 새 S.
 - 인벤토리: v1.14 §6 표를 행 집합·순서 그대로 상속(§3.1 prefix 불변). method-safety는 suffix 추가만, fixture 호환 검사(좁힘)는 Round 2 그대로 — 단 좁힘이 prefix 불변과 충돌하면(기존 메서드 제거 필요) 절차를 멈추고 사용자 판단.
 - 사전: **재생성 없음.** 아카이브 `lexicon_raw.json`(sha `acc5cebe…`)·`lexicon_review.json`(sha `c5ba256f…`)을 입력으로 `prepare → finalize → lexicon-gate → merge --round 3`를 §6 자격 규칙으로 재실행, 추가분은 origin `lexicon-r3`. 입력 해시가 아카이브 ledger와 다르면 거부.
-- 후보·R5/R6: §6 규칙으로 재생성. 워커 브리프는 예산 2 판으로 동결. hidden 생성 프롬프트는 `actionable`·`negative-distribution` 규칙과 섹션 교체 계약이 추가된 Round 3 판으로 동결(sha를 freeze에 기록); 검토 프롬프트는 동사 용법·`negative-method` 지시가 추가된 Round 3 판으로 동결. **검토자 카탈로그 전달:** 카탈로그 JSON lines는 바이트 동일한 첨부 파일로 전달하고 프롬프트 본문의 `<internal catalog lines>`는 첨부 파일 지시문으로 치환한다(Round 2 deviation의 정식화; 프롬프트 템플릿 sha와 첨부 sha를 attempts에 기록).
+- 후보·R5/R6: §6 규칙으로 재생성. **pre-T 체크포인트(AC-R3-01 binding):** 인벤토리 suffix 확정 → `lexicon-r3` 병합 → 후보·R5/R6까지 끝난 **T 직전의 정확한 정책 상태**에서 `round3_simulation.py --phase pre-T`를 실행해 seed ≥ 36/39, fixture positive 23/23 · negative raw 6/6, regression raw ≥ 10/14 · effective 14/14를 만족해야 T를 만들 수 있다; 입력 ranking/aliases/verb_inventory/S sha를 ledger에 기록한다(H 시뮬레이션은 개발 sanity check). 워커 브리프는 예산 2 판으로 동결. hidden 생성 프롬프트는 `actionable`·`negative-distribution` 규칙과 섹션 교체 계약이 추가된 Round 3 판으로 동결(sha를 freeze에 기록); 검토 프롬프트는 동사 용법·`negative-method` 지시가 추가된 Round 3 판으로 동결. **검토자 카탈로그 전달:** 카탈로그 JSON lines는 바이트 동일한 첨부 파일로 전달하고 프롬프트 본문의 `<internal catalog lines>`는 첨부 파일 지시문으로 치환한다(Round 2 deviation의 정식화; 프롬프트 템플릿 sha와 첨부 sha를 attempts에 기록).
 - T → hidden 생성·검토 → B → 워커 디스패치 → C/D | F | X: Round 2와 동일. AC-18a-B/D/F/X는 `round3-sealed.json.enc` 기준.
 - **AC-18b(Round 2 교훈):** 레코드를 담은 검토 입력 파일은 B 이전에 삭제하거나 암호화하고 해시만 남긴다. B 직후 작업 디렉터리 스캔을 ledger에 기록한다.
-- **역할(각각 ledger에 세션/actor id 기록):** generator/reviewer 디스패치 세션 = Round 3 평문 가시, stateless, 이후 튜닝 금지; tuning worker = 평문 비가시(Round 2·3 모두); D 게이트 컨트롤러 = 튜닝에 관여하지 않은 Round 3 평문 비가시 actor; D 이후 Round 2 참조 세트를 연 actor는 `reference-aware`로 표시. Round 2 평문에 노출된 세션(2026-10-02/03)은 Round 3의 hidden 생성·검토·워커·D 게이트를 맡지 않는다.
+- **역할(각각 ledger에 세션/actor id 기록):** generator actor와 reviewer actor는 **서로 다른** stateless 호출(Round 2처럼 각각 새 Unpersonalized Temporary chat)이며 Round 3 평문 가시, 이후 튜닝 금지; tuning worker = 평문 비가시(Round 2·3 모두); D 게이트 컨트롤러 = 튜닝에 관여하지 않은 Round 3 평문 비가시 actor; D 이후 Round 2 참조 세트를 연 actor는 `reference-aware`로 표시. Round 2 평문에 노출된 세션(2026-10-02/03)은 Round 3의 hidden 생성·검토·워커·D 게이트를 맡지 않는다.
 
 ## 6. 어휘 메커니즘
 
@@ -98,8 +99,8 @@ negative 측: B 정책에서 이미 10/14였고, 깨진 4건(rn-010/011/012/014)
 | `tune_search_ranking.py` | 원자 액션 제안기(예산 2), 새 상수, 보수적 tie-break, fixture 캐시 범위, `--round 3` |
 | `evaluator.py` | 대칭 판정식, `search_fn` 어댑터, raw/effective, freeze 키 `reference_set`·`regression_reference_sha256`·`hidden_generation_prompt_sha256`(Round 3 판) |
 | `round_seal.py` | 생성 프롬프트 `actionable`·`negative-distribution` 규칙 기계 검사(production `allowed_methods()` 재사용)와 우선순위, 검토자 프롬프트 동사 용법 지시, 첨부 카탈로그 전달 기록, 게이트 결과 sha 체크포인트 후 Round 2 참조 세트 평가 |
-| diag | 세 필드 표시, raw/effective 집계, `reference_round2` 블록 |
-| MCP 응답 테스트 / README | 세 필드와 abstention 계약 |
+| diag | 네 필드 표시, raw/effective 집계, `reference_round2` 블록 |
+| MCP 응답 테스트 / README | 네 필드(`method_intent_consistent`, `intent_methods`, `actionable`, `recommended_operation`)와 abstention 계약; diag는 네 필드 모두 표시 |
 
 ## 8. 테스트 전략
 
@@ -114,38 +115,39 @@ negative 측: B 정책에서 이미 10/14였고, 깨진 4건(rn-010/011/012/014)
 - fixture raw 하드 제약: negative fixture에 동사 없는 질의가 있어도 raw 판정으로만 통과/실패.
 - `verb_methods` prefix 불변: Round 2 리스트가 exact prefix, suffix 추가 사전순, 재배열·삭제 거부.
 - 응답 스키마: `recommended_operation` 4사분면(actionable±, results 유무).
-- 섹션 교체 계약: `negative distribution rejected` 응답 검증(8 id, 분포 4/4), 섹션 교체 1회 수명주기, attempt invalid 전환.
+- 섹션 교체 계약: `negative distribution rejected` 응답 검증(8 id, 분포 4/4), 섹션 교체 1회 수명주기, 두 번째 교체 금지 → attempt invalid 전환; `negative-method` 기계 규칙; 생성 입력 `VERB_METHODS` 블록 sha == `verb_inventory_sha256`.
 - legacy 어댑터: ranked_keys만 돌려주는 search_fn은 actionable=True로 해석.
 - 선택기 tie-break: 동일 결과에서 더 작은 보너스 쌍 우선.
 - 시뮬레이션 게이트(AC-R3-01, `round3_simulation.py --phase H`) 및 T→B→C→D 시뮬레이션 통과 후 `housekeeping_commit`.
 
 ## 9. 상태 모델·readiness 델타
 
-Round 2 §11 상속. 추가: `hidden_set_origin: "round3"`, `hidden_generation_rules`(§4의 동결 순서 목록), `negative_actionable`/`negative_abstained` 결과, `round3_gate_result_sha256`, `evaluation_domain: "actionable recommendation queries"`, 역할별 actor id, `negative_raw_top1`/`negative_effective`(seed·regression·hidden 각각), `reference_round2`(D 이후 관찰값: raw/effective, invalid_key 목록, enc sha), `regression_reference_sha256`, `catalog_attachment_sha256`(검토 attempts). 종료 분기는 D | F | X.
+Round 2 §11 상속. 추가: `hidden_set_origin: "round3"`, `hidden_generation_rules`(§4의 동결 순서 목록), `negative_actionable`/`negative_abstained` 결과, `round3_gate_result_sha256`, `evaluation_domain: "actionable recommendation queries"`, 역할별 actor id, `negative_raw_top1`/`negative_effective`(seed·regression·hidden 각각), `reference_round2`(D 이후 관찰값: raw/effective, invalid_key 목록, enc sha), `regression_reference_sha256`, `tuning_grid_sha256`, `catalog_attachment_sha256`(검토 attempts). 종료 분기는 D | F | X.
 
 ## 10. Acceptance Criteria (델타; 나머지는 v1.14 §12 상속)
 
 | ID | 분기 | 판정 | 검증 |
 |---|---|---|---|
-| AC-R3-01 | 공통 | H 시뮬레이션: seed ≥ 36/39, fixture positive 23/23 · fixture negative raw 6/6, regression negative raw ≥ 10/14 · effective 14/14, 두 수치 분리 기록 | `round3_simulation.py --phase H` ledger |
+| AC-R3-01 | 공통 | **pre-T 체크포인트**(T 직전 정확한 정책 상태): seed ≥ 36/39, fixture positive 23/23 · fixture negative raw 6/6, regression negative raw ≥ 10/14 · effective 14/14, 두 수치 분리 기록, 입력 sha ledger | `round3_simulation.py --phase pre-T` ledger(H 실행은 참고) |
 | AC-R3-02 | 공통 | 고정 참조(Round 2 S + B 정책 + Round 2 scorer)에서 Round 3 scorer(새 상수 0)의 전체 ranked key 순서·score 동일 | `round3-regression-reference.json` 비교 테스트, sha freeze |
 | AC-R3-03 | 공통 | `actionable`/`method_intent_consistent`는 점수·순서를 바꾸지 않음 | 테스트 |
 | AC-R3-04 | 공통 | 타깃 자격: 동사·hint 소속은 제외 사유 아님, 자원 필드 등장 필수; 후보 ⇔ R6 동치 | 테스트 |
 | AC-R3-05 | 공통 | 채택 alias: seed당 ≤ 2 원자 액션, 총 ≤ 15, 타깃 1 | validator + 로그 테스트 |
 | AC-R3-06 | T | freeze에 `reference_set`(origin round2, enc·held_out·negative sha), Round 3 생성 프롬프트 sha, `regression_reference_sha256` 기록; B·D·종료에서 archive 암호문 sha == freeze 값 | freeze + ledger |
-| AC-R3-07 | D | `round3_gate_result_sha256` ledger 기록 **후** Round 2 참조 세트 1회 복호화, `reference_round2` 블록에 raw/effective·invalid_key 기록, 게이트 재실행·재해석 없음 | ledger 순서 + round3-final |
-| AC-R3-08 | T 이후 | §5 역할 분리: generator/reviewer·worker·D 컨트롤러 actor id가 서로 다르고 각 제약을 만족(Round 2 평문 노출 세션 배제) | ledger |
+| AC-R3-07 | D | 게이트 체크포인트 이벤트 기록 **후** Round 2 참조 세트 1회 복호화, `reference_round2` 블록에 raw/effective·invalid_key 기록, 블록 계산 직후 평문 삭제(`plaintext_sha256`, `decrypt_at`, `deleted_at` ledger), 종료 커밋에 평문 부재, 게이트 재실행·재해석 없음 | ledger 순서 + round3-final + 스캔 |
+| AC-R3-08 | T 이후 | §5 역할 분리: `generator ≠ reviewer ≠ worker ≠ D 컨트롤러` actor id가 모두 서로 다르고 각 제약을 만족(Round 2 평문 노출 세션 배제) | ledger |
 | AC-R3-09 | 공통 | 대칭 판정식 적용; 봉인된 held_out 16건 전부 `actionable` 규칙(①②③) 통과, negative 정확히 4 actionable / 4 abstained; freeze의 `hidden_generation_rules`가 §4 목록과 동일; 게이트: held_out ≥15/16, negative_actionable 4/4 raw, negative_abstained 4/4 effective | evaluator·round_seal 테스트, 봉인 전 기계 검사 ledger |
 | AC-R3-10 | 성공/abort | `--verify` 재실행이 원자 액션 제안기 결과(패치·result_sha256)와 정확히 일치 | 로그 + 테스트 |
 | AC-R3-11 | 공통 | readiness·diag·round3-final에 `negative_raw_top1`과 `negative_effective` 동시 기록 | 렌더 테스트 |
 | AC-R3-12 | 공통 | `verb_methods` prefix 불변: 행 집합 동일, 각 Round 2 리스트가 Round 3 리스트의 exact prefix, suffix 추가는 사전순 | 테스트 |
+| AC-R3-13 | H | `policy.py`의 H diff가 §2의 두 종류(CONSTANT_KEYS 추가, origin 허용)에 한정; 격자 변경은 T 이전에만, `tuning_grid_sha256` freeze 기록 | diff 테스트 + freeze |
 | AC-18b(R3) | B..종료 | D 이전 디스크에 레코드 평문 없음(검토 입력 파일 포함); B 직후 스캔 ledger | ledger |
 
 ## 11. 위험과 완화
 
 - coverage 보너스가 "정답이 얕은 경로" 질의를 깨뜨릴 수 있음 → 기준값 0, 보수적 tie-break, fixture 하드 제약.
 - 동사 없는 held_out은 판정식상 실패 → `actionable` 규칙으로 사전 등록(evaluator와 같은 헬퍼). negative는 4/4 분포 고정으로 abstention이 게이트를 비우지 못하며, actionable negative 4건의 raw 통과가 raw 품질의 진짜 게이트다.
-- 격자 31,104점 × (seed 39 + neg 14 + fixture 29) → 계획 단계에서 실측; 10분 초과 시 `method_order_bonus` 격자를 `[0, 0.5]`로 축소.
+- 격자 31,104점 × (seed 39 + neg 14 + fixture 29) → H/pre-T에서 실측; 10분 초과 시 `method_order_bonus` 격자를 `[0, 0.5]`로 축소. 격자 축소 여부는 **T 이전에만** 결정하고 T 이후 격자 변경은 금지하며, 최종 격자의 canonical sha(`tuning_grid_sha256`)를 freeze에 기록한다.
 - 새 hidden 생성에는 ChatGPT 사용량이 필요(T 이후, 5시간 창 초기화 후).
 - s-027·s-028은 설계상 미해결일 수 있음(튜닝에 위임). Round 4 후보: 어휘 규칙 자동 제안.
 
