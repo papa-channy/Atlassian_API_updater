@@ -104,7 +104,8 @@ class TestSearchOperations(unittest.TestCase):
         from unittest import mock
         fixed = dataclasses.replace(policy.load_ranking(), constants=MappingProxyType(
             {"method_match_bonus": 2.0, "method_mismatch_penalty": 2.0, "path_unmatched_penalty": 1.0,
-             "path_unmatched_cap": 3, "product_hint_bonus": 3.0, "resource_match_bonus": 10.0}), sha256="fixed-for-test")
+             "path_unmatched_cap": 3, "product_hint_bonus": 3.0, "resource_match_bonus": 10.0,
+             "method_order_bonus": 0.0, "path_coverage_bonus": 0.0}), sha256="fixed-for-test")
         with mock.patch.object(policy, "ranking", return_value=fixed):
             self.assertIn("jira-platform:GET:/rest/api/3/issue/createmeta", self._keys(query="IssueCreateMetadata")[:4])
 
@@ -365,9 +366,10 @@ class TestScoringAlgorithm(unittest.TestCase):
         state = make_state("jira-platform")
         out = search.search_operations(state, "createIssue")
         pinned = out["results"][0]
-        self.assertEqual(pinned["signals"], {"method_intent": {"value": 0.0, "allowed": []}, "path_unmatched": {"value": 0.0, "tokens": []}, "product_hint": {"value": 0.0, "sources": []}, "resource_match": {"value": 0.0, "tokens": []}})
+        self.assertEqual(pinned["signals"], {"method_intent": {"value": 0.0, "allowed": []}, "path_unmatched": {"value": 0.0, "tokens": []}, "product_hint": {"value": 0.0, "sources": []}, "resource_match": {"value": 0.0, "tokens": []},
+                                             "method_order": {"value": 0.0, "verb": None, "preferred": None}, "path_coverage": {"value": 0.0, "matched": []}})
         other = out["results"][1]
-        self.assertEqual(set(other["signals"]), {"method_intent", "path_unmatched", "product_hint", "resource_match"})
+        self.assertEqual(set(other["signals"]), {"method_intent", "path_unmatched", "product_hint", "resource_match", "method_order", "path_coverage"})
         self.assertLessEqual({"ranking_sha256", "ranking_structure_sha256"}, set(out["intelligence_policy"]))
 
 
@@ -416,12 +418,91 @@ class TestScoringNumbers(unittest.TestCase):
         self.assertEqual(out["total_matches"], 3)
         b = out["results"][2]["signals"]
         self.assertEqual(b, {"method_intent": {"value": 2.0, "allowed": ["GET"]}, "path_unmatched": {"value": -1.0, "tokens": ["history"]}, "product_hint": {"value": 0.0, "sources": []},
-                             "resource_match": {"value": 0.0, "tokens": ["history"]}})
+                             "resource_match": {"value": 0.0, "tokens": ["history"]},
+                             "method_order": {"value": 0.0, "verb": "list", "preferred": "GET"}, "path_coverage": {"value": 0.0, "matched": ["widget"]}})
 
     def test_negative_subtotal_is_clamped_and_excluded(self):
         out = search.search_operations(self.state, "zzz")
         # nothingHere: description 1*1 = 1, all-match +2 = 3; no verb -> 0; 5 unmatched origins capped 3 * 1.0 = -3 -> clamp 0 -> excluded (terminal "epsilon" unmatched)
         self.assertEqual(out["results"], []); self.assertEqual(out["total_matches"], 0); self.assertNotIn("error", out)
+
+
+class TestRound3Signals(unittest.TestCase):
+    """spec §3.1-§3.3: method_order_bonus (first verb's preferred method, only inside the intersection), path_coverage_bonus
+    (unique matched literal path origins), abstention payload."""
+    def setUp(self):
+        import tempfile, os
+        raw = json.loads((policy.DATA_DIR / "search_ranking.json").read_text(encoding="utf-8"))
+        raw["constants"].update({"method_order_bonus": 1.0, "path_coverage_bonus": 1.0})
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as fh:
+            json.dump(raw, fh)
+        try:
+            self.rp = policy.load_ranking(pathlib.Path(fh.name))
+        finally:
+            os.unlink(fh.name)
+
+    def _entry(self, path, method="GET", source="jira-platform"):
+        return search.IndexEntry(f"{source}:{method}:{path}", {f: frozenset() for f in search.FIELD_WEIGHTS},
+                                 search.path_tokens_for(path, self.rp.path_noise), source, method, search.terminal_tokens_for(path))
+
+    def _sig(self, entry, q):
+        return search._structural_signals(entry, q, frozenset(q), self.rp)[1]
+
+    def test_method_intent_helper(self):
+        vm = self.rp.verb_methods
+        self.assertEqual(search.method_intent(("issue", "status"), vm), ([], None))
+        self.assertEqual(search.method_intent(("get", "issue"), vm), (["get"], frozenset({"GET"})))
+        self.assertEqual(search.method_intent(("change", "add", "x"), vm), (["change", "add"], frozenset({"POST"})))
+        self.assertEqual(search.method_intent(("get", "delete", "x"), vm), (["get", "delete"], frozenset()))
+        self.assertEqual(search.method_intent(("get",), {"get": ["GET"]}), (["get"], frozenset({"GET"})))     # raw lists work too
+
+    def test_method_order_first_verb_preferred_only(self):
+        post = self._entry("/x", method="POST"); put = self._entry("/x", method="PUT")
+        self.assertEqual(self._sig(post, ("add", "x"))["method_order"], {"value": 1.0, "verb": "add", "preferred": "POST"})
+        self.assertEqual(self._sig(put, ("add", "x"))["method_order"]["value"], 0.0)                     # entry.method != preferred
+        self.assertEqual(self._sig(put, ("change", "x"))["method_order"], {"value": 1.0, "verb": "change", "preferred": "PUT"})
+        self.assertEqual(self._sig(post, ("change", "x"))["method_order"]["value"], 0.0)                  # POST allowed but not preferred
+        self.assertEqual(self._sig(post, ("x",))["method_order"], {"value": 0.0, "verb": None, "preferred": None})
+
+    def test_method_order_first_verb_preferred_outside_intersection_is_zero(self):                        # review focus 2
+        post = self._entry("/x", method="POST")
+        sig = self._sig(post, ("change", "add", "x"))                        # change -> (PUT, POST), add -> (POST): intersection {POST}
+        self.assertEqual(sig["method_intent"]["value"], self.rp.constants["method_match_bonus"])            # intent matches POST
+        self.assertEqual(sig["method_order"], {"value": 0.0, "verb": "change", "preferred": "PUT"})      # preferred PUT is outside
+        self.assertEqual(self._sig(post, ("add", "change", "x"))["method_order"]["value"], 1.0)           # order matters
+        self.assertEqual(self._sig(post, ("get", "delete", "x"))["method_order"]["value"], 0.0)           # empty intersection
+
+    def test_path_coverage_counts_unique_matched_origins(self):
+        e = self._entry("/rest/api/3/issue/{k}/properties")
+        self.assertEqual(self._sig(e, ("get", "issue", "property"))["path_coverage"], {"value": 2.0, "matched": ["issue", "properties"]})
+        self.assertEqual(self._sig(e, ("get", "issue"))["path_coverage"], {"value": 1.0, "matched": ["issue"]})
+        self.assertEqual(self._sig(e, ("get", "rest", "api"))["path_coverage"], {"value": 0.0, "matched": []})   # noise never counts
+        dup = self._entry("/issue/{id}/issue")
+        self.assertEqual(self._sig(dup, ("issue",))["path_coverage"]["value"], 1.0)                              # origin once
+        total, _ = search._structural_signals(e, ("get", "issue", "property"), frozenset({"get", "issue", "property"}), self.rp)
+        c = self.rp.constants                                    # "property" also matches terminal "properties" by form (plural/singular, spec §6.5b)
+        self.assertEqual(total, c["method_match_bonus"] + c["resource_match_bonus"] + c["method_order_bonus"] + 2.0)  # mi + rm + mo + coverage, nothing unmatched
+
+    def test_abstention_payload_four_quadrants(self):
+        state = make_state("jira-platform", "jira-software", "confluence")
+        out = search.search_operations(state, "get issue by key")
+        self.assertEqual((out["method_intent_consistent"], out["intent_methods"], out["actionable"]), (True, ["GET"], True))
+        self.assertEqual(out["recommended_operation"], out["results"][0]["key"])
+        out = search.search_operations(state, "issue status field values")                                  # no verb
+        self.assertEqual((out["method_intent_consistent"], out["intent_methods"], out["actionable"]), (False, [], False))
+        self.assertIsNone(out["recommended_operation"]); self.assertTrue(out["results"])                      # candidates only
+        out = search.search_operations(state, "create and delete issue")                                    # conflicting verbs
+        self.assertEqual((out["intent_methods"], out["actionable"], out["recommended_operation"]), ([], False, None))
+        out = search.search_operations(state, "delete zzzqqq", method="POST")                               # actionable, no candidates
+        self.assertEqual((out["actionable"], out["results"], out["recommended_operation"]), (True, [], None))
+
+    def test_actionable_does_not_change_scores_or_order(self):                                             # AC-R3-03
+        state = make_state("jira-platform", "jira-software", "confluence")
+        for q in ("issue status field values", "get issue by key", "create and delete issue"):
+            out = search.search_operations(state, q)
+            rows = [(r["key"], r["score"], r["deprecated"]) for r in out["results"]]
+            self.assertEqual(rows, sorted(rows, key=lambda t: (-t[1], t[2], t[0])), q)
+            self.assertEqual(out["recommended_operation"], out["results"][0]["key"] if out["actionable"] and out["results"] else None)
 
 
 class TestRound2SpecParity(unittest.TestCase):

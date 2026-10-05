@@ -186,6 +186,9 @@ Phase 3 판정 기록: [docs/phase3-readiness.md](docs/phase3-readiness.md)
 - 질의 토큰은 `intelligence/data/search_aliases.json`의 alias(질의→스펙 방향)로 확장된다. 응답에서
   `query_tokens`(원 토큰), `alias_tokens`(alias로 추가된 토큰), `expanded_tokens`(합계)가 분리되어 나온다.
   alias 토큰은 감쇠 가중치를 받고, 전 토큰 일치 보너스는 원 토큰에만 적용된다.
+- 응답은 **abstention 계약**(Round 3)을 담는다: `intent_methods`(질의 동사들의 허용 HTTP 메서드 교집합), `method_intent_consistent`,
+  `actionable`(동사 의도가 명확할 때만 `true`), `recommended_operation`(`actionable`이고 결과가 있으면 `results[0].key`, 아니면 `null`).
+  `actionable: false`이면 `results`는 후보 목록이며 소비자는 `results[0]`을 추천으로 해석해서는 안 된다. 점수·순서는 영향받지 않는다.
 - 응답에 `intelligence_fingerprint`(registry + alias·override 데이터 + 정책 버전의 해시)와 `intelligence_policy`(alias·override sha256과 `POLICY_VERSIONS`)가 포함된다.
 
 **검색 질의 로그 (opt-in, 로컬 전용)**

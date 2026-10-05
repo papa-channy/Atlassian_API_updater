@@ -35,7 +35,10 @@ def create_server(manager) -> MCPServer:
     @mcp.tool(name="search_operations", description="Weighted English ASCII lexical search over official Jira/Confluence OpenAPI operations "
               "(operationId, summary, tags, path, schema names, description). An exact canonical key or operationId (case-insensitive fallback) "
               "pins that operation to the top (`exact_match`); curated aliases expand the query (`alias_tokens`). "
-              "Filters: source, method, tag, include_deprecated, limit (<=50). " + PROVENANCE_NOTE)
+              "Filters: source, method, tag, include_deprecated, limit (<=50). "
+              "Round 3 abstention contract: the response carries method_intent_consistent, intent_methods, actionable and "
+              "recommended_operation; when actionable is false the results are candidates only - do not treat results[0] as "
+              "a recommendation. " + PROVENANCE_NOTE)
     async def search_operations(query: str, source: Optional[str] = None, method: Optional[str] = None, tag: Optional[str] = None,
                                 include_deprecated: bool = True, limit: int = 10) -> CallToolResult:
         return await _run("search_operations", {"query": query, "source": source, "method": method, "tag": tag,

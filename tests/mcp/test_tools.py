@@ -72,6 +72,12 @@ class TestRunTool(unittest.TestCase):
             tools.run_tool(self.m, "get_schema", {"source": "jira-platform", "name": "MultipartFile"})
             self.assertEqual(ef.call_count, 2)
 
+    def test_search_response_carries_abstention_contract(self):
+        out = tools.run_tool(self.m, "search_operations", {"query": "upload attachment to issue"})
+        self.assertTrue(out["actionable"]); self.assertEqual(out["recommended_operation"], out["results"][0]["key"])
+        out = tools.run_tool(self.m, "search_operations", {"query": "issue status field values"})
+        self.assertFalse(out["actionable"]); self.assertIsNone(out["recommended_operation"]); self.assertEqual(out["intent_methods"], [])
+
     def test_body_absent_vs_null(self):
         absent = tools.run_tool(self.m, "check_request", {"key": ATT, "path_params": {"issueIdOrKey": "A"}, "content_type": "multipart/form-data"})
         self.assertTrue(any(e["rule"] == "body_required" for e in absent["errors"]))

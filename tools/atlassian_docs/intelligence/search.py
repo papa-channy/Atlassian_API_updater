@@ -211,14 +211,22 @@ def _score(entry, lexical_base: frozenset, direct: frozenset, cond: frozenset, b
     return lexical, matched_base
 
 
-def _structural_signals(entry, query_unigrams: tuple, exp_all: frozenset, rp):
-    """method intent + path specificity + product hint + terminal resource match (spec §6.3-§6.5b);
-    every number comes from rp."""
-    c = rp.constants
-    verbs = [t for t in query_unigrams if t in rp.verb_methods]
+def method_intent(query_unigrams, verb_methods):
+    """spec §3.3 (shared with the hidden-set machine check): inventory verbs in query order and the intersection of their
+    allowed methods — None when the query has no inventory verb, possibly empty (conflicting verbs)."""
+    verbs = [t for t in query_unigrams if t in verb_methods]
     allowed = None
     for v in verbs:
-        allowed = rp.verb_methods[v] if allowed is None else (allowed & rp.verb_methods[v])
+        methods = frozenset(verb_methods[v])
+        allowed = methods if allowed is None else (allowed & methods)
+    return verbs, allowed
+
+
+def _structural_signals(entry, query_unigrams: tuple, exp_all: frozenset, rp, intent=None):
+    """method intent + path specificity + product hint + terminal resource match (spec §6.3-§6.5b) + Round 3 method order and
+    path coverage (Round 3 spec §3.1/§3.2); every number comes from rp. intent = method_intent(...) computed once per query."""
+    c = rp.constants
+    verbs, allowed = intent if intent is not None else method_intent(query_unigrams, rp.verb_methods)
     if not allowed:
         mi = {"value": 0.0, "allowed": []}
     elif entry.method in allowed:
@@ -234,8 +242,13 @@ def _structural_signals(entry, query_unigrams: tuple, exp_all: frozenset, rp):
     term = entry.terminal_tokens
     matched = bool(term) and all(token_forms(t) & exp_all for t in term)
     rm = {"value": c["resource_match_bonus"] if matched else 0.0, "tokens": list(term)}
-    return mi["value"] + pu["value"] + ph["value"] + rm["value"], \
-        {"method_intent": mi, "path_unmatched": pu, "product_hint": ph, "resource_match": rm}
+    preferred = rp.verb_method_order[verbs[0]][0] if verbs else None                        # Round 2 prefix invariant: == Round 2's first
+    order_hit = bool(allowed) and preferred in allowed and entry.method == preferred
+    mo = {"value": c["method_order_bonus"] if order_hit else 0.0, "verb": verbs[0] if verbs else None, "preferred": preferred}
+    covered = sorted({pt.origin for pt in entry.path_tokens if pt.forms & exp_all})
+    pc = {"value": c["path_coverage_bonus"] * len(covered), "matched": covered}
+    return mi["value"] + pu["value"] + ph["value"] + rm["value"] + mo["value"] + pc["value"], \
+        {"method_intent": mi, "path_unmatched": pu, "product_hint": ph, "resource_match": rm, "method_order": mo, "path_coverage": pc}
 
 
 def _passes(op, method, tag, include_deprecated) -> bool:
@@ -271,7 +284,9 @@ def _zero_signals() -> dict:
     return {"method_intent": {"value": 0.0, "allowed": []},
             "path_unmatched": {"value": 0.0, "tokens": []},
             "product_hint": {"value": 0.0, "sources": []},
-            "resource_match": {"value": 0.0, "tokens": []}}
+            "resource_match": {"value": 0.0, "tokens": []},
+            "method_order": {"value": 0.0, "verb": None, "preferred": None},
+            "path_coverage": {"value": 0.0, "matched": []}}
 
 
 def _item(op, s, signals, match=None) -> dict:
@@ -292,6 +307,7 @@ def search_operations(state, query: str, *, source=None, method=None, tag=None,
         return provenance.error_response("invalid_argument", f"unknown source {source!r}")
     pol, rp = policy.aliases(), policy.ranking()
     unigrams = tokenize_unigrams(query)
+    intent = method_intent(unigrams, rp.verb_methods)
     exp = expand_query(query, pol)                       # exp.base: unigram forms only (spec §6.1)
     lexical_base = exp.base | joined_query_forms(query)  # Phase 2.5 exact-name matching kept (spec §6.6)
     scope = [source] if source else sorted(sources.SOURCES)
@@ -311,7 +327,7 @@ def search_operations(state, query: str, *, source=None, method=None, tag=None,
             lexical, _ = _score(entry, lexical_base, exp.direct, exp.cond, unigrams, pol)
             if lexical <= 0:
                 continue
-            structural, signals = _structural_signals(entry, unigrams, exp.all, rp)
+            structural, signals = _structural_signals(entry, unigrams, exp.all, rp, intent)
             final = max(lexical + structural, 0.0) * (DEPRECATED_FACTOR if op.deprecated else 1.0)
             if final == 0.0:
                 continue
@@ -324,6 +340,12 @@ def search_operations(state, query: str, *, source=None, method=None, tag=None,
     payload = {"query": query, "results": results[:limit], "total_matches": len(pinned) + len(non_pinned),
                "exact_match": bool(pinned), "query_tokens": sorted(exp.base),
                "alias_tokens": sorted(exp.direct | exp.cond), "expanded_tokens": sorted(exp.all)}
+    verbs, allowed = intent
+    shown = payload["results"]
+    payload["method_intent_consistent"] = bool(allowed)
+    payload["intent_methods"] = sorted(allowed) if allowed else []
+    payload["actionable"] = payload["method_intent_consistent"]              # spec §3.3: the product abstains without a clear intent
+    payload["recommended_operation"] = shown[0]["key"] if payload["actionable"] and shown else None
     ov = policy.overrides()
     payload["intelligence_fingerprint"] = policy.intelligence_fingerprint(
         state.registry.fingerprint, pol.sha256, ov.sha256)
