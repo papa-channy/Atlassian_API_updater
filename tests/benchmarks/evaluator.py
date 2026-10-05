@@ -158,3 +158,64 @@ def round_freeze_hashes(round: int, root=ROOT) -> dict:
             "hidden_reviewer_prompt_sha256": file_sha256(root / f"tests/benchmarks/round{round}-hidden-reviewer-prompt.md"),
             "tooling_code_sha256": tooling_code_sha256(root),
             "evaluation_code_sha256_at_T": evaluation_code_sha256(root)}
+
+
+PRE_FREEZE_NONVERB_STRUCTURE_SHA256 = {3: "02b27c8845a292d4b5ffac048fad52a3136909814e4cdb4165820fb31958b7ff"}
+NONVERB_STRUCTURE_KEYS = tuple(k for k in STRUCTURE_KEYS if k != "verb_methods")
+ROUND2_SPEC = ROOT / "docs" / "superpowers" / "specs" / "2026-10-02-search-quality-round2-design.md"
+
+
+def tuning_grid_sha256(raw: dict) -> str:
+    """spec AC-R3-13b: sha256(canonical_json(search_ranking.json["tuning_grid"])); freeze, tests and readiness share it."""
+    return canonical_sha256(raw["tuning_grid"])
+
+
+def nonverb_structure_sha256(raw: dict) -> str:
+    return canonical_sha256({k: raw[k] for k in NONVERB_STRUCTURE_KEYS})
+
+
+def pending_round(freeze=None):
+    """The round whose H structure/tooling is committed but whose freeze entry (commit T) does not exist yet, or None.
+    While a round is pending, the previous round's freeze entry is history: its file hashes are no longer compared with the
+    live tree (the tooling and the ranking structure legitimately changed at H)."""
+    cur = current_round(freeze)["round"]
+    return next((r for r in sorted(PRE_FREEZE_NONVERB_STRUCTURE_SHA256) if r > cur), None)
+
+
+def round2_verb_inventory() -> dict:
+    """The frozen Round 2 inventory: the JSON block under '## 6.' of the Round 2 spec (verb_inventory_sha256 d66317db…)."""
+    lines = ROUND2_SPEC.read_text(encoding="utf-8").split("\n")
+    start = next(i for i, l in enumerate(lines) if l.startswith("## 6."))
+    fence = next(i for i in range(start, len(lines)) if lines[i].startswith("```json"))
+    end = next(i for i in range(fence + 1, len(lines)) if lines[i].startswith("```"))
+    return json.loads("{" + "\n".join(lines[fence + 1:end]) + "}")["verb_methods"]
+
+
+def verb_prefix_violations(base: dict, live: dict) -> list:
+    """AC-R3-12: same row set; each base list is an exact prefix of the live list; the appended suffix is sorted, no duplicates."""
+    out = [f"verb {v!r} removed" for v in base if v not in live] + [f"verb {v!r} added" for v in live if v not in base]
+    for v, methods in base.items():
+        cur = list(live.get(v) or [])
+        if not cur:
+            continue
+        if cur[:len(methods)] != list(methods):
+            out.append(f"verb {v!r}: Round 2 list {list(methods)} is not an exact prefix of {cur}")
+            continue
+        suffix = cur[len(methods):]
+        if suffix != sorted(suffix):
+            out.append(f"verb {v!r}: suffix {suffix} is not sorted")
+        if len(set(cur)) != len(cur):
+            out.append(f"verb {v!r}: duplicate methods in {cur}")
+    return out
+
+
+def structure_check_problems(raw: dict, freeze=None) -> list:
+    """spec §8 (v1.14). Pending round N (H committed, no T yet): the non-verb structure must equal PRE_FREEZE_NONVERB_STRUCTURE_SHA256[N]
+    and verb_methods must satisfy the Round 2 prefix invariant (T may append sorted suffixes). Otherwise the full structure hash
+    must equal the current round's freeze."""
+    p = pending_round(freeze)
+    if p is None:
+        want, got = current_round(freeze)["structure_sha256"], canonical_sha256({k: raw[k] for k in STRUCTURE_KEYS})
+        return [] if got == want else [f"structure_sha256 {got} != current freeze {want}"]
+    out = [] if nonverb_structure_sha256(raw) == PRE_FREEZE_NONVERB_STRUCTURE_SHA256[p] else ["non-verb ranking structure differs from the H1 constant"]
+    return out + verb_prefix_violations(round2_verb_inventory(), raw["verb_methods"])

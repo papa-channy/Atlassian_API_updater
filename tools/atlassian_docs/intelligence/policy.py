@@ -11,7 +11,7 @@ from typing import Mapping, Optional
 from . import search
 from .headers import CREDENTIAL_HEADERS
 
-POLICY_VERSIONS = {"search": 3, "quirks": 1, "oas_transpiler": 1}
+POLICY_VERSIONS = {"search": 4, "quirks": 1, "oas_transpiler": 1}
 DATA_DIR = pathlib.Path(__file__).resolve().parent / "data"
 _KEY = re.compile(r"^[a-z][a-z0-9-]*:[A-Z]+:/")
 _ACTIONS, _ENFORCEMENT, _VALUE_POLICY = ("set", "suppress"), ("advisory", "required"), ("observed", "literal")
@@ -143,7 +143,7 @@ class QuirkOverrides:
 _METHODS = frozenset({"GET", "POST", "PUT", "PATCH", "DELETE"})
 STRUCTURE_KEYS = ("verb_methods", "path_noise", "product_hints", "tuning_grid", "baseline")
 CONSTANT_KEYS = ("method_match_bonus", "method_mismatch_penalty", "path_unmatched_penalty", "path_unmatched_cap", "product_hint_bonus",
-                 "resource_match_bonus")
+                 "resource_match_bonus", "method_order_bonus", "path_coverage_bonus")
 _WORD = re.compile(r"[a-z]+"); _NOISE = re.compile(r"[a-z0-9]+")   # always fullmatch ("get\n" must not pass)
 
 
@@ -161,6 +161,7 @@ class RankingPolicy:
     tuning_grid: Mapping[str, tuple]
     baseline: Mapping[str, float]
     constants: Mapping[str, float]
+    verb_method_order: Mapping[str, tuple]
     sha256: str
     structure_sha256: str
 
@@ -236,10 +237,12 @@ def load_ranking(path: Optional[pathlib.Path] = None) -> RankingPolicy:
     if not isinstance(raw["version"], int) or isinstance(raw["version"], bool) or raw["version"] < 1:
         raise ValueError("version must be an int >= 1")
     verbs = {}
+    order = {}
     for k, v in (raw["verb_methods"] or {}).items() if isinstance(raw["verb_methods"], dict) else [(None, None)]:
         if k is None or not _WORD.fullmatch(k) or not _str_list(v) or not set(v) <= _METHODS:
             raise ValueError(f"invalid verb_methods entry {k!r}")
         verbs[k] = frozenset(v)
+        order[k] = tuple(v)
     noise = raw["path_noise"]
     if not isinstance(noise, list) or not all(isinstance(t, str) and _NOISE.fullmatch(t) for t in noise) or len(set(noise)) != len(noise):
         raise ValueError("invalid path_noise")
@@ -267,6 +270,7 @@ def load_ranking(path: Optional[pathlib.Path] = None) -> RankingPolicy:
             dst[k] = c
     return RankingPolicy(raw["version"], MappingProxyType(verbs), frozenset(noise), MappingProxyType(hints),
                          MappingProxyType(out_grid), MappingProxyType(out_base), MappingProxyType(out_consts),
+                         MappingProxyType(order),
                          canonical_sha256(raw), canonical_sha256({k: raw[k] for k in STRUCTURE_KEYS}))
 
 

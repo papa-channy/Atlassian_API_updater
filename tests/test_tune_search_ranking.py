@@ -6,8 +6,10 @@ from tools.atlassian_docs.intelligence import policy
 
 GRID = {"method_match_bonus": [1.0, 2.0, 3.0], "method_mismatch_penalty": [0.0, 1.0, 2.0, 3.0], "path_unmatched_penalty": [0.5, 1.0, 1.5, 2.0],
         "path_unmatched_cap": [2, 3, 4], "product_hint_bonus": [2.0, 3.0, 4.0],
-        "resource_match_bonus": [6.0, 8.0, 10.0, 12.0]}
-BASE = {"method_match_bonus": 2.0, "method_mismatch_penalty": 2.0, "path_unmatched_penalty": 1.0, "path_unmatched_cap": 3, "product_hint_bonus": 3.0, "resource_match_bonus": 10.0}
+        "resource_match_bonus": [6.0, 8.0, 10.0, 12.0],
+        "method_order_bonus": [0.0, 0.5, 1.0], "path_coverage_bonus": [0.0, 0.5, 1.0]}
+BASE = {"method_match_bonus": 2.0, "method_mismatch_penalty": 2.0, "path_unmatched_penalty": 1.0, "path_unmatched_cap": 3, "product_hint_bonus": 3.0, "resource_match_bonus": 10.0,
+        "method_order_bonus": 0.0, "path_coverage_bonus": 0.0}
 S, R = tune.SEED_TOTAL, tune.REGRESSION_TOTAL   # totals of the bundled bench
 
 
@@ -26,8 +28,8 @@ class TestSelector(unittest.TestCase):
 
     def test_grid_cardinality_and_order(self):
         pts = tune.grid_points(GRID)
-        self.assertEqual(len(pts), 1728); self.assertEqual(pts, sorted(pts, key=lambda p: tuple(p[k] for k in tune.CONSTANT_KEYS)))
-        self.assertEqual(len(tune.grid_points(policy.load_ranking().tuning_grid)), 1728)   # the loaded (frozen) grid
+        self.assertEqual(len(pts), 15552); self.assertEqual(pts, sorted(pts, key=lambda p: tuple(p[k] for k in tune.CONSTANT_KEYS)))
+        self.assertEqual(len(tune.grid_points(policy.load_ranking().tuning_grid)), 23328)   # the loaded (frozen) grid
 
     def test_l1_index_distance(self):
         self.assertEqual(tune.l1_index_distance(BASE, BASE, GRID), 0)

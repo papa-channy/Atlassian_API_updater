@@ -177,11 +177,40 @@ class TestRankingPolicy(unittest.TestCase):
         rp = policy.load_ranking()
         self.assertEqual(rp.verb_methods["move"], frozenset({"PUT", "POST"})); self.assertIn("rest", rp.path_noise)
         self.assertEqual(rp.product_hints["jira"], frozenset({"jira-platform", "jira-software"}))
-        self.assertEqual(len(policy.CONSTANT_KEYS), 6); self.assertEqual(policy.CONSTANT_KEYS[-1], "resource_match_bonus")
         self.assertEqual(set(rp.constants), set(policy.CONSTANT_KEYS)); self.assertEqual(set(rp.baseline), set(policy.CONSTANT_KEYS)); self.assertEqual(len(rp.sha256), 64)
         from tests.benchmarks import evaluator as ev
-        self.assertEqual(rp.structure_sha256, ev.current_round()["structure_sha256"])
+        self.assertEqual(policy.CONSTANT_KEYS, ("method_match_bonus", "method_mismatch_penalty", "path_unmatched_penalty", "path_unmatched_cap",
+                                                "product_hint_bonus", "resource_match_bonus", "method_order_bonus", "path_coverage_bonus"))
+        self.assertEqual(ev.structure_check_problems(self._raw()), [])                                  # Round 3: H1 non-verb structure + verb prefix until T refreezes
+        self.assertEqual(rp.verb_method_order["change"], ("PUT", "POST")); self.assertEqual(rp.verb_method_order["leave"], ("POST", "DELETE"))
+        self.assertEqual(set(rp.verb_method_order), set(rp.verb_methods))
+        for v, order in rp.verb_method_order.items():
+            self.assertEqual(frozenset(order), rp.verb_methods[v], v)
+        self.assertEqual(rp.constants["method_order_bonus"], 0.0); self.assertEqual(rp.baseline["path_coverage_bonus"], 0.0)
+        self.assertEqual(rp.tuning_grid["method_mismatch_penalty"], (0.0, 1.0, 2.0, 3.0, 4.0, 5.0))
+        self.assertEqual(rp.tuning_grid["method_order_bonus"], (0.0, 0.5, 1.0)); self.assertEqual(rp.tuning_grid["path_coverage_bonus"], (0.0, 0.5, 1.0))
+        self.assertEqual(rp.version, 2)
         self.assertIs(policy.ranking(), policy.ranking())
+
+    def test_verb_method_order_preserves_file_order_and_is_immutable(self):
+        raw = self._raw()
+        raw["verb_methods"]["zzverb"] = ["DELETE", "GET", "POST"]
+        rp = self._from(raw)
+        self.assertEqual(rp.verb_method_order["zzverb"], ("DELETE", "GET", "POST"))
+        with self.assertRaises(TypeError):
+            rp.verb_method_order["zzverb"] = ()
+
+    def test_round3_policy_diff_is_limited_to_declared_kinds(self):
+        """AC-R3-13a: policy.py at HEAD differs from e16c073 only in POLICY_VERSIONS, CONSTANT_KEYS, the verb_method_order
+        field and its construction (the origin regex was already general)."""
+        import subprocess, pathlib
+        root = pathlib.Path(__file__).resolve().parents[2]
+        diff = subprocess.run(["git", "diff", "e16c073", "--", "tools/atlassian_docs/intelligence/policy.py"], cwd=root, capture_output=True, text=True).stdout
+        changed = [l[1:] for l in diff.splitlines() if l[:1] in "+-" and not l.startswith(("+++", "---"))]
+        allowed = ("POLICY_VERSIONS", "CONSTANT_KEYS", "verb_method_order", "resource_match_bonus", "order = {}", "order[k]", "MappingProxyType(order)",
+                   "method_order_bonus", "path_coverage_bonus")
+        for l in changed:
+            self.assertTrue(any(tok in l for tok in allowed) or not l.strip(), f"undeclared policy.py change: {l!r}")
 
     def test_constants_change_only_full_hash(self):
         raw = self._raw(); a = policy.load_ranking()
@@ -252,7 +281,7 @@ class TestRankingPolicy(unittest.TestCase):
 
 class TestFingerprintIncludesRanking(unittest.TestCase):
     def test_versions_and_block(self):
-        self.assertEqual(policy.POLICY_VERSIONS["search"], 3)
+        self.assertEqual(policy.POLICY_VERSIONS["search"], 4)
         blk = policy.policy_block("A", "B")
         self.assertEqual(blk["ranking_sha256"], policy.ranking().sha256)
         self.assertEqual(blk["ranking_structure_sha256"], policy.ranking().structure_sha256)

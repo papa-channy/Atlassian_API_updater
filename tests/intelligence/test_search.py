@@ -266,7 +266,7 @@ class TestSeedBenchmark(unittest.TestCase):
         out = search.search_operations(state, "fetch issue")
         self.assertIn("get", out["alias_tokens"]); self.assertIn("fetch", out["query_tokens"])
         self.assertEqual(set(out["expanded_tokens"]), set(out["query_tokens"]) | set(out["alias_tokens"]))
-        self.assertEqual(len(out["intelligence_fingerprint"]), 64); self.assertEqual(out["intelligence_policy"]["versions"]["search"], 3)
+        self.assertEqual(len(out["intelligence_fingerprint"]), 64); self.assertEqual(out["intelligence_policy"]["versions"]["search"], 4)
 
     def test_alias_damped_and_bonus_on_base_only(self):
         state = make_state("jira-platform")
@@ -391,7 +391,8 @@ class TestScoringNumbers(unittest.TestCase):
         from tests.intelligence.helpers import state_from_source_registries
         from tools.atlassian_docs.intelligence import normalizer, registry
         raw = json.loads((policy.DATA_DIR / "search_ranking.json").read_text(encoding="utf-8"))
-        raw["constants"] = {"method_match_bonus": 2.0, "method_mismatch_penalty": 2.0, "path_unmatched_penalty": 1.0, "path_unmatched_cap": 3, "product_hint_bonus": 3.0, "resource_match_bonus": 10.0}
+        raw["constants"] = {"method_match_bonus": 2.0, "method_mismatch_penalty": 2.0, "path_unmatched_penalty": 1.0, "path_unmatched_cap": 3, "product_hint_bonus": 3.0, "resource_match_bonus": 10.0,
+                            "method_order_bonus": 0.0, "path_coverage_bonus": 0.0}
         with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as fh:
             json.dump(raw, fh)
         try:

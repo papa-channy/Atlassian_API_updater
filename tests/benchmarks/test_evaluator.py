@@ -111,7 +111,6 @@ RANKING = pathlib.Path(__file__).resolve().parents[2] / "tools" / "atlassian_doc
 # The ranking-table structure hash frozen at the current round's commit T lives in a data file, so a new round
 # re-freezes by editing round_freeze.json rather than test code (which is part of evaluation_code_sha256).
 ROUND_FREEZE = pathlib.Path(__file__).resolve().parent / "round_freeze.json"
-RANKING_STRUCTURE_SHA256 = ev.current_round()["structure_sha256"]
 STRUCTURE_KEYS = ev.STRUCTURE_KEYS
 ROUND2_HASH_KEYS = {"structure_sha256", "verb_inventory_sha256", "concept_lexicon_sha256", "lexicon_aliases_sha256",
                     "alias_candidates_sha256", "worker_brief_sha256", "hidden_generation_prompt_sha256",
@@ -123,9 +122,28 @@ def ranking_structure_sha256(raw: dict) -> str:
 
 
 class TestRankingTablesFrozen(unittest.TestCase):
-    def test_structure_hash_matches_commit_t(self):
+    def test_structure_hash_matches_commit_t_or_pre_freeze_window(self):
+        """Round 3 (spec §8 v1.14): between H1 and T the NON-VERB structure equals the H1 constant and verb_methods satisfies the
+        Round 2 prefix invariant (suffixes may be added before T); from T the full structure equals the Round 3 freeze."""
         raw = json.loads(RANKING.read_text(encoding="utf-8"))
-        self.assertEqual(ranking_structure_sha256(raw), RANKING_STRUCTURE_SHA256)
+        self.assertEqual(ev.structure_check_problems(raw), [])
+        if ev.current_round()["round"] >= 3:
+            self.assertIsNone(ev.pending_round()); self.assertEqual(ranking_structure_sha256(raw), ev.freeze_for(3)["structure_sha256"])
+        else:
+            self.assertEqual(ev.pending_round(), 3); self.assertEqual(raw["version"], 2)
+            self.assertEqual(ev.nonverb_structure_sha256(raw), ev.PRE_FREEZE_NONVERB_STRUCTURE_SHA256[3])
+            suffixed = json.loads(json.dumps(raw)); suffixed["verb_methods"]["get"] = ["GET", "POST"]            # a T-style suffix is allowed before T
+            self.assertEqual(ev.structure_check_problems(suffixed), [])
+            reordered = json.loads(json.dumps(raw)); reordered["verb_methods"]["change"] = ["POST", "PUT"]
+            self.assertTrue(ev.structure_check_problems(reordered))
+            moved = json.loads(json.dumps(raw)); moved["path_noise"] = moved["path_noise"] + ["zz"]
+            self.assertTrue(ev.structure_check_problems(moved))
+
+    def test_tuning_grid_sha256_helper(self):
+        raw = json.loads(RANKING.read_text(encoding="utf-8"))
+        self.assertEqual(ev.tuning_grid_sha256(raw), ev.canonical_sha256(raw["tuning_grid"]))
+        other = json.loads(json.dumps(raw)); other["constants"]["method_match_bonus"] = 1.0
+        self.assertEqual(ev.tuning_grid_sha256(other), ev.tuning_grid_sha256(raw))        # constants do not change the grid hash
 
     def test_round_freeze_file_shape(self):
         f = ev.load_round_freeze()
@@ -138,10 +156,12 @@ class TestRankingTablesFrozen(unittest.TestCase):
             self.assertEqual(set(e["source_spec_sha256"]), {"jira-platform", "jira-software", "confluence"})
         self.assertEqual(ev.current_round(), f[-1]); self.assertEqual(ev.freeze_for(1), f[0])
 
-    def test_round2_freeze_hashes_match_files(self):
+    def test_current_round_freeze_hashes_match_files(self):
         e = ev.current_round()
         if e["round"] < 2:
             print("round 2 not frozen yet: hash equality checked after commit T"); return
+        if ev.pending_round() is not None:
+            print(f"round {ev.pending_round()} structure/tooling committed at H; freeze hashes checked after its commit T"); return
         got = ev.round_freeze_hashes(e["round"])
         for k, v in got.items():
             self.assertEqual(e[k], v, k)
@@ -250,10 +270,10 @@ class TestAliasNotesAndTuningLog(unittest.TestCase):
             for k, v in l["selected"].items():
                 self.assertIn(v, raw["tuning_grid"][k])
             self.assertEqual(l["registry_fingerprint"], b["round1_seal"]["registry_fingerprint"])
-            if l["ranking_structure_sha256"] == r1_structure:
+            if l["ranking_structure_sha256"] == r1_structure and ev.pending_round() is None:
                 self.assertEqual(l["baseline"], raw["baseline"])
-            else:   # pre-T2 run (spec v1.4 §0.4): logged under the 5-key table; its recorded axes must be unchanged
-                self.assertEqual(l["baseline"], {k: raw["baseline"][k] for k in l["baseline"]})
+            else:   # pre-T2 run (spec v1.4 §0.4), or a pending round's non-verb structure legitimately grew new keys at H:
+                self.assertEqual(l["baseline"], {k: raw["baseline"][k] for k in l["baseline"]})   # logged axes must be unchanged
         adopted = [l for l in lines if l.get("adopted")]
         self.assertEqual(len(adopted), 1); self.assertEqual(adopted[0]["selected"], R1_ADOPTED_CONSTANTS)
         final = json.loads(FINAL_R1.read_text(encoding="utf-8"))
