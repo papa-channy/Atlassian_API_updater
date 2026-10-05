@@ -399,6 +399,14 @@ class TestReplacementStateMachine(unittest.TestCase):
             hits = rs.scan_for_needles([root], m)
             self.assertEqual(sorted(pathlib.Path(h).name for h in hits), ["a.txt", "allowed.json", "b.json", "esc.json"])
             self.assertEqual(sorted(pathlib.Path(h).name for h in rs.scan_for_needles([root], m, allow=[root / "allowed.json"])), ["a.txt", "b.json", "esc.json"])
+            # I3 (H' final-review fix): an --allow entry naming a DIRECTORY allows every needle-containing file under it.
+            sub = root / "allowed_dir"; sub.mkdir()
+            (sub / "inside.json").write_text(json.dumps({"q": "show me the ticket details"}), encoding="utf-8")
+            hits_dir_allowed = sorted(pathlib.Path(h).name for h in rs.scan_for_needles([root], m, allow=[sub]))
+            self.assertNotIn("inside.json", hits_dir_allowed)                                                # inside the allowed directory: not reported
+            self.assertIn("a.txt", hits_dir_allowed)                                                          # outside it: still reported
+            hits_dir_not_allowed = sorted(pathlib.Path(h).name for h in rs.scan_for_needles([root], m))
+            self.assertIn("inside.json", hits_dir_not_allowed)                                                # with no allow at all: reported
             mp = root / "m.json"; mp.write_text(json.dumps(m), encoding="utf-8"); good = rs.ev.file_sha256(mp)
             from unittest import mock
             with mock.patch("builtins.print"):
@@ -421,11 +429,15 @@ class TestReplacementStateMachine(unittest.TestCase):
                 b = root / "bench.json"; b.write_text(json.dumps(bench), encoding="utf-8")
                 argv = ["seal", "--round", "3", "--plain", str(pl), "--bench", str(b), "--cache-dir", "x"] + (["--needle-manifest", str(manifest)] if manifest else [])
                 with mock.patch.object(rs, "load_catalogs_from_cache", lambda cache_dir, round=1: ([], CAT, "f" * 64, {})), mock.patch.object(rs, "verify_freeze", lambda r, c: []), \
-                     mock.patch.object(rs.ev, "freeze_for", lambda r: {"round": 3}), mock.patch.object(rs, "RANKING_PATH", root / "ranking.json"), mock.patch("builtins.print"):
+                     mock.patch.object(rs.ev, "freeze_for", lambda r: {"round": 3}), mock.patch.object(rs, "RANKING_PATH", root / "ranking.json"), mock.patch("builtins.print") as mock_print:
                     (root / "ranking.json").write_text(json.dumps({"verb_methods": VERBS}), encoding="utf-8")
                     code = rs.main(argv)
-                return code, json.loads(b.read_text(encoding="utf-8"))
-            code, out = run(good); self.assertEqual(code, 0); self.assertEqual(out["round3_seal"]["needle_manifest_sha256"], rs.ev.file_sha256(good))
+                printed = [c.args[0] for c in mock_print.call_args_list]
+                return code, json.loads(b.read_text(encoding="utf-8")), printed
+            code, out, printed = run(good); self.assertEqual(code, 0); self.assertEqual(out["round3_seal"]["needle_manifest_sha256"], rs.ev.file_sha256(good))
+            # Minor fix (H' final-review): a successful round >= 3 seal prints the negative actionable/abstained split.
+            actionable, abstained = rs.negative_distribution(plain["negative"], VERBS)
+            self.assertIn(f"negative_actionable_split: {actionable}/{abstained}", printed)
             self.assertEqual(run(bad)[0], 1)                                                              # wrong queries -> refused
             self.assertEqual(run(None)[0], 1)                                                             # missing manifest -> refused
 

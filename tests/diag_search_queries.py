@@ -233,6 +233,10 @@ def _evaluate(state, bench, sections, sets, plain, rnd):
             if hidden:
                 query = entry.pop("query")
                 entry["query_sha256"] = ev.canonical_sha256(query)
+                for r in entry["top5"]:                        # the verb token echoes a hidden-query word; value/preferred stay
+                    mo = (r.get("signals") or {}).get("method_order")
+                    if isinstance(mo, dict) and "verb" in mo:
+                        mo.pop("verb")
                 print(f"    FAIL {f['id']} <hidden>")
             else:
                 print(f"    FAIL {f['id']} {f['query']!r}: top1={f['top1']}")

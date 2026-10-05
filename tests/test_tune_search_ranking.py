@@ -69,6 +69,29 @@ class TestConservativeSelector(unittest.TestCase):
         self.assertEqual(tune.BONUS_KEYS, ("path_coverage_bonus", "method_order_bonus"))
 
 
+class TestCrossCheckMismatch(unittest.TestCase):
+    """I2 (H' final-review fix): the memoized/production cross-check must compare failing-record identity, not
+    just counts - a same-count, different-id disagreement is exactly the case counts alone would miss."""
+
+    def test_identical_failures_is_no_mismatch(self):
+        s = {"passed": 2, "failed": [{"id": "s-001"}]}
+        r = {"passed": 1, "failed": []}
+        self.assertEqual(tune.cross_check_mismatch(s, r, s, r), [])
+
+    def test_same_count_different_ids_is_detected(self):
+        slow_s = {"passed": 2, "failed": [{"id": "s-001"}]}
+        fast_s = {"passed": 2, "failed": [{"id": "s-002"}]}          # same failure COUNT, different record
+        slow_r = {"passed": 1, "failed": []}
+        fast_r = {"passed": 1, "failed": []}
+        self.assertEqual(tune.cross_check_mismatch(slow_s, slow_r, fast_s, fast_r), ["s-001", "s-002"])
+
+    def test_regression_side_mismatch_is_also_detected(self):
+        s = {"passed": 2, "failed": []}
+        slow_r = {"passed": 1, "failed": [{"id": "rn-001"}]}
+        fast_r = {"passed": 1, "failed": [{"id": "rn-002"}]}
+        self.assertEqual(tune.cross_check_mismatch(s, slow_r, s, fast_r), ["rn-001", "rn-002"])
+
+
 class TestEffects(unittest.TestCase):
     def test_plan_effects(self):
         self.assertEqual(tune.plan_effects(dry_run=True, perfect=True), {"write_constants": False, "append_log": False})

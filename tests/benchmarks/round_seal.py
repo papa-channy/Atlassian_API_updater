@@ -515,14 +515,22 @@ def needle_manifest(queries) -> list:
 
 
 def scan_for_needles(roots, manifest, allow=()) -> list:
-    """Files under `roots` (text suffixes only) whose normalized word stream contains any manifest n-gram, minus `allow`."""
-    by_n, allowed = {}, {pathlib.Path(p).resolve() for p in allow}
+    """Files under `roots` (text suffixes only) whose normalized word stream contains any manifest n-gram, minus `allow`
+    (each entry a file or a directory - a directory allows every file resolving inside it)."""
+    by_n = {}
+    allowed_files, allowed_dirs = set(), set()
+    for p in allow:
+        rp = pathlib.Path(p).resolve()
+        (allowed_dirs if rp.is_dir() else allowed_files).add(rp)
     for e in manifest:
         by_n.setdefault(e["words"], set()).add(e["sha256"])
     hits = []
     for root in roots:
         for p in sorted(pathlib.Path(root).rglob("*")):
-            if not p.is_file() or p.suffix not in SCAN_SUFFIXES or p.resolve() in allowed or ".git" in p.parts:
+            if not p.is_file() or p.suffix not in SCAN_SUFFIXES or ".git" in p.parts:
+                continue
+            rp = p.resolve()
+            if rp in allowed_files or any(rp.is_relative_to(d) for d in allowed_dirs):
                 continue
             words = _words(p.read_text(encoding="utf-8", errors="ignore"))
             if any(_ngram_sha256(" ".join(words[i:i + n])) in shas for n, shas in by_n.items() for i in range(len(words) - n + 1)):
@@ -660,6 +668,9 @@ def cmd_seal(args):
     print(f"sealed held_out sha256={bench['held_out']['sha256']}")
     print(f"sealed negative sha256={bench['negative']['sha256']}")
     print(f"registry_fingerprint: {fp}")
+    if args.round >= 3:
+        actionable, abstained = negative_distribution(plain["negative"], vm)
+        print(f"negative_actionable_split: {actionable}/{abstained}")
     return 0
 
 
@@ -723,7 +734,7 @@ def main(argv=None):
     p.add_argument("--reference-enc", default=None); p.set_defaults(fn=cmd_freeze)
     p = sub.add_parser("verify-freeze"); _round(p); p.add_argument("--cache-dir", required=True); p.set_defaults(fn=cmd_verify_freeze)
     p = sub.add_parser("scan"); p.add_argument("--manifest", required=True); p.add_argument("--root", action="append", required=True)
-    p.add_argument("--allow", action="append"); p.add_argument("--expect-sha256", default=None); p.set_defaults(fn=cmd_scan)
+    p.add_argument("--allow", action="append", help="file or directory to exclude from the scan"); p.add_argument("--expect-sha256", default=None); p.set_defaults(fn=cmd_scan)
     p = sub.add_parser("reference-check"); _round(p); p.add_argument("--reference-enc", required=True); p.set_defaults(fn=cmd_reference_check)
     args = ap.parse_args(argv)
     return args.fn(args)

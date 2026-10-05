@@ -72,7 +72,7 @@ def evaluate(records, search_fn, section=None):
         expected = rec.get("expected_top1_any") or []
         forbidden = rec.get("forbidden_top1") or []
         if not expected and not forbidden:
-            raise ValueError(f"benchmark record {rec.get('query')!r} must set expected_top1_any or forbidden_top1")
+            raise ValueError(f"benchmark record {rec.get('id')!r} must set expected_top1_any or forbidden_top1")
         ranked, actionable = ranked_and_actionable(search_fn, rec["query"])
         top1 = ranked[0] if ranked else None
         raw_ok = (not expected or top1 in expected) and (top1 not in forbidden)

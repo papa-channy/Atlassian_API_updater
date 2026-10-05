@@ -22,10 +22,6 @@ LEXICON_WORD, LEXICON_TARGET = "zzsynthetic", "issue"
 DATA_REL = "tools/atlassian_docs/intelligence/data"
 STEPS_COMMON = ("T", "B")
 BRANCHES = ("D", "F", "X")
-# This task's own files (brief Files list): copied over the git-archive extract so --phase H is runnable before H8
-# is committed (git archive HEAD would otherwise still carry the pre-task-8 diag_search_queries.py etc.).
-TASK8_FILES = ("tests/diag_search_queries.py", "tests/test_diag_search_queries.py", "tests/benchmarks/evaluator.py",
-              "tests/benchmarks/test_evaluator.py", "tests/benchmarks/round3_simulation.py", "tests/benchmarks/test_round3_simulation.py")
 FAILING = re.compile(r"^(?:FAIL|ERROR): (\S+) \(([^)]+)\)", re.M)
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
@@ -68,8 +64,6 @@ def drive(keep: bool) -> int:
     try:
         archive = subprocess.run(["git", "archive", "HEAD"], cwd=repo, check=True, capture_output=True).stdout
         subprocess.run(["tar", "-x", "-C", str(tree)], input=archive, check=True)
-        for rel in TASK8_FILES:                                      # this task's files, working-tree version
-            shutil.copyfile(repo / rel, tree / rel)
         _git(tree, "init", "-q"); _git(tree, "add", "-A"); _git(tree, "commit", "-q", "-m", "H (archive of HEAD)")
         head = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=repo, capture_output=True, text=True).stdout.strip()
         print(f"simulation tree: {tree} (git archive {head})")

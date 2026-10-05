@@ -74,6 +74,20 @@ def select_candidate(results, baseline, grid, seed_total=SEED_TOTAL, regression_
                                           sum(p[k] for k in MAGNITUDE_KEYS), tuple(p[k] for k in CONSTANT_KEYS))))
 
 
+def cross_check_mismatch(slow_s, slow_r, fast_s, fast_r) -> list:
+    """Round 3 H' (I2): identity check for the memoized/production cross-check at the selected point, not just
+    pass counts. Compares the sorted failing-record ids for seed and for regression between the two paths and
+    returns the sorted ids where they disagree (ids only, never queries); empty when the two paths agree."""
+    def ids(res):
+        return sorted(f["id"] for f in res["failed"])
+    mismatched = set()
+    if ids(slow_s) != ids(fast_s):
+        mismatched |= set(ids(slow_s)) ^ set(ids(fast_s))
+    if ids(slow_r) != ids(fast_r):
+        mismatched |= set(ids(slow_r)) ^ set(ids(fast_r))
+    return sorted(mismatched)
+
+
 def plan_effects(dry_run: bool, perfect: bool) -> dict:
     """--dry-run has no side effects; a normal run always logs, but writes constants only for a perfect pick."""
     return {"write_constants": perfect and not dry_run, "append_log": not dry_run}
@@ -533,11 +547,19 @@ def main(argv=None) -> int:
         ge = GridEvaluator(state, queries, _alias_policy(aliases_raw))
         ge_fx = GridEvaluator(fx_state, [r["query"] for r in fx_bench["seed"] + fx_bench["regression_negative"]], _alias_policy(aliases_raw))
 
+        _raw_sha_cache = {}
+
+        def raw_sha(raw):                        # memoized per distinct alias-state object (grid stage reuses one object many times)
+            key = id(raw)
+            if key not in _raw_sha_cache:
+                _raw_sha_cache[key] = policy.canonical_sha256(raw)
+            return _raw_sha_cache[key]
+
         def evaluate_fn(point, raw):             # grid stage (B aliases): memoized; proposer trials / final: production path
-            return evaluate_point_fast(ge, rp, point, bench) if policy.canonical_sha256(raw) == b_sha else evaluate_point(state, rp, point, bench, _alias_policy(raw))
+            return evaluate_point_fast(ge, rp, point, bench) if raw_sha(raw) == b_sha else evaluate_point(state, rp, point, bench, _alias_policy(raw))
 
         def fixture_fn(point, raw):
-            return fixture_failures_fast(ge_fx, rp, point, fx_bench) if policy.canonical_sha256(raw) == b_sha else fixture_failures(fx_state, rp, point, fx_bench, _alias_policy(raw))
+            return fixture_failures_fast(ge_fx, rp, point, fx_bench) if raw_sha(raw) == b_sha else fixture_failures(fx_state, rp, point, fx_bench, _alias_policy(raw))
         t0 = time.perf_counter()
         results, selected, working, patch, seed_res, reg_res, fixture_fail = run_pipeline(
             evaluate_fn, bench, aliases_raw, cands_doc, rp.tuning_grid, dict(rp.baseline), fixture_fn)
@@ -545,8 +567,11 @@ def main(argv=None) -> int:
         fixture_diag = fixture_negative_diagnostic(fx_state, rp, selected, fx_bench, _alias_policy(working))   # AC-R3-11a diagnostic, final config
         slow_s, slow_r = evaluate_point(state, rp, selected, bench, _alias_policy(aliases_raw))        # cross-check the memoized path once
         fast_s, fast_r = evaluate_point_fast(ge, rp, selected, bench)
-        if (slow_s["passed"], slow_r["passed"], slow_r["raw_passed"]) != (fast_s["passed"], fast_r["passed"], fast_r["raw_passed"]):
-            raise SystemExit("error: memoized grid evaluator disagrees with search_operations at the selected point")
+        counts_differ = (slow_s["passed"], slow_r["passed"], slow_r["raw_passed"]) != (fast_s["passed"], fast_r["passed"], fast_r["raw_passed"])
+        id_mismatch = cross_check_mismatch(slow_s, slow_r, fast_s, fast_r)
+        if counts_differ or id_mismatch:
+            raise SystemExit("error: memoized grid evaluator disagrees with search_operations at the selected point"
+                              f" (differing ids: {id_mismatch})")
         violations = validate_alias_change(aliases_raw, working, cands_doc["candidates"], {r["id"]: r["query"] for r in bench["seed"]},
                                            {r["id"]: r["failure_classes"] for r in bench["seed"]})
         if violations:

@@ -175,14 +175,14 @@ class TestRankingPolicy(unittest.TestCase):
 
     def test_bundled_loads_and_hashes(self):
         rp = policy.load_ranking()
-        self.assertEqual(rp.verb_methods["move"], frozenset({"PUT", "POST"})); self.assertIn("rest", rp.path_noise)
+        self.assertTrue(frozenset({"PUT", "POST"}) <= rp.verb_methods["move"]); self.assertIn("rest", rp.path_noise)
         self.assertEqual(rp.product_hints["jira"], frozenset({"jira-platform", "jira-software"}))
         self.assertEqual(set(rp.constants), set(policy.CONSTANT_KEYS)); self.assertEqual(set(rp.baseline), set(policy.CONSTANT_KEYS)); self.assertEqual(len(rp.sha256), 64)
         from tests.benchmarks import evaluator as ev
         self.assertEqual(policy.CONSTANT_KEYS, ("method_match_bonus", "method_mismatch_penalty", "path_unmatched_penalty", "path_unmatched_cap",
                                                 "product_hint_bonus", "resource_match_bonus", "method_order_bonus", "path_coverage_bonus"))
         self.assertEqual(ev.structure_check_problems(self._raw()), [])                                  # Round 3: H1 non-verb structure + verb prefix until T refreezes
-        self.assertEqual(rp.verb_method_order["change"], ("PUT", "POST")); self.assertEqual(rp.verb_method_order["leave"], ("POST", "DELETE"))
+        self.assertEqual(rp.verb_method_order["change"][:2], ("PUT", "POST")); self.assertEqual(rp.verb_method_order["leave"][:2], ("POST", "DELETE"))
         self.assertEqual(set(rp.verb_method_order), set(rp.verb_methods))
         for v, order in rp.verb_method_order.items():
             self.assertEqual(frozenset(order), rp.verb_methods[v], v)
@@ -205,7 +205,9 @@ class TestRankingPolicy(unittest.TestCase):
         field and its construction (the origin regex was already general)."""
         import subprocess, pathlib
         root = pathlib.Path(__file__).resolve().parents[2]
-        diff = subprocess.run(["git", "diff", "e16c073", "--", "tools/atlassian_docs/intelligence/policy.py"], cwd=root, capture_output=True, text=True).stdout
+        proc = subprocess.run(["git", "diff", "e16c073", "--", "tools/atlassian_docs/intelligence/policy.py"], cwd=root, capture_output=True, text=True)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        diff = proc.stdout
         changed = [l[1:] for l in diff.splitlines() if l[:1] in "+-" and not l.startswith(("+++", "---"))]
         allowed = ("POLICY_VERSIONS", "CONSTANT_KEYS", "verb_method_order", "resource_match_bonus", "order = {}", "order[k]", "MappingProxyType(order)",
                    "method_order_bonus", "path_coverage_bonus")

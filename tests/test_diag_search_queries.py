@@ -231,6 +231,9 @@ class TestDiagScript(unittest.TestCase):
         self.assertNotIn("query", rep["failures"][0]); self.assertEqual(rep["failures"][0]["query_sha256"], ev.canonical_sha256(plain["held_out"][0]["query"]))   # hidden failures never carry the text
         self.assertNotIn("query", rep["sets"]["held_out"]["failed"][0]); assert_no_query_key(self, rep["sets"]["held_out"]); assert_no_query_key(self, rep["failures"])
         self.assertEqual(set(rep["failures"][0]["top5"][0]["signals"]) >= {"method_order", "path_coverage"}, True)
+        for r in rep["failures"][0]["top5"]:                     # hygiene (H' I5): verb echoes a hidden-query token, value/preferred don't
+            mo = r["signals"]["method_order"]
+            self.assertNotIn("verb", mo); self.assertIn("value", mo); self.assertIn("preferred", mo)
 
     def test_reference_block_is_appended_once_and_only_to_the_current_artifact(self):
         out = self.tmp / "final.json"
