@@ -115,6 +115,7 @@ STRUCTURE_KEYS = ev.STRUCTURE_KEYS
 ROUND2_HASH_KEYS = {"structure_sha256", "verb_inventory_sha256", "concept_lexicon_sha256", "lexicon_aliases_sha256",
                     "alias_candidates_sha256", "worker_brief_sha256", "hidden_generation_prompt_sha256",
                     "hidden_reviewer_prompt_sha256", "tooling_code_sha256", "evaluation_code_sha256_at_T"}
+SHA_KEYS_R3 = ROUND2_HASH_KEYS | {"regression_reference_sha256", "tuning_grid_sha256"}
 
 
 def ranking_structure_sha256(raw: dict) -> str:
@@ -150,10 +151,15 @@ class TestRankingTablesFrozen(unittest.TestCase):
         self.assertIsInstance(f, list); self.assertEqual([e["round"] for e in f], list(range(1, len(f) + 1)))
         self.assertEqual(set(f[0]), {"round", "commit_T", "structure_sha256"})
         for e in f[1:]:
-            self.assertEqual(set(e), ROUND2_HASH_KEYS | {"round", "source_registry_fingerprint", "source_spec_sha256"})
-            for k in ROUND2_HASH_KEYS | {"source_registry_fingerprint"}:
+            self.assertEqual(set(e), ev.freeze_key_set(e["round"]), e["round"])
+            self.assertNotIn("commit_T", e)                                                     # spec §9: T sha is not inside the T file
+            for k in (SHA_KEYS_R3 if e["round"] >= 3 else ROUND2_HASH_KEYS) | {"source_registry_fingerprint"}:
                 self.assertRegex(e[k], r"^[0-9a-f]{64}$", k)
             self.assertEqual(set(e["source_spec_sha256"]), {"jira-platform", "jira-software", "confluence"})
+            if e["round"] >= 3:
+                self.assertEqual(set(e["reference_set"]), {"origin", "enc_sha256", "held_out_sha256", "negative_sha256"})
+                self.assertEqual(e["reference_set"]["origin"], "round2"); self.assertEqual(e["hidden_set_origin"], f"round{e['round']}")
+                self.assertIsInstance(e["hidden_generation_rules"], list)
         self.assertEqual(ev.current_round(), f[-1]); self.assertEqual(ev.freeze_for(1), f[0])
 
     def test_current_round_freeze_hashes_match_files(self):
@@ -584,3 +590,53 @@ class TestLexiconAliasesSha256(unittest.TestCase):
                          lambda r: r["notes"]["zzsynonym"].__setitem__("evidence", "edited")):
                 edited = json.loads(p.read_text(encoding="utf-8")); edit(edited)
                 self.assertNotEqual(ev.lexicon_aliases_sha256(edited, 2), base)
+
+
+class TestRound3SymmetricJudgement(unittest.TestCase):
+    """Round 3 spec §4 / §13: held_out requires actionable; negatives pass when abstained; seed is raw top-1; a legacy
+    search_fn (ranked keys only) is read as actionable=True so Round 1/2 judgements never change."""
+    def rec(self, i, q, exp, forb, origin):
+        return {"id": i, "query": q, "expected_top1_any": exp, "forbidden_top1": forb, "origin": origin, "failure_classes": [], "ambiguous": False}
+
+    def setUp(self):
+        self.H = [self.rec("h-001", "get the ticket", ["A"], [], "held_out-r3"), self.rec("h-002", "ticket details", ["A"], [], "held_out-r3")]
+        self.N = [self.rec("n-001", "ticket owner list", [], ["F"], "negative-r3"), self.rec("n-002", "get the owner", [], ["F"], "negative-r3")]
+        self.table = {"get the ticket": (["A"], True), "ticket details": (["A"], False), "ticket owner list": (["F"], False), "get the owner": (["F"], True)}
+        self.fn = lambda q: self.table[q]
+        self.legacy = lambda q: self.table[q][0]
+
+    def test_held_out_requires_actionable(self):
+        res = ev.evaluate(self.H, self.fn, section="held_out")
+        self.assertEqual((res["passed"], res["raw_passed"], res["effective_passed"]), (1, 2, 1))
+        self.assertEqual([f["id"] for f in res["failed"]], ["h-002"]); self.assertEqual((res["failed"][0]["actionable"], res["failed"][0]["raw_ok"]), (False, True))
+        self.assertEqual(res["actionable"], {"total": 1, "raw_passed": 1}); self.assertEqual(res["abstained"], {"total": 1, "effective_passed": 0})
+
+    def test_negative_passes_when_abstained_fails_when_actionable(self):
+        res = ev.evaluate(self.N, self.fn, section="negative")
+        self.assertEqual((res["passed"], res["raw_passed"], res["effective_passed"]), (1, 0, 1))
+        self.assertEqual([f["id"] for f in res["failed"]], ["n-002"])
+        self.assertEqual(res["actionable"], {"total": 1, "raw_passed": 0}); self.assertEqual(res["abstained"], {"total": 1, "effective_passed": 1})
+        same = ev.evaluate(self.N, self.fn, section="regression_negative")
+        self.assertEqual((same["passed"], same["raw_passed"]), (1, 0))
+
+    def test_seed_section_is_raw_top1(self):
+        res = ev.evaluate(self.H, self.fn, section="seed")
+        self.assertEqual((res["passed"], res["failed"]), (2, [])); self.assertNotIn("raw_passed", res)
+
+    def test_legacy_search_fn_is_actionable_true(self):                                                 # review focus 4
+        self.assertEqual(ev.ranked_and_actionable(self.legacy, "ticket details"), (["A"], True))
+        self.assertEqual(ev.ranked_and_actionable(self.fn, "ticket details"), (["A"], False))
+        self.assertEqual(ev.evaluate(self.H, self.legacy, section="held_out")["passed"], 2)
+        self.assertEqual(ev.evaluate(self.N, self.legacy, section="negative")["passed"], 0)
+        res = ev.evaluate(self.N, self.legacy)                                                           # Round 1 call form, no section
+        self.assertEqual(res["passed"], 0); self.assertNotIn("raw_passed", res)
+        self.assertEqual(set(res["failed"][0]), {"id", "query", "top1", "expected_top1_any", "forbidden_top1"})   # Round 1 failure shape
+
+
+class TestRound3FreezeKeys(unittest.TestCase):
+    def test_freeze_key_set_per_round(self):
+        self.assertEqual(ev.freeze_key_set(1), {"round", "commit_T", "structure_sha256"})
+        self.assertEqual(ev.freeze_key_set(2), ROUND2_HASH_KEYS | {"round", "source_registry_fingerprint", "source_spec_sha256"})
+        self.assertEqual(ev.freeze_key_set(3), ev.freeze_key_set(2) | set(ev.ROUND3_EXTRA_KEYS))
+        self.assertNotIn("commit_T", ev.freeze_key_set(3))
+        self.assertEqual(ev.freeze_key_set(2), set(ev.freeze_for(2)))

@@ -7,6 +7,7 @@ _CAMEL_1 = re.compile(r"([a-z0-9])([A-Z])"); _CAMEL_2 = re.compile(r"([A-Z]{2,})
 _ID = re.compile(r"^(s|rn|h|n)-\d{3}$"); _ORIGIN = re.compile(r"^(seed|held_out|negative)-r\d+$")
 _CLASSES = {"R1", "R2", "R3", "R4", "R5", "R6"}
 NEGATIVE_SECTIONS = ("regression_negative", "negative")
+ACTIONABLE_SECTIONS = ("held_out",)          # Round 3 spec §4 v1.20: only held_out requires actionable; seed/fixture positive are raw top-1
 
 
 def canonical_sha256(obj) -> str:
@@ -52,22 +53,49 @@ def check_schema(section_name: str, records) -> None:
             raise ValueError(f"{section_name}/{rid}: ambiguous must be a bool")
 
 
-def evaluate(records, search_fn):
+def ranked_and_actionable(search_fn, query):
+    """Round 3 spec §4: search_fn returns (ranked_keys, actionable) or - the Round 1/2 call form - ranked_keys only, which the
+    adapter reads as actionable=True (historical judgements never turn into abstentions)."""
+    out = search_fn(query)
+    if isinstance(out, tuple) and len(out) == 2 and isinstance(out[1], bool):
+        return list(out[0]), out[1]
+    return list(out), True
+
+
+def evaluate(records, search_fn, section=None):
+    """Symmetric judgement (Round 3 spec §4). held_out: top1 ∈ expected AND actionable. negatives: top1 ∉ forbidden OR abstained.
+    Everything else (seed, fixtures, Round 1 callers with section=None): raw top-1 only."""
     if is_sealed(records):
         return {"sealed": True, "count": records.get("count")}
-    failed = []
+    failed, raw_passed, act_total, act_raw = [], 0, 0, 0
     for rec in records:
         expected = rec.get("expected_top1_any") or []
         forbidden = rec.get("forbidden_top1") or []
         if not expected and not forbidden:
             raise ValueError(f"benchmark record {rec.get('query')!r} must set expected_top1_any or forbidden_top1")
-        ranked = search_fn(rec["query"])
+        ranked, actionable = ranked_and_actionable(search_fn, rec["query"])
         top1 = ranked[0] if ranked else None
-        ok = (not expected or top1 in expected) and (top1 not in forbidden)
+        raw_ok = (not expected or top1 in expected) and (top1 not in forbidden)
+        raw_passed += raw_ok
+        if actionable:
+            act_total += 1; act_raw += raw_ok
+        if section in ACTIONABLE_SECTIONS:
+            ok = raw_ok and actionable
+        elif section in NEGATIVE_SECTIONS:
+            ok = raw_ok or not actionable
+        else:
+            ok = raw_ok
         if not ok:
-            failed.append({"id": rec.get("id"), "query": rec["query"], "top1": top1,
-                           "expected_top1_any": expected, "forbidden_top1": forbidden})
-    return {"passed": len(records) - len(failed), "failed": failed, "total": len(records)}
+            f = {"id": rec.get("id"), "query": rec["query"], "top1": top1, "expected_top1_any": expected, "forbidden_top1": forbidden}
+            if section is not None:
+                f.update(actionable=actionable, raw_ok=raw_ok)
+            failed.append(f)
+    out = {"passed": len(records) - len(failed), "failed": failed, "total": len(records)}
+    if section in ACTIONABLE_SECTIONS or section in NEGATIVE_SECTIONS:
+        abstained = len(records) - act_total
+        out.update(raw_passed=raw_passed, effective_passed=out["passed"], actionable={"total": act_total, "raw_passed": act_raw},
+                   abstained={"total": abstained, "effective_passed": abstained if section in NEGATIVE_SECTIONS else 0})
+    return out
 
 
 IRREGULAR_SINGULAR = {"statuses": "status"}; UNCHANGED_PLURAL = frozenset({"series", "species", "news"})
@@ -104,6 +132,20 @@ def freeze_for(round: int, freeze=None) -> dict:
         if e.get("round") == round:
             return e
     raise KeyError(f"round {round} is not in round_freeze.json")
+
+
+ROUND3_EXTRA_KEYS = ("regression_reference_sha256", "reference_set", "hidden_generation_rules", "tuning_grid_sha256", "hidden_set_origin")
+_ROUND2_KEYS = frozenset({"round", "structure_sha256", "verb_inventory_sha256", "source_registry_fingerprint", "source_spec_sha256",
+                          "concept_lexicon_sha256", "lexicon_aliases_sha256", "alias_candidates_sha256", "worker_brief_sha256",
+                          "hidden_generation_prompt_sha256", "hidden_reviewer_prompt_sha256", "tooling_code_sha256", "evaluation_code_sha256_at_T"})
+
+
+def freeze_key_set(round: int) -> set:
+    """Canonical key set of a round_freeze.json entry (Round 3 spec §9): round 1 legacy; round 2 as frozen; round >= 3 adds
+    ROUND3_EXTRA_KEYS. No entry after round 1 carries commit_T (self-reference)."""
+    if round == 1:
+        return {"round", "commit_T", "structure_sha256"}
+    return set(_ROUND2_KEYS) | (set(ROUND3_EXTRA_KEYS) if round >= 3 else set())
 
 
 def files_sha256(root, files) -> str:
@@ -150,14 +192,18 @@ def round_freeze_hashes(round: int, root=ROOT) -> dict:
     root = pathlib.Path(root)
     j = lambda rel: canonical_sha256(json.loads((root / rel).read_text(encoding="utf-8")))
     aliases = json.loads((root / DATA_REL / "search_aliases.json").read_text(encoding="utf-8"))
-    return {"concept_lexicon_sha256": j(f"{DATA_REL}/concept_lexicon.json"),
-            "lexicon_aliases_sha256": lexicon_aliases_sha256(aliases, round),
-            "alias_candidates_sha256": j(f"{DATA_REL}/alias_candidates.json"),
-            "worker_brief_sha256": file_sha256(root / f"tests/benchmarks/round{round}-worker-brief.md"),
-            "hidden_generation_prompt_sha256": file_sha256(root / f"tests/benchmarks/round{round}-hidden-generation-prompt.md"),
-            "hidden_reviewer_prompt_sha256": file_sha256(root / f"tests/benchmarks/round{round}-hidden-reviewer-prompt.md"),
-            "tooling_code_sha256": tooling_code_sha256(root),
-            "evaluation_code_sha256_at_T": evaluation_code_sha256(root)}
+    out = {"concept_lexicon_sha256": j(f"{DATA_REL}/concept_lexicon.json"),
+           "lexicon_aliases_sha256": lexicon_aliases_sha256(aliases, round),
+           "alias_candidates_sha256": j(f"{DATA_REL}/alias_candidates.json"),
+           "worker_brief_sha256": file_sha256(root / f"tests/benchmarks/round{round}-worker-brief.md"),
+           "hidden_generation_prompt_sha256": file_sha256(root / f"tests/benchmarks/round{round}-hidden-generation-prompt.md"),
+           "hidden_reviewer_prompt_sha256": file_sha256(root / f"tests/benchmarks/round{round}-hidden-reviewer-prompt.md"),
+           "tooling_code_sha256": tooling_code_sha256(root),
+           "evaluation_code_sha256_at_T": evaluation_code_sha256(root)}
+    if round >= 3:
+        out["regression_reference_sha256"] = j(f"tests/benchmarks/round{round}-regression-reference.json")
+        out["tuning_grid_sha256"] = tuning_grid_sha256(json.loads((root / DATA_REL / "search_ranking.json").read_text(encoding="utf-8")))
+    return out
 
 
 PRE_FREEZE_NONVERB_STRUCTURE_SHA256 = {3: "02b27c8845a292d4b5ffac048fad52a3136909814e4cdb4165820fb31958b7ff"}
