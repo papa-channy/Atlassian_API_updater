@@ -1,6 +1,6 @@
 # Search Quality Round 3 — Technical Specification
 
-**문서 버전:** v1.7 (v1.0 = brainstorming 2026-10-05, 사용자 승인 섹션 1–6; v1.1 = 외부 검수 1차 반영: P0 8건·P1 6건 — 새 hidden set, abstention 계약과 대칭 게이트, S 재사용 조건, AC-R3-02 참조 고정, 동사 순서 동결, 제안기 원자 액션 계약, freeze 불변, 보수적 tie-break, 타깃 자원 증거; v1.2 = 외부 검수 2차 반영: P0 4건·P1 6건 — hidden actionability 분포·검사 계약, verb_methods prefix 불변, fixture negative raw 6/6, recommended_operation, resource_vocab 정규화, 참조 생성 격리, 게이트 결과 해시 체크포인트, 역할 분리; v1.3 = 외부 검수 3차 반영: P0 4건·P1 6건 — 규칙명 정합(actionable·negative-distribution만), held_out expected-method 정합, negative 섹션 교체 계약·수명주기, recommended_operation 빈 결과 정의, negative 프롬프트 문구, actionable negative 강도 규칙, legacy 어댑터 기본값, B 정책 문구, 참조 평문 수명주기, 게이트 체크포인트 바인딩; v1.4 = 외부 검수 4차 반영: P0 3건·P1 6건 — 버전 라벨, policy.py 허용 diff 계약, AC-R3-01 pre-T 체크포인트, negative-method 기계 규칙, 생성 입력에 VERB_METHODS 블록, 섹션 교체 상태기계, generator≠reviewer actor, AC-R3-07 삭제 요건, 네 필드, 격자 축소 pre-T 한정; v1.5 = 외부 검수 5차 반영: P0 2건·P1 5건 — AC-R3-01 pre-T 단일화, Round 2 AC 치환표, negative-method 요약 정합, method_order_bonus의 intent 정합, AC-R3-13 분리, 런타임 측정 절차, freeze 키 집합; v1.6 = 외부 검수 6차 반영: P0 2건·P1 5건 — freeze 키 집합에서 commit_T 제거, §8 chronology 정정, 검토자 역할 축소, held_out 테스트 3분기, POLICY_VERSIONS 명시, 섹션 위반 처리 순서, resource_vocab 보장 문구; v1.7 = 외부 검수 7차 반영: P0 1건·P1 4건 — policy.py 허용 diff 세 종류 전 문서 통일, AC-01a 기준 커밋 e16c073, 생성 프롬프트 규칙 요약 정합, tuning_grid_sha256 정의, AC 참조 번호)
+**문서 버전:** v1.8 (v1.0 = brainstorming 2026-10-05, 사용자 승인 섹션 1–6; v1.1 = 외부 검수 1차 반영: P0 8건·P1 6건 — 새 hidden set, abstention 계약과 대칭 게이트, S 재사용 조건, AC-R3-02 참조 고정, 동사 순서 동결, 제안기 원자 액션 계약, freeze 불변, 보수적 tie-break, 타깃 자원 증거; v1.2 = 외부 검수 2차 반영: P0 4건·P1 6건 — hidden actionability 분포·검사 계약, verb_methods prefix 불변, fixture negative raw 6/6, recommended_operation, resource_vocab 정규화, 참조 생성 격리, 게이트 결과 해시 체크포인트, 역할 분리; v1.3 = 외부 검수 3차 반영: P0 4건·P1 6건 — 규칙명 정합(actionable·negative-distribution만), held_out expected-method 정합, negative 섹션 교체 계약·수명주기, recommended_operation 빈 결과 정의, negative 프롬프트 문구, actionable negative 강도 규칙, legacy 어댑터 기본값, B 정책 문구, 참조 평문 수명주기, 게이트 체크포인트 바인딩; v1.4 = 외부 검수 4차 반영: P0 3건·P1 6건 — 버전 라벨, policy.py 허용 diff 계약, AC-R3-01 pre-T 체크포인트, negative-method 기계 규칙, 생성 입력에 VERB_METHODS 블록, 섹션 교체 상태기계, generator≠reviewer actor, AC-R3-07 삭제 요건, 네 필드, 격자 축소 pre-T 한정; v1.5 = 외부 검수 5차 반영: P0 2건·P1 5건 — AC-R3-01 pre-T 단일화, Round 2 AC 치환표, negative-method 요약 정합, method_order_bonus의 intent 정합, AC-R3-13 분리, 런타임 측정 절차, freeze 키 집합; v1.6 = 외부 검수 6차 반영: P0 2건·P1 5건 — freeze 키 집합에서 commit_T 제거, §8 chronology 정정, 검토자 역할 축소, held_out 테스트 3분기, POLICY_VERSIONS 명시, 섹션 위반 처리 순서, resource_vocab 보장 문구; v1.7 = 외부 검수 7차 반영: P0 1건·P1 4건 — policy.py 허용 diff 세 종류 전 문서 통일, AC-01a 기준 커밋 e16c073, 생성 프롬프트 규칙 요약 정합, tuning_grid_sha256 정의, AC 참조 번호; v1.8 = 외부 검수 8차 반영: P0 4건·P1 4건 — §2를 불변/제약된 변경/변경으로 3분, AC-01a/b·AC-07·AC-08·AC-09 치환, provenance 도메인 분리, synthetic lifecycle F/X, 격자 환경 의존 주석)
 **기준일:** 2026-10-05
 **선행 구현:** Round 2 (spec v1.14, 종료 커밋 F `770eb63`: 튜닝 실패, hidden set 미평가; `main` e16c073). 오프라인 테스트 476.
 **상속:** 이 문서에 적지 않은 절차·AC·상태 모델은 **Round 2 스펙 v1.14를 그대로 상속**한다(§5 봉인 절차 전부 — S, pre-T 순서, §5.3 stateless 생성·검토 계약, §5.4 봉인, §5.5 one-way 파이프라인·두 단계 채택, §5.6 워커 계약, abort X; §8 alias_notes 스키마; §11 상태 모델; §12 AC 전부). 이 문서는 **델타**만 규정하며, 충돌 시 이 문서가 우선한다.
@@ -35,7 +35,8 @@ negative 측: B 정책에서 이미 10/14였고, 깨진 4건(rn-010/011/012/014)
 ## 2. 범위
 
 **변경:** `tools/atlassian_docs/intelligence/search.py`(신호 2개, `method_intent_consistent`/`actionable` 필드), `data/search_ranking.json`(상수 2개, 격자, 버전 2), `tests/benchmarks/alias_candidates_tool.py`(타깃 자격 규칙), `tests/tune_search_ranking.py`(예산 2 원자 액션 제안기, 새 상수, 보수적 tie-break, fixture 캐시), `tests/benchmarks/evaluator.py`(대칭 판정식), `tests/benchmarks/round_seal.py`(생성 프롬프트 `actionable`·`negative-method`·`negative-distribution` 규칙, 섹션 교체 계약, Round 2 참조 세트 등록), diag, MCP 응답 테스트, 스펙·계획·readiness.
-**유지(동결):** Round 1·2 로그·freeze 항목·readiness 섹션·`round1-final.json`; fixture 23/6(내용 불변, 하드 제약); Phase 1 파일; `verb_methods`의 **행 집합과 각 행의 Round 2 리스트를 exact prefix로 보존**(§3.1 prefix 불변); `policy.py`의 H 변경 허용 범위는 ① `CONSTANT_KEYS`에 `method_order_bonus`, `path_coverage_bonus` 추가, ② alias_notes origin `round3`·`lexicon-r3` 허용(regex는 이미 일반형), ③ `POLICY_VERSIONS["search"]` 3→4(응답 스키마 변경)로 한정하고 그 외 스키마·검증 의미는 Round 2와 동일하다(AC-R3-13a: H의 `policy.py` diff가 이 세 종류에 한정됨을 테스트).
+**불변(byte-invariant):** Round 1·2 로그·freeze 항목·readiness 섹션·`round1-final.json`·`round2-*` 산출물; fixture 23/6(내용 불변, 하드 제약); Phase 1 파일; Phase 2 core 모듈 중 §3이 명시하지 않은 파일.
+**제약된 변경:** `verb_methods`는 행 집합 동일 + 각 행의 Round 2 리스트가 exact prefix(§3.1, AC-R3-12; suffix는 T에 커밋); `search_ranking.json`의 구조 변경(새 상수 키 기준값 0, 최종 `tuning_grid`, `method_mismatch_penalty` 격자, 버전 2)은 **T에 커밋**하고 T 이후 구조 불변, B..C에서는 선택된 상수 값과 `origin=round3` alias/rule만 변경; `policy.py`의 H 변경 허용 범위는 ① `CONSTANT_KEYS`에 `method_order_bonus`, `path_coverage_bonus` 추가, ② alias_notes origin `round3`·`lexicon-r3` 허용(regex는 이미 일반형), ③ `POLICY_VERSIONS["search"]` 3→4(응답 스키마 변경)로 한정하고 그 외 스키마·검증 의미는 Round 2와 동일하다(AC-R3-13a: H의 `policy.py` diff가 이 세 종류에 한정됨을 테스트).
 **해제:** Round 2의 "`search.py` 불변" 조항. `search.py` 변경은 H에서 끝나고 T에서 `evaluation_code_sha256_at_T`로 재동결된다.
 **하지 않음:** alias_damping 변경, 어휘 규칙(`when_all`) 자동 제안, 지시어 신호, `verb_methods` 기존 메서드의 삭제·재배열, Round 2 봉인 세트의 게이트 사용.
 
@@ -118,7 +119,7 @@ negative 측: B 정책에서 이미 10/14였고, 깨진 4건(rn-010/011/012/014)
 - 섹션 교체 계약: `negative distribution rejected` 응답 검증(8 id, 분포 4/4), 섹션 교체 1회 수명주기, 두 번째 교체 금지 → attempt invalid 전환; `negative-method` 기계 규칙; 생성 입력 `VERB_METHODS` 블록 sha == `verb_inventory_sha256`.
 - legacy 어댑터: ranked_keys만 돌려주는 search_fn은 actionable=True로 해석.
 - 선택기 tie-break: 동일 결과에서 더 작은 보너스 쌍 우선.
-- H sanity: `round3_simulation.py --phase H`(비구속). T/B/C/D 상태 전이 로직은 fixture·mock artifact를 쓰는 **synthetic lifecycle 테스트**로 H에서 검증하며 실제 commit chronology와 무관하다(Round 2의 `round2_simulation.py`를 일반화). 실제 수명주기는 §5가 유일한 authority: `housekeeping_commit < S < … < AC-R3-01 pre-T < T < B < C < D`. AC-R3-01 binding: `round3_simulation.py --phase pre-T`, 통과 후에만 T 생성.
+- H sanity: `round3_simulation.py --phase H`(비구속). T→B→C→D, T→B→F, T→B→X 세 전이의 상태 로직은 fixture·mock artifact를 쓰는 **synthetic lifecycle 테스트**로 H에서 검증하며 실제 commit chronology와 무관하다(Round 2의 `round2_simulation.py`를 일반화). 실제 수명주기는 §5가 유일한 authority: `housekeeping_commit < S < … < AC-R3-01 pre-T < T < B < C < D`. AC-R3-01 binding: `round3_simulation.py --phase pre-T`, 통과 후에만 T 생성.
 - `method_order_bonus` 다중 동사 테스트: 첫 동사의 preferred가 교집합 밖이면 0.
 
 ## 9. 상태 모델·readiness 델타
@@ -131,18 +132,20 @@ Round 2 §11 상속. 추가: `hidden_set_origin: "round3"`, `hidden_generation_r
 
 ### 10.1 Round 2 AC 치환표 (literal 상속하지 않는 행)
 
-v1.14 §12의 다음 행은 Round 3에서 아래 문구로 **치환**한다. 표에 없는 Round 2 AC(AC-01b~d, AC-06a, AC-07, AC-11, AC-13, AC-14, AC-16, AC-17, AC-23, AC-18a-B/D/F/X, AC-18b, AC-19a~d, AC-20a/b)는 `round2`→`round3`, `r2`→`r3`, `search-tuning-round2.jsonl`→`search-tuning-round3.jsonl`, `round2-worker-brief.md`→`round3-worker-brief.md`, `.enc`→`round3-sealed.json.enc`의 이름 치환만으로 그대로 적용한다.
+v1.14 §12의 다음 행은 Round 3에서 아래 문구로 **치환**한다. 표에 없는 Round 2 AC(AC-01c~d, AC-06a, AC-11, AC-13, AC-14, AC-16, AC-17, AC-23, AC-18a-B/D/F/X, AC-18b, AC-19a~d, AC-20a/b)는 `round2`→`round3`, `r2`→`r3`, `search-tuning-round2.jsonl`→`search-tuning-round3.jsonl`, `round2-worker-brief.md`→`round3-worker-brief.md`, `.enc`→`round3-sealed.json.enc`의 이름 치환만으로 그대로 적용한다.
 
 | Round 2 AC | Round 3 치환 |
 |---|---|
-| AC-01a | `round3_start_commit == e16c073`; `e16c073 < housekeeping_commit < T < B`; `verb_methods`(suffix)·`alias_candidates.json`·사전 병합·`failure_classes`·브리프·프롬프트 변경은 T에만; `policy.py`·`search.py`·§5.1 도구 변경은 H/H′에만 |
+| AC-01a | `round3_start_commit == e16c073`; `e16c073 < housekeeping_commit < T < B`; `verb_methods`(suffix)·`alias_candidates.json`·사전 병합·`failure_classes`·브리프·프롬프트·**`search_ranking.json` 구조 변경(새 상수 키 기준값 0, 최종 `tuning_grid`, mismatch 격자, 버전 2)**은 T에만; `policy.py`·`search.py`·§5.1 도구 변경은 H/H′에만 |
+| AC-01b | 성공: T < B < C < D; T에 동결된 상수 키·격자·스키마는 불변; B..C에서는 선택된 상수 **값**과 `origin=round3` alias/rule만 변경 |
+| AC-07 | 성공·실패: §8에 정의된 **Round 3 unit/integrity suite** 통과(구현 계획이 테스트 모듈·명령 목록으로 구체화) |
 | AC-02 | C..D 변경 파일 ⊆ {`search_queries.json`, `round3-final.json`, `phase3-readiness.md`} |
 | AC-03 | D 평문 sha256 == `round3_seal`; D에 테스트 코드 변경 없음 |
 | AC-04 | gate 집합 origin ∈ {`held_out-r3`, `negative-r3`}, 다른 round origin 0개(레코드 스키마: held_out `origin: "held_out-r3"`, negative `"negative-r3"`); B 봉인 체크포인트에서 검사 |
 | AC-05 | `search.py` H 변경은 §3 범위만(T에서 `evaluation_code_sha256_at_T`로 재동결); `policy.py`는 §2의 세 종류(CONSTANT_KEYS 두 항목 추가, origin `round3`/`lexicon-r3` 허용, `POLICY_VERSIONS["search"]` 3→4)만; §5.1 도구·무결성 테스트 파일은 `housekeeping_commit` 이후 종료 커밋까지 diff 비어 있음; `tooling_code_sha256` == 현재 파일 |
 | AC-06b | adopted run의 스냅샷 seed 39/39, regression **effective** 14/14(raw는 별도 기록) |
-| AC-08 | `POLICY_VERSIONS["search"] == 4`(응답 스키마 변경으로 H에서 3→4 bump; Round 1·2 산출물 해시에는 영향 없음을 테스트); `round_freeze` round 3 항목의 모든 해시 == 현재 Round 3 artifact; Round 1·2 항목은 역사 artifact로 불변이며 현재 파일과 비교하지 않음; S 출처 필드 == 모든 Round 3 영속 artifact의 provenance |
-| AC-09 | §2 "유지" 목록 diff 비어 있음; Round 1·2 artifact·로그·seal·readiness 섹션 해시 불변; Round 3 허용 변경은 §2 "변경" 목록 |
+| AC-08 | `POLICY_VERSIONS["search"] == 4`(응답 스키마 변경으로 H에서 3→4 bump; Round 1·2 산출물 해시에는 영향 없음을 테스트); `round_freeze` round 3 항목의 모든 해시 == 현재 Round 3 artifact; Round 1·2 항목은 역사 artifact로 불변이며 현재 파일과 비교하지 않음; **provenance 도메인별 검사:** operational artifact(`lexicon-r3` 병합분·`alias_candidates.json`·method-safety·seal·tuning log·`round3-final.json`)의 `generated_from` == Round 3 S(`round3_operational_snapshot`), `round3-regression-reference.json`의 provenance == AC-R3-02에 고정된 Round 2 S(`round2_regression_snapshot`), `reference_set`의 provenance == Round 2 archive 메타데이터; readiness에 두 snapshot을 따로 표시 |
+| AC-09 | §2 "불변" 목록 byte-invariant(Round 1·2 artifact·로그·seal·readiness 섹션, fixture, Phase 1); `verb_methods`는 AC-R3-12 prefix 불변; `policy.py`는 AC-R3-13a의 세 종류만; `search_ranking.json` 구조는 AC-01a/b의 T 커밋 규칙; 그 외 변경은 §2 "변경" 목록에 한정 |
 | AC-10 | `round3-final.json` provenance 필드 + `round`, `held_out_top3`, raw/effective, `reference_round2` |
 | AC-12 | round3 alias/rule 전부 §6·AC-R3-05 계약(1 타깃, 후보 포함, 총 ≤15, seed당 ≤2 원자 액션, `candidate_word`, 자원 어휘 자격 — 동사·hint 소속 타깃 허용); 실패·abort 분기에서는 0개 |
 | AC-15a/b | 튜닝 로그 **round 3** 기준(adopted 정확히 1 / adopted 0 + `tuning_failed` ≥ 1, 파일 상수 == B) |
@@ -173,7 +176,7 @@ v1.14 §12의 다음 행은 Round 3에서 아래 문구로 **치환**한다. 표
 
 - coverage 보너스가 "정답이 얕은 경로" 질의를 깨뜨릴 수 있음 → 기준값 0, 보수적 tie-break, fixture 하드 제약.
 - 동사 없는 held_out은 판정식상 실패 → `actionable` 규칙으로 사전 등록(evaluator와 같은 헬퍼). negative는 4/4 분포 고정으로 abstention이 게이트를 비우지 못하며, actionable negative 4건의 raw 통과가 raw 품질의 진짜 게이트다.
-- 격자 31,104점 × (seed 39 + neg 14 + fixture 29) → 측정 절차: 같은 S·B aliases에서 전체 격자를 정확히 1회 실행한 wall-clock(도구 오류·timeout은 판정에 쓰지 않음)을 ledger에 기록하고, 10분 초과 시 `method_order_bonus` 격자를 `[0, 0.5]`로 축소. 격자 축소 여부는 **T 이전에만** 결정하고 T 이후 격자 변경은 금지하며, 최종 격자의 canonical sha(`tuning_grid_sha256`)를 freeze에 기록한다(AC-R3-13b). 계획 단계에서 실측해 격자를 미리 확정하는 것을 우선한다.
+- 격자 31,104점 × (seed 39 + neg 14 + fixture 29) → 측정 절차: 같은 S·B aliases에서 전체 격자를 정확히 1회 실행한 wall-clock(도구 오류·timeout은 판정에 쓰지 않음)을 ledger에 기록하고, 10분 초과 시 `method_order_bonus` 격자를 `[0, 0.5]`로 축소. 격자 축소 여부는 **T 이전에만** 결정하고 T 이후 격자 변경은 금지하며, 최종 격자의 canonical sha(`tuning_grid_sha256`)를 freeze에 기록한다(AC-R3-13b). 계획 단계에서 실측해 격자를 미리 확정하는 것을 우선한다(동일 코드가 기계 부하에 따라 다른 격자를 고르는 환경 의존을 피하기 위해, 실측 기계·러너 조건을 ledger에 기록하고 가능하면 스펙에 최종 격자를 고정한다).
 - 새 hidden 생성에는 ChatGPT 사용량이 필요(T 이후, 5시간 창 초기화 후).
 - s-027·s-028은 설계상 미해결일 수 있음(튜닝에 위임). Round 4 후보: 어휘 규칙 자동 제안.
 
