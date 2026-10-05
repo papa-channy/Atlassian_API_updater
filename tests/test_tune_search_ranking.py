@@ -58,6 +58,17 @@ class TestSelector(unittest.TestCase):
         self.assertEqual(tune.select_candidate(res, BASE, GRID), BASE)                                 # seed max, then regression max
 
 
+class TestConservativeSelector(unittest.TestCase):
+    def test_smaller_bonus_pair_beats_l1_distance(self):
+        near, far = pt(method_order_bonus=0.5), pt(method_match_bonus=1.0, path_unmatched_cap=4)          # bonuses (0,0.5) L1 1 vs (0,0) L1 2
+        self.assertEqual(tune.select_candidate([(near, S, R), (far, S, R)], BASE, GRID), far)             # bonus tuple first
+        o, c = pt(method_order_bonus=0.5), pt(path_coverage_bonus=0.5)                                     # (0,0.5) < (0.5,0)
+        self.assertEqual(tune.select_candidate([(c, S, R), (o, S, R)], BASE, GRID), o)
+        self.assertEqual(tune.select_candidate([(o, S, R), (BASE, S, R)], BASE, GRID), BASE)
+        self.assertEqual(tune.select_candidate([(o, S, R), (BASE, S - 1, R)], BASE, GRID), o)             # perfect still beats non-perfect
+        self.assertEqual(tune.BONUS_KEYS, ("path_coverage_bonus", "method_order_bonus"))
+
+
 class TestEffects(unittest.TestCase):
     def test_plan_effects(self):
         self.assertEqual(tune.plan_effects(dry_run=True, perfect=True), {"write_constants": False, "append_log": False})
@@ -71,77 +82,92 @@ class TestEffects(unittest.TestCase):
         self.assertEqual(tune.dirty_paths(porcelain), ["new.py", "tests/b.py", "tools/a.py"])
 
 
-CANDS = {"workspace": {"seed_ids": ["s-001"], "targets_by_seed": {"s-001": ["page", "space"]}, "allowed_targets": ["page", "space"], "catalog_df": 7},
-         "feedback": {"seed_ids": ["s-002", "s-003"], "targets_by_seed": {"s-002": ["comment"], "s-003": ["comment", "issue"]},
-                      "allowed_targets": ["comment", "issue"], "catalog_df": 0}}
 BASE_RAW = {"version": 1, "alias_damping": 0.5, "rule_damping": 1.0, "aliases": {"ticket": ["issue"]}, "rules": [],
             "notes": {"ticket": {"origin": "phase2.5", "seed_query_id": None, "failure_classes": [], "evidence": "x"}}}
-BENCH2 = {"seed": [{"id": "s-001", "query": "browse pages inside this workspace", "failure_classes": ["R6"]},
-                   {"id": "s-002", "query": "leave feedback on this ticket", "failure_classes": ["R5", "R6"]},
-                   {"id": "s-003", "query": "read feedback on the issue", "failure_classes": ["R6"]}], "regression_negative": [{"id": "rn-001", "query": "x"}]}
-QUERIES = {r["id"]: r["query"] for r in BENCH2["seed"]}
-CLASSES = {r["id"]: r["failure_classes"] for r in BENCH2["seed"]}
 
 
 def fake_eval(rules):
-    """rules: (word, target) -> seeds fixed; ("rule", sorted when_all, target) -> seeds fixed; ("BREAK", word, target) -> regression breaks."""
+    """rules: (word, target) -> seeds fixed; ("PAIR", (w1, t1), (w2, t2)) -> seeds fixed only when both aliases present;
+    ("BREAK", word, target) -> regression breaks. Returns (failed seed ids, failed regression ids) like eval_fn."""
     def fn(raw):
-        failed, reg = {"s-001", "s-002", "s-003"}, set()
-        for word, targets in raw["aliases"].items():
-            for sid in rules.get((word, targets[0]), ()):
-                failed.discard(sid)
-            if ("BREAK", word, targets[0]) in rules:
-                reg.add("rn-001")
-        for r in raw["rules"]:
-            for sid in rules.get(("rule", tuple(sorted(r["when_all"])), r["add"][0]), ()):
-                failed.discard(sid)
+        failed, reg = {"s-001", "s-002", "s-003", "s-004"}, set()
+        have = {(w, v[0]) for w, v in raw["aliases"].items()}
+        for key, seeds in rules.items():
+            if key[0] == "PAIR" and key[1] in have and key[2] in have:
+                failed -= set(seeds)
+            elif key[0] == "BREAK":
+                if (key[1], key[2]) in have: reg.add("rn-001")
+            elif key in have:
+                failed -= set(seeds)
         return frozenset(failed), frozenset(reg)
     return fn
 
 
+CANDS = {"workspace": {"seed_ids": ["s-001"], "targets_by_seed": {"s-001": ["page", "space"]}, "allowed_targets": ["page", "space"], "catalog_df": 7},
+         "feedback": {"seed_ids": ["s-002", "s-003"], "targets_by_seed": {"s-002": ["comment"], "s-003": ["comment", "issue"]}, "allowed_targets": ["comment", "issue"], "catalog_df": 0},
+         "starred": {"seed_ids": ["s-004"], "targets_by_seed": {"s-004": ["favourite"]}, "allowed_targets": ["favourite"], "catalog_df": 1},
+         "searches": {"seed_ids": ["s-004"], "targets_by_seed": {"s-004": ["filter"]}, "allowed_targets": ["filter"], "catalog_df": 2}}
+BENCH2 = {"seed": [{"id": "s-001", "query": "browse pages inside this workspace", "failure_classes": ["R6"]},
+                   {"id": "s-002", "query": "leave feedback on this ticket", "failure_classes": ["R5", "R6"]},
+                   {"id": "s-003", "query": "read feedback on the issue", "failure_classes": ["R6"]},
+                   {"id": "s-004", "query": "list my starred searches", "failure_classes": ["R6"]}], "regression_negative": [{"id": "rn-001", "query": "x"}]}
+QUERIES = {r["id"]: r["query"] for r in BENCH2["seed"]}
+CLASSES = {r["id"]: r["failure_classes"] for r in BENCH2["seed"]}
+
+
 class TestProposer(unittest.TestCase):
-    def test_direct_alias_in_order_and_working_state(self):
+    """spec §6: atomic actions (candidate_word, target), size-1 in tuple order then size-2 with distinct words, rollback per trial,
+    <= 2 per seed, <= budget total, direct aliases only."""
+    def test_trial_order_singles_then_distinct_word_pairs(self):
+        acts = [("a", "x"), ("a", "y"), ("b", "x")]
+        self.assertEqual(tune.trial_order(acts), [(("a", "x"),), (("a", "y"),), (("b", "x"),), (("a", "x"), ("b", "x")), (("a", "y"), ("b", "x"))])
+        self.assertEqual(tune.atomic_actions(CANDS, "s-004", BASE_RAW), [("searches", "filter"), ("starred", "favourite")])
+        self.assertEqual(tune.atomic_actions(CANDS, "s-004", {**BASE_RAW, "aliases": {"starred": ["favourite"]}}), [("searches", "filter")])
+
+    def test_single_actions_in_order_and_rollback(self):
         fn = fake_eval({("workspace", "space"): ["s-001"], ("feedback", "comment"): ["s-002", "s-003"]})
         working, patch = tune.propose_aliases(fn, BENCH2, BASE_RAW, CANDS)
-        self.assertEqual(patch["aliases"], {"workspace": ["space"], "feedback": ["comment"]})   # page tried first, fails; space adopted
-        self.assertEqual(patch["resolved_by_prior_change"], ["s-003"]); self.assertEqual(patch["unresolved"], [])
-        self.assertEqual(patch["notes"]["workspace"]["candidate_word"], "workspace"); self.assertEqual(patch["notes"]["workspace"]["seed_query_id"], "s-001")
+        self.assertEqual(patch["aliases"], {"workspace": ["space"], "feedback": ["comment"]})           # page tried first, failed, rolled back
+        self.assertEqual(patch["rules"], []); self.assertEqual(patch["resolved_by_prior_change"], ["s-003"]); self.assertEqual(patch["unresolved"], ["s-004"])
+        self.assertEqual(patch["actions_by_seed"], {"s-001": [["workspace", "space"]], "s-002": [["feedback", "comment"]]})
+        self.assertEqual(patch["notes"]["workspace"], tune.round_note("workspace", "s-001", "space"))
         self.assertEqual(working["aliases"]["ticket"], ["issue"]); self.assertEqual(BASE_RAW["aliases"], {"ticket": ["issue"]})
-        self.assertEqual(tune.propose_aliases(fn, BENCH2, BASE_RAW, CANDS)[1], patch)                 # deterministic
+        self.assertEqual(tune.propose_aliases(fn, BENCH2, BASE_RAW, CANDS)[1], patch)                    # deterministic
+
+    def test_pair_adopted_when_no_single_fixes_the_seed(self):
+        fn = fake_eval({("PAIR", ("searches", "filter"), ("starred", "favourite")): ["s-004"]})
+        _, patch = tune.propose_aliases(fn, BENCH2, BASE_RAW, CANDS)
+        self.assertEqual(patch["aliases"], {"searches": ["filter"], "starred": ["favourite"]}); self.assertEqual(patch["actions_by_seed"]["s-004"], [["searches", "filter"], ["starred", "favourite"]])
+        self.assertEqual(patch["unresolved"], ["s-001", "s-002", "s-003"])
+        _, capped = tune.propose_aliases(fn, BENCH2, BASE_RAW, CANDS, per_seed=1)
+        self.assertEqual(capped["aliases"], {}); self.assertIn("s-004", capped["unresolved"])          # pair never tried at per_seed=1
+        _, budget = tune.propose_aliases(fn, BENCH2, BASE_RAW, CANDS, budget=1)
+        self.assertEqual(budget["aliases"], {})                                                           # a pair does not fit a budget of 1
 
     def test_proposer_rejects_change_that_breaks_regression(self):
-        fn = fake_eval({("workspace", "page"): ["s-001"], ("BREAK", "workspace", "page"): True,
-                        ("rule", ("browse", "workspace"), "page"): ["s-001"]})
+        fn = fake_eval({("workspace", "page"): ["s-001"], ("BREAK", "workspace", "page"): True, ("workspace", "space"): ["s-001"]})
         _, patch = tune.propose_aliases(fn, BENCH2, BASE_RAW, CANDS)
-        self.assertEqual(patch["aliases"], {}); self.assertEqual(patch["rules"], [{"when_all": ["workspace", "browse"], "add": ["page"]}])
-        self.assertIn("rule:0", patch["notes"]); self.assertEqual(patch["unresolved"], ["s-002", "s-003"])
+        self.assertEqual(patch["aliases"]["workspace"], ["space"])
 
-    def test_budget_checked_after_prior_change_reevaluation(self):
-        fn = fake_eval({("workspace", "page"): ["s-001"], ("feedback", "comment"): ["s-002", "s-003"]})
-        _, patch = tune.propose_aliases(fn, BENCH2, BASE_RAW, CANDS, budget=2)
-        self.assertEqual(patch["resolved_by_prior_change"], ["s-003"]); self.assertEqual(patch["unresolved"], [])
-        _, patch1 = tune.propose_aliases(fn, BENCH2, BASE_RAW, CANDS, budget=1)
-        self.assertEqual(patch1["aliases"], {"workspace": ["page"]}); self.assertEqual(patch1["unresolved"], ["s-002", "s-003"])
-
-    def test_seed_without_r6_is_skipped(self):
-        """Review I-1 (s-014 "fetch page by id" shape): a failing seed whose bench classes lack R6 never gets a change."""
+    def test_seed_without_r6_is_skipped_and_used_word_not_retried(self):
         bench = json.loads(json.dumps(BENCH2)); bench["seed"][0]["failure_classes"] = ["R5"]
-        fn = fake_eval({("workspace", "page"): ["s-001"], ("feedback", "comment"): ["s-002", "s-003"]})
-        _, patch = tune.propose_aliases(fn, bench, BASE_RAW, CANDS)
-        self.assertEqual(patch["aliases"], {"feedback": ["comment"]}); self.assertEqual(patch["not_r6"], ["s-001"])
-        self.assertEqual(patch["trials"], 1)                                  # no trial was spent on s-001
-
-    def test_per_seed_one_and_used_word_skips_direct(self):
         fn = fake_eval({("workspace", "page"): ["s-001"], ("feedback", "comment"): ["s-002"], ("feedback", "issue"): ["s-003"]})
-        _, patch = tune.propose_aliases(fn, BENCH2, BASE_RAW, CANDS)
-        self.assertEqual(patch["aliases"], {"workspace": ["page"], "feedback": ["comment"]}); self.assertEqual(patch["unresolved"], ["s-003"])
+        _, patch = tune.propose_aliases(fn, bench, BASE_RAW, CANDS)
+        self.assertEqual(patch["not_r6"], ["s-001"]); self.assertEqual(patch["aliases"], {"feedback": ["comment"]}); self.assertIn("s-003", patch["unresolved"])
+
+    def test_fixture_constraint_skips_breaking_action(self):
+        fn = fake_eval({("workspace", "page"): ["s-001"], ("workspace", "space"): ["s-001"]})
+        breaks = lambda raw: ["s-022"] if raw["aliases"].get("workspace") == ["page"] else []
+        _, patch = tune.propose_aliases(fn, BENCH2, BASE_RAW, CANDS, fixture_fn=breaks)
+        self.assertEqual(patch["aliases"]["workspace"], ["space"])
+        self.assertEqual(patch["fixture_fail"], [{"kind": "alias", "actions": [["workspace", "page"]], "seed_query_id": "s-001", "failing": ["s-022"]}])
 
 
 class TestValidator(unittest.TestCase):
     def after(self, **aliases):
         raw = json.loads(json.dumps(BASE_RAW))
         for w, (t, sid) in aliases.items():
-            raw["aliases"][w] = [t]; raw["notes"][w] = tune.round2_note(w, sid, t, "alias")
+            raw["aliases"][w] = [t]; raw["notes"][w] = tune.round_note(w, sid, t)
         return raw
 
     def v(self, after, **kw):
@@ -149,9 +175,11 @@ class TestValidator(unittest.TestCase):
 
     def test_accepts_proposer_shape(self):
         self.assertEqual(self.v(self.after(workspace=("page", "s-001"))), [])
+        # NOTE (task-7 concern): Round 3 rejects any added rule outright (direct aliases only); this case now carries
+        # exactly that one violation instead of being clean, since the old Round 2 "accepted rule shape" case is moot.
         rule = json.loads(json.dumps(BASE_RAW)); rule["rules"] = [{"when_all": ["workspace", "browse"], "add": ["page"]}]
-        rule["notes"]["rule:0"] = tune.round2_note("workspace", "s-001", "page", "rule")
-        self.assertEqual(self.v(rule), [])
+        rule["notes"]["rule:0"] = tune.round_note("workspace", "s-001", "page")
+        self.assertEqual(self.v(rule), ["rules are not proposed in Round 3 (direct aliases only)"])
 
     def test_rejects_bad_shapes(self):
         two = self.after(workspace=("page", "s-001")); two["aliases"]["workspace"] = ["page", "space"]
@@ -160,24 +188,40 @@ class TestValidator(unittest.TestCase):
         self.assertTrue(any("target" in m for m in self.v(self.after(workspace=("issue", "s-001")))))
         self.assertTrue(any("target" in m for m in self.v(self.after(feedback=("issue", "s-002")))))      # allowed overall, not for s-002
         self.assertTrue(any("seed" in m for m in self.v(self.after(workspace=("page", "s-002")))))
+        # NOTE (task-7 concern): the per-seed cap moved from 1 (Round 2) to 2 (Round 3 PER_SEED); three notes on one
+        # seed are needed to trigger it now, and the message text changed to "atomic actions".
         twice = self.after(workspace=("page", "s-001")); twice["aliases"]["feedback"] = ["comment"]
-        twice["notes"]["feedback"] = tune.round2_note("feedback", "s-001", "comment", "alias")
-        self.assertTrue(any("per seed" in m for m in self.v(twice)))
+        twice["notes"]["feedback"] = tune.round_note("feedback", "s-001", "comment")
+        twice["aliases"]["starred"] = ["favourite"]; twice["notes"]["starred"] = tune.round_note("starred", "s-001", "favourite")
+        self.assertTrue(any("atomic actions" in m for m in self.v(twice)))
         self.assertTrue(any("budget" in m for m in self.v(self.after(workspace=("page", "s-001")), budget=0)))
         damped = self.after(workspace=("page", "s-001")); damped["alias_damping"] = 0.9
         self.assertTrue(any("alias_damping" in m for m in self.v(damped)))
         removed = self.after(); del removed["aliases"]["ticket"]; del removed["notes"]["ticket"]
         self.assertTrue(any("removed" in m for m in self.v(removed)))
         rule = json.loads(json.dumps(BASE_RAW)); rule["rules"] = [{"when_all": ["workspace", "browse", "page"], "add": ["page"]}]
-        rule["notes"]["rule:0"] = tune.round2_note("workspace", "s-001", "page", "rule")
+        rule["notes"]["rule:0"] = tune.round_note("workspace", "s-001", "page")
         self.assertTrue(any("context" in m for m in self.v(rule)))
         not_r6 = self.after(workspace=("page", "s-001"))
         self.assertTrue(any("not R6" in m for m in tune.validate_alias_change(BASE_RAW, not_r6, CANDS, QUERIES, {**CLASSES, "s-001": ["R5"]})))
         bad_note = self.after(workspace=("page", "s-001")); bad_note["notes"]["workspace"]["failure_classes"] = []
         self.assertTrue(any("not R6" in m for m in self.v(bad_note)))
         rule2 = json.loads(json.dumps(BASE_RAW)); rule2["rules"] = [{"when_all": ["workspace", "sprint"], "add": ["page"]}]
-        rule2["notes"]["rule:0"] = tune.round2_note("workspace", "s-001", "page", "rule")
+        rule2["notes"]["rule:0"] = tune.round_note("workspace", "s-001", "page")
         self.assertTrue(any("context" in m for m in self.v(rule2)))                                   # sprint not in the query
+
+    def test_rejects_rules_and_more_than_two_actions_per_seed(self):
+        after = json.loads(json.dumps(BASE_RAW)); after["rules"].append({"when_all": ["workspace", "browse"], "add": ["page"]})
+        after["notes"]["rule:0"] = tune.round_note("workspace", "s-001", "page")
+        self.assertTrue(any("not proposed in Round 3" in v for v in tune.validate_alias_change(BASE_RAW, after, CANDS, QUERIES, CLASSES)))
+        three = json.loads(json.dumps(BASE_RAW))
+        for w, t in (("workspace", "page"), ("feedback", "comment"), ("starred", "favourite")):
+            three["aliases"][w] = [t]; three["notes"][w] = tune.round_note(w, "s-001", t)
+        self.assertTrue(any("more than two atomic actions" in v for v in tune.validate_alias_change(BASE_RAW, three, CANDS, QUERIES, CLASSES)))
+        two = json.loads(json.dumps(BASE_RAW))
+        for w, t in (("searches", "filter"), ("starred", "favourite")):
+            two["aliases"][w] = [t]; two["notes"][w] = tune.round_note(w, "s-004", t)
+        self.assertEqual(tune.validate_alias_change(BASE_RAW, two, CANDS, QUERIES, CLASSES), [])
 
 
 class TestReplayAndHashes(unittest.TestCase):
@@ -222,7 +266,7 @@ class TestReplayAndHashes(unittest.TestCase):
         import tempfile
         from unittest import mock
         line = {"run_id": "r2", "constants_selected": {**BASE, "method_match_bonus": 3.0}, "result_sha256": "f" * 64,
-                "aliases_proposed": {"aliases": {"workspace": ["page"]}, "rules": [], "notes": {"workspace": tune.round2_note("workspace", "s-001", "page", "alias")}}}
+                "aliases_proposed": {"aliases": {"workspace": ["page"]}, "rules": [], "notes": {"workspace": tune.round_note("workspace", "s-001", "page")}}}
         with tempfile.TemporaryDirectory() as td, mock.patch.object(tune, "_read_log", return_value=[line]), \
              mock.patch.object(tune, "ALIASES_PATH", pathlib.Path(td) / "a.json"), mock.patch.object(tune, "RANKING_PATH", pathlib.Path(td) / "r.json"), mock.patch("sys.stderr"):
             (pathlib.Path(td) / "a.json").write_text(json.dumps(BASE_RAW)); (pathlib.Path(td) / "r.json").write_text(json.dumps({"constants": dict(BASE)}))
@@ -240,7 +284,7 @@ class TestReplayAndHashes(unittest.TestCase):
         self.assertEqual(tune.suite_evidence("Ran 3 tests\n\nOK\n")["failing_tests"], [])
         self.assertEqual(tune.suite_evidence("Ran 3 tests\n\nOK\n")["exit_code"], 0)
         self.assertEqual(tune.suite_evidence(text + "exit_code: 3\n")["exit_code"], 3)            # explicit capture line wins (M-8)
-        line = {"constants_selected": {**BASE, "method_match_bonus": 3.0}, "aliases_proposed": {"aliases": {"workspace": ["page"]}, "rules": [], "notes": {"workspace": tune.round2_note("workspace", "s-001", "page", "alias")}}}
+        line = {"constants_selected": {**BASE, "method_match_bonus": 3.0}, "aliases_proposed": {"aliases": {"workspace": ["page"]}, "rules": [], "notes": {"workspace": tune.round_note("workspace", "s-001", "page")}}}
         ranking, aliases = tune.materialize_candidate(line, BASE_RAW, {"constants": dict(BASE), "version": 1})
         self.assertEqual(ranking["constants"]["method_match_bonus"], 3.0); self.assertEqual(aliases["aliases"]["workspace"], ["page"])
         self.assertEqual(tune.alias_patch(BASE_RAW, aliases), line["aliases_proposed"])
@@ -250,10 +294,104 @@ class TestReplayAndHashes(unittest.TestCase):
         from unittest import mock
         calls = []
         with mock.patch.object(tune, "select_candidate", side_effect=lambda *a, **k: calls.append("select") or dict(BASE)), \
-             mock.patch.object(tune, "propose_aliases", side_effect=lambda *a, **k: calls.append("propose") or (json.loads(json.dumps(BASE_RAW)), {"aliases": {}, "rules": {}, "notes": {}, "resolved_by_prior_change": [], "unresolved": [], "trials": 0})):
+             mock.patch.object(tune, "propose_aliases", side_effect=lambda *a, **k: calls.append("propose") or (json.loads(json.dumps(BASE_RAW)), {"aliases": {}, "rules": {}, "notes": {}, "resolved_by_prior_change": [], "unresolved": [], "trials": 0, "actions_by_seed": {}, "fixture_fail": []})):
             tune.run_pipeline(lambda point, raw: ({"passed": S, "failed": []}, {"passed": R, "failed": []}), tune._BENCH, BASE_RAW, {"candidates": {}}, GRID, BASE,
                               lambda point, raw: [])
         self.assertEqual(calls, ["select", "propose"])
+
+
+class TestGridEvaluator(unittest.TestCase):
+    """spec §3.4 v1.22: the memoized grid path must rank exactly like search_operations (review focus 3)."""
+    @classmethod
+    def setUpClass(cls):
+        cls.state = tune.fixture_state(); cls.rp = policy.load_ranking(); cls.bench = tune.fixture_bench(tune._BENCH)
+        cls.queries = [r["query"] for r in cls.bench["seed"] + cls.bench["regression_negative"]] + ["issue status field values", "create and delete issue", "list page versions"]
+        cls.ap = tune._alias_policy(json.loads(tune.ALIASES_PATH.read_text(encoding="utf-8")))
+        cls.ge = tune.GridEvaluator(cls.state, cls.queries, cls.ap)
+
+    def test_grid_evaluator_matches_search_operations(self):
+        import random
+        from unittest import mock
+        from tools.atlassian_docs.intelligence import search
+        pts = tune.grid_points(self.rp.tuning_grid); rnd = random.Random(7)
+        sample = rnd.sample(pts, 20) + [{**dict(self.rp.constants), "method_order_bonus": 1.0, "path_coverage_bonus": 1.0, "method_mismatch_penalty": 5.0}]
+        for p in sample:
+            rpp = tune.ranking_with(self.rp, p)
+            with mock.patch.object(policy, "ranking", return_value=rpp), mock.patch.object(policy, "aliases", return_value=self.ap):
+                for q in self.queries:
+                    out = search.search_operations(self.state, q, limit=5)
+                    self.assertEqual(self.ge.ranked(q, rpp), ([r["key"] for r in out["results"]], out["actionable"]), (p, q))
+
+    def test_fast_and_slow_point_evaluation_agree(self):
+        for p in (dict(self.rp.constants), {**dict(self.rp.constants), "path_coverage_bonus": 0.5}):
+            fast = tune.evaluate_point_fast(self.ge, self.rp, p, self.bench)
+            slow = tune.evaluate_point(self.state, self.rp, p, self.bench, self.ap)
+            self.assertEqual([(r["passed"], r.get("raw_passed"), r.get("effective_passed")) for r in fast], [(r["passed"], r.get("raw_passed"), r.get("effective_passed")) for r in slow])
+            self.assertEqual(tune.fixture_failures_fast(self.ge, self.rp, p, self.bench), tune.fixture_failures(self.state, self.rp, p, self.bench, self.ap))
+
+
+class TestTuningAccept(unittest.TestCase):
+    def res(self, passed, raw=None, eff=None):
+        out = {"passed": passed, "failed": [], "total": R}
+        if raw is not None: out.update(raw_passed=raw, effective_passed=eff)
+        return out
+
+    def test_predicate_uses_effective_regression_and_fixture_raw(self):
+        seed_ok, seed_bad = {"passed": S, "failed": [], "total": S}, {"passed": S - 1, "failed": [], "total": S}
+        self.assertTrue(tune.tuning_accept(seed_ok, self.res(R, raw=10, eff=R), []))                      # raw 10/14 is fine
+        self.assertFalse(tune.tuning_accept(seed_ok, self.res(R - 1, raw=R - 1, eff=R - 1), []))
+        self.assertFalse(tune.tuning_accept(seed_bad, self.res(R, raw=R, eff=R), []))
+        self.assertFalse(tune.tuning_accept(seed_ok, self.res(R, raw=R, eff=R), ["rn-003"]))               # fixture negative raw is a hard constraint
+
+    def test_finish_marks_failed_or_pending(self):
+        import argparse
+        from unittest import mock
+        rp = policy.load_ranking(); patch = {"aliases": {}, "rules": [], "notes": {}, "resolved_by_prior_change": [], "not_r6": [], "unresolved": [], "fixture_fail": [], "trials": 0, "actions_by_seed": {}}
+        args = argparse.Namespace(dry_run=True, note="t")
+        with mock.patch.object(tune, "_git", return_value=""), mock.patch("builtins.print") as pr:
+            code = tune._finish(args, rp, "f" * 64, [], dict(rp.constants), patch, {}, {"passed": S, "failed": [], "total": S}, self.res(R, raw=10, eff=R), "b" * 64, {"constants": [], "final": []}, 1.5, {"raw_passed": 6, "effective_passed": 6, "total": 6})
+            self.assertEqual(code, 0)
+            line = json.loads(pr.call_args_list[1].args[0]); self.assertEqual((line["status"], line["tuning_accept"], line["regression_raw"], line["regression_negative"]), ("pending", True, f"10/{R}", f"{R}/{R}"))
+            self.assertEqual((line["fixture_negative_raw"], line["fixture_negative_effective_diagnostic"]), ("6/6", "6/6"))
+        with mock.patch.object(tune, "_git", return_value=""), mock.patch("builtins.print") as pr:
+            code = tune._finish(args, rp, "f" * 64, [], dict(rp.constants), patch, {}, {"passed": S - 1, "failed": [], "total": S}, self.res(R, raw=R, eff=R), "b" * 64, {"constants": [], "final": []}, 1.5, {"raw_passed": 6, "effective_passed": 6, "total": 6})
+            self.assertEqual(code, 1); line = json.loads(pr.call_args_list[1].args[0]); self.assertEqual((line["status"], line["tuning_accept"], line["tuning_failed"]), ("failed", False, True))
+
+    def test_verify_failure_branch_replays_the_failed_run(self):
+        from unittest import mock
+        failed = {"run_id": "f1", "status": "failed", "adopted": False, "tuning_failed": True, "constants_selected": dict(BASE), "result_sha256": "a" * 64}
+        with mock.patch.object(tune, "_read_log", return_value=[failed, {**failed, "run_id": "f2"}]), mock.patch.object(tune, "_with_state", return_value=[]), \
+             mock.patch.object(tune, "baseline_mismatch", return_value=[]), mock.patch("builtins.print") as pr:
+            self.assertEqual(tune._verify("cache", tune._BENCH, policy.load_ranking(), BASE_RAW, {}, {"generated_from": {"inputs": {"aliases": policy.canonical_sha256(BASE_RAW)}}, "candidates": {}}), 0)
+        with mock.patch.object(tune, "_read_log", return_value=[failed, {**failed, "run_id": "f2", "result_sha256": "b" * 64}]), mock.patch("sys.stderr"), mock.patch("builtins.print"):
+            self.assertEqual(tune._verify("cache", tune._BENCH, policy.load_ranking(), BASE_RAW, {}, {"generated_from": {"inputs": {}}, "candidates": {}}), 2)   # failed runs disagree
+
+
+class TestBaselineAndConstantsFile(unittest.TestCase):
+    def test_baseline_sha_includes_fixture_evaluator_and_grid(self):
+        import tempfile, pathlib, shutil
+        bench = tune._BENCH; rk = json.loads(tune.RANKING_PATH.read_text(encoding="utf-8")); al = json.loads(tune.ALIASES_PATH.read_text(encoding="utf-8"))
+        cands = {"candidates": {}, "generated_from": {}}
+        a = tune.baseline_sha256(al, rk, "f" * 64, cands, bench)
+        other = json.loads(json.dumps(rk)); other["tuning_grid"]["method_order_bonus"] = [0.0, 0.5]
+        self.assertNotEqual(a, tune.baseline_sha256(al, other, "f" * 64, cands, bench))                # grid is an input
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            for rel in tune.ev.EVALUATION_CODE_FILES:
+                (root / rel).parent.mkdir(parents=True, exist_ok=True); shutil.copyfile(tune.ROOT / rel, root / rel)
+            self.assertEqual(tune.baseline_sha256(al, rk, "f" * 64, cands, bench, root=root), a)
+            (root / tune.ev.EVALUATION_CODE_FILES[0]).write_bytes(b"x")
+            self.assertNotEqual(tune.baseline_sha256(al, rk, "f" * 64, cands, bench, root=root), a)        # evaluation code is an input
+
+    def test_write_constants_eight_keys_keeps_structure(self):
+        import tempfile, pathlib, shutil
+        with tempfile.TemporaryDirectory() as td:
+            p = pathlib.Path(td) / "search_ranking.json"; shutil.copyfile(tune.RANKING_PATH, p)
+            before = policy.load_ranking(p); point = {**dict(before.constants), "method_order_bonus": 0.5, "method_mismatch_penalty": 5.0}
+            tune.write_constants(point, path=p)
+            after = policy.load_ranking(p)
+            self.assertEqual(dict(after.constants), point); self.assertEqual(after.structure_sha256, before.structure_sha256)
+            self.assertEqual(p.read_text(encoding="utf-8").count('"constants"'), 1)
 
 
 class TestFixtureConstraint(unittest.TestCase):
@@ -278,7 +416,9 @@ class TestFixtureConstraint(unittest.TestCase):
         breaks = lambda raw: ["s-022"] if raw["aliases"].get("workspace") == ["page"] else []    # synthetic fixture breaker
         _, patch = tune.propose_aliases(fn, BENCH2, BASE_RAW, CANDS, fixture_fn=breaks)
         self.assertEqual(patch["aliases"], {"workspace": ["space"], "feedback": ["comment"]})      # page skipped, space adopted
-        self.assertEqual(patch["fixture_fail"], [{"kind": "alias", "word": "workspace", "target": "page", "seed_query_id": "s-001", "failing": ["s-022"]}])
+        # NOTE (task-7 concern): fixture_fail entries now describe atomic-action combos ("actions": [[word, target], ...])
+        # rather than a single word/target pair, since the proposer tries size-1/size-2 action combos, not single words.
+        self.assertEqual(patch["fixture_fail"], [{"kind": "alias", "actions": [["workspace", "page"]], "seed_query_id": "s-001", "failing": ["s-022"]}])
         self.assertEqual(tune.propose_aliases(fn, BENCH2, BASE_RAW, CANDS, fixture_fn=breaks)[1], patch)
         _, unconstrained = tune.propose_aliases(fn, BENCH2, BASE_RAW, CANDS)
         self.assertEqual(unconstrained["aliases"]["workspace"], ["page"])                          # the constraint made the difference

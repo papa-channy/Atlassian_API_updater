@@ -18,7 +18,7 @@ alias/rule trial of the proposer - must pass the r0 fixture suite (the 23 seed /
 make_state("jira-platform", "jira-software", "confluence"), as in tests/intelligence/test_search.py). A failing candidate
 is excluded from selection and logged under `fixture_fail`; it is a constraint, never an objective.
 """
-import argparse, copy, dataclasses, datetime, hashlib, itertools, json, os, pathlib, re, shutil, subprocess, sys, tempfile, uuid
+import argparse, copy, dataclasses, datetime, hashlib, itertools, json, os, pathlib, re, shutil, subprocess, sys, tempfile, time, uuid
 from types import MappingProxyType
 from unittest import mock
 
@@ -42,7 +42,8 @@ MAGNITUDE_KEYS = tuple(k for k in CONSTANT_KEYS if k != "path_unmatched_cap")
 _BENCH = json.loads(BENCH_PATH.read_text(encoding="utf-8"))
 SEED_TOTAL, REGRESSION_TOTAL = len(_BENCH["seed"]), len(_BENCH["regression_negative"])
 SOURCES = ("jira-platform", "jira-software", "confluence")
-BUDGET = 15
+BUDGET, PER_SEED = 15, 2
+BONUS_KEYS = ("path_coverage_bonus", "method_order_bonus")      # spec §3.4: conservative tie-break, in this order
 FIXTURE_COUNTS = (23, 6)
 EVENTS = ("baseline_checked", "constants_selected", "aliases_proposed", "final_check")
 
@@ -60,16 +61,17 @@ def l1_index_distance(point, baseline, grid) -> int:
 
 
 def select_candidate(results, baseline, grid, seed_total=SEED_TOTAL, regression_total=REGRESSION_TOTAL) -> dict:
-    """spec §8.2: (1) perfect points only, else max seed then max regression; (2) min L1 grid-index distance to
-    baseline; (3) min magnitude sum; (4) lexicographic 6-tuple."""
+    """spec §3.4: results = (point, seed_passed, regression_EFFECTIVE_passed). (1) perfect points only, else max seed then max
+    regression; (2) smaller (path_coverage_bonus, method_order_bonus); (3) min L1 grid-index distance to the baseline; (4) min
+    magnitude sum; (5) lexicographic 8-tuple."""
     if not results:
         raise ValueError("no results to select from")
     pool = [p for p, s, r in results if s == seed_total and r == regression_total]
     if not pool:
         best = max((s, r) for _, s, r in results)
         pool = [p for p, s, r in results if (s, r) == best]
-    return dict(min(pool, key=lambda p: (l1_index_distance(p, baseline, grid), sum(p[k] for k in MAGNITUDE_KEYS),
-                                          tuple(p[k] for k in CONSTANT_KEYS))))
+    return dict(min(pool, key=lambda p: (tuple(p[k] for k in BONUS_KEYS), l1_index_distance(p, baseline, grid),
+                                          sum(p[k] for k in MAGNITUDE_KEYS), tuple(p[k] for k in CONSTANT_KEYS))))
 
 
 def plan_effects(dry_run: bool, perfect: bool) -> dict:
@@ -92,7 +94,11 @@ def dirty_paths(porcelain: str) -> list:
 # ---- evaluation against the snapshot ----
 
 def _search_fn(state):
-    return lambda q: [r["key"] for r in search_operations(state, q, limit=5).get("results", [])]
+    """(top-5 keys, actionable) - the Round 3 evaluator contract."""
+    def fn(q):
+        out = search_operations(state, q, limit=5)
+        return [r["key"] for r in out.get("results", [])], bool(out.get("actionable", True))
+    return fn
 
 
 def ranking_with(rp, point):
@@ -101,10 +107,19 @@ def ranking_with(rp, point):
 
 
 def evaluate_point(state, rp, point, bench, alias_policy):
+    """Production path: seed raw top-1, regression_negative raw + effective (spec §4)."""
     with mock.patch.object(policy, "ranking", return_value=ranking_with(rp, point)), \
             mock.patch.object(policy, "aliases", return_value=alias_policy):
         fn = _search_fn(state)
-        return evaluate(bench["seed"], fn), evaluate(bench["regression_negative"], fn)
+        return evaluate(bench["seed"], fn, section="seed"), evaluate(bench["regression_negative"], fn, section="regression_negative")
+
+
+def fixture_negative_diagnostic(state, rp, point, bench_r0, alias_policy) -> dict:
+    """AC-R3-11a `fixture_negative.effective_diagnostic`: the 6 r0 negatives judged like regression_negative (raw + effective) -
+    recorded on the log line only; acceptance uses fixture_failures (raw)."""
+    with mock.patch.object(policy, "ranking", return_value=ranking_with(rp, point)), \
+            mock.patch.object(policy, "aliases", return_value=alias_policy):
+        return evaluate(bench_r0["regression_negative"], _search_fn(state), section="regression_negative")
 
 
 def top5(state, rp, point, query, alias_policy):
@@ -130,8 +145,58 @@ def fixture_state():
 
 
 def fixture_failures(state, rp, point, bench_r0, alias_policy) -> list:
-    """Sorted ids of r0 fixture records that fail at `point` with `alias_policy` ([] = the candidate is admissible)."""
-    s, r = evaluate_point(state, rp, point, bench_r0, alias_policy)
+    """Sorted ids of r0 fixture records failing at `point` - RAW judgement for both sets (spec §3.4 fixture hard constraint)."""
+    with mock.patch.object(policy, "ranking", return_value=ranking_with(rp, point)), \
+            mock.patch.object(policy, "aliases", return_value=alias_policy):
+        fn = _search_fn(state)
+        s, r = evaluate(bench_r0["seed"], fn), evaluate(bench_r0["regression_negative"], fn)
+    return sorted(f["id"] for f in s["failed"] + r["failed"])
+
+
+class GridEvaluator:
+    """Memoized grid-stage evaluation (spec §3.4 v1.22). Per query the lexical rows (entry, op, lexical) are computed ONCE per alias
+    state with the production `_score`; every grid point re-runs only the production `_structural_signals` and reproduces
+    search_operations' ordering: key (-final, deprecated, key), DEPRECATED_FACTOR, zero clamp, limit. Bench queries contain
+    whitespace so exact-key pinning never applies; a whitespace-free query falls back to search_operations."""
+    def __init__(self, state, queries, alias_policy):
+        from tools.atlassian_docs.intelligence import search as S
+        self.S, self.state, self.ap, self.rows, self.meta = S, state, alias_policy, {}, {}
+        for q in dict.fromkeys(queries):
+            unigrams, exp = S.tokenize_unigrams(q), S.expand_query(q, alias_policy)
+            lexical_base, rows = exp.base | S.joined_query_forms(q), []
+            for name in sorted(state.registry.sources):
+                sr = state.registry.sources[name]
+                for entry in sr.search_index.entries:
+                    lexical, _ = S._score(entry, lexical_base, exp.direct, exp.cond, unigrams, alias_policy)
+                    if lexical > 0:
+                        rows.append((entry, sr.operations_by_key[entry.key], lexical))
+            self.rows[q], self.meta[q] = rows, (unigrams, exp.all)
+
+    def ranked(self, query, rp, limit=5):
+        if query not in self.rows or not any(ch.isspace() for ch in query.strip()):
+            with mock.patch.object(policy, "ranking", return_value=rp), mock.patch.object(policy, "aliases", return_value=self.ap):
+                return _search_fn(self.state)(query)
+        unigrams, exp_all = self.meta[query]
+        intent = self.S.method_intent(unigrams, rp.verb_methods)
+        cands = []
+        for entry, op, lexical in self.rows[query]:
+            structural, _ = self.S._structural_signals(entry, unigrams, exp_all, rp, intent)
+            final = max(lexical + structural, 0.0) * (self.S.DEPRECATED_FACTOR if op.deprecated else 1.0)
+            if final == 0.0:
+                continue
+            cands.append((final, op.deprecated, op.key))
+        cands.sort(key=lambda c: (-c[0], c[1], c[2]))
+        return [c[2] for c in cands[:limit]], bool(intent[1])
+
+
+def evaluate_point_fast(ge, rp, point, bench):
+    rpp = ranking_with(rp, point); fn = lambda q: ge.ranked(q, rpp)
+    return evaluate(bench["seed"], fn, section="seed"), evaluate(bench["regression_negative"], fn, section="regression_negative")
+
+
+def fixture_failures_fast(ge, rp, point, bench_r0) -> list:
+    rpp = ranking_with(rp, point); fn = lambda q: ge.ranked(q, rpp)
+    s, r = evaluate(bench_r0["seed"], fn), evaluate(bench_r0["regression_negative"], fn)
     return sorted(f["id"] for f in s["failed"] + r["failed"])
 
 
@@ -139,7 +204,7 @@ def write_constants(point, path=RANKING_PATH) -> None:
     """Rewrite ONLY the `constants` object; verify the frozen structure hash is unchanged, else restore."""
     original = path.read_text(encoding="utf-8")
     before = policy.load_ranking(path)
-    rows = (CONSTANT_KEYS[:2], CONSTANT_KEYS[2:5], CONSTANT_KEYS[5:])          # the frozen file's layout
+    rows = (CONSTANT_KEYS[:2], CONSTANT_KEYS[2:5], CONSTANT_KEYS[5:6], CONSTANT_KEYS[6:])          # the frozen file's layout
     body = ",\n    ".join(", ".join(f'"{k}": {json.dumps(point[k])}' for k in row) for row in rows if row)
     text, n = re.subn(r'"constants": \{[^}]*\}', lambda _m: '"constants": {\n    ' + body + "\n  }", original)
     if n != 1:
@@ -169,9 +234,9 @@ def _norm_tokens(text):
     return norm_tokens(text)
 
 
-def round2_note(word, sid, target, kind) -> dict:
+def round_note(word, sid, target) -> dict:
     return {"origin": f"round{ROUND}", "seed_query_id": sid, "candidate_word": word, "failure_classes": ["R6"],
-            "evidence": f"{kind} {word} -> {target} for {sid} (frozen candidate, deterministic proposer)"}
+            "evidence": f"alias {word} -> {target} for {sid} (frozen candidate, deterministic atomic-action proposer)"}
 
 
 def alias_patch(base_raw, working_raw) -> dict:
@@ -193,16 +258,32 @@ def strip_round_entries(raw, round) -> dict:
     return out
 
 
-def propose_aliases(eval_fn, bench, base_raw, cands, budget=BUDGET, fixture_fn=None):
-    """spec §7.2: seeds in id order; each seed is re-evaluated against the working state first (resolved_by_prior_change),
-    then seeds whose bench failure_classes lack R6 are skipped (not_r6: §7.2 requires failure_classes ∋ R6, so a
-    change for such a seed could never be adopted), then the budget is checked; candidate words (sorted) x that seed's
-    targets (sorted); direct alias first, then one-context rules; accept the first trial that fixes the seed without
-    breaking any passing record. fixture_fn(raw) -> failing r0 fixture ids: a trial that passes the snapshot check but
-    fails the fixture suite is not accepted (hard constraint, spec v1.14) and is recorded in patch["fixture_fail"]."""
+def atomic_actions(cands, sid, working) -> list:
+    """spec §6: this seed's (candidate_word, target) pairs in tuple order; words already aliased in the working state excluded."""
+    return sorted((w, t) for w, c in cands.items() if sid in c["seed_ids"] and w not in working["aliases"] for t in c["targets_by_seed"][sid])
+
+
+def trial_order(actions) -> list:
+    """size-1 actions in tuple order, then size-2 combinations with DISTINCT candidate words in tuple order."""
+    return [(a,) for a in actions] + [(a, b) for a, b in itertools.combinations(actions, 2) if a[0] != b[0]]
+
+
+def apply_actions(working, actions, sid):
+    trial = copy.deepcopy(working)
+    for word, target in actions:
+        trial["aliases"][word] = [target]; trial["notes"][word] = round_note(word, sid, target)
+    return trial
+
+
+def propose_aliases(eval_fn, bench, base_raw, cands, budget=BUDGET, per_seed=PER_SEED, fixture_fn=None):
+    """spec §6 atomic-action contract: seeds in id order; each seed re-evaluated against the working state first
+    (resolved_by_prior_change); seeds without R6 skipped; trials in trial_order(); every trial starts from the current working
+    snapshot (failed trials are not accumulated); the first trial that fixes the seed without breaking a passing seed, a
+    regression record (effective) or the fixture suite is committed. <= per_seed actions per seed, <= budget in total. Direct
+    aliases only (no rules, spec §2)."""
     working = copy.deepcopy(base_raw)
     seed_fail, _ = eval_fn(working)
-    patch = {"resolved_by_prior_change": [], "not_r6": [], "unresolved": [], "fixture_fail": [], "trials": 0}
+    patch = {"resolved_by_prior_change": [], "not_r6": [], "unresolved": [], "fixture_fail": [], "trials": 0, "actions_by_seed": {}}
     accepted_n, by_id = 0, {r["id"]: r for r in bench["seed"]}
 
     def ok(trial, sid, cur_fail, cur_reg, desc):
@@ -221,41 +302,22 @@ def propose_aliases(eval_fn, bench, base_raw, cands, budget=BUDGET, fixture_fn=N
             patch["resolved_by_prior_change"].append(sid); continue
         if "R6" not in (by_id[sid].get("failure_classes") or ()):
             patch["not_r6"].append(sid); continue
-        if accepted_n >= budget:
-            patch["unresolved"].append(sid); continue
-        words = sorted(w for w, c in cands.items() if sid in c["seed_ids"])
-        qtoks, found = _norm_tokens(by_id[sid]["query"]), None
-        for word in words:
-            if word in working["aliases"]:
+        found = None
+        for combo in trial_order(atomic_actions(cands, sid, working)):
+            if len(combo) > per_seed or accepted_n + len(combo) > budget:
                 continue
-            for target in sorted(cands[word]["targets_by_seed"][sid]):
-                trial = copy.deepcopy(working)
-                trial["aliases"][word] = [target]; trial["notes"][word] = round2_note(word, sid, target, "alias")
-                if ok(trial, sid, cur_fail, cur_reg, {"kind": "alias", "word": word, "target": target}):
-                    found = trial; break
-            if found:
-                break
-        if found is None:
-            for word in words:
-                for ctx in sorted(t for t in qtoks if t != word):
-                    for target in sorted(cands[word]["targets_by_seed"][sid]):
-                        trial = copy.deepcopy(working)
-                        trial["rules"].append({"when_all": [word, ctx], "add": [target]})
-                        trial["notes"][f"rule:{len(trial['rules']) - 1}"] = round2_note(word, sid, target, "rule")
-                        if ok(trial, sid, cur_fail, cur_reg, {"kind": "rule", "when_all": [word, ctx], "target": target}):
-                            found = trial; break
-                    if found:
-                        break
-                if found:
-                    break
+            trial = apply_actions(working, combo, sid)
+            if ok(trial, sid, cur_fail, cur_reg, {"kind": "alias", "actions": [list(a) for a in combo]}):
+                found = (trial, combo); break
         if found is None:
             patch["unresolved"].append(sid); continue
-        working, accepted_n = found, accepted_n + 1
+        working, accepted_n = found[0], accepted_n + len(found[1])
+        patch["actions_by_seed"][sid] = [list(a) for a in found[1]]
     patch.update(alias_patch(base_raw, working))
     return working, patch
 
 
-def validate_alias_change(before_raw, after_raw, cands, queries, classes, budget=BUDGET) -> list:
+def validate_alias_change(before_raw, after_raw, cands, queries, classes, budget=BUDGET, per_seed=PER_SEED) -> list:
     """Pure shape check (spec §7.2); replay equality is verify_replay. classes: {seed_id: bench failure_classes};
     every added note and its seed must carry R6."""
     out = [f"top-level {k!r} changed" for k in ("version", "alias_damping", "rule_damping") if before_raw.get(k) != after_raw.get(k)]
@@ -269,14 +331,16 @@ def validate_alias_change(before_raw, after_raw, cands, queries, classes, budget
         if after_raw["notes"].get(k) != n:
             out.append(f"note {k!r} removed or changed")
     added = alias_patch(before_raw, after_raw)
-    per_seed, n_new = {}, len(added["aliases"]) + len(added["rules"])
+    if added["rules"]:
+        out.append("rules are not proposed in Round 3 (direct aliases only)")
+    per_seed_counts, n_new = {}, len(added["aliases"]) + len(added["rules"])
     if n_new > budget:
         out.append(f"budget exceeded: {n_new} > {budget}")
     for key, note in added["notes"].items():
         cw, sid = note.get("candidate_word"), note.get("seed_query_id")
         if cw not in cands:
             out.append(f"{key}: candidate_word {cw!r} not in frozen candidates"); continue
-        per_seed[sid] = per_seed.get(sid, 0) + 1
+        per_seed_counts[sid] = per_seed_counts.get(sid, 0) + 1
         if "R6" not in (note.get("failure_classes") or ()) or "R6" not in (classes.get(sid) or ()):
             out.append(f"{key}: seed {sid!r} is not R6 (note and bench failure_classes must contain R6)")
         if sid not in cands[cw]["seed_ids"]:
@@ -303,7 +367,7 @@ def validate_alias_change(before_raw, after_raw, cands, queries, classes, budget
     for i in range(len(before_raw["rules"]), len(after_raw["rules"])):
         if f"rule:{i}" not in added["notes"]:
             out.append(f"rule:{i} added without a note")
-    out += [f"more than one change per seed: {sid}" for sid, n in sorted(per_seed.items()) if n > 1]
+    out += [f"more than two atomic actions for seed {sid}: {n}" for sid, n in sorted(per_seed_counts.items()) if n > per_seed]
     return out
 
 
@@ -312,11 +376,21 @@ def baseline_mismatch(aliases_raw, ranking_raw, cands_doc) -> list:
     return [name for name, raw in (("aliases", aliases_raw), ("ranking", ranking_raw)) if policy.canonical_sha256(raw) != inputs[name]]
 
 
-def baseline_sha256(aliases_raw, ranking_raw, fp, cands_doc, bench) -> str:
+def baseline_sha256(aliases_raw, ranking_raw, fp, cands_doc, bench, root=ROOT) -> str:
+    """spec §5.5 v1.22: the whole input of tune_round3 - B aliases/ranking, S, frozen candidates, seed/regression benches, the r0
+    fixture bench, the evaluation code and the final grid."""
+    fx = fixture_bench(bench)
     return policy.canonical_sha256({"b_aliases_sha256": policy.canonical_sha256(aliases_raw), "b_ranking_sha256": policy.canonical_sha256(ranking_raw),
                                     "snapshot_registry_fingerprint": fp, "alias_candidates_sha256": policy.canonical_sha256(cands_doc),
                                     "seed_benchmark_sha256": policy.canonical_sha256(bench["seed"]),
-                                    "regression_benchmark_sha256": policy.canonical_sha256(bench["regression_negative"])})
+                                    "regression_benchmark_sha256": policy.canonical_sha256(bench["regression_negative"]),
+                                    "fixture_benchmark_sha256": policy.canonical_sha256(fx),
+                                    "evaluation_code_sha256": ev.evaluation_code_sha256(root), "tuning_grid_sha256": ev.tuning_grid_sha256(ranking_raw)})
+
+
+def tuning_accept(seed_res, reg_res, fixture_final) -> bool:
+    """spec §5.5 v1.22: seed 39/39 ∧ regression_effective 14/14 ∧ fixture positive 23/23 ∧ fixture negative raw 6/6."""
+    return seed_res["passed"] == SEED_TOTAL and reg_res["effective_passed"] == REGRESSION_TOTAL and not fixture_final
 
 
 LOG_MUTABLE_KEYS = ("run_log_sha256", "status", "adopted", "reject_reason", "reject_evidence")
@@ -403,7 +477,7 @@ def _with_state(cache, fn):
             return fn(build_state(copy_dir))
 
 
-def require_round(min_round=2) -> None:
+def require_round(min_round=3) -> None:
     """Refuse to run before round_freeze.json has a round >= min_round entry (checked fresh, not from the
     module-level ROUND computed at import time): every subcommand does file/log I/O keyed by ROUND/LOG_PATH,
     and until the Round-N freeze entry exists those resolve to an earlier round's (frozen) paths."""
@@ -453,11 +527,26 @@ def main(argv=None) -> int:
         fp = state.registry.fingerprint
         if fp != seal.get("registry_fingerprint") or fp != cands_doc["generated_from"]["registry_fingerprint"]:
             raise SystemExit(f"error: registry fingerprint {fp} != round{ROUND}_seal / alias_candidates provenance; wrong snapshot?")
-        evaluate_fn = lambda point, raw: evaluate_point(state, rp, point, bench, _alias_policy(raw))
+        b_sha = policy.canonical_sha256(aliases_raw)
+        queries = [r["query"] for r in bench["seed"] + bench["regression_negative"]]
         fx_state, fx_bench = fixture_state(), fixture_bench(bench)
-        fixture_fn = lambda point, raw: fixture_failures(fx_state, rp, point, fx_bench, _alias_policy(raw))
+        ge = GridEvaluator(state, queries, _alias_policy(aliases_raw))
+        ge_fx = GridEvaluator(fx_state, [r["query"] for r in fx_bench["seed"] + fx_bench["regression_negative"]], _alias_policy(aliases_raw))
+
+        def evaluate_fn(point, raw):             # grid stage (B aliases): memoized; proposer trials / final: production path
+            return evaluate_point_fast(ge, rp, point, bench) if policy.canonical_sha256(raw) == b_sha else evaluate_point(state, rp, point, bench, _alias_policy(raw))
+
+        def fixture_fn(point, raw):
+            return fixture_failures_fast(ge_fx, rp, point, fx_bench) if policy.canonical_sha256(raw) == b_sha else fixture_failures(fx_state, rp, point, fx_bench, _alias_policy(raw))
+        t0 = time.perf_counter()
         results, selected, working, patch, seed_res, reg_res, fixture_fail = run_pipeline(
             evaluate_fn, bench, aliases_raw, cands_doc, rp.tuning_grid, dict(rp.baseline), fixture_fn)
+        grid_runtime = time.perf_counter() - t0
+        fixture_diag = fixture_negative_diagnostic(fx_state, rp, selected, fx_bench, _alias_policy(working))   # AC-R3-11a diagnostic, final config
+        slow_s, slow_r = evaluate_point(state, rp, selected, bench, _alias_policy(aliases_raw))        # cross-check the memoized path once
+        fast_s, fast_r = evaluate_point_fast(ge, rp, selected, bench)
+        if (slow_s["passed"], slow_r["passed"], slow_r["raw_passed"]) != (fast_s["passed"], fast_r["passed"], fast_r["raw_passed"]):
+            raise SystemExit("error: memoized grid evaluator disagrees with search_operations at the selected point")
         violations = validate_alias_change(aliases_raw, working, cands_doc["candidates"], {r["id"]: r["query"] for r in bench["seed"]},
                                            {r["id"]: r["failure_classes"] for r in bench["seed"]})
         if violations:
@@ -466,30 +555,38 @@ def main(argv=None) -> int:
             print(f"  FAIL {f['id']} {f['query']!r}")
             for key, score, sig in top5(state, rp, selected, f["query"], _alias_policy(working)):
                 print(f"      {score:8.3f}  {key}  {json.dumps(sig, sort_keys=True)}")
-        return fp, results, selected, working, patch, seed_res, reg_res, fixture_fail
+        return fp, results, selected, working, patch, seed_res, reg_res, fixture_fail, grid_runtime, fixture_diag
     try:
-        fp, results, selected, working, patch, seed_res, reg_res, fixture_fail = _with_state(cache, body)
+        fp, results, selected, working, patch, seed_res, reg_res, fixture_fail, grid_runtime, fixture_diag = _with_state(cache, body)
     except SystemExit as e:
         print(e, file=sys.stderr); return 2
     return _finish(args, rp, fp, results, selected, patch, working, seed_res, reg_res,
-                   baseline_sha256(aliases_raw, ranking_raw, fp, cands_doc, bench), fixture_fail)
+                   baseline_sha256(aliases_raw, ranking_raw, fp, cands_doc, bench), fixture_fail, grid_runtime, fixture_diag)
 
 
-def _finish(args, rp, fp, results, selected, patch, working, seed_res, reg_res, base_sha, fixture_fail) -> int:
-    perfect = seed_res["passed"] == SEED_TOTAL and reg_res["passed"] == REGRESSION_TOTAL and not fixture_fail["final"]
-    effects = plan_effects(args.dry_run, perfect)
+def _finish(args, rp, fp, results, selected, patch, working, seed_res, reg_res, base_sha, fixture_fail, grid_runtime, fixture_diag) -> int:
+    accept = tuning_accept(seed_res, reg_res, fixture_fail["final"])
+    effects = plan_effects(args.dry_run, accept)
+    pos_fail = [i for i in fixture_fail["final"] if i.startswith("s-")]
+    neg_fail = [i for i in fixture_fail["final"] if i.startswith("rn-")]
     line = {"run_id": str(uuid.uuid4()), "run_at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "git_commit": _git("rev-parse", "HEAD").strip(), "round": ROUND, "registry_fingerprint": fp,
             "baseline_sha256": base_sha, "events": list(EVENTS), "constants_selected": selected,
-            "grid_size": len(results) + len(fixture_fail["constants"]), "fixture_fail": fixture_fail,
+            "grid_size": len(results) + len(fixture_fail["constants"]), "grid_runtime_s": round(grid_runtime, 1),
+            "fixture_fail": fixture_fail,
             "passing_combos": sum(1 for _, s, r in results if s == SEED_TOTAL and r == REGRESSION_TOTAL),
             "aliases_proposed": patch, "seed": f"{seed_res['passed']}/{SEED_TOTAL}",
-            "regression_negative": f"{reg_res['passed']}/{REGRESSION_TOTAL}", "tuning_failed": not perfect,
+            "regression_negative": f"{reg_res['effective_passed']}/{REGRESSION_TOTAL}",
+            "regression_raw": f"{reg_res['raw_passed']}/{REGRESSION_TOTAL}",
+            "fixture_positive": f"{FIXTURE_COUNTS[0] - len(pos_fail)}/{FIXTURE_COUNTS[0]}",
+            "fixture_negative_raw": f"{FIXTURE_COUNTS[1] - len(neg_fail)}/{FIXTURE_COUNTS[1]}",
+            "fixture_negative_effective_diagnostic": f"{fixture_diag['effective_passed']}/{FIXTURE_COUNTS[1]}",
+            "tuning_accept": accept, "tuning_failed": not accept,
             "result_sha256": result_sha256(selected, patch),
             "dirty": dirty_paths(_git("status", "--porcelain", "--untracked-files=no")), "note": args.note,
             "ranking_structure_sha256": rp.structure_sha256, "baseline": dict(rp.baseline)}
     line["run_log_sha256"] = policy.canonical_sha256(log_core(line))   # status/adopted/reject_reason are outside the hash
-    line["status"], line["adopted"] = ("pending" if perfect else "failed"), False
+    line["status"], line["adopted"] = ("pending" if accept else "failed"), False
     if effects["write_constants"]:                                   # candidate policy, adoption pending --adopt
         write_constants(selected)
         ALIASES_PATH.write_text(json.dumps(working, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -502,7 +599,7 @@ def _finish(args, rp, fp, results, selected, patch, working, seed_res, reg_res, 
                                            "tuning_failed", "status", "result_sha256")}, ensure_ascii=False))
     print(json.dumps({"aliases": patch["aliases"], "rules": patch["rules"], "unresolved": patch["unresolved"],
                       "resolved_by_prior_change": patch["resolved_by_prior_change"]}, ensure_ascii=False))
-    return 0 if perfect else 1
+    return 0 if accept else 1
 
 
 def _current_result_sha256() -> str:
@@ -607,16 +704,27 @@ def _verify(cache, bench, rp, aliases_raw, ranking_raw, cands_doc) -> int:
     rejected candidate while the applied delta is 0 (policy == B)."""
     log = _read_log()
     adopted, rejected = [l for l in log if l["adopted"]], [l for l in log if l["status"] == "rejected"]
-    if len(adopted) + len(rejected) != 1:
-        print("error: exactly one adopted run (success) or one rejected run (abort) required", file=sys.stderr); return 2
-    target = (adopted or rejected)[0]
+    failed = [l for l in log if l["status"] == "failed"]
     base = strip_round_entries(aliases_raw, ROUND)
-    consts = dict(rp.constants) if adopted else dict(target["constants_selected"])
-    if rejected:                                                    # AC-19d / AC-01d: BOTH policy files at B
+    if len(adopted) + len(rejected) == 1:
+        target = (adopted or rejected)[0]
+        consts = dict(rp.constants) if adopted else dict(target["constants_selected"])
+        if rejected:                                                # AC-19d / AC-01d: BOTH policy files at B
+            bad = baseline_mismatch(aliases_raw, ranking_raw, cands_doc)
+            delta = alias_patch(base, aliases_raw)
+            if bad or delta["aliases"] or delta["rules"] or delta["notes"]:
+                print(f"MISMATCH abort branch: policy files are not at B: {bad or 'round2 alias delta present'}", file=sys.stderr); return 1
+    elif not adopted and not rejected and failed:                   # no decided run yet: all candidates must agree (replayable failure)
+        if len({l["result_sha256"] for l in failed}) != 1:
+            print("error: failed runs in the log disagree on result_sha256", file=sys.stderr); return 2
+        target = failed[0]
+        consts = dict(target["constants_selected"])
         bad = baseline_mismatch(aliases_raw, ranking_raw, cands_doc)
         delta = alias_patch(base, aliases_raw)
         if bad or delta["aliases"] or delta["rules"] or delta["notes"]:
-            print(f"MISMATCH abort branch: policy files are not at B: {bad or 'round2 alias delta present'}", file=sys.stderr); return 1
+            print(f"MISMATCH failure branch: policy files are not at B: {bad or 'round delta present'}", file=sys.stderr); return 1
+    else:
+        print("error: exactly one adopted run (success), one rejected run (abort), or only failed runs required", file=sys.stderr); return 2
 
     def body(state):
         def eval_fn(raw):
