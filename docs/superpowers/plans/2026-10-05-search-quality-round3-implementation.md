@@ -8,9 +8,9 @@
 
 **Tech Stack:** Python ≥ 3.10 stdlib only under `tools/`; `unittest`; no new dependencies.
 
-**Spec:** `docs/superpowers/specs/2026-10-05-search-quality-round3-design.md` **v1.15** (v1.12 passed 12 external reviews with "구현 계획으로 진행 가능"; v1.13 = the plan-stage corrections listed in its §14, made while writing this plan — grid count 23,328 and measured runtime, memoized grid evaluator, ranking structure committed at H, `verb_method_order`, seed = raw top-1, AC-R3-02 "full" = `MAX_LIMIT`, direct-alias proposer, pre-freeze structure-hash window; v1.14/v1.15 = plan review 1/2 corrections). The spec v1.15 is binding; this plan is its argument. Round 2 spec v1.14 is inherited where v1.13 is silent.
+**Spec:** `docs/superpowers/specs/2026-10-05-search-quality-round3-design.md` **v1.16** (v1.12 passed 12 external reviews with "구현 계획으로 진행 가능"; v1.13 = the plan-stage corrections listed in its §14, made while writing this plan — grid count 23,328 and measured runtime, memoized grid evaluator, ranking structure committed at H, `verb_method_order`, seed = raw top-1, AC-R3-02 "full" = `MAX_LIMIT`, direct-alias proposer, pre-freeze structure-hash window; v1.14–v1.16 = plan review 1–3 corrections). The spec v1.16 is binding; this plan is its argument. Round 2 spec v1.14 is inherited where the Round 3 spec v1.16 is silent.
 
-**Plan version:** v3 (2026-10-05; after external plan reviews 1–2, see Plan revision notes).
+**Plan version:** v4 (2026-10-05; after external plan reviews 1–3, see Plan revision notes).
 
 ## Global Constraints
 
@@ -20,7 +20,7 @@
 - **Constrained changes** (spec §2): `verb_methods` row set identical to Round 2 and each Round 2 list an exact prefix of the Round 3 list (AC-R3-12); suffixes only at T, sorted. Between H1 and T the structure check is two invariants (spec §8 v1.14): non-verb structure sha == `PRE_FREEZE_NONVERB_STRUCTURE_SHA256[3]` and the prefix invariant on `verb_methods`. `search_ranking.json` structure (8 constant keys with the two new baselines 0, the final grid, `method_mismatch_penalty` grid `[0,1,2,3,4,5]`, `version: 2`) is committed at **H1** and frozen at T; after T the structure never changes; B..C changes only the selected constant values and `origin=round3` aliases. `policy.py` changes only in H and only in the four declared kinds (CONSTANT_KEYS +2, origins — already general, `POLICY_VERSIONS["search"]` 3→4, `RankingPolicy.verb_method_order`).
 - `TOOLING_FILES` (Task 3) are immutable from `housekeeping_commit` to the terminal commit (D, F or X). A pre-T tooling defect is fixed as H′ and the affected pre-T artifacts are regenerated in dependency order.
 - Commit naming: Tasks 1–8 produce development commits H1..H8 on branch `round3` in `.worktrees/round3`; **`housekeeping_commit` = H8** (or the last H′). Commit order: H1..H8 → S → inventory → lexicon → candidates → pre-T checkpoint → T → generation/review (stateless) → seal metadata → **user encrypts + plaintext deleted + scan `[]`** → B → tuning (frozen brief) → (C → D | F | X). **terminal commit := D | F | X**.
-- **Session separation (AC-R3-08):** the session that wrote the Round 3 spec and this plan (`5edca2ca…`, 2026-10-02..05) saw the Round 2 hidden plaintext. It may implement Tasks 1–8 (tooling) but **must not** act as Round 3 generator, reviewer, tuning worker or D controller. Tasks 9–17 are run by a fresh controller session; the tuning worker is a fresh subagent; the D gate controller is a fresh actor that did not touch tuning; the Round 2 reference set is opened only by the D controller after the gate checkpoint, and that actor is then `reference-aware`. Every actor's ids are ledgered: `actor_id` := the immutable chat/agent identifier (Temporary chat URL id; subagent agent id), `session_id` := the orchestration session identifier (the Claude Code session uuid for controller/worker steps; the canonical sentinel `not_available` where none exists — never an invented string). Three machine-checked separation events (spec §5 v1.15): `actor_separation_check_B` (`generator_actor_id != reviewer_actor_id`, before B), `actor_separation_check_worker` (`worker_actor_id ∉ {generator, reviewer}`, after allocation and before the worker's first action, Task 13), `actor_separation_check_D` (`D_controller_actor_id ∉ {generator, reviewer, worker}`, before the D evaluation, Task 15).
+- **Session separation (AC-R3-08):** the session that wrote the Round 3 spec and this plan (`5edca2ca…`, 2026-10-02..05) saw the Round 2 hidden plaintext. It may implement Tasks 1–8 (tooling) but **must not** act as Round 3 generator, reviewer, tuning worker or D controller. Tasks 9–17 are run by a fresh controller session; the tuning worker is a fresh subagent; the D gate controller is a fresh actor that did not touch tuning; the Round 2 reference set is opened only by the D controller after the gate checkpoint, and that actor is then `reference-aware`. Every actor's ids are ledgered: `actor_id` := the immutable chat/agent identifier (Temporary chat URL id; subagent agent id), `session_id` := the orchestration session identifier (the Claude Code session uuid for controller/worker steps; the canonical sentinel `not_available` where none exists — never an invented string). Three machine-checked separation events (spec §5 v1.15): `actor_separation_check_B` (`generator_actor_id != reviewer_actor_id`, before B), `actor_separation_check_worker` (`worker_actor_id ∉ {generator, reviewer}`, after the worker's Phase 0 handshake and before `run the brief procedure`, Task 13), `actor_separation_check_D` (`D_controller_actor_id ∉ {controller, generator, reviewer, worker}`, before the D evaluation, Task 15). Plaintext scans never retain the queries: the controller writes a hashed n-gram **needle manifest** before encryption and every later scan (`round_seal.py scan`) compares normalized word n-grams against it with an explicit allow list; the verdict is `unexpected_hits == []` (spec §5 v1.16).
 - Sealed plaintext path `~/.atlassian_api_updater/sealed/round3-sealed.json` is never given to an implementer or a tuning worker. The plaintext is encrypted and deleted **before** commit B, so at B and after only `round3-sealed.json.enc` exists; no agent knows the passphrase. **AC-18b(R3):** any review input that embeds the hidden records (`hidden-review-input.txt`, replacement outputs, replacement-review messages) is written under `~/.atlassian_api_updater/round3-work/plain/` and that directory is deleted before commit B; only sha256 values survive in the ledgers. The B-time scan of `~/.atlassian_api_updater/` for record plaintext is ledgered.
 - Source snapshot S: `~/.atlassian_api_updater/round3-cache/` (`$ATLASSIAN_DOCS_ROUND3_CACHE`), created once after H (Task 9): a copy of the archived Round 2 S iff its registry fingerprint `f3c2e9d48aa85c96ca62cdd84ff700cc2714c888cf4148b3a91c604c45b47b62` **and** all three spec shas (`confluence b3d010b6…`, `jira-platform 3d0edfb0…`, `jira-software cb7e24b3…`) equal a fresh live fetch; otherwise the fresh fetch. Every catalog-dependent step reads only S.
 - Round 2 archive (read-only inputs): `~/.atlassian_api_updater/archive/round2/round2-cache/` (S2), `round2-work/lexicon_raw.json` (sha `acc5cebeafc5c48236a9de5d685b888fb2a83532340405556d77b801468a6872`), `round2-work/lexicon_review.json` (`c5ba256f8acd082febe06724d6646bff631e136dc437f4fa1528286117bd62f4`), `round2-work/lexicon-generation-input.txt`, `round2-work/lexicon-review-input.txt`, `sealed/round2-sealed.json.enc` (`c1a3794b0ac7563bee0ccdcc61e0ecb43026d0f778ec4773ef2695459cca369b`; held_out `0f990f2fc134cd41eca2061931c65cfdd4bc21819051f9ae8538c0258aaf3540`, negative `7750a2020923bcf8ddfa22e79f2c071001db9942194c3215cc03c60f363dde76`). Round 2 reference commit for AC-R3-02: `29dba38` (T; the B/F policy files equal T's).
@@ -1063,7 +1063,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 - Test: `tests/benchmarks/test_round_seal.py`
 
 **Interfaces:**
-- Produces: `rs.HIDDEN_RULES_R3` (frozen ordered tuple), `rs.RECORD_RULES`, `rs.SECTION_RULES`, `rs.NEGATIVE_SPLIT == (4, 4)`; `rs.intent_of(query, verb_methods)`; `rs.record_actionable(rec, verb_methods) -> bool`; `rs.negative_distribution(records, verb_methods) -> (actionable, abstained)`; `rs.machine_check(plain, bench, internal, round=1, verb_methods=None)` (round ≥ 3 requires `verb_methods`, else `ValueError`); `rs.rule_id(message) -> str`; `rs.record_rejections(violations) -> list[str]`; `rs.section_rejections(violations) -> list[str]`; `rs.section_request(section, plain) -> str`; `rs.next_request(violations, plain, state) -> tuple`; `rs.render_generation_input(template, generator_records, verb_methods) -> str`; `rs.annotate_for_review(plain, verb_methods) -> dict` (same records plus `machine: {matched_verbs, intent_methods, machine_actionable}` per record); `rs.verify_reference_ciphertext(enc_path, round=3) -> list[str]` (`[]` iff `file_sha256(enc) == freeze_for(round)["reference_set"]["enc_sha256"]`); CLI `reference-check --round 3 --reference-enc PATH` (prints `reference ciphertext ok` / `MISMATCH …`, exit 0/1); `rs.freeze_entry(round, cache_dir, reference_enc=None)`; CLI `freeze --round 3 --cache-dir S --reference-enc PATH`, `check/seal --round 3` read `verb_methods` from `search_ranking.json`.
+- Produces: `rs.HIDDEN_RULES_R3` (frozen ordered tuple), `rs.RECORD_RULES`, `rs.SECTION_RULES`, `rs.NEGATIVE_SPLIT == (4, 4)`; `rs.intent_of(query, verb_methods)`; `rs.record_actionable(rec, verb_methods) -> bool`; `rs.negative_distribution(records, verb_methods) -> (actionable, abstained)`; `rs.machine_check(plain, bench, internal, round=1, verb_methods=None)` (round ≥ 3 requires `verb_methods`, else `ValueError`); `rs.rule_id(message) -> str`; `rs.record_rejections(violations) -> list[str]`; `rs.section_rejections(violations) -> list[str]`; `rs.section_request(section, plain) -> str`; `rs.next_request(violations, plain, state) -> tuple`; `rs.render_generation_input(template, generator_records, verb_methods) -> str`; `rs.annotate_for_review(plain, verb_methods) -> dict` (same records plus `machine: {matched_verbs, intent_methods, machine_actionable}` per record); `rs.needle_manifest(queries) -> list[{"words", "sha256"}]` (normalized n-gram hashes, no plaintext); `rs.scan_for_needles(roots, manifest, allow=()) -> list[str]` (files whose normalized word stream contains any manifest n-gram, minus allowed paths); CLI `scan --manifest M --root R [--root R2…] [--allow PATH…]` (prints `{"unexpected_hits": [...]}`, exit 0 iff empty); `rs.verify_reference_ciphertext(enc_path, round=3) -> list[str]` (`[]` iff `file_sha256(enc) == freeze_for(round)["reference_set"]["enc_sha256"]`); CLI `reference-check --round 3 --reference-enc PATH` (prints `reference ciphertext ok` / `MISMATCH …`, exit 0/1); `rs.freeze_entry(round, cache_dir, reference_enc=None)`; CLI `freeze --round 3 --cache-dir S --reference-enc PATH`, `check/seal --round 3` read `verb_methods` from `search_ranking.json`.
 - Consumes: `search.method_intent`, `search.tokenize_unigrams` (Task 2); `ev.freeze_key_set`, `ev.round_freeze_hashes` (Task 3).
 
 - [ ] **Step 1: Write the failing tests**
@@ -1180,6 +1180,22 @@ class TestReplacementStateMachine(unittest.TestCase):
         self.assertEqual(n5["machine"], {"matched_verbs": [], "intent_methods": [], "machine_actionable": False})
         self.assertEqual({k: v for k, v in h1.items() if k != "machine"}, valid_plain_r3()["held_out"][0])          # records untouched
         self.assertEqual(sum(r["machine"]["machine_actionable"] for r in ann["negative"]), 4)
+
+    def test_needle_manifest_and_scan(self):
+        import tempfile, pathlib, json
+        queries = ["show me the ticket details", "Delete the ticket status field"]
+        m = rs.needle_manifest(queries)
+        self.assertEqual([e["words"] for e in m], [5, 5]); self.assertTrue(all(len(e["sha256"]) == 64 for e in m))
+        self.assertNotIn("ticket", json.dumps(m))                                                           # no plaintext in the manifest
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td); (root / "a.txt").write_text("notes: Show   me the\nticket details!", encoding="utf-8")     # whitespace / case variant
+            (root / "b.json").write_text(json.dumps({"q": "delete the ticket status field"}), encoding="utf-8")
+            (root / "c.md").write_text("ticket details are shown here", encoding="utf-8")                   # partial: no hit
+            (root / "allowed.json").write_text(json.dumps({"q": "show me the ticket details"}), encoding="utf-8")
+            hits = rs.scan_for_needles([root], m)
+            self.assertEqual(sorted(pathlib.Path(h).name for h in hits), ["a.txt", "allowed.json", "b.json"])
+            self.assertEqual(sorted(pathlib.Path(h).name for h in rs.scan_for_needles([root], m, allow=[root / "allowed.json"])), ["a.txt", "b.json"])
+            self.assertEqual(rs.scan_for_needles([root], rs.needle_manifest(["totally absent phrase here"])), [])
 
     def test_verify_reference_ciphertext(self):
         import tempfile, pathlib
@@ -1351,6 +1367,41 @@ def annotate_for_review(plain, verb_methods) -> dict:
     return out
 
 
+_WORD = re.compile(r"[^a-z0-9]+")
+SCAN_SUFFIXES = (".txt", ".json", ".jsonl", ".md", ".log", ".py", ".yaml", ".yml", ".csv")
+
+
+def _words(text: str) -> list:
+    return [w for w in _WORD.split(text.lower()) if w]
+
+
+def needle_manifest(queries) -> list:
+    """AC-18b scanner input (spec §5 v1.16): per query the word count and sha256 of the normalized n-gram — never the text."""
+    return [{"words": len(_words(q)), "sha256": canonical_sha256(" ".join(_words(q)))} for q in queries]
+
+
+def scan_for_needles(roots, manifest, allow=()) -> list:
+    """Files under `roots` (text suffixes only) whose normalized word stream contains any manifest n-gram, minus `allow`."""
+    by_n, allowed = {}, {pathlib.Path(p).resolve() for p in allow}
+    for e in manifest:
+        by_n.setdefault(e["words"], set()).add(e["sha256"])
+    hits = []
+    for root in roots:
+        for p in sorted(pathlib.Path(root).rglob("*")):
+            if not p.is_file() or p.suffix not in SCAN_SUFFIXES or p.resolve() in allowed or ".git" in p.parts:
+                continue
+            words = _words(p.read_text(encoding="utf-8", errors="ignore"))
+            if any(canonical_sha256(" ".join(words[i:i + n])) in shas for n, shas in by_n.items() for i in range(len(words) - n + 1)):
+                hits.append(str(p))
+    return hits
+
+
+def cmd_scan(args):
+    hits = scan_for_needles(args.root, _read_json(args.manifest), allow=args.allow or [])
+    print(json.dumps({"unexpected_hits": hits}))
+    return 1 if hits else 0
+
+
 def verify_reference_ciphertext(enc_path, round=3) -> list:
     """AC-R3-06 checkpoint helper (B, before the D decryption, terminal D/F/X): archive ciphertext sha == freeze reference_set.enc_sha256."""
     want, got = ev.freeze_for(round)["reference_set"]["enc_sha256"], ev.file_sha256(enc_path)
@@ -1387,7 +1438,7 @@ def render_generation_input(template: str, generator_records, verb_methods) -> s
         entry["hidden_set_origin"] = f"round{round}"
 ```
 
-`cmd_freeze` passes `reference_enc=getattr(args, "reference_enc", None)`; the `freeze` parser gains `p.add_argument("--reference-enc", default=None)`; new parser `p = sub.add_parser("reference-check"); _round(p); p.add_argument("--reference-enc", required=True); p.set_defaults(fn=cmd_reference_check)`. `cmd_check`/`cmd_seal`: `vm = _read_json(RANKING_PATH)["verb_methods"] if args.round >= 3 else None` and pass `verb_methods=vm` to `machine_check`.
+`cmd_freeze` passes `reference_enc=getattr(args, "reference_enc", None)`; the `freeze` parser gains `p.add_argument("--reference-enc", default=None)`; new parsers `p = sub.add_parser("scan"); p.add_argument("--manifest", required=True); p.add_argument("--root", action="append", required=True); p.add_argument("--allow", action="append"); p.set_defaults(fn=cmd_scan)` and `p = sub.add_parser("reference-check"); _round(p); p.add_argument("--reference-enc", required=True); p.set_defaults(fn=cmd_reference_check)`. `cmd_check`/`cmd_seal`: `vm = _read_json(RANKING_PATH)["verb_methods"] if args.round >= 3 else None` and pass `verb_methods=vm` to `machine_check`.
 
 - [ ] **Step 4: Run the full suite, commit**
 
@@ -2243,6 +2294,10 @@ regression_raw is recorded only. tuning_accept false -> status "failed" (F). tun
 AC-valid (adoptable) only if the canonical full suite then passes (C); a red suite rejects it (X).
 Expected wall-clock of step 2: about 18 minutes for the 23,328-point grid (memoized evaluator) plus the proposer trials; do not interrupt it.
 
+Phase 0 (handshake): if your dispatch message is exactly "handshake", write {"worker_actor_id": <your agent id>, "session_id": <your session id or "not_available">}
+to ~/.atlassian_api_updater/round3-work/worker-handshake.json, read NO other file, run NO other command, and report the single word
+HANDSHAKE. Do not start the procedure below until you receive the message "run the brief procedure".
+
 Procedure (run from the repo root, exactly once; rerun only after a tool error, never after a valid result):
 1. git status --porcelain --untracked-files=no   -> must be empty (otherwise stop and report).
 2. python tests/tune_search_ranking.py --cache-dir "$ATLASSIAN_DOCS_ROUND3_CACHE" --note "round3 tuning run"
@@ -2411,7 +2466,7 @@ print("review_message_sha256", hashlib.sha256(msg.encode()).hexdigest()); print(
 EOF2
 ```
 
-New Unpersonalized Temporary chat (a different chat from the generator's; its id is the `reviewer_actor_id`) → attach `round3-internal-catalog.jsonl` → paste the message → first output → `$W/plain/hidden-review-output.json` → validate with `rs.validate_reviewer_output(out, ids)` (invalid/parse/transport → retry the identical input, each attempt ledgered); ledger `reviewed_record_shas`/`accepted_ids`. Rejected ids → one request to the generator chat with lines `record <id> rejected: reviewer` (the frozen prompt's semantic replacement contract); the response is validated (`validate_replacement_output`), merged, and the **whole set re-enters Step 2** (full machine check with the same `state`; a broken 4/4 may trigger the single negative section replacement, whose 8 new records are machine-checked and then reviewed in full; a second need is `invalid`). Replacement records are reviewed with the same frozen prompt (annotated the same way), in a new review attempt. The controller never decides accept/reject. Build `$W/coverage-manifest.json = coverage_manifest(plain, accepted_attempt_by_id)`; `verify_coverage(manifest, plain, attempts) == []` or the seal is blocked (hashes only). Then the actor check: `generator_actor_id != reviewer_actor_id` (ledger `actor_separation_check: ok`).
+New Unpersonalized Temporary chat (a different chat from the generator's; its id is the `reviewer_actor_id`) → attach `round3-internal-catalog.jsonl` → paste the message → first output → `$W/plain/hidden-review-output.json` → validate with `rs.validate_reviewer_output(out, ids)` (invalid/parse/transport → retry the identical input, each attempt ledgered); ledger `reviewed_record_shas`/`accepted_ids`. Rejected ids → one request to the generator chat with lines `record <id> rejected: reviewer` (the frozen prompt's semantic replacement contract); the response is validated (`validate_replacement_output`), merged, and the **whole set re-enters Step 2** (full machine check with the same `state`; a broken 4/4 may trigger the single negative section replacement, whose 8 new records are machine-checked and then reviewed in full; a second need is `invalid`). Replacement records are reviewed with the same frozen prompt (annotated the same way), in a new review attempt. The controller never decides accept/reject. Build `$W/coverage-manifest.json = coverage_manifest(plain, accepted_attempt_by_id)`; `verify_coverage(manifest, plain, attempts) == []` or the seal is blocked (hashes only). Then the actor check: `generator_actor_id != reviewer_actor_id` (ledger the event `actor_separation_check_B` with both ids).
 
 - [ ] **Step 4: Seal metadata, hygiene, [user] encryption, scan — then commit B**
 
@@ -2426,20 +2481,20 @@ python tests/benchmarks/round_seal.py seal --round 3 --plain ~/.atlassian_api_up
 cd ~/.atlassian_api_updater/sealed && openssl enc -aes-256-cbc -pbkdf2 -in round3-sealed.json -out round3-sealed.json.enc && rm round3-sealed.json
 ```
 
-**Before** asking for encryption, the query-needle scan (spec §5 v1.15: the 24 query strings are read from the sealed plaintext in memory; every text file under `~/.atlassian_api_updater/` except the sealed plaintext itself is searched for each query literal):
+**Before** asking for encryption: write the needle manifest (hashes only) and run the first scan (spec §5 v1.16):
 
 ```bash
 python - <<'EOF2'
 import json, pathlib
+from tests.benchmarks import round_seal as rs
 root = pathlib.Path.home() / ".atlassian_api_updater"; sealed = root / "sealed" / "round3-sealed.json"
-plain = json.load(open(sealed)); needles = [r["query"] for r in plain["held_out"] + plain["negative"]]
-hits = [str(p) for p in root.rglob("*") if p.is_file() and p != sealed and p.suffix in (".txt", ".json", ".jsonl", ".md", ".log")
-        and any(n in p.read_text(encoding="utf-8", errors="ignore") for n in needles)]
-print(json.dumps({"event": "ac18b_scan_before_encryption", "needles": len(needles), "plaintext_copies": hits}))
+plain = json.load(open(sealed))
+(root / "round3-work" / "needle-manifest.json").write_text(json.dumps(rs.needle_manifest([r["query"] for r in plain["held_out"] + plain["negative"]]), indent=1), encoding="utf-8")
 EOF2
+python tests/benchmarks/round_seal.py scan --manifest $W/needle-manifest.json --root ~/.atlassian_api_updater --root . --allow ~/.atlassian_api_updater/sealed/round3-sealed.json
 ```
 
-`plaintext_copies` must be `[]` (ledger). Only then the user encrypts (command above). Controller, after the user confirms:
+The scan must print `{"unexpected_hits": []}` (ledger as `ac18b_scan_before_encryption`). Only then the user encrypts (command above). Controller, after the user confirms:
 
 ```bash
 test ! -e ~/.atlassian_api_updater/sealed/round3-sealed.json && shasum -a 256 ~/.atlassian_api_updater/sealed/round3-sealed.json.enc   # AC-18a-B value
@@ -2456,14 +2511,14 @@ git commit -m "B: Round 3 seal (held_out 16 / negative 8 sha256 + distributions,
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
-AC-23 evidence (checkpoint `B`) as in Task 11 on the clean committed HEAD; ledger `negative_distribution` (4/4) from the seal output as the AC-R3-09a B check. The needle list cannot be re-read after encryption, so the post-B scan (`ac18b_scan_after_B`) uses the needles ledgered in memory during the same controller run (the controller keeps them in process until this scan, never on disk) and must again be `[]`.
+AC-23 evidence (checkpoint `B`) as in Task 11 on the clean committed HEAD; ledger `negative_distribution` (4/4) from the seal output as the AC-R3-09a B check. The post-B scan (`ac18b_scan_after_B`) is `python tests/benchmarks/round_seal.py scan --manifest $W/needle-manifest.json --root ~/.atlassian_api_updater --root .` with no allow list (the plaintext is gone) and must print `{"unexpected_hits": []}`.
 
 ---
 
 ### Task 13: **[controller]** S checkpoint, then dispatch the frozen worker brief (B..C)
 
 - `python tests/benchmarks/round_seal.py verify-freeze --round 3 --cache-dir $S` → `freeze ok` (ledger); `git status --porcelain --untracked-files=no` empty; `shasum -a 256 tests/benchmarks/round3-worker-brief.md` == `freeze_for(3)["worker_brief_sha256"]`.
-- Dispatch one **fresh** implementer subagent (standard model) whose prompt is: one line of context + "read `tests/benchmarks/round3-worker-brief.md` first; it is your entire procedure" + `ATLASSIAN_DOCS_ROUND3_CACHE=$S` + the report file path. Nothing else. Immediately after the dispatch returns the agent id (before the worker's first tool action can matter — the dispatch prompt tells the worker to begin with `git status`), ledger `actor_separation_check_worker` (`worker_actor_id ∉ {generator_actor_id, reviewer_actor_id}`; a collision aborts the dispatch) together with `worker_actor_id`, run count, each report's `run_id`/`status`/`tuning_accept`/`result_sha256`/`grid_runtime_s`.
+- **Two-phase handshake (spec §5 v1.16).** Phase 0: dispatch one **fresh** implementer subagent (standard model) whose prompt is: one line of context + "read `tests/benchmarks/round3-worker-brief.md` first; it is your entire procedure; this message is: handshake" + `ATLASSIAN_DOCS_ROUND3_CACHE=$S` + the report file path. The frozen brief makes the worker write `$W/worker-handshake.json` and stop with `HANDSHAKE` (no other file read, no other command). The controller then checks `worker_actor_id ∉ {generator_actor_id, reviewer_actor_id}` and ledgers `actor_separation_check_worker` (a collision ends the dispatch; a new worker is allocated). Phase 1: only after that event exists, send the same agent (SendMessage, context intact) exactly `run the brief procedure`. Ledger `worker_actor_id`, run count, each report's `run_id`/`status`/`tuning_accept`/`result_sha256`/`grid_runtime_s`/`fixture_negative_effective_diagnostic`.
 - Only predefined replies: "run the brief procedure", "run it again" (after a tool error).
 - Branch-aware task review (Round 2 Task 12 checklist with `round3` names): `adopted` → suite green, `--verify` passes, `constants_selected`/`result_sha256` match the files, commit touches only the three files; `failed` → suite green, policy == B, the `failed` line validates (`tuning_accept: false`, `regression_raw`/`regression_negative` present), commit touches only the log, `python tests/tune_search_ranking.py --verify --cache-dir $S` prints `replay ok` (failure-branch replay, AC-R3-10); `rejected` → policy == B on HEAD, `reject_evidence` matches the evidence file, `--materialize` reproduction of the failing-test signature in a temporary worktree.
 
@@ -2473,14 +2528,14 @@ AC-23 evidence (checkpoint `B`) as in Task 11 on the clean committed HEAD; ledge
 
 - [ ] **Step 1: Hash/provenance check (all branches)** — `HK=$(cat $W/housekeeping_commit); TF=$(python -c "from tests.benchmarks import evaluator as ev; print(' '.join(ev.TOOLING_FILES))"); git diff --exit-code "$HK" -- $TF tools/atlassian_docs/intelligence/search.py tools/atlassian_docs/intelligence/policy.py` exits 0; `tooling_code_sha256` unchanged; the worker commit touches only the brief's allowed files; the log matches exactly one branch (one `adopted` | `failed ≥ 1` and no adopted/rejected | one `rejected`). `python tests/tune_search_ranking.py --verify --cache-dir $S` → `replay ok` on every branch.
 - [ ] **Step 2a: Success** — `verify-freeze`, the `evaluation_code_sha256 == freeze_for(3)["evaluation_code_sha256_at_T"]` assertion, suite, empty commit `C: Round 3 freeze before final evaluation (evaluation_code_sha256 == at_T)`; continue with Task 15.
-- [ ] **Step 2b: Tuning failure** — AC-18a-F checkpoint (`.enc` sha unchanged, no plaintext, no decryption), the `pre_terminal_plaintext_scan` (the query needles are unavailable on F — scan for `"origin": "held_out-r3"` / `"negative-r3"` record bodies under `~/.atlassian_api_updater/` and the repo working tree; must be `[]`), and the AC-R3-06 pre-terminal check `python tests/benchmarks/round_seal.py reference-check --round 3 --reference-enc ~/.atlassian_api_updater/archive/round2/sealed/round2-sealed.json.enc` (hash only, never opened), render readiness (Task 16, failure branch: `D_controller_actor_id: not_applicable`, hidden `not_evaluated`, `reference_round2: not_applicable`), commit `F: Round 3 tuning failed` touching only `docs/phase3-readiness.md`. Skip Task 15; continue with Task 17.
+- [ ] **Step 2b: Tuning failure** — AC-18a-F checkpoint (`.enc` sha unchanged, no plaintext, no decryption), the `pre_terminal_plaintext_scan` (`python tests/benchmarks/round_seal.py scan --manifest $W/needle-manifest.json --root ~/.atlassian_api_updater --root .` with no allow list; must print `{"unexpected_hits": []}`), and the AC-R3-06 pre-terminal check `python tests/benchmarks/round_seal.py reference-check --round 3 --reference-enc ~/.atlassian_api_updater/archive/round2/sealed/round2-sealed.json.enc` (hash only, never opened), render readiness (Task 16, failure branch: `D_controller_actor_id: not_applicable`, hidden `not_evaluated`, `reference_round2: not_applicable`), commit `F: Round 3 tuning failed` touching only `docs/phase3-readiness.md`. Skip Task 15; continue with Task 17.
 - [ ] **Step 2c: Abort** — ledger `rejected_suite_evidence`, AC-18a-X checkpoint, `pre_terminal_plaintext_scan` (as in 2b), AC-R3-06 pre-terminal `reference-check` (hash only), render readiness (abort branch, B-vs-X policy shas), commit `X: Round 3 aborted (rejected tuning run)` touching only `docs/phase3-readiness.md`. Skip Task 15; continue with Task 17.
 
 ---
 
 ### Task 15: **[D controller (fresh actor) + user]** Commit D — single gate evaluation, gate checkpoint, then the Round 2 reference observation
 
-The D controller is a fresh actor (new session or subagent that did not run Tasks 9–14's tuning dispatch); ledger `D_controller_actor_id` and the event `actor_separation_check_D` (`D_controller_actor_id ∉ {generator_actor_id, reviewer_actor_id, worker_actor_id}`) before anything else.
+The D controller is a fresh actor (new session or subagent that did not run Tasks 9–14's tuning dispatch); ledger `D_controller_actor_id` and the event `actor_separation_check_D` (`D_controller_actor_id ∉ {controller_actor_id, generator_actor_id, reviewer_actor_id, worker_actor_id}`) before anything else.
 
 - [ ] `python tests/benchmarks/round_seal.py verify-freeze --round 3 --cache-dir $S` → `freeze ok`; AC-18a-D checkpoint (`.enc` sha == B value, no plaintext) → ledger.
 - [ ] **[user]** decrypt: `cd ~/.atlassian_api_updater/sealed && openssl enc -d -aes-256-cbc -pbkdf2 -in round3-sealed.json.enc -out round3-sealed.json`.
@@ -2521,7 +2576,7 @@ python tests/diag_search_queries.py --round 3 --cache-dir $S --reference ~/.atla
 rm ~/.atlassian_api_updater/round3-work/reference-round2-plain.json
 ```
 
-Ledger `deleted_at` and mark this actor `reference-aware`; it performs no further Round 3 evaluation. The Round 3 gate is never re-run or re-interpreted after this point (the checkpoint event is the evidence). Run the AC-R3-06 `reference-check` once more (hash unchanged after the user's decryption step) and the `pre_terminal_plaintext_scan` with the Round 3 needles (the Round 3 plaintext is readable at D: every text file except `sealed/round3-sealed.json` must be free of the 24 queries, and the reference plaintext must already be deleted) → `[]`.
+Ledger `deleted_at` and mark this actor `reference-aware`; it performs no further Round 3 evaluation. The Round 3 gate is never re-run or re-interpreted after this point (the checkpoint event is the evidence). Run the AC-R3-06 `reference-check` once more (hash unchanged after the user's decryption step) and the `pre_terminal_plaintext_scan`: `python tests/benchmarks/round_seal.py scan --manifest $W/needle-manifest.json --root ~/.atlassian_api_updater --root . --allow ~/.atlassian_api_updater/sealed/round3-sealed.json` → `{"unexpected_hits": []}` (the decrypted sealed plaintext is the only allowed copy; the reference plaintext must already be deleted; the unseal has not happened yet).
 
 - [ ] Unseal, suite, **render readiness (Task 16, success branch)**, commit D:
 
@@ -2540,13 +2595,13 @@ The `post_terminal_plaintext_scan` after commit D is Task 17's first step (ledge
 
 ### Task 16: **[controller]** Subroutine — render the readiness Round 3 section from the ledgers (called by Task 14 Step 2b/2c before F/X and by Task 15 before commit D; never its own commit)
 
-Append `## Search Quality Round 3 — decision record (<date>)` after the Round 2 section of `docs/phase3-readiness.md` (never inside it), rendered from `controller-events.jsonl` + `attempts.jsonl`: `round3_start_commit e16c073`, `housekeeping_commit`, spec v1.15 / plan v3, `evaluation_domain: actionable recommendation queries`, S (`s_reused_from_round2`, fingerprint, spec shas, op count) as `round3_operational_snapshot`, the AC-R3-02 reference provenance as `round2_regression_snapshot` (29dba38, fingerprint, reference sha), verb inventory decisions (suffixes, prefix check), method-safety, lexicon re-gate counts and the newly merged `lexicon-r3` words, candidates/R5/R6, AC-13 replay, **pre-T checkpoint** numbers and input shas, T/B/C shas (terminal commit `self`), `structure/tooling/evaluation/tuning_grid/regression_reference` shas at T, `reference_set` (enc sha), hidden generation attempts (`rendered_generation_prompt_sha256`, outputs, `next_request` kinds sent, section replacements used), review attempts (`catalog_attachment_sha256`), coverage manifest sha, `temporary_chat_unpersonalized: true`, AC-18b scans (`ac18b_scan_before_encryption`, `ac18b_scan_after_B`, `pre_terminal_plaintext_scan` — the `post_terminal_plaintext_scan` is ledger/provenance-only because it runs after the terminal commit), the three `actor_separation_check_*` events, `.enc` sha at B and pre-terminal, worker brief sha + `worker_actor_id` + runs (`run_id`, `status`, `tuning_accept`, `seed`, `regression_negative` effective, `regression_raw`, `fixture_positive`, `fixture_negative_raw`, `grid_runtime_s`, `result_sha256`), `--verify` result, actor table (`controller_actor_id`, generator/reviewer chat attestation, `worker_actor_id`, `D_controller_actor_id` or `not_applicable`, `reference-aware` actor), the result rows in the spec §13 schema — `seed.top1_correct`, `regression_negative.{raw, effective}`, `fixture_positive.top1_correct`, `fixture_negative.{raw, effective_diagnostic}` (from the log line's `fixture_negative_raw` / `fixture_negative_effective_diagnostic`), `hidden.held_out_pass`, `hidden.negative.{raw, effective}` (+ `negative_actionable`/`negative_abstained`) or `not_evaluated` on F/X, `round3_gate_result_sha256`, `reference_round2` (raw/effective, `invalid_key`, `plaintext_sha256`, `decrypt_at`, `deleted_at`) or `not_applicable`, the state model table (branch D/F/X; `adopted_runs`, `failed_runs`, `rejected_runs`, `hidden_evaluated`, `ciphertext_retained`), and the attestation list over spec v1.15 §10 (AC-01a/b, 02–05, 06b, 07, 08 with the two provenance domains, 09, 10, 12, 13, 15a/15b split, 19c, 21/22, 23, AC-R3-01..13b, AC-18b(R3)). This task never produces its own commit.
+Append `## Search Quality Round 3 — decision record (<date>)` after the Round 2 section of `docs/phase3-readiness.md` (never inside it), rendered from `controller-events.jsonl` + `attempts.jsonl`: `round3_start_commit e16c073`, `housekeeping_commit`, spec v1.15 / plan v3, `evaluation_domain: actionable recommendation queries`, S (`s_reused_from_round2`, fingerprint, spec shas, op count) as `round3_operational_snapshot`, the AC-R3-02 reference provenance as `round2_regression_snapshot` (29dba38, fingerprint, reference sha), verb inventory decisions (suffixes, prefix check), method-safety, lexicon re-gate counts and the newly merged `lexicon-r3` words, candidates/R5/R6, AC-13 replay, **pre-T checkpoint** numbers and input shas, T/B/C shas (terminal commit `self`), `structure/tooling/evaluation/tuning_grid/regression_reference` shas at T, `reference_set` (enc sha), hidden generation attempts (`rendered_generation_prompt_sha256`, outputs, `next_request` kinds sent, section replacements used), review attempts (`catalog_attachment_sha256`), coverage manifest sha, `temporary_chat_unpersonalized: true`, AC-18b scans (`ac18b_scan_before_encryption`, `ac18b_scan_after_B`, `pre_terminal_plaintext_scan` — the `post_terminal_plaintext_scan` is ledger/provenance-only because it runs after the terminal commit), the three `actor_separation_check_*` events, `.enc` sha at B and pre-terminal, worker brief sha + `worker_actor_id` + runs (`run_id`, `status`, `tuning_accept`, `seed`, `regression_negative` effective, `regression_raw`, `fixture_positive`, `fixture_negative_raw`, `fixture_negative_effective_diagnostic`, `grid_runtime_s`, `result_sha256`), `--verify` result, actor table (`controller_actor_id`, generator/reviewer chat attestation, `worker_actor_id`, `D_controller_actor_id` or `not_applicable`, `reference-aware` actor), the result rows in the spec §13 schema — `seed.top1_correct`, `regression_negative.{raw, effective}`, `fixture_positive.top1_correct`, `fixture_negative.{raw, effective_diagnostic}` (from the log line's `fixture_negative_raw` / `fixture_negative_effective_diagnostic`), `hidden.held_out_pass`, `hidden.negative.{raw, effective}` (+ `negative_actionable`/`negative_abstained`) or `not_evaluated` on F/X, `round3_gate_result_sha256`, `reference_round2` (raw/effective, `invalid_key`, `plaintext_sha256`, `decrypt_at`, `deleted_at`) or `not_applicable`, the state model table (branch D/F/X; `adopted_runs`, `failed_runs`, `rejected_runs`, `hidden_evaluated`, `ciphertext_retained`), and the attestation list over spec v1.15 §10 (AC-01a/b, 02–05, 06b, 07, 08 with the two provenance domains, 09, 10, 12, 13, 15a/15b split, 19c, 21/22, 23, AC-R3-01..13b, AC-18b(R3)). This task never produces its own commit.
 
 ---
 
 ### Task 17: **[controller]** Post-terminal provenance review and finishing
 
-- Record the terminal commit sha (D, F or X) in the ledger in one event together with the post-terminal AC-R3-06 check: `{"event": "terminal_commit", "terminal_commit_sha", "reference_ciphertext_sha256" (== freeze reference_set.enc_sha256 via reference-check), "checked_at"}`; then the `post_terminal_plaintext_scan` (record-body scan of `~/.atlassian_api_updater/` and the working tree; on D additionally the 24 query needles) → `[]`, ledgered and copied into the provenance report (not into readiness). Dispatch a reviewer (most capable model) limited to provenance: spec v1.15 §10.1/§10.2 row by row against git history, ledgers and artifacts, including the AC-18b scans and the ledger ORDER (gate checkpoint before `decrypt_at`); report saved as `$W/provenance-report.md`; no changes to `TOOLING_FILES`.
+- Record the terminal commit sha (D, F or X) in the ledger in one event together with the post-terminal AC-R3-06 check: `{"event": "terminal_commit", "terminal_commit_sha", "reference_ciphertext_sha256" (== freeze reference_set.enc_sha256 via reference-check), "checked_at"}`; then the `post_terminal_plaintext_scan`: `python tests/benchmarks/round_seal.py scan --manifest $W/needle-manifest.json --root ~/.atlassian_api_updater --root .` — on F/X with no allow list; on D with the intentionally published terminal artifacts allowed (`--allow tests/benchmarks/search_queries.json --allow tests/benchmarks/round3-final.json --allow docs/phase3-readiness.md --allow ~/.atlassian_api_updater/sealed/round3-sealed.json`) — must print `{"unexpected_hits": []}`, ledgered and copied into the provenance report (not into readiness). Dispatch a reviewer (most capable model) limited to provenance: spec v1.15 §10.1/§10.2 row by row against git history, ledgers and artifacts, including the AC-18b scans and the ledger ORDER (gate checkpoint before `decrypt_at`); report saved as `$W/provenance-report.md`; no changes to `TOOLING_FILES`.
 - Update memory (`search-quality-round3-design-status.md` → outcome; MEMORY.md index); archive `round3-cache`, `round3-work` and `sealed/round3-sealed.json.enc` under `~/.atlassian_api_updater/archive/round3/` after the user confirms.
 - Use `superpowers:finishing-a-development-branch` (the user chooses merge/push; push only on instruction).
 
@@ -2568,7 +2623,7 @@ Append `## Search Quality Round 3 — decision record (<date>)` after the Round 
 | AC-R3-02 | Task 4 (isolated generation, verifier, test), Task 11 freeze `regression_reference_sha256` |
 | AC-R3-03 | Task 2 `test_actionable_does_not_change_scores_or_order`, Task 4 regression reference |
 | AC-R3-04 | Task 5 tests (resource vocabulary, real fixtures, candidates ⇔ R6) |
-| AC-R3-06, AC-R3-07 | Task 6 `reference_set` + `reference-check`; checkpoints at B (Task 12), before decrypt and terminal (Task 15), F/X terminal (Task 14); Task 15 gate checkpoint → decrypt → observe → delete (ledger order) |
+| AC-R3-06, AC-R3-07 | Task 6 `reference_set` + `reference-check`; checkpoints at B (Task 12), before the D decryption (Task 15), post-terminal D/F/X with the terminal sha (Task 17); Task 15 gate checkpoint → decrypt → observe → delete (ledger order) |
 | AC-R3-08 | Global Constraints session separation; three `actor_separation_check_*` events (Tasks 12, 13, 15) |
 | AC-R3-09a/b | Task 6 rules + Task 3 evaluator (T), Task 12 seal distribution (B), Task 15 single evaluation (D) |
 | AC-R3-10 | Task 7 `--verify` on success/failure/abort |
@@ -2590,3 +2645,5 @@ v1 (2026-10-05): initial plan written against spec v1.13.
 v2 (after external plan review 1 — P0 5 / P1 7; spec v1.14): P0: (1) pre-freeze structure check split into non-verb structure sha + verb prefix invariant (`ev.structure_check_problems`; helpers moved into the stdlib evaluator, Task 1/5); (2) seal → user encryption + deletion + scan → commit B (Global Constraints, Task 12); (3) `record <id> rejected: reviewer` added to the frozen generation prompt as the semantic replacement contract, semantic rejections re-enter the single `next_request` state machine (Tasks 11, 12); (4) reviewer prompt checks verb USE for held_out and actionable negatives with machine annotations `rs.annotate_for_review` (Tasks 6, 11, 12); (5) AC-R3-06 `reference-check` at B, before the D decryption, and at every terminal commit (Tasks 6, 12, 14, 15). P1: AC-09/§7 spec wording; memoized-evaluator equivalence preflight on the actual S inside `--phase pre-T` (Tasks 8, 11); AC-13 replay as an executable script (Task 11); `$W/housekeeping_commit` pinned in Task 9 and used instead of placeholders (Tasks 11, 14); Task 16 declared a subroutine called before D/F/X; readiness result rows in the §13 schema; attempts ledger carries actor/session ids and transport/parse/valid status with the actor-separation check (Task 12).
 
 v3 (after external plan review 2 — P0 3 / P1 5; spec v1.15): P0: (1) actor separation split into three chronologically possible checks (before B, worker allocation, before D) with `session_id` sourced from the orchestration session or `not_available`; (2) AC-R3-11a/b rewritten to the §13 schema and `tune.fixture_negative_diagnostic` produces `fixture_negative_effective_diagnostic` on the log line (acceptance still raw); (3) plaintext scans split into `pre_terminal_plaintext_scan` (before Task 16, in readiness) and `post_terminal_plaintext_scan` (Task 17, ledger/provenance only). P1: every binding reference now says spec v1.15; the before-encryption scan uses the 24 query needles with only the sealed plaintext excluded; §5 distinguishes the top-5 pre-T equivalence from the MAX_LIMIT AC-R3-02 equivalence; the terminal AC-R3-06 check is tied to the terminal commit sha in Task 17; `actor_id`/`session_id` sources defined.
+
+v4 (after external plan review 3 — P0 3 / P1 5; spec v1.16): P0: (1) two-phase worker handshake in the frozen brief (Phase 0 `handshake` → `worker-handshake.json` + `HANDSHAKE`; controller checks and ledgers `actor_separation_check_worker`; then `run the brief procedure` via SendMessage) — Tasks 11, 13; (2) plaintext scans use a hashed normalized n-gram needle manifest written before encryption (`rs.needle_manifest`, `rs.scan_for_needles`, CLI `scan --manifest --root --allow`), verdict `unexpected_hits == []` with explicit allow lists (pre-encryption: sealed plaintext; after B and F/X: none; pre-terminal D: decrypted sealed plaintext; post-terminal D: the published terminal artifacts) — Tasks 6, 12, 14, 15, 17; (3) spec §9 state model now cites the §13 schema. P1: Task 12 event named `actor_separation_check_B`; D check includes `controller_actor_id`; header inheritance sentence; AC-R3-06 coverage row; Task 16 run schema carries `fixture_negative_effective_diagnostic`.
