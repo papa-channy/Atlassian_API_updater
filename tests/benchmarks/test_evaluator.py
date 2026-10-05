@@ -299,7 +299,8 @@ class TestAliasNotesAndTuningLog(unittest.TestCase):
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 EVAL_CODE_FILES = ("tests/benchmarks/evaluator.py", "tests/benchmarks/test_evaluator.py",
                    "tests/diag_search_queries.py", "tests/tune_search_ranking.py",
-                   "tests/benchmarks/round_seal.py", "tests/benchmarks/alias_candidates_tool.py")
+                   "tests/benchmarks/round_seal.py", "tests/benchmarks/alias_candidates_tool.py",
+                   "tests/benchmarks/regression_reference.py")
 
 
 R1_FINAL_SHA256 = "b573ba0f8deeb826e4cdea88f83a45ae028871c836f02945c66af21d78d31090"      # pinned Step 3
