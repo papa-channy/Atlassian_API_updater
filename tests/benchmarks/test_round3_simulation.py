@@ -29,3 +29,13 @@ class TestSyntheticHidden(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestSyntheticLexiconPhrase(unittest.TestCase):
+    def test_synthetic_T_merges_a_phrase_rule(self):
+        """v1.24: the synthetic lexicon-r3 merge exercises the phrase -> when_all rule path and its lexicon-r3 rule note."""
+        from tests.benchmarks import concept_lexicon_check as clc, round3_simulation as sim
+        aliases = {"version": 1, "alias_damping": 0.5, "rule_damping": 1.0, "aliases": {}, "rules": [], "notes": {}}
+        out, skipped = clc.merge(aliases, {sim.LEXICON_WORD: [sim.LEXICON_TARGET], sim.LEXICON_PHRASE: [sim.LEXICON_PHRASE_TARGET]}, sim.ROUND)
+        self.assertEqual(skipped, []); self.assertEqual(out["rules"], [{"when_all": ["zzalpha", "zzbeta"], "add": ["issue"]}])
+        self.assertEqual(out["notes"]["rule:0"]["origin"], "lexicon-r3"); self.assertIn(sim.LEXICON_WORD, out["aliases"])

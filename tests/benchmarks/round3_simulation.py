@@ -19,6 +19,7 @@ import argparse, copy, datetime, hashlib, json, os, pathlib, re, shutil, subproc
 ROUND = 3
 SIM_DIR = ".round3-sim"                       # inside the temp tree: synthetic snapshot and plaintext
 LEXICON_WORD, LEXICON_TARGET = "zzsynthetic", "issue"
+LEXICON_PHRASE, LEXICON_PHRASE_TARGET = "zzalpha zzbeta", "issue"          # v1.24: synthetic phrase -> when_all rule (spec §6)
 DATA_REL = "tools/atlassian_docs/intelligence/data"
 STEPS_COMMON = ("T", "B")
 BRANCHES = ("D", "F", "X")
@@ -261,15 +262,16 @@ def apply_T():
     # Additive merge: concept_lexicon.json / alias_candidates.json already carry the real, catalog_df-scale Round
     # 1/2 documents (hundreds of entries the live search_aliases.json's words/targets are justified by, spec §10.2
     # TestPolicyVocabularyProvenance); the synthetic lexicon-r3 word is merged IN rather than replacing them.
-    raw, review = {LEXICON_WORD: [LEXICON_TARGET]}, {LEXICON_WORD: True}
+    synthetic = {LEXICON_WORD: [LEXICON_TARGET], LEXICON_PHRASE: [LEXICON_PHRASE_TARGET]}
+    raw, review = dict(synthetic), {k: True for k in synthetic}
     lexicon = _read(f"{DATA_REL}/concept_lexicon.json")
-    lexicon["lexicon"] = {**lexicon.get("lexicon", {}), LEXICON_WORD: [LEXICON_TARGET]}
+    lexicon["lexicon"] = {**lexicon.get("lexicon", {}), **synthetic}
     lexicon["round"] = ROUND
     lexicon["generated_from"] = act.provenance(fp, shas, {
         "verb_inventory": canonical_sha256(ranking["verb_methods"]), "aliases": canonical_sha256(aliases),
         "raw_generation": canonical_sha256(raw), "semantic_review": canonical_sha256(review)})
     act._write(ROOT / DATA_REL / "concept_lexicon.json", lexicon)              # 1. synthetic lexicon, merged as lexicon-r3
-    merged, skipped = clc.merge(aliases, {LEXICON_WORD: [LEXICON_TARGET]}, ROUND)
+    merged, skipped = clc.merge(aliases, synthetic, ROUND)
     assert not skipped
     (ROOT / DATA_REL / "search_aliases.json").write_text(json.dumps(merged, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     bench = _read("tests/benchmarks/search_queries.json")
@@ -300,7 +302,7 @@ def apply_T():
         finally:
             sys.stdout = old
     assert code == 0
-    print(f"lexicon-r{ROUND} {LEXICON_WORD}->{LEXICON_TARGET}; {len(doc['candidates'])} candidates; "
+    print(f"lexicon-r{ROUND} {LEXICON_WORD}->{LEXICON_TARGET} + phrase rule {LEXICON_PHRASE}->{LEXICON_PHRASE_TARGET}; {len(doc['candidates'])} candidates; "
           f"R6 seeds {sum('R6' in v for v in cls.values())}; round_freeze round {ROUND} added")
 
 
