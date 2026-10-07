@@ -123,6 +123,7 @@
     "resource_match_bonus": 10.0,
     "method_order_bonus": 0.0, "path_coverage_bonus": 0.0
   },
+  "ordering_rules": {"intent_tier": true, "preferred_method_tiebreak": true, "terminal_alias_full_weight": true},
   "constants": {
     "method_match_bonus": 2.0, "method_mismatch_penalty": 2.0,
     "path_unmatched_penalty": 1.0, "path_unmatched_cap": 3, "product_hint_bonus": 3.0,

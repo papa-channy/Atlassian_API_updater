@@ -118,7 +118,7 @@ def equivalence_mismatches(state, rp, bench, ap, n=20, seed=20261005) -> list:
     pairs = [(state, [r["query"] for r in bench["seed"] + bench["regression_negative"]]), (fx_state, [r["query"] for r in fx_bench["seed"] + fx_bench["regression_negative"]])]
     out = []
     for st, queries in pairs:
-        ge = tune.GridEvaluator(st, queries, ap)
+        ge = tune.GridEvaluator(st, queries, ap, rp.ordering_rules["terminal_alias_full_weight"])
         for p in pts:
             rpp = tune.ranking_with(rp, p)
             with mock.patch.object(policy, "ranking", return_value=rpp), mock.patch.object(policy, "aliases", return_value=ap):

@@ -86,9 +86,11 @@ def generate(repo_root: pathlib.Path, cache_dir: pathlib.Path, bench_path: pathl
 
 def _pinned_policies(reference, policy):
     """Round 3 loader + B content: B aliases verbatim; live structure with the B inventory, B constants and the two new constants at 0."""
+    from tools.atlassian_docs.intelligence import search
     live = json.loads((policy.DATA_DIR / "search_ranking.json").read_text(encoding="utf-8"))
     ranking_raw = {**live, "verb_methods": reference["b_ranking"]["verb_methods"],
-                   "constants": {**reference["b_ranking"]["constants"], **NEW_CONSTANTS}}
+                   "constants": {**reference["b_ranking"]["constants"], **NEW_CONSTANTS},
+                   "ordering_rules": dict(search.LEGACY_ORDERING_RULES)}                 # v1.24: AC-R3-02 compares in legacy mode
     with tempfile.TemporaryDirectory() as td:
         rp = pathlib.Path(td) / "r.json"; ap = pathlib.Path(td) / "a.json"
         rp.write_text(json.dumps(ranking_raw), encoding="utf-8"); ap.write_text(json.dumps(reference["b_aliases"]), encoding="utf-8")

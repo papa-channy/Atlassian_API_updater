@@ -172,34 +172,37 @@ class GridEvaluator:
     state with the production `_score`; every grid point re-runs only the production `_structural_signals` and reproduces
     search_operations' ordering: key (-final, deprecated, key), DEPRECATED_FACTOR, zero clamp, limit. Bench queries contain
     whitespace so exact-key pinning never applies; a whitespace-free query falls back to search_operations."""
-    def __init__(self, state, queries, alias_policy):
+    def __init__(self, state, queries, alias_policy, terminal_full=False):
         from tools.atlassian_docs.intelligence import search as S
-        self.S, self.state, self.ap, self.rows, self.meta = S, state, alias_policy, {}, {}
+        self.S, self.state, self.ap, self.rows, self.meta, self.terminal_full = S, state, alias_policy, {}, {}, terminal_full
         for q in dict.fromkeys(queries):
             unigrams, exp = S.tokenize_unigrams(q), S.expand_query(q, alias_policy)
             lexical_base, rows = exp.base | S.joined_query_forms(q), []
             for name in sorted(state.registry.sources):
                 sr = state.registry.sources[name]
                 for entry in sr.search_index.entries:
-                    lexical, _ = S._score(entry, lexical_base, exp.direct, exp.cond, unigrams, alias_policy)
+                    lexical, _ = S._score(entry, lexical_base, exp.direct, exp.cond, unigrams, alias_policy, terminal_full)
                     if lexical > 0:
                         rows.append((entry, sr.operations_by_key[entry.key], lexical))
-            self.rows[q], self.meta[q] = rows, (unigrams, exp.all)
+            self.rows[q], self.meta[q] = rows, (unigrams, exp.all, S.joined_query_forms(q))
 
     def ranked(self, query, rp, limit=5):
         if query not in self.rows or not any(ch.isspace() for ch in query.strip()):
             with mock.patch.object(policy, "ranking", return_value=rp), mock.patch.object(policy, "aliases", return_value=self.ap):
                 return _search_fn(self.state)(query)
-        unigrams, exp_all = self.meta[query]
+        unigrams, exp_all, joined = self.meta[query]
         intent = self.S.method_intent(unigrams, rp.verb_methods)
+        rules = self.S.ordering_rules_for(rp.ordering_rules, joined)
+        verbs, allowed = intent
+        preferred = rp.verb_method_order[verbs[0]][0] if verbs else None
         cands = []
         for entry, op, lexical in self.rows[query]:
             structural, _ = self.S._structural_signals(entry, unigrams, exp_all, rp, intent)
             final = max(lexical + structural, 0.0) * (self.S.DEPRECATED_FACTOR if op.deprecated else 1.0)
             if final == 0.0:
                 continue
-            cands.append((final, op.deprecated, op.key))
-        cands.sort(key=lambda c: (-c[0], c[1], c[2]))
+            cands.append((final, op.deprecated, op.key, entry.method))
+        cands.sort(key=lambda c: self.S._order_key(rules, allowed, preferred, c[0], c[3], c[1], c[2]))
         return [c[2] for c in cands[:limit]], bool(intent[1])
 
 
@@ -544,8 +547,9 @@ def main(argv=None) -> int:
         b_sha = policy.canonical_sha256(aliases_raw)
         queries = [r["query"] for r in bench["seed"] + bench["regression_negative"]]
         fx_state, fx_bench = fixture_state(), fixture_bench(bench)
-        ge = GridEvaluator(state, queries, _alias_policy(aliases_raw))
-        ge_fx = GridEvaluator(fx_state, [r["query"] for r in fx_bench["seed"] + fx_bench["regression_negative"]], _alias_policy(aliases_raw))
+        tf = rp.ordering_rules["terminal_alias_full_weight"]                                          # v1.24 spec §3.8 parity
+        ge = GridEvaluator(state, queries, _alias_policy(aliases_raw), tf)
+        ge_fx = GridEvaluator(fx_state, [r["query"] for r in fx_bench["seed"] + fx_bench["regression_negative"]], _alias_policy(aliases_raw), tf)
 
         _raw_sha_cache = {}
 

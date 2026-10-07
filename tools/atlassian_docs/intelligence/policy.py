@@ -141,7 +141,8 @@ class QuirkOverrides:
 
 
 _METHODS = frozenset({"GET", "POST", "PUT", "PATCH", "DELETE"})
-STRUCTURE_KEYS = ("verb_methods", "path_noise", "product_hints", "tuning_grid", "baseline")
+STRUCTURE_KEYS = ("verb_methods", "path_noise", "product_hints", "tuning_grid", "baseline", "ordering_rules")
+ORDERING_RULE_KEYS = ("intent_tier", "preferred_method_tiebreak", "terminal_alias_full_weight")   # Round 3 spec §3.6-3.8 (v1.24)
 CONSTANT_KEYS = ("method_match_bonus", "method_mismatch_penalty", "path_unmatched_penalty", "path_unmatched_cap", "product_hint_bonus",
                  "resource_match_bonus", "method_order_bonus", "path_coverage_bonus")
 _WORD = re.compile(r"[a-z]+"); _NOISE = re.compile(r"[a-z0-9]+")   # always fullmatch ("get\n" must not pass)
@@ -162,8 +163,16 @@ class RankingPolicy:
     baseline: Mapping[str, float]
     constants: Mapping[str, float]
     verb_method_order: Mapping[str, tuple]
+    ordering_rules: Mapping[str, bool]
     sha256: str
     structure_sha256: str
+
+
+def _bool_map(v, name, keys) -> dict:
+    """ordering_rules (Round 3 spec §3.6-3.8, v1.24): exactly the ORDERING_RULE_KEYS, every value a bool."""
+    if not isinstance(v, dict) or set(v) != set(keys) or not all(isinstance(x, bool) for x in v.values()):   # ordering_rules contract
+        raise ValueError(f"{name} must map exactly {list(keys)} to booleans")                                # ordering_rules contract
+    return {k: v[k] for k in keys}                                                                             # ordering_rules
 
 
 def _num(v, name, integer=False):
@@ -233,7 +242,7 @@ def load_ranking(path: Optional[pathlib.Path] = None) -> RankingPolicy:
     from .. import sources
     raw = _read(path or DATA_DIR / "search_ranking.json")
     if not isinstance(raw, dict) or set(raw) != {"version", *STRUCTURE_KEYS, "constants"}:
-        raise ValueError("ranking policy must have exactly version, verb_methods, path_noise, product_hints, tuning_grid, baseline, constants")
+        raise ValueError("ranking policy must have exactly version, verb_methods, path_noise, product_hints, tuning_grid, baseline, ordering_rules, constants")
     if not isinstance(raw["version"], int) or isinstance(raw["version"], bool) or raw["version"] < 1:
         raise ValueError("version must be an int >= 1")
     verbs = {}
@@ -268,9 +277,10 @@ def load_ranking(path: Optional[pathlib.Path] = None) -> RankingPolicy:
             if c not in out_grid[k]:
                 raise ValueError(f"{name}[{k}]={c} is outside its tuning grid")
             dst[k] = c
+    rules = _bool_map(raw["ordering_rules"], "ordering_rules", ORDERING_RULE_KEYS)
     return RankingPolicy(raw["version"], MappingProxyType(verbs), frozenset(noise), MappingProxyType(hints),
                          MappingProxyType(out_grid), MappingProxyType(out_base), MappingProxyType(out_consts),
-                         MappingProxyType(order),
+                         MappingProxyType(order), MappingProxyType(rules),
                          canonical_sha256(raw), canonical_sha256({k: raw[k] for k in STRUCTURE_KEYS}))
 
 

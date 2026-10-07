@@ -110,7 +110,7 @@ def singular(t: str) -> str:
     return t[:-1] if t.endswith("s") else t
 
 
-STRUCTURE_KEYS = ("verb_methods", "path_noise", "product_hints", "tuning_grid", "baseline")
+STRUCTURE_KEYS = ("verb_methods", "path_noise", "product_hints", "tuning_grid", "baseline", "ordering_rules")
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 ROUND_FREEZE = pathlib.Path(__file__).resolve().parent / "round_freeze.json"
 DATA_REL = "tools/atlassian_docs/intelligence/data"
@@ -209,7 +209,7 @@ def round_freeze_hashes(round: int, root=ROOT) -> dict:
     return out
 
 
-PRE_FREEZE_NONVERB_STRUCTURE_SHA256 = {3: "02b27c8845a292d4b5ffac048fad52a3136909814e4cdb4165820fb31958b7ff"}
+PRE_FREEZE_NONVERB_STRUCTURE_SHA256 = {3: "1e99c67ec445163f777b0cdfb933ac6d0cac22d638c1994743028678a862c9f1"}
 NONVERB_STRUCTURE_KEYS = tuple(k for k in STRUCTURE_KEYS if k != "verb_methods")
 ROUND2_SPEC = ROOT / "docs" / "superpowers" / "specs" / "2026-10-02-search-quality-round2-design.md"
 

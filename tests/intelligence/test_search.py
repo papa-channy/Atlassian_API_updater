@@ -472,6 +472,73 @@ class TestRound3Signals(unittest.TestCase):
         self.assertEqual(self._sig(post, ("add", "change", "x"))["method_order"]["value"], 1.0)           # order matters
         self.assertEqual(self._sig(post, ("get", "delete", "x"))["method_order"]["value"], 0.0)           # empty intersection
 
+    def _rules(self, **on):
+        return {k: on.get(k, False) for k in policy.ORDERING_RULE_KEYS}
+
+    def test_order_key_intent_tier(self):                                                              # spec §3.6 (v1.24)
+        allowed = frozenset({"PUT", "POST"})
+        on, off = self._rules(intent_tier=True), self._rules()
+        self.assertEqual(search._order_key(on, allowed, "PUT", 39.0, "GET", False, "k1")[0], 1)       # out of intent -> tier 1
+        self.assertEqual(search._order_key(on, allowed, "PUT", 36.0, "PUT", False, "k2")[0], 0)
+        self.assertLess(search._order_key(on, allowed, "PUT", 36.0, "PUT", False, "k2"), search._order_key(on, allowed, "PUT", 39.0, "GET", False, "k1"))
+        self.assertEqual(search._order_key(on, frozenset(), None, 39.0, "GET", False, "k1")[0], 0)     # no intent -> everything tier 0
+        self.assertEqual(search._order_key(off, allowed, "PUT", 39.0, "GET", False, "k1"), (0, -39.0, 0, False, "k1"))   # legacy shape
+
+    def test_order_key_preferred_method_tiebreak(self):                                                # spec §3.7 (v1.24)
+        allowed = frozenset({"PUT", "POST"}); on = self._rules(preferred_method_tiebreak=True)
+        put, post = search._order_key(on, allowed, "PUT", 21.0, "PUT", False, "b"), search._order_key(on, allowed, "PUT", 21.0, "POST", False, "a")
+        self.assertLess(put, post)                                                                      # tie: preferred first, before key order
+        self.assertLess(search._order_key(on, allowed, "PUT", 22.0, "POST", False, "a"), put)          # score still dominates
+        self.assertEqual(search._order_key(on, allowed, "GET", 21.0, "POST", False, "a")[2], 0)        # preferred outside intersection -> no effect
+        self.assertEqual(search._order_key(on, frozenset(), None, 21.0, "POST", False, "a")[2], 0)
+
+    def test_score_terminal_alias_full_weight(self):                                                   # spec §3.8 (v1.24)
+        e = self._entry("/rest/api/3/version", method="POST")
+        fields = dict(e.fields); fields["path"] = frozenset({"version"}); fields["summary"] = frozenset({"version", "project"}); fields["tags"] = frozenset({"project"})
+        e = search.IndexEntry(e.key, fields, e.path_tokens, e.source, e.method, e.terminal_tokens)
+        pol = policy.aliases(); w = search.FIELD_WEIGHTS
+        damped, _ = search._score(e, frozenset({"project"}), frozenset({"version"}), frozenset(), ("release", "project"), pol)
+        full, _ = search._score(e, frozenset({"project"}), frozenset({"version"}), frozenset(), ("release", "project"), pol, terminal_full=True)
+        self.assertEqual(full - damped, (1 - pol.alias_damping) * (w["path"] + w["summary"]))         # only the terminal alias token is undamped
+        other = self._entry("/rest/api/3/project", method="POST")
+        fields = dict(other.fields); fields["summary"] = frozenset({"version", "project"})
+        other = search.IndexEntry(other.key, fields, other.path_tokens, other.source, other.method, other.terminal_tokens)
+        a, _ = search._score(other, frozenset({"project"}), frozenset({"version"}), frozenset(), ("release", "project"), pol)
+        b, _ = search._score(other, frozenset({"project"}), frozenset({"version"}), frozenset(), ("release", "project"), pol, terminal_full=True)
+        self.assertEqual(a, b)                                                                          # 'version' is not this entry's terminal -> damped as before
+        c_d, _ = search._score(e, frozenset({"project"}), frozenset(), frozenset({"version"}), ("release", "project"), pol)
+        c_f, _ = search._score(e, frozenset({"project"}), frozenset(), frozenset({"version"}), ("release", "project"), pol, terminal_full=True)
+        self.assertEqual(c_f - c_d, (1 - pol.rule_damping) * (w["path"] + w["summary"]))              # rule tokens (exp.cond) follow the same terminal rule
+
+    def test_search_operations_legacy_mode_is_score_order(self):                                       # AC-R3-14 legacy (v1.24)
+        import tempfile
+        from unittest import mock
+        raw = json.loads((policy.DATA_DIR / "search_ranking.json").read_text(encoding="utf-8")); raw["ordering_rules"] = dict(search.LEGACY_ORDERING_RULES)
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as fh:
+            json.dump(raw, fh); path = pathlib.Path(fh.name)
+        with mock.patch.object(policy, "ranking", return_value=policy.load_ranking(path)):
+            out = search.search_operations(make_state("jira-platform"), "update issue summary", limit=50)
+        rows = [r for r in out["results"] if not r.get("match")]
+        self.assertTrue(rows); self.assertEqual(rows, sorted(rows, key=lambda r: (-r["score"], r["deprecated"], r["key"])))
+
+    def test_search_operations_intent_tier_demotes_out_of_intent(self):                                # AC-R3-14 rules on (v1.24)
+        out = search.search_operations(make_state("jira-platform"), "update issue summary", limit=50)
+        methods = [r["key"].split(":")[1] for r in out["results"] if not r.get("match")]
+        allowed = set(out["intent_methods"]); self.assertTrue(allowed and methods)
+        first_out = next((i for i, m in enumerate(methods) if m not in allowed), len(methods))
+        self.assertTrue(all(m in allowed for m in methods[:first_out]) and all(m not in allowed for m in methods[first_out:]))
+
+    def test_identifier_queries_keep_legacy_order(self):                                                # v1.24 ruling: spec §3.6/§3.7 scope
+        on = self._rules(intent_tier=True, preferred_method_tiebreak=True, terminal_alias_full_weight=True)
+        self.assertEqual(search.ordering_rules_for(on, frozenset()), on)
+        self.assertEqual(search.ordering_rules_for(on, search.joined_query_forms("IssueCreateMetadata")),
+                         {"intent_tier": False, "preferred_method_tiebreak": False, "terminal_alias_full_weight": True})
+        self.assertEqual(search.joined_query_forms("update issue summary"), frozenset())                 # plain words never trigger the exemption
+
+    def test_pinned_exact_match_precedes_intent_tier(self):                                             # review focus 6 (v1.24)
+        out = search.search_operations(make_state("jira-platform"), "createIssue", limit=10)
+        self.assertTrue(out["results"] and out["results"][0].get("match"))                              # exact operationId pin stays first under the rules
+
     def test_path_coverage_counts_unique_matched_origins(self):
         e = self._entry("/rest/api/3/issue/{k}/properties")
         self.assertEqual(self._sig(e, ("get", "issue", "property"))["path_coverage"], {"value": 2.0, "matched": ["issue", "properties"]})

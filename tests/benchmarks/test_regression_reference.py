@@ -37,6 +37,11 @@ class TestRegressionReference(unittest.TestCase):
             print("archived Round 2 snapshot not available: snapshot part of AC-R3-02 checked by the controller (ledger)"); return
         self.assertEqual(rr.verify_reference(self.ref, cache_dir=pathlib.Path(cache)), [])
 
+    def test_reference_runs_in_legacy_ordering_mode(self):                                              # AC-R3-02 (v1.24)
+        from tools.atlassian_docs.intelligence import policy, search
+        rp, _ = rr._pinned_policies(self.ref, policy)
+        self.assertEqual(dict(rp.ordering_rules), search.LEGACY_ORDERING_RULES)
+
     def test_round3_freeze_pins_the_reference(self):
         if ev.current_round()["round"] < 3:
             print("round 3 not frozen yet: regression_reference_sha256 checked after commit T"); return

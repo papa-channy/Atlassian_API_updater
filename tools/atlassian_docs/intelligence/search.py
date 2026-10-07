@@ -193,22 +193,46 @@ def expand_query(query: str, pol) -> QueryExpansion:
     return QueryExpansion(frozenset(base), frozenset(direct), frozenset(cond))
 
 
-def _score(entry, lexical_base: frozenset, direct: frozenset, cond: frozenset, bonus_tokens: tuple, pol):
+LEGACY_ORDERING_RULES = {"intent_tier": False, "preferred_method_tiebreak": False, "terminal_alias_full_weight": False}
+
+
+def _score(entry, lexical_base: frozenset, direct: frozenset, cond: frozenset, bonus_tokens: tuple, pol, terminal_full: bool = False):
     """Lexical score of one entry (spec §6.6), all-match bonus included; returns (lexical, matched_base).
     bonus_tokens are the query unigrams: each must hit matched_base in some singular/plural form.
-    Joined forms can add score but never cancel the bonus. Deprecation is applied by the caller."""
+    Joined forms can add score but never cancel the bonus. Deprecation is applied by the caller.
+    terminal_full (Round 3 spec §3.8): alias/rule tokens that are forms of the entry's terminal resource count at full weight;
+    False reproduces the Round 2 formula exactly."""
     ad, rd = pol.alias_damping, pol.rule_damping
+    term = expand_token_forms(entry.terminal_tokens) if terminal_full else frozenset()
     lexical = 0.0
     matched = set()
     for field, weight in FIELD_WEIGHTS.items():
         f = entry.fields[field]
-        hb = lexical_base & f
-        lexical += weight * (len(hb) + ad * len(direct & f) + rd * len(cond & f))
+        hb, d, c = lexical_base & f, direct & f, cond & f
+        df, cf = d & term, c & term
+        lexical += weight * (len(hb) + len(df) + ad * (len(d) - len(df)) + len(cf) + rd * (len(c) - len(cf)))
         matched |= hb
     matched_base = frozenset(matched)
     if lexical and bonus_tokens and all(token_forms(q) & matched_base for q in bonus_tokens):
         lexical += ALL_MATCH_BONUS
     return lexical, matched_base
+
+
+def ordering_rules_for(rules, joined_forms) -> dict:
+    """Round 3 spec §3.6/§3.7 scope (v1.24 ruling): the ordering rules read verb intent from natural-language queries. A query
+    that contains an identifier-style word (CamelCase / joined schema or operation name, i.e. joined_query_forms non-empty) is
+    an exact-name lookup whose embedded verbs are not an action intent -> legacy order for tier and tie-break (scoring unchanged)."""
+    if not joined_forms:
+        return rules
+    return {**rules, "intent_tier": False, "preferred_method_tiebreak": False}
+
+
+def _order_key(rules, allowed, preferred, final: float, method: str, deprecated: bool, key: str) -> tuple:
+    """Sort key (Round 3 spec §3.6/§3.7, v1.24): (tier, -final, tiebreak, deprecated, key). tier demotes methods outside the
+    verb intent; tiebreak prefers the first verb's preferred method among equal scores. All rules false -> the Round 2 order."""
+    tier = 1 if rules["intent_tier"] and allowed and method not in allowed else 0
+    tb = 1 if rules["preferred_method_tiebreak"] and allowed and preferred in allowed and method != preferred else 0
+    return (tier, -final, tb, deprecated, key)
 
 
 def method_intent(query_unigrams, verb_methods):
@@ -308,8 +332,13 @@ def search_operations(state, query: str, *, source=None, method=None, tag=None,
     pol, rp = policy.aliases(), policy.ranking()
     unigrams = tokenize_unigrams(query)
     intent = method_intent(unigrams, rp.verb_methods)
+    verbs, allowed = intent
+    preferred = rp.verb_method_order[verbs[0]][0] if verbs else None
+    terminal_full = rp.ordering_rules["terminal_alias_full_weight"]
+    joined = joined_query_forms(query)
+    rules = ordering_rules_for(rp.ordering_rules, joined)
     exp = expand_query(query, pol)                       # exp.base: unigram forms only (spec §6.1)
-    lexical_base = exp.base | joined_query_forms(query)  # Phase 2.5 exact-name matching kept (spec §6.6)
+    lexical_base = exp.base | joined                     # Phase 2.5 exact-name matching kept (spec §6.6)
     scope = [source] if source else sorted(sources.SOURCES)
     pinned = exact_matches(state, query, scope, method, tag, include_deprecated)
     pinned_keys = {op.key for op, _ in pinned}
@@ -324,19 +353,19 @@ def search_operations(state, query: str, *, source=None, method=None, tag=None,
             op = sr.operations_by_key[entry.key]
             if not _passes(op, method, tag, include_deprecated):
                 continue
-            lexical, _ = _score(entry, lexical_base, exp.direct, exp.cond, unigrams, pol)
+            lexical, _ = _score(entry, lexical_base, exp.direct, exp.cond, unigrams, pol, terminal_full)
             if lexical <= 0:
                 continue
             structural, signals = _structural_signals(entry, unigrams, exp.all, rp, intent)
             final = max(lexical + structural, 0.0) * (DEPRECATED_FACTOR if op.deprecated else 1.0)
             if final == 0.0:
                 continue
-            candidates.append((final, op, signals))
-    candidates.sort(key=lambda c: (-c[0], c[1].deprecated, c[1].key))
+            candidates.append((final, op, signals, entry.method))
+    candidates.sort(key=lambda c: _order_key(rules, allowed, preferred, c[0], c[3], c[1].deprecated, c[1].key))
     non_pinned = [c for c in candidates if c[1].key not in pinned_keys]
     pinned_score = (non_pinned[0][0] if non_pinned else 0.0) + 1.0
     results = [_item(op, pinned_score, _zero_signals(), kind) for op, kind in pinned] + \
-              [_item(op, final, signals) for final, op, signals in non_pinned]
+              [_item(op, final, signals) for final, op, signals, _m in non_pinned]
     payload = {"query": query, "results": results[:limit], "total_matches": len(pinned) + len(non_pinned),
                "exact_match": bool(pinned), "query_tokens": sorted(exp.base),
                "alias_tokens": sorted(exp.direct | exp.cond), "expanded_tokens": sorted(exp.all)}

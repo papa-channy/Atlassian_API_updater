@@ -330,7 +330,7 @@ class TestGridEvaluator(unittest.TestCase):
         cls.state = tune.fixture_state(); cls.rp = policy.load_ranking(); cls.bench = tune.fixture_bench(tune._BENCH)
         cls.queries = [r["query"] for r in cls.bench["seed"] + cls.bench["regression_negative"]] + ["issue status field values", "create and delete issue", "list page versions"]
         cls.ap = tune._alias_policy(json.loads(tune.ALIASES_PATH.read_text(encoding="utf-8")))
-        cls.ge = tune.GridEvaluator(cls.state, cls.queries, cls.ap)
+        cls.ge = tune.GridEvaluator(cls.state, cls.queries, cls.ap, cls.rp.ordering_rules["terminal_alias_full_weight"])
 
     def test_grid_evaluator_matches_search_operations(self):
         import random
@@ -447,12 +447,13 @@ class TestFixtureConstraint(unittest.TestCase):
         self.assertEqual(unconstrained["aliases"]["workspace"], ["page"])                          # the constraint made the difference
 
     def test_real_fixture_suite_rejects_a_synthetic_breaking_alias(self):
-        """On the real fixtures: the live policy passes the r0 suite (23/6), a synthetic alias summary -> create breaks s-022."""
+        """On the real fixtures: the live policy passes the r0 suite (23/6), a synthetic alias summary -> property breaks s-022
+        (v1.24: the former summary -> create no longer breaks it - the intent tier demotes POST /issue for 'update issue summary')."""
         rp = policy.load_ranking(); state, fb = tune.fixture_state(), tune.fixture_bench(tune._BENCH)
         self.assertEqual((len(fb["seed"]), len(fb["regression_negative"])), (23, 6))
         raw = json.loads(tune.ALIASES_PATH.read_text(encoding="utf-8"))
         self.assertEqual(tune.fixture_failures(state, rp, dict(rp.constants), fb, tune._alias_policy(raw)), [])
-        raw["aliases"]["summary"] = ["create"]
+        raw["aliases"]["summary"] = ["property"]
         raw["notes"]["summary"] = {"origin": "phase2.5", "seed_query_id": None, "failure_classes": [], "evidence": "synthetic"}
         self.assertIn("s-022", tune.fixture_failures(state, rp, dict(rp.constants), fb, tune._alias_policy(raw)))
         with self.assertRaises(SystemExit):

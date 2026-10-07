@@ -212,9 +212,32 @@ class TestRankingPolicy(unittest.TestCase):
         diff = proc.stdout
         changed = [l[1:] for l in diff.splitlines() if l[:1] in "+-" and not l.startswith(("+++", "---"))]
         allowed = ("POLICY_VERSIONS", "CONSTANT_KEYS", "verb_method_order", "resource_match_bonus", "order = {}", "order[k]", "MappingProxyType(order)",
-                   "method_order_bonus", "path_coverage_bonus")
+                   "method_order_bonus", "path_coverage_bonus", "ordering_rules", "ORDERING_RULE_KEYS", "_bool_map", "STRUCTURE_KEYS", "ranking policy must have exactly")   # v1.24: six kinds
         for l in changed:
             self.assertTrue(any(tok in l for tok in allowed) or not l.strip(), f"undeclared policy.py change: {l!r}")
+
+    def test_ordering_rules_loaded_and_frozen(self):                                              # Round 3 spec §3.6-3.8 (v1.24)
+        rp = policy.load_ranking()
+        self.assertEqual(set(rp.ordering_rules), set(policy.ORDERING_RULE_KEYS))
+        self.assertTrue(all(isinstance(v, bool) for v in rp.ordering_rules.values()))
+        with self.assertRaises(TypeError):
+            rp.ordering_rules["intent_tier"] = False                                                # MappingProxyType
+
+    def test_ordering_rules_contract_violations(self):
+        base = self._raw()
+        missing = dict(base); missing.pop("ordering_rules")
+        extra = dict(base, ordering_rules={**base["ordering_rules"], "zz": True})
+        short = dict(base, ordering_rules={"intent_tier": True})
+        nonbool = dict(base, ordering_rules={**base["ordering_rules"], "intent_tier": 1})
+        for bad in (missing, extra, short, nonbool):
+            with self.assertRaises(ValueError):
+                self._from(bad)
+
+    def test_ordering_rules_are_structure(self):
+        raw = self._raw(); a = policy.load_ranking()
+        raw["ordering_rules"] = {k: False for k in policy.ORDERING_RULE_KEYS}
+        b = self._from(raw)
+        self.assertNotEqual(a.structure_sha256, b.structure_sha256)
 
     def test_constants_change_only_full_hash(self):
         raw = self._raw(); a = policy.load_ranking()
