@@ -212,32 +212,47 @@ def lexicon_gate(lexicon_doc, bench, by_key, ranking_raw, regression_check=None)
     return lexicon_doc, rejected_now
 
 
-def seed_regression_checker(cache_dir, aliases_raw, round):
-    """Production-scorer checker for lexicon_gate (spec §6 v1.25): returns (check, cleanup). check merges ONE lexicon entry into
-    `aliases_raw` (the pre-merge aliases) and compares the raw top-1 of the given seeds before/after on the snapshot registry."""
-    import json, tempfile
+def _checker_for_state(state, aliases_raw, round, tmpdir=None):
+    """spec §6 v1.25 `seed-regression` checker over a built registry: check(syn, targets, seeds) merges ONE lexicon entry into
+    `aliases_raw` (which must be the PRE-merge aliases: an entry that merge skips as already present raises ValueError — H12 review
+    I2) and reports whether any seed's raw judgement (evaluator.evaluate, section None) flips from pass to fail."""
+    import tempfile
     from unittest import mock
-    from tests.benchmarks import concept_lexicon_check as clc, regression_reference as rr
+    from tests.benchmarks import concept_lexicon_check as clc
     from tools.atlassian_docs.intelligence import policy, search
-    state, cleanup = rr._state_from_cache(pathlib.Path(cache_dir))
-    rp = policy.load_ranking()
+    rp = policy.load_ranking(); tmp = pathlib.Path(tmpdir or tempfile.mkdtemp(prefix="lexgate-")); n = [0]
 
     def load(raw):
-        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as fh:
-            json.dump(raw, fh)
-        return policy.load_aliases(pathlib.Path(fh.name))
+        n[0] += 1; p = tmp / f"aliases-{n[0]}.json"; p.write_text(json.dumps(raw), encoding="utf-8")
+        ap = policy.load_aliases(p); p.unlink(missing_ok=True); return ap
 
-    def top1_ok(rec, ap):
+    def passed(rec, ap):
         with mock.patch.object(policy, "ranking", return_value=rp), mock.patch.object(policy, "aliases", return_value=ap):
-            res = search.search_operations(state, rec["query"], limit=1).get("results", [])
-        return bool(res) and res[0]["key"] in (rec.get("expected_top1_any") or [])
+            fn = lambda q: [r["key"] for r in search.search_operations(state, q, limit=5).get("results", [])]
+            return ev.evaluate([rec], fn)["passed"] == 1
 
     base_ap = load(aliases_raw)
 
     def check(syn, targets, seeds):
-        merged, _ = clc.merge(aliases_raw, {syn: targets}, round)
+        merged, skipped = clc.merge(aliases_raw, {syn: targets}, round)
+        if skipped:
+            raise ValueError(f"{syn!r} is already merged into the alias file: the lexicon gate must run on the pre-merge aliases")
         ap = load(merged)
-        return any(top1_ok(r, base_ap) and not top1_ok(r, ap) for r in seeds)
+        return any(passed(r, base_ap) and not passed(r, ap) for r in seeds)
+    return check
+
+
+def seed_regression_checker(cache_dir, aliases_raw, round):
+    """Production-scorer checker for lexicon_gate on the snapshot registry: returns (check, cleanup); cleanup removes the temporary
+    registry copy and the alias temp dir."""
+    import shutil, tempfile
+    from tests.benchmarks import regression_reference as rr
+    state, cleanup_state = rr._state_from_cache(pathlib.Path(cache_dir))
+    tmp = tempfile.mkdtemp(prefix="lexgate-")
+    check = _checker_for_state(state, aliases_raw, round, tmp)
+
+    def cleanup():
+        cleanup_state(); shutil.rmtree(tmp, ignore_errors=True)
     return check, cleanup
 
 
@@ -294,7 +309,10 @@ def cmd_method_safety(args):
 def cmd_lexicon_gate(args):
     internal, _, _, ranking, aliases, bench, _ = _load(args)
     doc = _read(args.lexicon)
-    check, cleanup = seed_regression_checker(args.cache_dir, aliases, args.round)        # aliases = pre-merge state at gate time
+    if any(isinstance(n, dict) and n.get("origin") == f"lexicon-r{args.round}" for n in (aliases.get("notes") or {}).values()):
+        print(f"REFUSED: search_aliases.json already contains lexicon-r{args.round} entries; run the gate on the pre-merge aliases (H12 review I2)"); return 1
+    print(f"gate aliases_sha256: {canonical_sha256(aliases)}")
+    check, cleanup = seed_regression_checker(args.cache_dir, aliases, args.round)        # aliases = pre-merge state (checked above)
     try:
         doc, rejected = lexicon_gate(doc, bench, {op["key"]: op for op in internal}, ranking, regression_check=check)
     finally:

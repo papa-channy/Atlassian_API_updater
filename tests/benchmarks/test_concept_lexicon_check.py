@@ -27,6 +27,8 @@ class TestChecks(unittest.TestCase):
         self.assertEqual(rej["page"]["reason"], "in_catalog")                                        # same product -> still in_catalog
         kept2, rej2 = clc.structural_check({"workspace": ["space"]}, CONCEPTS, CATALOG | {"workspace"}, VERBS, HINTS, ALIAS_KEYS)
         self.assertEqual(rej2["workspace"]["reason"], "in_catalog")                                  # without source data: strict as before
+        kept3, rej3 = clc.structural_check({"entry": ["worklog"]}, CONCEPTS | {"worklog"}, CATALOG | {"entry"}, VERBS, HINTS, ALIAS_KEYS, token_sources=sources)
+        self.assertEqual(rej3["entry"]["reason"], "in_catalog")                                      # H12 review I1: a summary-only catalog word (no resource sources) stays in_catalog
 
     def test_plural_synonym_rejected_after_normalization(self):
         kept, rej = clc.prepare_review({"files": ["attachments"], "File": ["attachment"]}, *ARGS)

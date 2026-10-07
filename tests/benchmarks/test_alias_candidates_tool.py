@@ -169,6 +169,21 @@ class TestLexiconGate(unittest.TestCase):
         self.assertEqual(sorted(doc["lexicon"]), ["time entry", "unrelated"])
         self.assertEqual(calls, [("blog entry", ("post",), ("s-036",)), ("time entry", ("worklog",), ("s-030",))])   # only vocab-passing entries with seeds are checked
 
+    def test_seed_regression_checker_on_fixtures(self):                                             # H12 review I2/I3 (production path)
+        import json
+        from tests import tune_search_ranking as tune
+        state = tune.fixture_state(); raw = json.loads(tune.ALIASES_PATH.read_text(encoding="utf-8"))
+        pre = {**raw, "notes": {k: v for k, v in raw["notes"].items() if v.get("origin") != "lexicon-r3"}}
+        pre["aliases"] = {k: v for k, v in raw["aliases"].items() if k in pre["notes"]}
+        pre["rules"] = [r for i, r in enumerate(raw["rules"]) if f"rule:{i}" in pre["notes"]]
+        pre["notes"] = {k: v for k, v in pre["notes"].items() if not k.startswith("rule:") or int(k.split(":")[1]) < len(pre["rules"])}
+        s022 = next(r for r in tune._BENCH["seed"] if r["id"] == "s-022")                            # 'update issue summary' -> PUT /issue/{k}
+        check = act._checker_for_state(state, pre, 3)
+        self.assertTrue(check("summary", ["property"], [s022]))                                      # the known fixture-breaking alias flips s-022
+        self.assertFalse(check("zzunrelated", ["issue"], [s022]))                                    # an alias that never fires on the seed
+        with self.assertRaises(ValueError):
+            check("ticket", ["issue"], [s022])                                                       # already an alias: gate must see pre-merge aliases
+
 
 class TestVerbPrefixInvariant(unittest.TestCase):
     """AC-R3-12: the live inventory keeps Round 2's rows and each Round 2 list as an exact prefix; suffixes sorted."""

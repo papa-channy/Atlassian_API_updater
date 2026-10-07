@@ -48,10 +48,13 @@ def is_phrase(key: str) -> bool:
 
 
 def _cross_product(syn, targets, token_sources) -> bool:
-    """spec §6 v1.25: a catalog word may alias a target when its RESOURCE sources and the target's resource sources are disjoint."""
+    """spec §6 v1.25: a catalog word may alias a target only when the word itself is a RESOURCE token somewhere and its resource
+    sources are disjoint from the target's (workspace: jira-software vs space: confluence). A word that is catalog vocabulary only
+    through summaries/operationIds has no resource sources and stays `in_catalog` (H12 review I1)."""
     if not token_sources or len(targets) != 1:
         return False
-    return not (set(token_sources.get(syn, ())) & set(token_sources.get(targets[0], ())))
+    own = set(token_sources.get(syn, ()))
+    return bool(own) and not (own & set(token_sources.get(targets[0], ())))
 
 
 def structural_check(lex, concept_set, catalog_set, verbs, hints, alias_keys, rule_sets=frozenset(), token_sources=None):
