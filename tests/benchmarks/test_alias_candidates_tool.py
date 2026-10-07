@@ -152,6 +152,23 @@ class TestLexiconGate(unittest.TestCase):
         doc2, rejected2 = act.lexicon_gate(doc2, bench, by_key, RANK)
         self.assertEqual(rejected2, ["time entry"]); self.assertEqual(doc2["rejected"]["time entry"]["reason"], "seed-incompatible")
 
+    def test_lexicon_gate_seed_regression_check(self):                                              # spec §6 v1.25
+        internal = [{"key": "confluence:PUT:/blogposts/{id}", "source": "confluence", "method": "PUT", "operation_id": "updateBlogPost", "summary": "Update blog post", "tags": ["Blog Post"]},
+                    {"key": "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/worklog", "source": "jira-platform", "method": "GET", "operation_id": "getIssueWorklog", "summary": "Get issue worklogs", "tags": ["Issue worklogs"]}]
+        by_key = {op["key"]: op for op in internal}
+        bench = {"seed": [{"id": "s-036", "query": "rewrite this wiki blog entry", "expected_top1_any": [internal[0]["key"]], "failure_classes": []},
+                          {"id": "s-030", "query": "show time entries for ticket", "expected_top1_any": [internal[1]["key"]], "failure_classes": []}]}
+        calls = []
+        def check(syn, targets, seeds):
+            calls.append((syn, tuple(targets), tuple(r["id"] for r in seeds)))
+            return syn == "blog entry"                                                               # merging it flips s-036 from pass to fail
+        doc = {"lexicon": {"blog entry": ["post"], "time entry": ["worklog"], "unrelated": ["page"], "wiki blog": ["issue"]}, "rejected": {}, "catalog_df": {}}
+        doc, rejected = act.lexicon_gate(doc, bench, by_key, RANK, regression_check=check)
+        self.assertEqual(rejected, ["blog entry", "wiki blog"])
+        self.assertEqual(doc["rejected"]["blog entry"]["reason"], "seed-regression"); self.assertEqual(doc["rejected"]["wiki blog"]["reason"], "seed-incompatible")
+        self.assertEqual(sorted(doc["lexicon"]), ["time entry", "unrelated"])
+        self.assertEqual(calls, [("blog entry", ("post",), ("s-036",)), ("time entry", ("worklog",), ("s-030",))])   # only vocab-passing entries with seeds are checked
+
 
 class TestVerbPrefixInvariant(unittest.TestCase):
     """AC-R3-12: the live inventory keeps Round 2's rows and each Round 2 list as an exact prefix; suffixes sorted."""

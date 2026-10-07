@@ -12,11 +12,21 @@ class TestChecks(unittest.TestCase):
         raw = {"Tickets": ["issue"], "ticket": ["issues"], "notes": ["comment"]}
         self.assertEqual(clc.normalize_raw(raw), {"note": ["comment"], "ticket": ["issue"]})
 
-    def test_normalize_sorts_phrase_tokens_so_reordered_phrases_collide(self):                        # H10 review I2
-        raw = {"entry time": ["blogpost"], "time entry": ["worklog"], "Blog Entries": ["blogpost"]}
-        self.assertEqual(clc.normalize_raw(raw), {"blog entry": ["blogpost"], "entry time": ["blogpost", "worklog"]})
+    def test_normalize_keeps_first_seen_phrase_order_and_merges_same_token_set(self):            # spec §6 v1.25 (H10 review I2 + reviewer display)
+        raw = {"time entry": ["worklog"], "entry time": ["blogpost"], "Blog Entries": ["blogpost"]}
+        self.assertEqual(clc.normalize_raw(raw), {"time entry": ["blogpost", "worklog"], "blog entry": ["blogpost"]})
         kept, rej = clc.structural_check(clc.normalize_raw(raw), CONCEPTS | {"worklog", "blogpost"}, CATALOG, VERBS, HINTS, ALIAS_KEYS)
-        self.assertEqual(rej["entry time"]["reason"], "multi_target"); self.assertEqual(kept, {"blog entry": ["blogpost"]})
+        self.assertEqual(rej["time entry"]["reason"], "multi_target"); self.assertEqual(kept, {"blog entry": ["blogpost"]})
+        self.assertEqual(clc.phrase_set("time entry"), frozenset({"entry", "time"}))
+
+    def test_in_catalog_cross_product_exception(self):                                             # spec §6 v1.25
+        sources = {"workspace": {"jira-software"}, "space": {"confluence"}, "page": {"confluence"}, "board": {"jira-software"}}
+        lex = {"workspace": ["space"], "board": ["page"], "page": ["space"]}
+        kept, rej = clc.structural_check(lex, CONCEPTS | {"board"}, CATALOG | {"workspace", "board"}, VERBS, HINTS, ALIAS_KEYS, token_sources=sources)
+        self.assertEqual(kept, {"workspace": ["space"], "board": ["page"]})                          # catalog words of another product may alias
+        self.assertEqual(rej["page"]["reason"], "in_catalog")                                        # same product -> still in_catalog
+        kept2, rej2 = clc.structural_check({"workspace": ["space"]}, CONCEPTS, CATALOG | {"workspace"}, VERBS, HINTS, ALIAS_KEYS)
+        self.assertEqual(rej2["workspace"]["reason"], "in_catalog")                                  # without source data: strict as before
 
     def test_plural_synonym_rejected_after_normalization(self):
         kept, rej = clc.prepare_review({"files": ["attachments"], "File": ["attachment"]}, *ARGS)

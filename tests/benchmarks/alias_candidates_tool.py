@@ -188,8 +188,10 @@ def classify(bench, internal, ranking_raw, aliases_raw) -> dict:
         out[rec["id"]] = classes
     return out
 
-def lexicon_gate(lexicon_doc, bench, by_key, ranking_raw):
-    """spec §5.2.3: a lexicon synonym that occurs in a seed query must target that seed's expected vocabulary."""
+def lexicon_gate(lexicon_doc, bench, by_key, ranking_raw, regression_check=None):
+    """spec §5.2.3: a lexicon synonym that occurs in a seed query must target that seed's expected vocabulary.
+    Round 3 spec §6 (v1.25): `regression_check(syn, targets, seeds) -> bool` (True = merging this entry alone flips one of those
+    seeds' raw top-1 from pass to fail) rejects the entry as `seed-regression`; checked only after the vocabulary gate."""
     verbs, noise, hints = ranking_raw["verb_methods"], frozenset(ranking_raw["path_noise"]), ranking_raw["product_hints"]
     rejected_now = []
     for syn in sorted(lexicon_doc["lexicon"]):
@@ -198,11 +200,45 @@ def lexicon_gate(lexicon_doc, bench, by_key, ranking_raw):
         if not seeds:
             continue
         allowed = set().union(*(expected_vocab(r, by_key, noise) for r in seeds))
+        reason = None
         if not set(lexicon_doc["lexicon"][syn]) & allowed:
-            lexicon_doc["rejected"][syn] = {"reason": "seed-incompatible", "targets": lexicon_doc["lexicon"].pop(syn),
+            reason = "seed-incompatible"
+        elif regression_check is not None and regression_check(syn, list(lexicon_doc["lexicon"][syn]), seeds):
+            reason = "seed-regression"
+        if reason:
+            lexicon_doc["rejected"][syn] = {"reason": reason, "targets": lexicon_doc["lexicon"].pop(syn),
                                             "catalog_df": lexicon_doc.get("catalog_df", {}).get(syn, 0)}
             rejected_now.append(syn)
     return lexicon_doc, rejected_now
+
+
+def seed_regression_checker(cache_dir, aliases_raw, round):
+    """Production-scorer checker for lexicon_gate (spec §6 v1.25): returns (check, cleanup). check merges ONE lexicon entry into
+    `aliases_raw` (the pre-merge aliases) and compares the raw top-1 of the given seeds before/after on the snapshot registry."""
+    import json, tempfile
+    from unittest import mock
+    from tests.benchmarks import concept_lexicon_check as clc, regression_reference as rr
+    from tools.atlassian_docs.intelligence import policy, search
+    state, cleanup = rr._state_from_cache(pathlib.Path(cache_dir))
+    rp = policy.load_ranking()
+
+    def load(raw):
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as fh:
+            json.dump(raw, fh)
+        return policy.load_aliases(pathlib.Path(fh.name))
+
+    def top1_ok(rec, ap):
+        with mock.patch.object(policy, "ranking", return_value=rp), mock.patch.object(policy, "aliases", return_value=ap):
+            res = search.search_operations(state, rec["query"], limit=1).get("results", [])
+        return bool(res) and res[0]["key"] in (rec.get("expected_top1_any") or [])
+
+    base_ap = load(aliases_raw)
+
+    def check(syn, targets, seeds):
+        merged, _ = clc.merge(aliases_raw, {syn: targets}, round)
+        ap = load(merged)
+        return any(top1_ok(r, base_ap) and not top1_ok(r, ap) for r in seeds)
+    return check, cleanup
 
 
 def provenance(fp, shas, inputs) -> dict:
@@ -256,9 +292,13 @@ def cmd_method_safety(args):
 
 
 def cmd_lexicon_gate(args):
-    internal, _, _, ranking, _, bench, _ = _load(args)
+    internal, _, _, ranking, aliases, bench, _ = _load(args)
     doc = _read(args.lexicon)
-    doc, rejected = lexicon_gate(doc, bench, {op["key"]: op for op in internal}, ranking)
+    check, cleanup = seed_regression_checker(args.cache_dir, aliases, args.round)        # aliases = pre-merge state at gate time
+    try:
+        doc, rejected = lexicon_gate(doc, bench, {op["key"]: op for op in internal}, ranking, regression_check=check)
+    finally:
+        cleanup()
     doc.setdefault("generated_from", {}).setdefault("inputs", {})["bench"] = canonical_sha256(bench)
     _write(args.lexicon, doc)
     print(f"gate rejected: {rejected}")

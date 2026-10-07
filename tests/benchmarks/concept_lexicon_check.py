@@ -25,11 +25,19 @@ def _rej(reason, targets, df=0):
     return {"reason": reason, "targets": list(targets), "catalog_df": df}
 
 
+def phrase_set(key: str) -> frozenset:
+    return frozenset(key.split(" "))
+
+
 def normalize_raw(raw) -> dict:
-    out = {}
+    """Round 3 spec §6 (v1.25): a two-token phrase keeps the token order it was first seen in (the reviewer reads natural
+    language); phrases with the same token set merge into that first key (when_all is a set), differing targets -> multi_target."""
+    out, phrase_key = {}, {}
     for syn, targets in (raw or {}).items():
         toks = act.norm_tokens(str(syn))
-        key = " ".join(sorted(toks) if len(toks) == 2 else toks) if toks else str(syn).lower()   # v1.24: a phrase key is its sorted token pair (when_all is a set)
+        key = " ".join(toks) if toks else str(syn).lower()
+        if len(toks) == 2:
+            key = phrase_key.setdefault(frozenset(toks), key)
         vals = [t for target in (targets if isinstance(targets, list) else [targets]) for t in act.norm_tokens(str(target))]
         out.setdefault(key, set()).update(vals)
     return {k: sorted(v) for k, v in sorted(out.items())}
@@ -39,8 +47,16 @@ def is_phrase(key: str) -> bool:
     return " " in key
 
 
-def structural_check(lex, concept_set, catalog_set, verbs, hints, alias_keys, rule_sets=frozenset()):
-    """Single-word keys -> alias candidates (Round 2 rules). Two-token keys -> conditional-rule candidates (Round 3 spec §6 v1.24):
+def _cross_product(syn, targets, token_sources) -> bool:
+    """spec §6 v1.25: a catalog word may alias a target when its RESOURCE sources and the target's resource sources are disjoint."""
+    if not token_sources or len(targets) != 1:
+        return False
+    return not (set(token_sources.get(syn, ())) & set(token_sources.get(targets[0], ())))
+
+
+def structural_check(lex, concept_set, catalog_set, verbs, hints, alias_keys, rule_sets=frozenset(), token_sources=None):
+    """Single-word keys -> alias candidates (Round 2 rules; v1.25: `in_catalog` is waived when the word and its target are
+    resources of disjoint products, `token_sources`). Two-token keys -> conditional-rule candidates (Round 3 spec §6 v1.24):
     catalog membership is not a rejection reason for a phrase (it adds context), an existing rule with the same when_all set is
     `rule_conflict`; three or more tokens are `shape`."""
     kept, rej = {}, {}
@@ -57,7 +73,8 @@ def structural_check(lex, concept_set, catalog_set, verbs, hints, alias_keys, ru
         else:
             reason = ("id_like" if not any(c.isalpha() for c in syn) or syn in act.ID_LIKE
                       else "function_word" if syn in act.FUNCTION_WORDS
-                      else "verb" if syn in verbs else "product_hint" if syn in hints else "in_catalog" if syn in catalog_set
+                      else "verb" if syn in verbs else "product_hint" if syn in hints
+                      else "in_catalog" if syn in catalog_set and not _cross_product(syn, targets, token_sources)
                       else "alias_conflict" if syn in alias_keys else "multi_target" if len(targets) != 1
                       else "target_not_concept" if targets[0] not in concept_set else None)
         if reason:
@@ -67,9 +84,9 @@ def structural_check(lex, concept_set, catalog_set, verbs, hints, alias_keys, ru
     return kept, rej
 
 
-def prepare_review(raw, concept_set, catalog_set, verbs, hints, alias_keys, rule_sets=frozenset()):
+def prepare_review(raw, concept_set, catalog_set, verbs, hints, alias_keys, rule_sets=frozenset(), token_sources=None):
     """Order (spec §7.0): normalize -> structural. No cap here: the semantic review sees every surviving synonym."""
-    return structural_check(normalize_raw(raw), concept_set, catalog_set, verbs, hints, alias_keys, rule_sets)
+    return structural_check(normalize_raw(raw), concept_set, catalog_set, verbs, hints, alias_keys, rule_sets, token_sources)
 
 
 def union_docs(docs) -> dict:
@@ -126,8 +143,8 @@ def finalize(kept, rejected, review):
     return kept, dict(sorted(rejected.items()))
 
 
-def build(raw, review, concept_set, catalog_set, verbs, hints, alias_keys, df=None, rule_sets=frozenset()):
-    kept, rejected = prepare_review(raw, concept_set, catalog_set, verbs, hints, alias_keys, rule_sets)
+def build(raw, review, concept_set, catalog_set, verbs, hints, alias_keys, df=None, rule_sets=frozenset(), token_sources=None):
+    kept, rejected = prepare_review(raw, concept_set, catalog_set, verbs, hints, alias_keys, rule_sets, token_sources)
     lexicon, rejected = finalize(kept, rejected, review)
     for syn, e in rejected.items():
         e["catalog_df"] = (df or {}).get(syn, 0)
@@ -138,7 +155,7 @@ def merge(aliases_raw, lexicon, round):
     out, skipped = copy.deepcopy(aliases_raw), []
     for syn, targets in sorted(lexicon.items()):
         if is_phrase(syn):                                                             # Round 3 spec §6 (v1.24): phrase -> when_all rule
-            when_all = sorted(syn.split(" "))
+            when_all = sorted(phrase_set(syn))
             if any(frozenset(r["when_all"]) == frozenset(when_all) for r in out["rules"]):
                 skipped.append(syn); continue
             out["rules"].append({"when_all": when_all, "add": list(targets)})
@@ -196,8 +213,10 @@ def _context(args):
     _, internal, fp, shas = rs.load_catalogs_from_cache(args.cache_dir, args.round)
     ranking, aliases = _read(act.DATA / "search_ranking.json"), _read(act.DATA / "search_aliases.json")
     rule_sets = frozenset(frozenset(r["when_all"]) for r in aliases.get("rules") or [])
-    return internal, fp, shas, ranking, aliases, (set(act.concept_tokens(internal, ranking["path_noise"])), act.catalog_vocab(internal),
-                                                  set(ranking["verb_methods"]), set(ranking["product_hints"]), act.alias_source_words(aliases), rule_sets)
+    concepts = act.concept_tokens(internal, ranking["path_noise"])
+    token_sources = {t: set(e["sources"]) for t, e in concepts.items()}                       # resource sources (spec §6 v1.25)
+    return internal, fp, shas, ranking, aliases, (set(concepts), act.catalog_vocab(internal),
+                                                  set(ranking["verb_methods"]), set(ranking["product_hints"]), act.alias_source_words(aliases), rule_sets, token_sources)
 
 
 def _union(paths):

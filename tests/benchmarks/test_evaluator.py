@@ -265,7 +265,8 @@ class TestAliasNotesAndTuningLog(unittest.TestCase):
                 self.assertTrue(isinstance(n.get("evidence"), str) and n["evidence"], k)
                 if lex is not None and lex.get("round") == r:
                     if k.startswith("rule:"):                                                       # phrase key == sorted token pair (v1.24)
-                        self.assertEqual(rule["add"], lex["lexicon"].get(" ".join(rule["when_all"])), f"{k}: differs from concept_lexicon.json")
+                        match = [v for pk, v in lex["lexicon"].items() if " " in pk and frozenset(pk.split(" ")) == frozenset(rule["when_all"])]
+                        self.assertEqual([rule["add"]], match, f"{k}: differs from concept_lexicon.json")
                     else:
                         self.assertEqual(raw["aliases"][k], lex["lexicon"].get(k), f"{k}: differs from concept_lexicon.json")
             else:                                                            # phase2.5
