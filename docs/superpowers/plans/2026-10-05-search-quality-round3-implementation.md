@@ -8,9 +8,9 @@
 
 **Tech Stack:** Python ≥ 3.10 stdlib only under `tools/`; `unittest`; no new dependencies.
 
-**Spec:** `docs/superpowers/specs/2026-10-05-search-quality-round3-design.md` **v1.23** (v1.12 passed 12 external reviews with "구현 계획으로 진행 가능"; v1.13 = the plan-stage corrections listed in its §14, made while writing this plan — grid count 23,328 and measured runtime, memoized grid evaluator, ranking structure committed at H, `verb_method_order`, seed = raw top-1, AC-R3-02 "full" = `MAX_LIMIT`, direct-alias proposer, pre-freeze structure-hash window; v1.14–v1.23 = plan review 1–9 corrections). The spec v1.23 is binding; this plan is its argument. Round 2 spec v1.14 is inherited where the Round 3 spec v1.23 is silent.
+**Spec:** `docs/superpowers/specs/2026-10-05-search-quality-round3-design.md` **v1.24** (v1.24 = §15 design extension; previously **v1.23** (v1.12 passed 12 external reviews with "구현 계획으로 진행 가능"; v1.13 = the plan-stage corrections listed in its §14, made while writing this plan — grid count 23,328 and measured runtime, memoized grid evaluator, ranking structure committed at H, `verb_method_order`, seed = raw top-1, AC-R3-02 "full" = `MAX_LIMIT`, direct-alias proposer, pre-freeze structure-hash window; v1.14–v1.23 = plan review 1–9 corrections). The spec v1.24 is binding; this plan is its argument. Round 2 spec v1.14 is inherited where the Round 3 spec v1.23 is silent.
 
-**Plan version:** v14 (2026-10-05; after external plan reviews 1–9, see Plan revision notes).
+**Plan version:** v15 (2026-10-07; v14 = after external plan reviews 1–9; **v15 = spec v1.24 design extension after the binding pre-T checkpoint failed at seed 31/39** — Tasks 18–21 add the three deterministic ordering/weighting rules, the Round 3 lexicon generation with phrase rules, the simulation update and the controller re-entry; Tasks 10–11 amended; see Plan revision notes).
 
 ## Global Constraints
 
@@ -26,6 +26,10 @@
 - Round 2 archive (read-only inputs): `~/.atlassian_api_updater/archive/round2/round2-cache/` (S2), `round2-work/lexicon_raw.json` (sha `acc5cebeafc5c48236a9de5d685b888fb2a83532340405556d77b801468a6872`), `round2-work/lexicon_review.json` (`c5ba256f8acd082febe06724d6646bff631e136dc437f4fa1528286117bd62f4`), `round2-work/lexicon-generation-input.txt`, `round2-work/lexicon-review-input.txt`, `sealed/round2-sealed.json.enc` (`c1a3794b0ac7563bee0ccdcc61e0ecb43026d0f778ec4773ef2695459cca369b`; held_out `0f990f2fc134cd41eca2061931c65cfdd4bc21819051f9ae8538c0258aaf3540`, negative `7750a2020923bcf8ddfa22e79f2c071001db9942194c3215cc03c60f363dde76`). Round 2 reference commit for AC-R3-02: `29dba38` (T; the B/F policy files equal T's).
 - `POLICY_VERSIONS["search"]` becomes 4 in H1 and never changes again this round. `search_aliases.json` changes only at T (lexicon-r3 merge) and inside the tuning run (round3 entries). `constants` change only inside the tuning run.
 - Every commit message ends with `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`.
+- **v1.24 design-extension H′ (spec §8, §15):** Tasks 18–20 are post-S H′ commits made with the spec amended (ledger `{"event": "spec_amended", "from": "v1.23", "to": "v1.24", "spec_sha256": <sha of the committed spec file>, "spec_commit": "0f81ad8", "reason": "pre-T seed 31/39"}` once, before the first of them). Each follows fix → suite → `--phase H` → scoped review by a fresh reviewer (findings 0) → `git rev-parse HEAD > $W/housekeeping_commit` + `housekeeping_commit_moved` event (old/new/reason/review_findings/reviewer_actor_id/reviewed_base_sha/reviewed_head_sha/review_output_sha256). `TOOLING_FILES`, `search.py`, `policy.py` are immutable from the **final** `housekeeping_commit` (after Task 20) to the terminal commit.
+- **Suite verdict in the pre-T window (controller ruling 2026-10-05, Round 2 precedent):** while the working tree carries uncommitted T-bound changes (lexicon-r3 merge, candidates, R5/R6) the canonical suite fails exactly `FREEZE_DEPENDENT_TESTS = {tests.benchmarks.test_evaluator.TestAliasNotesAndTuningLog.test_alias_notes_per_origin, …TestPolicyVocabularyProvenance.test_policy_vocabulary_provenance, …TestRound2PreTProvenance.test_registry_fingerprint_matches_freeze_source}` (they compare live artifacts with `ev.current_round()`, still the Round 2 entry). For an H′ in this window `h_prime_suite_pass := (suite exit 0 in a throwaway `git worktree add <scratch> HEAD` of the H′ commit) ∧ (working-state failures ⊆ FREEZE_DEPENDENT_TESTS)`; both runs are ledgered with command and output sha; the working-state run is recorded as `not pass (freeze-dependent only)`. AC-23 (green on the clean committed HEAD) applies at T and B unchanged.
+- **Invocation:** `round3_simulation.py` is run as `python -m tests.benchmarks.round3_simulation …` from the repo root (an editable install `_html_mng.pth` on this machine puts a foreign `tests` package on `sys.path`; the file-path form fails with ImportError). Same code, same inputs.
+- **`search_ranking.json` structure (v1.24):** `ordering_rules` = `{"intent_tier": true, "preferred_method_tiebreak": true, "terminal_alias_full_weight": true}` is a structure field (in `STRUCTURE_KEYS` of both `policy.py` and `evaluator.py`), committed in Task 18, frozen at T in `structure_sha256`; `PRE_FREEZE_NONVERB_STRUCTURE_SHA256[3]` is recomputed in Task 18. All three flags false = legacy mode = byte-identical ordering and scores to v1.23 (AC-R3-02 reference comparison runs in legacy mode; the reference file is not regenerated).
 - Chunked writes: no single tool call larger than ~60 lines. Never call real Jira/Confluence APIs; never print credential header values.
 - After commit B the working tree must be clean when the worker starts. Controller evidence accumulates in `~/.atlassian_api_updater/round3-work/controller-events.jsonl` and `attempts.jsonl` (outside the repo) and is rendered into `docs/phase3-readiness.md` only in the terminal commit.
 - Branch-aware test ACs: the suite must be green at T and B (AC-23), on the success and tuning-failure branches after tuning (AC-07/14/16); the abort branch preserves the failing test names/output as AC-22 evidence.
@@ -38,6 +42,9 @@
 3. The memoized grid evaluator must rank every bench query identically to `search_operations` at random grid points, including deprecated operations and the zero-clamp (Task 7 `test_grid_evaluator_matches_search_operations`).
 4. A `search_fn` returning a bare list must evaluate exactly as in Round 1 (`actionable=True`), so Round 1 artifacts and tests stay byte-invariant (Task 3 `test_legacy_search_fn_is_actionable_true`).
 5. A `verb_methods` row that is reordered or truncated versus Round 2 must fail the prefix invariant even when the set of methods is equal (Task 5 `test_verb_prefix_invariant_rejects_reorder_and_truncation`).
+6. (v1.24) An exact operationId query (`createIssue`) must keep its pinned result first even though the intent tier would demote a POST-less intent; pinning never re-sorts (Task 18 `test_pinned_exact_match_precedes_intent_tier`).
+7. (v1.24) A conditional-rule token (`exp.cond`) that names the entry's terminal resource must get the same full weight as a direct alias token, otherwise phrase rules such as `time entry → worklog` stay half-weighted and the §3.8 gain is lost exactly where phrases are needed (Task 18 `test_score_terminal_alias_full_weight`, cond case).
+8. (v1.24) A two-word lexicon key containing a product hint (`jira entry`) must be rejected as `product_hint`, not merged as a rule that fires on every Jira query (Task 19 `test_phrase_keys_become_rule_candidates`).
 
 ---
 
@@ -2254,7 +2261,9 @@ Ledger `verb_inventory_sha256` and the sha of `tests/benchmarks/round3-method-sa
 
 ---
 
-### Task 10: **[controller]** Concept lexicon — re-gate the archived Round 2 generation/review (no ChatGPT call)
+### Task 10: **[controller]** Concept lexicon — stage (a): re-gate the archived Round 2 generation/review (no ChatGPT call)
+
+> **v1.24:** Task 10 is stage (a) of spec §5 (completed 2026-10-05: feedback→comment, iteration→sprint merged as `lexicon-r3`; H′ dca5b9c made the archived review acceptable). Stage (b), the Round 3 generation with phrase rules, is **Task 21** and runs after Tasks 18–20. Task 21 re-runs the whole union pipeline, so the stage-(a) merge is reproduced, not kept.
 
 **Files:**
 - Modify: `tools/atlassian_docs/intelligence/data/concept_lexicon.json` (Round 3 document), `search_aliases.json` (lexicon-r3 merge only)
@@ -2288,6 +2297,8 @@ python -m unittest discover -s tests -t .
 
 ### Task 11: **[controller]** Candidates, R5/R6, AC-13 replay, **binding pre-T checkpoint**, frozen texts, freeze, commit T
 
+> **v1.24 re-entry:** run Task 11 again from Step 1 after Task 21 (the 2026-10-05 run stopped at Step 3 with seed 31/39 and created no T). Step 2's replay uses the union inputs (archive + Round 3 generation) exactly as Task 21 produced them. Step 3 is invoked as `python -m tests.benchmarks.round3_simulation --phase pre-T --cache-dir $S --work $W` (Global Constraints). The pre-step suite runs are expected to show only `FREEZE_DEPENDENT_TESTS` until T.
+
 **Files:**
 - Create: `tools/atlassian_docs/intelligence/data/alias_candidates.json` (round 3)
 - Modify: `tests/benchmarks/search_queries.json` (seed `failure_classes` only)
@@ -2318,17 +2329,19 @@ j = lambda p: json.loads(pathlib.Path(p).read_text(encoding="utf-8"))
 shutil.copy(D / "search_aliases.json", tmp / "aliases-current.json"); shutil.copy(B, tmp / "bench-current.json")
 shutil.copy(W / "aliases-premerge.json", D / "search_aliases.json"); shutil.copy(W / "bench-preclassify.json", B)      # lexicon stage inputs
 try:
-    run("tests/benchmarks/concept_lexicon_check.py", "prepare", "--cache-dir", str(S), "--round", "3", "--raw", str(A / "lexicon_raw.json"), "--out", str(tmp / "structural.json"))
-    run("tests/benchmarks/concept_lexicon_check.py", "finalize", "--cache-dir", str(S), "--round", "3", "--raw", str(A / "lexicon_raw.json"), "--structural", str(tmp / "structural.json"),
-        "--review", str(A / "lexicon_review.json"), "--generation-input", str(A / "lexicon-generation-input.txt"), "--review-input", str(A / "lexicon-review-input.txt"),
-        "--template", "tests/benchmarks/round2-lexicon-generation-prompt.md", "--out", str(tmp / "lexicon.json"))
+    RAW = [str(A / "lexicon_raw.json"), str(W / "lexicon_raw_r3.json")]; REV = [str(A / "lexicon_review.json"), str(W / "lexicon_review_r3.json")]   # v1.24 union: archive first
+    GEN = [str(A / "lexicon-generation-input.txt"), str(W / "lexicon-generation-input-r3.txt")]; RIN = [str(A / "lexicon-review-input.txt"), str(W / "lexicon-review-input-r3.txt")]
+    TPL = ["tests/benchmarks/round2-lexicon-generation-prompt.md", "tests/benchmarks/round3-lexicon-generation-prompt.md"]
+    run("tests/benchmarks/concept_lexicon_check.py", "prepare", "--cache-dir", str(S), "--round", "3", "--raw", *RAW, "--out", str(tmp / "structural.json"))
+    run("tests/benchmarks/concept_lexicon_check.py", "finalize", "--cache-dir", str(S), "--round", "3", "--raw", *RAW, "--structural", str(tmp / "structural.json"),
+        "--review", *REV, "--generation-input", *GEN, "--review-input", *RIN, "--template", *TPL, "--out", str(tmp / "lexicon.json"))
     run("tests/benchmarks/alias_candidates_tool.py", "lexicon-gate", "--cache-dir", str(S), "--round", "3", "--lexicon", str(tmp / "lexicon.json"))
     shutil.copy(W / "aliases-premerge.json", tmp / "aliases.json")
     run("tests/benchmarks/concept_lexicon_check.py", "merge", "--lexicon", str(tmp / "lexicon.json"), "--aliases", str(tmp / "aliases.json"), "--round", "3")
 finally:
     shutil.copy(tmp / "aliases-current.json", D / "search_aliases.json"); shutil.copy(tmp / "bench-current.json", B)
 assert ev.canonical_sha256(j(tmp / "lexicon.json")) == ev.canonical_sha256(j(D / "concept_lexicon.json")), "lexicon replay differs"
-assert ev.lexicon_aliases_sha256(j(tmp / "aliases.json"), 3) == ev.lexicon_aliases_sha256(j(D / "search_aliases.json"), 3), "merge replay differs"
+assert ev.lexicon_aliases_sha256(j(tmp / "aliases.json"), 3) == ev.lexicon_aliases_sha256(j(D / "search_aliases.json"), 3), "merge replay differs"   # v1.24: covers lexicon-r3 rules too (rule:<i> notes)
 run("tests/benchmarks/alias_candidates_tool.py", "candidates", "--cache-dir", str(S), "--round", "3", "--bench", str(W / "bench-preclassify.json"), "--out", str(tmp / "cands.json"))
 assert ev.canonical_sha256(j(tmp / "cands.json")) == ev.canonical_sha256(j(D / "alias_candidates.json")), "candidates replay differs"
 _, internal, _, _ = rs.load_catalogs_from_cache(S, 3)
@@ -2347,7 +2360,7 @@ A mismatch is a tool defect → post-S H′ (fix → canonical suite → `--phas
 - [ ] **Step 3: Binding pre-T checkpoint (AC-R3-01)**
 
 ```bash
-python tests/benchmarks/round3_simulation.py --phase pre-T --cache-dir $S --work $W
+python -m tests.benchmarks.round3_simulation --phase pre-T --cache-dir $S --work $W
 ```
 
 Exit 0 is required to continue: seed ≥ 36/39, fixture failing `[]`, regression raw ≥ 10/14, effective 14/14, and `equivalence_mismatches: []` (memoized grid evaluator == `search_operations` on the actual S, 20 sampled points + baseline, every query); the event carries the input shas (ranking, aliases, verb inventory, S, fixture bench, evaluation code, tuning grid). An equivalence mismatch is a tooling defect → H′. Exit 1 on the thresholds → do not freeze; the structural change is insufficient on the real catalog → report to the user (the spec's expectation came from the archived-S simulation, 36/39).
@@ -2696,10 +2709,12 @@ Append `## Search Quality Round 3 — decision record (<date>)` after the Round 
 - Update memory (`search-quality-round3-design-status.md` → outcome; MEMORY.md index); archive `round3-cache`, `round3-work` and `sealed/round3-sealed.json.enc` under `~/.atlassian_api_updater/archive/round3/` after the user confirms.
 - Use `superpowers:finishing-a-development-branch` (the user chooses merge/push; push only on instruction).
 
-## AC coverage map (spec v1.23)
+## AC coverage map (spec v1.24)
 
 | AC | Where |
 |---|---|
+| AC-R3-14 (v1.24) | Task 18 `_order_key`/`_score` tests, `test_search_operations_legacy_mode_is_score_order`, `test_reference_runs_in_legacy_ordering_mode`, `test_ordering_rules_are_structure`; Task 11 freeze (`structure_sha256`) |
+| AC-R3-15 (v1.24) | Task 19 phrase/union/renderer tests, Task 21 ledger (actor separation, components shas), Task 11 Step 2 union replay |
 | AC-01a/b, 01c/d | Global Constraints (H1 structure, T suffix/data, B..C values), Tasks 11/13/14 git checks |
 | AC-02, 03, 10, 11 | Task 15 (D whitelist, seal check, artifact), Task 8 `TestRound3FinalArtifact` |
 | AC-04 | Task 6 origins `-r3` + seal, Task 12 B check |
@@ -2731,6 +2746,8 @@ Append `## Search Quality Round 3 — decision record (<date>)` after the Round 
 
 ## Plan revision notes
 
+v15 (2026-10-07; spec v1.24, after the controller's binding pre-T checkpoint failed at seed 31/39 on both the live S and the archived S2): the spec's 36/39 was a post-tuning simulation figure, so v1.23's AC-R3-01 could not be met by the pre-T policy (ranking == Round 2 baseline by AC-R3-02). User decision: keep the threshold, raise the system. Added Task 18 (H9: `ordering_rules` — intent tier, preferred-method tie-break, terminal-alias full weight; legacy mode so the AC-R3-02 reference is compared unchanged; memoized evaluator parity), Task 19 (H10: lexicon phrase keys → `when_all` rules, union raw/review inputs with archive-first precedence, grounded generation-input renderer, frozen Round 3 lexicon prompts), Task 20 (H11: synthetic phrase rule in the simulation; final `housekeeping_commit`), Task 21 (controller: stage-(b) stateless lexicon generation + union pipeline), the v1.24 re-entry order, `spec_amended` / design-extension H′ rules, the pre-T-window suite verdict (`FREEZE_DEPENDENT_TESTS`), the `python -m` invocation note; Task 10 marked stage (a); Task 11 re-entry note, union-aware AC-13 replay and `-m` invocation. Probe evidence (spec §15): rules alone 34/39; + 3 hand-picked lexicon aliases + 2 phrase rules 36/39; + terminal-alias full weight 37/39; fixtures and regression unchanged in all adopted variants; head-noun weighting rejected (29/39, fixtures broken).
+
 v1 (2026-10-05): initial plan written against spec v1.13.
 
 v2 (after external plan review 1 — P0 5 / P1 7; spec v1.14): P0: (1) pre-freeze structure check split into non-verb structure sha + verb prefix invariant (`ev.structure_check_problems`; helpers moved into the stdlib evaluator, Task 1/5); (2) seal → user encryption + deletion + scan → commit B (Global Constraints, Task 12); (3) `record <id> rejected: reviewer` added to the frozen generation prompt as the semantic replacement contract, semantic rejections re-enter the single `next_request` state machine (Tasks 11, 12); (4) reviewer prompt checks verb USE for held_out and actionable negatives with machine annotations `rs.annotate_for_review` (Tasks 6, 11, 12); (5) AC-R3-06 `reference-check` at B, before the D decryption, and at every terminal commit (Tasks 6, 12, 14, 15). P1: AC-09/§7 spec wording; memoized-evaluator equivalence preflight on the actual S inside `--phase pre-T` (Tasks 8, 11); AC-13 replay as an executable script (Task 11); `$W/housekeeping_commit` pinned in Task 9 and used instead of placeholders (Tasks 11, 14); Task 16 declared a subroutine called before D/F/X; readiness result rows in the §13 schema; attempts ledger carries actor/session ids and transport/parse/valid status with the actor-separation check (Task 12).
@@ -2758,3 +2775,602 @@ v6 (after external plan review 5 — P0 3 / P1 5; spec v1.18): P0: (1) spec §5 
 v5 (after external plan review 4 — P0 3 / P1 5; spec v1.17): P0: (1) Phase 0 is a handshake-only dispatch prompt (marker `ROUND3-WORKER-HANDSHAKE`, no brief) and the controller binds `worker-handshake.json.worker_actor_id` to the transport agent id before `actor_separation_check_worker`; (2) Task 12 Step 4 reordered and rewritten in execution order (seal with `--needle-manifest` → manifest + sha → pre-encryption scan → user encrypts → checks → B → post-B scan) and the Global Constraints chronology matches; (3) `needle_manifest_sha256` is bound into `round3_seal` at B, every scan asserts it with `--expect-sha256` and prints it; tamper test added. P1: binding references now v1.17 / plan v5; AC-R3-08 and AC-18b(R3) rows carry the handshake and the four-scan/allow-list/manifest-sha contract; n-gram hash is plain `hashlib.sha256` of the normalized string; scanner unescapes JSON `\\n`/`\\t`/`\\r`/`\\uXXXX` and the ASCII-English contract is stated, with a test.
 
 v4 (after external plan review 3 — P0 3 / P1 5; spec v1.16): P0: (1) two-phase worker handshake in the frozen brief (Phase 0 `handshake` → `worker-handshake.json` + `HANDSHAKE`; controller checks and ledgers `actor_separation_check_worker`; then `run the brief procedure` via SendMessage) — Tasks 11, 13; (2) plaintext scans use a hashed normalized n-gram needle manifest written before encryption (`rs.needle_manifest`, `rs.scan_for_needles`, CLI `scan --manifest --root --allow`), verdict `unexpected_hits == []` with explicit allow lists (pre-encryption: sealed plaintext; after B and F/X: none; pre-terminal D: decrypted sealed plaintext; post-terminal D: the published terminal artifacts) — Tasks 6, 12, 14, 15, 17; (3) spec §9 state model now cites the §13 schema. P1: Task 12 event named `actor_separation_check_B`; D check includes `controller_actor_id`; header inheritance sentence; AC-R3-06 coverage row; Task 16 run schema carries `fixture_negative_effective_diagnostic`.
+
+---
+
+## v1.24 re-entry order (controller session, after spec v1.24 commit 0f81ad8)
+
+```
+spec_amended ledger → Task 18 (H9 scorer rules) → Task 19 (H10 lexicon tooling + frozen prompts) → Task 20 (H11 simulation; final housekeeping_commit)
+→ Task 9 Step 2 artifacts regenerated on the same S (verb_report / method-safety must be byte-identical; ledger) → Task 21 (lexicon stage (b) + union pipeline)
+→ Task 11 from Step 1 (candidates, AC-13 replay with union inputs, pre-T ≥ 36 → T) → Tasks 12–17 unchanged
+```
+
+The working tree keeps the uncommitted T-bound files during Tasks 18–20 (`tests/benchmarks/round3-method-safety.json`, the stage-(a) `concept_lexicon.json` / `search_aliases.json`, `alias_candidates.json`, classified `search_queries.json`). Each H′ commit stages **only** the files its task names; `git status --porcelain --untracked-files=no` must list only those T-bound files before and after each commit.
+
+### Task 18: **[H9, design-extension H′]** Scorer ordering rules — intent tier, preferred-method tie-break, terminal-alias full weight, `ordering_rules` structure, legacy mode for AC-R3-02
+
+**Files:**
+- Modify: `tools/atlassian_docs/intelligence/search.py` (`_score` signature, `_order_key`, `search_operations` sort)
+- Modify: `tools/atlassian_docs/intelligence/policy.py` (`STRUCTURE_KEYS`, `ORDERING_RULE_KEYS`, `RankingPolicy.ordering_rules`, loader)
+- Modify: `tools/atlassian_docs/intelligence/data/search_ranking.json` (add `ordering_rules`)
+- Modify: `tests/benchmarks/evaluator.py` (`STRUCTURE_KEYS`, `PRE_FREEZE_NONVERB_STRUCTURE_SHA256[3]`)
+- Modify: `tests/benchmarks/regression_reference.py` (`_pinned_policies` → legacy mode), `tests/tune_search_ranking.py` (`GridEvaluator`)
+- Modify: `tests/benchmarks/round3_simulation.py` (`equivalence_mismatches` passes the flag — one line; the rest of the simulation is Task 20)
+- Test: `tests/intelligence/test_search.py`, `tests/intelligence/test_policy.py`, `tests/benchmarks/test_regression_reference.py`
+
+**Interfaces:**
+- Consumes: `search._structural_signals`, `search.method_intent`, `search.expand_token_forms`, `policy.load_ranking`, `evaluator.nonverb_structure_sha256`.
+- Produces: `policy.ORDERING_RULE_KEYS = ("intent_tier", "preferred_method_tiebreak", "terminal_alias_full_weight")`; `RankingPolicy.ordering_rules: Mapping[str, bool]` (positional field right after `verb_method_order`); `search._score(entry, lexical_base, direct, cond, bonus_tokens, pol, terminal_full=False) -> (lexical, matched_base)`; `search._order_key(rules, allowed, preferred, final, method, deprecated, key) -> tuple`; `search.LEGACY_ORDERING_RULES = {k: False for k in ORDERING_RULE_KEYS}`; `tune.GridEvaluator(state, queries, alias_policy, terminal_full=False)`.
+
+- [ ] **Step 0: ledger `spec_amended` (once, before this task's commit)**
+
+```bash
+W=~/.atlassian_api_updater/round3-work
+echo '{"event": "spec_amended", "from": "v1.23", "to": "v1.24", "spec_commit": "'"$(git rev-parse --short 0f81ad8)"'", "spec_sha256": "'"$(shasum -a 256 docs/superpowers/specs/2026-10-05-search-quality-round3-design.md | cut -d" " -f1)"'", "reason": "binding pre-T checkpoint seed 31/39 (< 36): spec section 0 figure was post-tuning; design extension spec sections 3.6-3.8, 5(b), 6", "actor_id": "<controller session id>", "ts": "'"$(date -u +%FT%TZ)"'"}' >> $W/controller-events.jsonl
+```
+
+- [ ] **Step 1: Failing tests — loader and structure (`tests/intelligence/test_policy.py`)**
+
+Append to the ranking loader test class (the one with `_raw()` / `_from()` helpers):
+
+```python
+    def test_ordering_rules_loaded_and_frozen(self):
+        rp = policy.load_ranking()
+        self.assertEqual(set(rp.ordering_rules), set(policy.ORDERING_RULE_KEYS))
+        self.assertTrue(all(isinstance(v, bool) for v in rp.ordering_rules.values()))
+        with self.assertRaises(TypeError):
+            rp.ordering_rules["intent_tier"] = False                      # MappingProxyType
+
+    def test_ordering_rules_contract_violations(self):
+        base = self._raw()
+        missing = dict(base); missing.pop("ordering_rules")
+        extra = dict(base, ordering_rules={**base["ordering_rules"], "zz": True})
+        short = dict(base, ordering_rules={"intent_tier": True})
+        nonbool = dict(base, ordering_rules={**base["ordering_rules"], "intent_tier": 1})
+        for bad in (missing, extra, short, nonbool):
+            with self.assertRaises(ValueError):
+                self._from(bad)
+
+    def test_ordering_rules_are_structure(self):
+        raw = self._raw(); a = policy.load_ranking()
+        raw["ordering_rules"] = {k: False for k in policy.ORDERING_RULE_KEYS}
+        b = self._from(raw)
+        self.assertNotEqual(a.structure_sha256, b.structure_sha256)
+```
+
+Extend the allowed-token tuple of `test_round3_policy_diff_is_limited_to_declared_kinds` with `"ordering_rules", "ORDERING_RULE_KEYS", "_bool_map"` (AC-R3-13a six kinds).
+
+- [ ] **Step 2: Run → fail**
+
+Run: `python -m unittest tests.intelligence.test_policy -k ordering_rules`
+Expected: 3 failures/errors — `AttributeError: ... no attribute 'ORDERING_RULE_KEYS'` / `KeyError: 'ordering_rules'`.
+
+- [ ] **Step 3: policy.py**
+
+```python
+STRUCTURE_KEYS = ("verb_methods", "path_noise", "product_hints", "tuning_grid", "baseline", "ordering_rules")
+ORDERING_RULE_KEYS = ("intent_tier", "preferred_method_tiebreak", "terminal_alias_full_weight")   # Round 3 spec §3.6-3.8 (v1.24)
+
+
+def _bool_map(v, name, keys) -> dict:
+    if not isinstance(v, dict) or set(v) != set(keys) or not all(isinstance(x, bool) for x in v.values()):
+        raise ValueError(f"{name} must map exactly {list(keys)} to booleans")
+    return {k: v[k] for k in keys}
+```
+
+`RankingPolicy`: insert `ordering_rules: Mapping[str, bool]` right after `verb_method_order`. In `load_ranking`: the key-set error message lists `ordering_rules`; after the constants loop add `rules = _bool_map(raw["ordering_rules"], "ordering_rules", ORDERING_RULE_KEYS)` and pass `MappingProxyType(rules)` positionally after `MappingProxyType(order)`. `grep -rn "RankingPolicy(" tests tools` — every direct constructor call gets the new positional argument (`MappingProxyType({k: True for k in policy.ORDERING_RULE_KEYS})` in tests).
+
+- [ ] **Step 4: Data + evaluator structure**
+
+Add to `tools/atlassian_docs/intelligence/data/search_ranking.json` (top level, after `baseline`): `"ordering_rules": {"intent_tier": true, "preferred_method_tiebreak": true, "terminal_alias_full_weight": true}`. In `tests/benchmarks/evaluator.py` set `STRUCTURE_KEYS = ("verb_methods", "path_noise", "product_hints", "tuning_grid", "baseline", "ordering_rules")`, then recompute and paste the constant:
+
+```bash
+python -c "import json; from tests.benchmarks import evaluator as ev; print(ev.nonverb_structure_sha256(json.load(open('tools/atlassian_docs/intelligence/data/search_ranking.json'))))"
+```
+
+Expected: a 64-hex sha ≠ `02b27c88…`; set `PRE_FREEZE_NONVERB_STRUCTURE_SHA256 = {3: "<that sha>"}`.
+
+Run: `python -m unittest tests.intelligence.test_policy tests.benchmarks.test_evaluator -k "ordering_rules or structure_hash or declared_kinds"`
+Expected: PASS.
+
+- [ ] **Step 5: Failing tests — scorer rules (`tests/intelligence/test_search.py`, the class with `_entry`/`_sig` helpers)**
+
+```python
+    def _rules(self, **on):
+        return {k: on.get(k, False) for k in policy.ORDERING_RULE_KEYS}
+
+    def test_order_key_intent_tier(self):                                                              # spec §3.6
+        allowed = frozenset({"PUT", "POST"})
+        on, off = self._rules(intent_tier=True), self._rules()
+        self.assertEqual(search._order_key(on, allowed, "PUT", 39.0, "GET", False, "k1")[0], 1)       # out of intent -> tier 1
+        self.assertEqual(search._order_key(on, allowed, "PUT", 36.0, "PUT", False, "k2")[0], 0)
+        self.assertLess(search._order_key(on, allowed, "PUT", 36.0, "PUT", False, "k2"), search._order_key(on, allowed, "PUT", 39.0, "GET", False, "k1"))
+        self.assertEqual(search._order_key(on, frozenset(), None, 39.0, "GET", False, "k1")[0], 0)     # no intent -> everything tier 0
+        self.assertEqual(search._order_key(off, allowed, "PUT", 39.0, "GET", False, "k1"), (0, -39.0, 0, False, "k1"))   # legacy shape
+
+    def test_order_key_preferred_method_tiebreak(self):                                                # spec §3.7
+        allowed = frozenset({"PUT", "POST"}); on = self._rules(preferred_method_tiebreak=True)
+        put, post = search._order_key(on, allowed, "PUT", 21.0, "PUT", False, "b"), search._order_key(on, allowed, "PUT", 21.0, "POST", False, "a")
+        self.assertLess(put, post)                                                                      # tie: preferred first, before key order
+        self.assertLess(search._order_key(on, allowed, "PUT", 22.0, "POST", False, "a"), put)          # score still dominates
+        self.assertEqual(search._order_key(on, allowed, "GET", 21.0, "POST", False, "a")[2], 0)        # preferred outside intersection -> no effect
+        self.assertEqual(search._order_key(on, frozenset(), None, 21.0, "POST", False, "a")[2], 0)
+
+    def test_score_terminal_alias_full_weight(self):                                                   # spec §3.8
+        e = self._entry("/rest/api/3/version", method="POST")
+        fields = dict(e.fields); fields["path"] = frozenset({"version"}); fields["summary"] = frozenset({"version", "project"}); fields["tags"] = frozenset({"project"})
+        e = search.IndexEntry(e.key, fields, e.path_tokens, e.source, e.method, e.terminal_tokens)
+        pol = policy.aliases()
+        damped, _ = search._score(e, frozenset({"project"}), frozenset({"version"}), frozenset(), ("release", "project"), pol)
+        full, _ = search._score(e, frozenset({"project"}), frozenset({"version"}), frozenset(), ("release", "project"), pol, terminal_full=True)
+        w = search.FIELD_WEIGHTS
+        self.assertEqual(full - damped, (1 - pol.alias_damping) * (w["path"] + w["summary"]))         # only the terminal alias token is undamped
+        other = self._entry("/rest/api/3/project", method="POST")
+        fields = dict(other.fields); fields["summary"] = frozenset({"version", "project"})
+        other = search.IndexEntry(other.key, fields, other.path_tokens, other.source, other.method, other.terminal_tokens)
+        a, _ = search._score(other, frozenset({"project"}), frozenset({"version"}), frozenset(), ("release", "project"), pol)
+        b, _ = search._score(other, frozenset({"project"}), frozenset({"version"}), frozenset(), ("release", "project"), pol, terminal_full=True)
+        self.assertEqual(a, b)                                                                          # 'version' is not this entry's terminal -> damped as before
+        c_d, _ = search._score(e, frozenset({"project"}), frozenset(), frozenset({"version"}), ("release", "project"), pol)
+        c_f, _ = search._score(e, frozenset({"project"}), frozenset(), frozenset({"version"}), ("release", "project"), pol, terminal_full=True)
+        self.assertEqual(c_f - c_d, (1 - pol.rule_damping) * (w["path"] + w["summary"]))              # rule tokens (exp.cond) follow the same terminal rule
+
+    def test_pinned_exact_match_precedes_intent_tier(self):                                             # review focus 6
+        out = search.search_operations(make_state("jira-platform"), "createIssue", limit=10)
+        self.assertTrue(out["results"] and out["results"][0].get("match"))                              # exact operationId pin stays first under the rules
+
+    def test_search_operations_legacy_mode_is_score_order(self):                                       # AC-R3-14 legacy
+        raw = json.loads(RANKING.read_text(encoding="utf-8")); raw["ordering_rules"] = dict(search.LEGACY_ORDERING_RULES)
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as fh:
+            json.dump(raw, fh); path = pathlib.Path(fh.name)
+        with mock.patch.object(policy, "ranking", return_value=policy.load_ranking(path)):
+            out = search.search_operations(make_state("jira-platform"), "update issue summary", limit=50)
+        rows = [r for r in out["results"] if not r.get("match")]
+        self.assertEqual(rows, sorted(rows, key=lambda r: (-r["score"], r["deprecated"], r["key"])))
+
+    def test_search_operations_intent_tier_demotes_out_of_intent(self):                                # AC-R3-14 rules on
+        out = search.search_operations(make_state("jira-platform"), "update issue summary", limit=50)
+        methods = [r["key"].split(":")[1] for r in out["results"] if not r.get("match")]
+        allowed = set(out["intent_methods"])
+        first_out = next((i for i, m in enumerate(methods) if m not in allowed), len(methods))
+        self.assertTrue(all(m in allowed for m in methods[:first_out]) and all(m not in allowed for m in methods[first_out:]))
+```
+
+(`RANKING`, `make_state`, `mock`, `tempfile`, `pathlib`, `json` are already imported in this module; add any that are missing.)
+
+- [ ] **Step 6: Run → fail**
+
+Run: `python -m unittest tests.intelligence.test_search -k "order_key or terminal_alias or legacy_mode or intent_tier"`
+Expected: `AttributeError: module ... has no attribute '_order_key'` / `TypeError: _score() got an unexpected keyword argument 'terminal_full'`.
+
+- [ ] **Step 7: search.py**
+
+```python
+LEGACY_ORDERING_RULES = {"intent_tier": False, "preferred_method_tiebreak": False, "terminal_alias_full_weight": False}
+
+
+def _score(entry, lexical_base: frozenset, direct: frozenset, cond: frozenset, bonus_tokens: tuple, pol, terminal_full: bool = False):
+    """Lexical score of one entry (spec §6.6), all-match bonus included; returns (lexical, matched_base).
+    terminal_full (Round 3 spec §3.8): alias/rule tokens that are forms of the entry's terminal resource count at full weight."""
+    ad, rd = pol.alias_damping, pol.rule_damping
+    term = expand_token_forms(entry.terminal_tokens) if terminal_full else frozenset()
+    lexical = 0.0
+    matched = set()
+    for field, weight in FIELD_WEIGHTS.items():
+        f = entry.fields[field]
+        hb, d, c = lexical_base & f, direct & f, cond & f
+        df, cf = d & term, c & term
+        lexical += weight * (len(hb) + len(df) + ad * (len(d) - len(df)) + len(cf) + rd * (len(c) - len(cf)))
+        matched |= hb
+    matched_base = frozenset(matched)
+    if lexical and bonus_tokens and all(token_forms(q) & matched_base for q in bonus_tokens):
+        lexical += ALL_MATCH_BONUS
+    return lexical, matched_base
+
+
+def _order_key(rules, allowed, preferred, final: float, method: str, deprecated: bool, key: str) -> tuple:
+    """Sort key (Round 3 spec §3.6/§3.7): (tier, -final, tiebreak, deprecated, key). All rules false -> (0, -final, 0, deprecated, key),
+    the Round 2 order."""
+    tier = 1 if rules["intent_tier"] and allowed and method not in allowed else 0
+    tb = 1 if rules["preferred_method_tiebreak"] and allowed and preferred in allowed and method != preferred else 0
+    return (tier, -final, tb, deprecated, key)
+```
+
+In `search_operations`: `verbs, allowed = intent`; `preferred = rp.verb_method_order[verbs[0]][0] if verbs else None`; `terminal_full = rp.ordering_rules["terminal_alias_full_weight"]`; call `_score(..., pol, terminal_full)`; append `(final, op, signals, entry.method)`; sort with `candidates.sort(key=lambda c: _order_key(rp.ordering_rules, allowed, preferred, c[0], c[3], c[1].deprecated, c[1].key))`; `non_pinned`/`results` comprehensions unpack four fields. `exact_matches` and pinning unchanged.
+
+- [ ] **Step 8: Run → pass; then the memoized evaluator and the reference**
+
+Run: `python -m unittest tests.intelligence.test_search -k "order_key or terminal_alias or legacy_mode or intent_tier"` → Expected: PASS (6 tests).
+
+`tests/tune_search_ranking.py` `GridEvaluator.__init__(self, state, queries, alias_policy, terminal_full=False)`: pass `terminal_full` to `S._score(...)`; store `self.terminal_full`. In `ranked`: `verbs, allowed = intent`; `preferred = rp.verb_method_order[verbs[0]][0] if verbs else None`; `cands.append((final, op.deprecated, op.key, entry.method))`; `cands.sort(key=lambda c: self.S._order_key(rp.ordering_rules, allowed, preferred, c[0], c[3], c[1], c[2]))`. Callers: `main()` constructs `GridEvaluator(state, queries, ap, rp.ordering_rules["terminal_alias_full_weight"])`; `round3_simulation.equivalence_mismatches` likewise (one-line change).
+
+`tests/benchmarks/regression_reference.py` `_pinned_policies`: `ranking_raw = {**live, "verb_methods": ..., "constants": {...}, "ordering_rules": dict(search.LEGACY_ORDERING_RULES)}` (import `search` lazily inside the function, next to `policy`). Add to `tests/benchmarks/test_regression_reference.py`:
+
+```python
+    def test_reference_runs_in_legacy_ordering_mode(self):                                              # AC-R3-02 (v1.24)
+        from tools.atlassian_docs.intelligence import policy, search
+        rp, _ = rr._pinned_policies(self.ref, policy)
+        self.assertEqual(dict(rp.ordering_rules), search.LEGACY_ORDERING_RULES)
+```
+
+Run: `python -m unittest tests.benchmarks.test_regression_reference tests.test_tune_search_ranking` → Expected: PASS (`test_fixture_part_matches_current_scorer` proves legacy mode reproduces the Round 2 reference; `test_grid_evaluator_matches_search_operations` proves the memoized path applies the rules identically).
+
+- [ ] **Step 9: Canonical suite, `--phase H`, commit**
+
+```bash
+python -m unittest discover -s tests -t . > $W/h9-suite-working.out 2>&1; echo "exit $?"      # expected: FAILED (failures=3), exactly FREEZE_DEPENDENT_TESTS
+grep -E '^(FAIL|ERROR):' $W/h9-suite-working.out
+git add tools/atlassian_docs/intelligence/search.py tools/atlassian_docs/intelligence/policy.py tools/atlassian_docs/intelligence/data/search_ranking.json \
+        tests/benchmarks/evaluator.py tests/benchmarks/regression_reference.py tests/tune_search_ranking.py tests/benchmarks/round3_simulation.py \
+        tests/intelligence/test_search.py tests/intelligence/test_policy.py tests/benchmarks/test_regression_reference.py
+git commit -m "H9 (v1.24): ordering_rules — intent tier, preferred-method tie-break, terminal-alias full weight; legacy mode for AC-R3-02; memoized evaluator parity
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+SCR=/private/tmp/claude-501/-Users-chan-Developer-internal-Atlassian-API-updater/42e25099-9d61-4b2a-b9f5-db24bf29e3ba/scratchpad
+git worktree add $SCR/h9 HEAD && (cd $SCR/h9 && python -m unittest discover -s tests -t . > $W/h9-suite-clean.out 2>&1; echo "clean exit $?"); git worktree remove --force $SCR/h9
+python -m tests.benchmarks.round3_simulation --phase H > $W/h9-phaseH.out 2>&1; echo "phaseH exit $?"; tail -1 $W/h9-phaseH.out
+```
+
+Expected: clean exit 0 (`Ran 54x tests OK`), working-state failures == FREEZE_DEPENDENT_TESTS only, `ALL STEPS PASS`. Then dispatch the fresh reviewer (scoped review of `<old housekeeping>..HEAD`, report file under `$W/`, findings 0 required), overwrite `$W/housekeeping_commit`, ledger `housekeeping_commit_moved` (fields per Global Constraints) plus both suite shas.
+
+### Task 19: **[H10, design-extension H′]** Lexicon tooling — phrase keys → `when_all` rules, union inputs, generation-input renderer, frozen Round 3 lexicon prompts
+
+**Files:**
+- Modify: `tests/benchmarks/concept_lexicon_check.py` (structural phrase branch, `cap_per_concept`, `merge`, `cmd_prepare`/`cmd_finalize` union, `cmd_render_generation_input`)
+- Modify: `tests/benchmarks/alias_candidates_tool.py` (`lexicon_gate` phrase branch, `_context` passes rule sets)
+- Modify: `tests/benchmarks/test_evaluator.py` (`test_alias_notes_per_origin` lexicon-r rules branch)
+- Create: `tests/benchmarks/round3-lexicon-generation-prompt.md`, `tests/benchmarks/round3-lexicon-review-prompt.md`
+- Test: `tests/benchmarks/test_concept_lexicon_check.py`, `tests/benchmarks/test_alias_candidates_tool.py`
+
+**Interfaces:**
+- Consumes: `clc.normalize_raw` (already joins 2-token keys as `"t1 t2"`), `clc.structural_check`, `clc.finalize`, `clc.merge`, `act.lexicon_gate`, `act.expected_vocab`, `act.concept_tokens`, `policy.load_aliases` (notes schema: `rule:<i>` with origin `lexicon-r3`, `seed_query_id` null, `failure_classes` [] already passes `_check_alias_notes`).
+- Produces: `clc.is_phrase(key) -> bool` (`" " in key`); `clc.structural_check(lex, concept_set, catalog_set, verbs, hints, alias_keys, rule_sets=frozenset())` (new reasons `rule_conflict`; phrase keys skip `in_catalog` and `alias_conflict`; ≥3 tokens → `shape`); `clc.cap_per_concept` caps words and phrases separately (`MAX_PER_CONCEPT` each); `clc.merge(aliases_raw, lexicon, round) -> (out, skipped)` appends `{"when_all": sorted(tokens), "add": [target]}` + note `rule:<i>` for phrase keys; `clc.union_docs(docs: list[dict]) -> dict` (first occurrence of a key wins); CLI `prepare`/`finalize` take `--raw`/`--review`/`--generation-input`/`--review-input`/`--template` with `nargs="+"` (parallel lists, archive first); doc gains `"components": {"raw": [sha…], "review": [sha…], "templates": [sha…], "generation_inputs": [sha…], "review_inputs": [sha…]}`; CLI `render-generation-input --cache-dir S --round 3 --template T --out OUT` → `clc.render_lexicon_generation_input(template, internal, ranking_raw) -> str`.
+
+- [ ] **Step 1: Failing tests — structural phrase branch, cap, merge, union (`tests/benchmarks/test_concept_lexicon_check.py`)**
+
+```python
+    def test_phrase_keys_become_rule_candidates(self):
+        lex = {"time entry": ["worklog"], "blog entry": ["blogpost"], "get entry": ["worklog"], "my own entry": ["worklog"], "issue page": ["page"], "jira entry": ["issue"]}
+        kept, rej = clc.structural_check(lex, CONCEPTS | {"worklog", "blogpost"}, CATALOG | {"time", "entry", "blog", "worklog", "blogpost"},
+                                         VERBS, HINTS, ALIAS_KEYS, rule_sets=frozenset({frozenset({"issue", "page"})}))
+        self.assertEqual(kept, {"blog entry": ["blogpost"], "time entry": ["worklog"]})               # catalog words are fine inside a phrase
+        self.assertEqual({k: v["reason"] for k, v in rej.items()}, {"get entry": "verb", "my own entry": "shape", "issue page": "rule_conflict", "jira entry": "product_hint"})
+
+    def test_cap_counts_words_and_phrases_separately(self):
+        lex = {f"w{i}": ["issue"] for i in range(6)}; lex.update({f"p{i} x": ["issue"] for i in range(6)})
+        kept, rej = clc.cap_per_concept(lex)
+        self.assertEqual(sum(1 for k in kept if " " in k), 5); self.assertEqual(sum(1 for k in kept if " " not in k), 5)
+        self.assertEqual({v["reason"] for v in rej.values()}, {"concept-cap"})
+
+    def test_merge_emits_rules_for_phrases(self):
+        aliases = {"version": 1, "alias_damping": 0.5, "rule_damping": 1.0, "aliases": {}, "rules": [{"when_all": ["issue", "key"], "add": ["getissue"]}],
+                   "notes": {"rule:0": {"origin": "phase2.5", "seed_query_id": None, "failure_classes": [], "evidence": "x"}}}
+        out, skipped = clc.merge(aliases, {"time entry": ["worklog"], "issue key": ["getissue"], "note": ["comment"]}, 3)
+        self.assertEqual(out["rules"][1], {"when_all": ["entry", "time"], "add": ["worklog"]}); self.assertEqual(skipped, ["issue key"])
+        self.assertEqual(out["notes"]["rule:1"], {"origin": "lexicon-r3", "seed_query_id": None, "failure_classes": [], "evidence": "concept lexicon r3 phrase"})
+        self.assertEqual(out["aliases"], {"note": ["comment"]}); self.assertEqual(len(aliases["rules"]), 1)   # input untouched
+
+    def test_union_docs_first_wins(self):
+        self.assertEqual(clc.union_docs([{"release": ["build"], "note": ["comment"]}, {"release": ["version"], "starred": ["favourite"]}]),
+                         {"release": ["build"], "note": ["comment"], "starred": ["favourite"]})
+```
+
+- [ ] **Step 2: Run → fail**
+
+Run: `python -m unittest tests.benchmarks.test_concept_lexicon_check -k "phrase or separately or emits_rules or union"`
+Expected: `TypeError: structural_check() got an unexpected keyword argument 'rule_sets'`, `AttributeError: ... 'union_docs'`, cap/merge assertion failures.
+
+- [ ] **Step 3: concept_lexicon_check.py — structural, cap, merge, union**
+
+```python
+def is_phrase(key: str) -> bool:
+    return " " in key
+
+
+def structural_check(lex, concept_set, catalog_set, verbs, hints, alias_keys, rule_sets=frozenset()):
+    kept, rej = {}, {}
+    for syn, targets in lex.items():
+        toks = syn.split(" ")
+        if len(toks) > 2 or any(not _SHAPE.fullmatch(t) or len(t) < 2 or t in STOPWORDS for t in toks):
+            reason = "shape"
+        elif len(toks) == 2:                                                        # phrase -> conditional rule (spec §6 v1.24)
+            reason = ("id_like" if any(not any(c.isalpha() for c in t) or t in act.ID_LIKE for t in toks)
+                      else "function_word" if any(t in act.FUNCTION_WORDS for t in toks)
+                      else "verb" if any(t in verbs for t in toks) else "product_hint" if any(t in hints for t in toks)
+                      else "rule_conflict" if frozenset(toks) in rule_sets else "multi_target" if len(targets) != 1
+                      else "target_not_concept" if targets[0] not in concept_set else None)
+        else:
+            reason = ("id_like" if not any(c.isalpha() for c in syn) or syn in act.ID_LIKE
+                      else "function_word" if syn in act.FUNCTION_WORDS
+                      else "verb" if syn in verbs else "product_hint" if syn in hints else "in_catalog" if syn in catalog_set
+                      else "alias_conflict" if syn in alias_keys else "multi_target" if len(targets) != 1
+                      else "target_not_concept" if targets[0] not in concept_set else None)
+        if reason:
+            rej[syn] = _rej(reason, targets)
+        else:
+            kept[syn] = list(targets)
+    return kept, rej
+```
+
+`cap_per_concept`: group by `(targets[0], is_phrase(syn))` instead of `targets[0]`. `merge`: for phrase keys, `rule = {"when_all": sorted(syn.split(" ")), "add": list(targets)}`; if `frozenset(rule["when_all"])` is in `{frozenset(r["when_all"]) for r in out["rules"]}` → `skipped.append(syn)`, else append and `out["notes"][f"rule:{len(out['rules'])-1}"] = {"origin": f"lexicon-r{round}", "seed_query_id": None, "failure_classes": [], "evidence": f"concept lexicon r{round} phrase"}`. Add:
+
+```python
+def union_docs(docs) -> dict:
+    out = {}
+    for d in docs:
+        for k, v in (d or {}).items():
+            out.setdefault(k, v)
+    return out
+```
+
+`prepare_review(raw, concept_set, catalog_set, verbs, hints, alias_keys, rule_sets=frozenset())` forwards `rule_sets`; `_context` returns `rule_sets = frozenset(frozenset(r["when_all"]) for r in aliases["rules"])` as a seventh ctx element; `build` forwards it.
+
+- [ ] **Step 4: Run → pass**
+
+Run: `python -m unittest tests.benchmarks.test_concept_lexicon_check` → Expected: PASS (all, including the Round 2 tests).
+
+- [ ] **Step 5: Failing tests — gate and renderer**
+
+`tests/benchmarks/test_alias_candidates_tool.py` (uses its fixture catalog `CAT2`/`RANK`/bench helpers already in the module):
+
+```python
+    def test_lexicon_gate_phrase_requires_both_tokens_in_seed(self):
+        internal = [{"key": "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/worklog", "source": "jira-platform", "method": "GET",
+                     "operation_id": "getIssueWorklog", "summary": "Get issue worklogs", "tags": ["Issue worklogs"]},
+                    {"key": "confluence:GET:/pages", "source": "confluence", "method": "GET", "operation_id": "getPages", "summary": "Get pages", "tags": ["Page"]}]
+        by_key = {op["key"]: op for op in internal}
+        bench = {"seed": [{"id": "s-001", "query": "show time entries for ticket", "expected_top1_any": [internal[0]["key"]], "failure_classes": []}]}
+        doc = {"lexicon": {"time entry": ["worklog"], "blog entry": ["page"]}, "rejected": {}, "catalog_df": {}}
+        doc, rejected = act.lexicon_gate(doc, bench, by_key, RANK)
+        self.assertEqual(rejected, [])                       # 'time entry' targets the seed's vocabulary; no seed contains both 'blog' and 'entry'
+        doc2 = {"lexicon": {"time entry": ["page"]}, "rejected": {}, "catalog_df": {}}
+        doc2, rejected2 = act.lexicon_gate(doc2, bench, by_key, RANK)
+        self.assertEqual(rejected2, ["time entry"]); self.assertEqual(doc2["rejected"]["time entry"]["reason"], "seed-incompatible")
+```
+
+(`RANK` is the module's fixture ranking dict.) `tests/benchmarks/test_concept_lexicon_check.py`:
+
+```python
+    def test_render_generation_input_is_deterministic_and_grounded(self):
+        internal = [{"key": "jira-platform:GET:/rest/api/3/issue/{id}/worklog", "source": "jira-platform", "method": "GET", "operation_id": "getIssueWorklog",
+                     "summary": "Get issue worklogs", "tags": ["Issue worklogs"], "description": "Returns worklogs for an issue.\tTime tracking must be enabled."},
+                    {"key": "jira-platform:POST:/rest/api/3/issue", "source": "jira-platform", "method": "POST", "operation_id": "createIssue", "summary": "Create issue", "tags": ["Issues"], "description": ""}]
+        ranking = {"path_noise": ["rest", "api", "3"], "verb_methods": {"get": ["GET"], "create": ["POST"]}}
+        tpl = "HEAD\nCONCEPTS:\n<one line per concept: \"<token>\\t<count>\\t<products>\\t<excerpt>\">\nVERBS:\n<verb keys>\n"
+        out = clc.render_lexicon_generation_input(tpl, internal, ranking)
+        self.assertEqual(out, clc.render_lexicon_generation_input(tpl, internal, ranking))
+        self.assertIn("worklog\t1\tjira-platform\tReturns worklogs for an issue.", out)                  # first sentence, tabs collapsed
+        self.assertIn("\nissue\t2\tjira-platform\t-\n", out)                                             # smallest-key terminal op has no description -> '-'
+        self.assertIn("VERBS:\ncreate, get\n", out); self.assertNotIn("<one line", out); self.assertNotIn("<verb keys>", out)
+```
+
+- [ ] **Step 6: Run → fail**
+
+Run: `python -m unittest tests.benchmarks.test_alias_candidates_tool -k phrase tests.benchmarks.test_concept_lexicon_check -k render`
+Expected: gate test fails (`"time entry"` never gated/rejected because `syn in norm_tokens(...)` is false for a phrase) and `AttributeError: render_lexicon_generation_input`.
+
+- [ ] **Step 7: Gate + renderer**
+
+`alias_candidates_tool.lexicon_gate`: replace `seeds = [r for r in bench["seed"] if syn in norm_tokens(r["query"])]` with `toks = syn.split(" "); seeds = [r for r in bench["seed"] if all(t in norm_tokens(r["query"]) for t in toks)]`. In `concept_lexicon_check.py`:
+
+```python
+_WS = re.compile(r"\s+")
+
+
+def _excerpt(description: str, limit: int = 160) -> str:
+    text = _WS.sub(" ", (description or "")).strip()
+    first = text.split(". ")[0]
+    first = first if first.endswith(".") or first == text else first + "."
+    return first[:limit] if first else "-"
+
+
+def render_lexicon_generation_input(template: str, internal, ranking_raw) -> str:
+    """Round 3 spec §5(b): every concept token with count/products and a grounding excerpt (first sentence of the description of
+    the lexicographically smallest op whose terminal segment is that token; '-' when none), plus the verb keys (excluded words)."""
+    noise = frozenset(ranking_raw["path_noise"])
+    tokens = act.concept_tokens(internal, noise)
+    by_terminal = {}
+    for op in sorted(internal, key=lambda o: o["key"]):
+        segs = act.path_literal_tokens(op["key"].split(":", 2)[2])
+        if segs and segs[-1] not in noise:
+            by_terminal.setdefault(segs[-1], op)
+    lines = [f"{t}\t{e['count']}\t{','.join(e['sources'])}\t{_excerpt((by_terminal.get(t) or {}).get('description', ''))}" for t, e in tokens.items()]
+    verbs = ", ".join(sorted(ranking_raw["verb_methods"]))
+    out = template.replace('<one line per concept: "<token>\\t<count>\\t<products>\\t<excerpt>">', "\n".join(lines)).replace("<verb keys>", verbs)
+    assert "<one line per concept" not in out and "<verb keys>" not in out, "template placeholders missing"
+    return out
+```
+
+CLI: `p = sub.add_parser("render-generation-input"); p.add_argument("--cache-dir", required=True); p.add_argument("--round", type=int, default=3); p.add_argument("--template", required=True); p.add_argument("--out", required=True); p.set_defaults(fn=cmd_render_generation_input)` where the command loads `internal, fp, shas, ranking, aliases, ctx = _context(args)`, writes the rendered text and prints `rendered_sha256`. `prepare`/`finalize`: `--raw`, `--review`, `--generation-input`, `--review-input`, `--template` get `nargs="+"`; `raw = union_docs([_read(p) for p in args.raw])`, `review = union_docs([...])`; the doc keeps `raw_sha256 = canonical_sha256(raw)` (union), `review_output_sha256 = canonical_sha256(review)` (union), `prompt_template_sha256 = _sha(args.template[0])`, `generation_input_sha256 = _sha(args.generation_input[0])`, `review_input_sha256 = _sha(args.review_input[0])` (archive values, byte-compatible with Round 2 readers) and adds `"components": {"raw": [canonical_sha256(_read(p)) for p in args.raw], "review": [...], "templates": [_sha(t) for t in args.template], "generation_inputs": [_sha(g) ...], "review_inputs": [_sha(r) ...]}`.
+
+- [ ] **Step 8: Run → pass; adapt the notes test**
+
+Run: `python -m unittest tests.benchmarks.test_alias_candidates_tool tests.benchmarks.test_concept_lexicon_check` → Expected: PASS.
+
+`tests/benchmarks/test_evaluator.py` `test_alias_notes_per_origin`, lexicon-r branch: replace `self.assertFalse(k.startswith("rule:"), ...)` with
+
+```python
+                if k.startswith("rule:"):                                                           # v1.24 phrase rule (spec §6)
+                    self.assertGreaterEqual(r, 3, k); rule = raw["rules"][int(k.split(":")[1])]
+                    self.assertEqual(len(rule["when_all"]), 2, k); self.assertEqual(len(rule["add"]), 1, k)
+```
+
+Run: `python -m unittest tests.benchmarks.test_evaluator -k alias_notes` → Expected: FAIL only by `2 <= r <= rnd` for the stage-(a) `lexicon-r3` words (pre-T window, FREEZE_DEPENDENT) — confirm the failure message names `feedback`/`iteration`, not a `rule:` key.
+
+- [ ] **Step 9: Frozen prompt texts**
+
+`tests/benchmarks/round3-lexicon-generation-prompt.md` (exact bytes):
+
+```
+You are given the resource vocabulary of a REST API catalog (Atlassian Jira / Confluence). Each CONCEPTS line is:
+token, occurrence count, products, excerpt — the excerpt is the first sentence of one operation's documentation for that resource.
+For each concept token, list everyday words an ordinary end user (not a developer) might type instead of the token when
+describing what they want: up to 5 SINGLE words and up to 5 TWO-WORD phrases (lowercase ASCII letters only; a phrase is two
+words separated by one space). Use product UI vocabulary where you know it (for example "release" for version, "starred" for
+favourite, "log work" or "time entry" for worklog, "blog entry" for blogpost, "workspace" for space). Never use a VERBS word as a
+synonym or inside a phrase. Do not repeat the token itself. Do not include product names.
+Output ONLY one JSON object: {"<word or two-word phrase>": ["<concept token>"], ...} — exactly one concept per key; if a key fits
+several concepts, choose the single best one. No commentary.
+
+CONCEPTS:
+<one line per concept: "<token>\t<count>\t<products>\t<excerpt>">
+
+VERBS:
+<verb keys>
+```
+
+`tests/benchmarks/round3-lexicon-review-prompt.md`:
+
+```
+Below is a JSON object mapping a candidate synonym — a single English word or a two-word phrase an end user might type — to one
+API concept token of an issue-tracking / wiki product. For each entry answer whether an ordinary user would plausibly use the
+synonym to mean that concept (a two-word phrase must mean the concept as a whole, e.g. "time entry" -> worklog is true,
+"issue page" -> page is false). Reply ONLY with a JSON object {"<synonym>": true|false, ...} covering every key. Do not add,
+rename or re-target any entry.
+
+ENTRIES:
+<the "lexicon" object of lexicon_structural.json>
+```
+
+- [ ] **Step 10: Suite, `--phase H`, commit, review, pointer move**
+
+```bash
+python -m unittest discover -s tests -t . > $W/h10-suite-working.out 2>&1; grep -E '^(FAIL|ERROR):' $W/h10-suite-working.out     # expected: FREEZE_DEPENDENT_TESTS only
+git add tests/benchmarks/concept_lexicon_check.py tests/benchmarks/alias_candidates_tool.py tests/benchmarks/test_concept_lexicon_check.py \
+        tests/benchmarks/test_alias_candidates_tool.py tests/benchmarks/test_evaluator.py tests/benchmarks/round3-lexicon-generation-prompt.md tests/benchmarks/round3-lexicon-review-prompt.md
+git commit -m "H10 (v1.24): lexicon phrase keys -> when_all rules, union raw/review inputs, grounded generation-input renderer, Round 3 lexicon prompts
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+git worktree add $SCR/h10 HEAD && (cd $SCR/h10 && python -m unittest discover -s tests -t . > $W/h10-suite-clean.out 2>&1; echo "clean exit $?"); git worktree remove --force $SCR/h10
+python -m tests.benchmarks.round3_simulation --phase H > $W/h10-phaseH.out 2>&1; tail -1 $W/h10-phaseH.out
+```
+
+Expected: clean exit 0, `ALL STEPS PASS`. Fresh reviewer (scoped `<housekeeping>..HEAD`, findings 0) → pointer move + `housekeeping_commit_moved` ledger.
+
+### Task 20: **[H11, design-extension H′]** Simulation — synthetic phrase rule in `apply_T`, equivalence preflight with the three rules, final `housekeeping_commit`
+
+**Files:**
+- Modify: `tests/benchmarks/round3_simulation.py` (`apply_T`, `equivalence_mismatches` already passes the flag from Task 18)
+- Test: `tests/benchmarks/test_round3_simulation.py`
+
+**Interfaces:**
+- Consumes: `clc.merge` (Task 19: phrase → rule), `tune.GridEvaluator(..., terminal_full)` (Task 18), `policy.ORDERING_RULE_KEYS`.
+- Produces: `round3_simulation.LEXICON_PHRASE, LEXICON_PHRASE_TARGET = "zzalpha zzbeta", "issue"`; synthetic T merges `{LEXICON_WORD: [LEXICON_TARGET], LEXICON_PHRASE: [LEXICON_PHRASE_TARGET]}`.
+
+- [ ] **Step 1: Failing test (`tests/benchmarks/test_round3_simulation.py`)**
+
+```python
+    def test_synthetic_T_merges_a_phrase_rule(self):
+        """v1.24: the synthetic lexicon-r3 merge exercises the phrase -> when_all rule path and its lexicon-r3 rule note."""
+        from tests.benchmarks import concept_lexicon_check as clc, round3_simulation as sim
+        aliases = {"version": 1, "alias_damping": 0.5, "rule_damping": 1.0, "aliases": {}, "rules": [], "notes": {}}
+        out, skipped = clc.merge(aliases, {sim.LEXICON_WORD: [sim.LEXICON_TARGET], sim.LEXICON_PHRASE: [sim.LEXICON_PHRASE_TARGET]}, sim.ROUND)
+        self.assertEqual(skipped, []); self.assertEqual(out["rules"], [{"when_all": ["zzalpha", "zzbeta"], "add": ["issue"]}])
+        self.assertEqual(out["notes"]["rule:0"]["origin"], "lexicon-r3"); self.assertIn(sim.LEXICON_WORD, out["aliases"])
+```
+
+- [ ] **Step 2: Run → fail**
+
+Run: `python -m unittest tests.benchmarks.test_round3_simulation -k phrase_rule` → Expected: `AttributeError: ... 'LEXICON_PHRASE'`.
+
+- [ ] **Step 3: Implement**
+
+In `round3_simulation.py`: `LEXICON_PHRASE, LEXICON_PHRASE_TARGET = "zzalpha zzbeta", "issue"`; in `apply_T` use `synthetic = {LEXICON_WORD: [LEXICON_TARGET], LEXICON_PHRASE: [LEXICON_PHRASE_TARGET]}` for `raw`, `review` (`{k: True ...}`), `lexicon["lexicon"]` and `clc.merge(aliases, synthetic, ROUND)`; the printed T line reads `lexicon-r3 zzsynthetic->issue + phrase rule`. Keep `assert not skipped`.
+
+- [ ] **Step 4: Run → pass, full `--phase H`, commit, review, pointer move**
+
+```bash
+python -m unittest tests.benchmarks.test_round3_simulation
+python -m tests.benchmarks.round3_simulation --phase H > $W/h11-phaseH.out 2>&1; echo "exit $?"; tail -1 $W/h11-phaseH.out      # ALL STEPS PASS (six suite runs green in the synthetic tree)
+python -m unittest discover -s tests -t . > $W/h11-suite-working.out 2>&1; grep -E '^(FAIL|ERROR):' $W/h11-suite-working.out      # FREEZE_DEPENDENT_TESTS only
+git add tests/benchmarks/round3_simulation.py tests/benchmarks/test_round3_simulation.py
+git commit -m "H11 (v1.24): synthetic T merges a lexicon-r3 phrase rule; simulation exercises the ordering rules
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+git worktree add $SCR/h11 HEAD && (cd $SCR/h11 && python -m unittest discover -s tests -t . > $W/h11-suite-clean.out 2>&1; echo "clean exit $?"); git worktree remove --force $SCR/h11
+```
+
+Expected: PASS / `ALL STEPS PASS` / clean exit 0. Fresh reviewer (scoped), findings 0 → `git rev-parse HEAD > $W/housekeeping_commit`, `housekeeping_commit_moved` ledger. This is the **final** `housekeeping_commit`; AC-05 diffs `TOOLING_FILES`, `search.py`, `policy.py` against it. Then regenerate the Task 9 Step 2 artifacts on the same S and ledger `hprime_regeneration` with the shas (must equal the 2026-10-05 values: method-safety `f2528a8d…`, `prefix ok`).
+
+### Task 21: **[controller]** Concept lexicon — stage (b): Round 3 stateless generation with phrase rules, union pipeline, merge (spec §5(b), §6, AC-R3-15)
+
+**Files:**
+- Create (outside repo): `$W/lexicon-generation-input-r3.txt`, `$W/lexicon_raw_r3.json`, `$W/lexicon_structural.json`, `$W/lexicon-review-input-r3.txt`, `$W/lexicon_review_r3.json`, UI-state screenshots
+- Modify: `tools/atlassian_docs/intelligence/data/concept_lexicon.json` (union document), `search_aliases.json` (lexicon-r3 aliases **and rules**, replacing the stage-(a) merge)
+
+**Interfaces:**
+- Consumes: Task 19 CLI (`render-generation-input`, `prepare`/`finalize` with list arguments, `merge`), archive inputs `A=~/.atlassian_api_updater/archive/round2/round2-work`, `$W/aliases-premerge.json` (pre-stage-(a) aliases, saved 2026-10-05, sha `20d94582…` canonical / file sha ledgered), `$W/bench-preclassify.json`.
+- Produces: `concept_lexicon.json` with `components` block; `search_aliases.json` whose `lexicon-r3` entries are the union result; ledger events `lexicon_generation_r3`, `lexicon_review_r3`, `lexicon_regated` (union counts), attempts in `$W/attempts.jsonl` (stage `lexicon-generation-r3` / `lexicon-review-r3`, `actor_id` = Temporary chat URL id, `temporary_chat_unpersonalized: true`, input/output shas, `transport_status`/`parse_status`/`valid_status`).
+
+- [ ] **Step 1: Restore the pre-lexicon alias state and render the generation input**
+
+```bash
+S=~/.atlassian_api_updater/round3-cache; W=~/.atlassian_api_updater/round3-work; A=~/.atlassian_api_updater/archive/round2/round2-work; export ATLASSIAN_DOCS_ROUND3_CACHE=$S
+shasum -a 256 $W/aliases-premerge.json                                    # must equal the ledgered aliases_premerge_sha256 (lexicon_regated event, 2026-10-05)
+cp $W/aliases-premerge.json tools/atlassian_docs/intelligence/data/search_aliases.json      # union pipeline starts from the pre-stage-(a) aliases
+git checkout -- tools/atlassian_docs/intelligence/data/concept_lexicon.json                # the HEAD (Round 2) document is overwritten by finalize below
+python tests/benchmarks/concept_lexicon_check.py render-generation-input --cache-dir $S --round 3 --template tests/benchmarks/round3-lexicon-generation-prompt.md --out $W/lexicon-generation-input-r3.txt
+shasum -a 256 $W/lexicon-generation-input-r3.txt tests/benchmarks/round3-lexicon-generation-prompt.md
+```
+
+Ledger `{"event": "lexicon_generation_input_rendered", "rendered_sha256", "template_sha256", "concept_count"}`. The alias restore is reversible (stage (a) is reproduced by the union run); `candidates`/`failure_classes` from the 2026-10-05 Task 11 Step 1 are regenerated in the Task 11 re-run.
+
+- [ ] **Step 2: Generate (stateless; ChatGPT, mechanics per handoff §6)**
+
+Open a ChatGPT **Temporary chat**, personalization **off** (screenshot → `$W/lexicon-generation-r3-ui-state.jpg`), attach `$W/lexicon-generation-input-r3.txt` as the file (hidden `input[type=file]` made visible via JS, `find` → `file_upload`; confirm the attachment finished via `form.innerText`) with the message body being the same text (byte-exact: paste the file content), send, extract the reply (`document.body.innerText.lastIndexOf('ChatGPT 답변:')`). Save the first parseable JSON object as `$W/lexicon_raw_r3.json`; a non-JSON or non-object reply → attempt `parse_status: invalid`, retry once with the identical input in a **new** Temporary chat. Ledger the attempt (`attempts.jsonl`) with `actor_id` (chat URL id), `input_sha256` (== rendered sha), `output_sha256`, statuses. Never paste the Round 2 archive or any seed/hidden material into the chat.
+
+- [ ] **Step 3: Structural stage over the union, review input**
+
+```bash
+python tests/benchmarks/concept_lexicon_check.py prepare --cache-dir $S --round 3 --raw $A/lexicon_raw.json $W/lexicon_raw_r3.json --out $W/lexicon_structural.json
+python - <<'EOF2'
+import json, pathlib, hashlib
+W = pathlib.Path.home() / ".atlassian_api_updater" / "round3-work"
+st = json.loads((W / "lexicon_structural.json").read_text()); tpl = pathlib.Path("tests/benchmarks/round3-lexicon-review-prompt.md").read_text()
+text = tpl.replace('<the "lexicon" object of lexicon_structural.json>', json.dumps(st["lexicon"], indent=1, ensure_ascii=False, sort_keys=True))
+(W / "lexicon-review-input-r3.txt").write_text(text, encoding="utf-8")
+print(json.dumps({"review_input_sha256": hashlib.sha256(text.encode()).hexdigest(), "entries": len(st["lexicon"]), "phrases": sum(" " in k for k in st["lexicon"])}))
+EOF2
+```
+
+Ledger the printed line. Note: the archive review covers the 62 archive words that survive; the Round 3 reviewer sees **every** structurally-kept key (archive + new) — the union review keeps the archive verdict for archive keys (first wins), so the Round 3 reviewer's verdict on an archive key is recorded but not used (ledger `review_overlap_keys`).
+
+- [ ] **Step 4: Review (stateless, second actor), finalize, gate, merge**
+
+New Temporary chat (personalization off, screenshot `$W/lexicon-review-r3-ui-state.jpg`, actor id ≠ generator), send `$W/lexicon-review-input-r3.txt` byte-exact (attachment + body), save the first parseable object as `$W/lexicon_review_r3.json`; `finalize` refuses missing keys / non-bool → retry the identical input in a new chat (ledger each attempt).
+
+```bash
+python tests/benchmarks/concept_lexicon_check.py finalize --cache-dir $S --round 3 \
+  --raw $A/lexicon_raw.json $W/lexicon_raw_r3.json --structural $W/lexicon_structural.json \
+  --review $A/lexicon_review.json $W/lexicon_review_r3.json \
+  --generation-input $A/lexicon-generation-input.txt $W/lexicon-generation-input-r3.txt \
+  --review-input $A/lexicon-review-input.txt $W/lexicon-review-input-r3.txt \
+  --template tests/benchmarks/round2-lexicon-generation-prompt.md tests/benchmarks/round3-lexicon-generation-prompt.md \
+  --out tools/atlassian_docs/intelligence/data/concept_lexicon.json
+python tests/benchmarks/alias_candidates_tool.py lexicon-gate --cache-dir $S --round 3 --lexicon tools/atlassian_docs/intelligence/data/concept_lexicon.json
+python tests/benchmarks/concept_lexicon_check.py merge --lexicon tools/atlassian_docs/intelligence/data/concept_lexicon.json --aliases tools/atlassian_docs/intelligence/data/search_aliases.json --round 3
+python -m unittest discover -s tests -t . > $W/task21-suite.out 2>&1; grep -E '^(FAIL|ERROR):|^Ran' $W/task21-suite.out       # FREEZE_DEPENDENT_TESTS only
+```
+
+Expected: `feedback→comment` and `iteration→sprint` are merged again (stage (a) reproduced) plus the Round 3 additions; `merged N aliases` where the merge output also lists the appended rules. Ledger `lexicon_regated` (v1.24 shape): structural kept/rejected by reason (words and phrases separately), semantic rejected, gate rejected, merged words, merged rules (`when_all`/`add`), `lexicon_aliases_sha256(aliases, 3)`, `concept_lexicon` file sha, the five `components` sha lists, `actor_separation_check_lexicon: generator_actor_id != reviewer_actor_id`.
+
+- [ ] **Step 5: Coverage check against the pre-T gap (diagnostic, no change to artifacts)**
+
+```bash
+python - <<'EOF2'
+import json
+al = json.load(open("tools/atlassian_docs/intelligence/data/search_aliases.json"))
+want_aliases = {"starred": "favourite", "release": "version", "workspace": "space"}
+want_rules = [({"time", "entry"}, "worklog"), ({"blog", "entry"}, "blogpost")]
+have_a = {w: (al["aliases"].get(w) == [t]) for w, t in want_aliases.items()}
+have_r = {"+".join(sorted(s)): any(set(r["when_all"]) == s and r["add"] == [t] for r in al["rules"]) for s, t in want_rules}
+print(json.dumps({"aliases": have_a, "rules": have_r}))
+EOF2
+```
+
+Ledger the result as `lexicon_gap_coverage`. This is **information for the user**, not a gate: if coverage is partial, continue to Task 11 — the binding decision is the pre-T checkpoint. Do not add any alias by hand (spec §6: lexicon entries come only from the stateless generation + gate).
+
+- [ ] **Step 6: task-done**
+
+`python -m unittest tests.benchmarks.test_concept_lexicon_check tests.benchmarks.test_alias_candidates_tool tests.intelligence.test_policy` → PASS. Then Task 11 from Step 1.
