@@ -270,3 +270,73 @@ seed 23/23, regression_negative 6/6, held_out 4/16, negative 5/8, gate failed) �
 ### Attestation (spec §12)
 
 - AC-01a/b/c: H..T..B..F commits touch only the allowed files; no policy change after B. AC-05: tooling diff H..F empty, `tooling_code_sha256` unchanged. AC-18a-B/F: ciphertext sha unchanged, no plaintext. AC-21: tuning failure ends the round at B policy. AC-23: suite green at T and B (ledgered). AC-07/14/16: apply on branch F and pass (no evaluation ran; no policy or evaluator change after B; ciphertext retained). **AC-18b: FAIL** — the post-terminal provenance review found that four working files under `~/.atlassian_api_updater/round2-work/` (the hidden-review inputs, the replacement output and the replacement-review message) held the hidden records in plaintext from before B through F, readable by the worker's account; they were never handed to the worker and the tuning run depends only on the B inputs and the frozen tooling (unchanged H..F), so the F result is unaffected, but the spec's claim that the plaintext was unreadable during tuning does not hold for Round 2. Remediation: the four files were deleted after F (`ac18b_finding_remediated` event, shas ledgered); Round 3 rule: review inputs that embed the records must be deleted or encrypted before B. Controller evidence: `~/.atlassian_api_updater/round2-work/{controller-events,attempts}.jsonl`.
+
+## Search Quality Round 3 — decision record (2026-10-07)
+
+**Outcome: closed before T — the binding pre-T checkpoint (AC-R3-01, seed ≥ 36/39) was not reached.** No T, B, hidden set, tuning run or gate evaluation exists for Round 3; the Round 2 reference set was never decrypted. Status: **Round 3 pre-T not reached** (Discovery gate not attempted) → Round 4 brainstorming. Spec v1.25.1 (`0741e34`), plan v16. Evaluation domain: actionable recommendation queries.
+
+| item | value |
+|---|---|
+| round3_start_commit | `e16c073` |
+| initial_housekeeping_commit | `10473ad` (H′ of the Task 8 review) |
+| housekeeping_commit (final) | `9bf823d` (design-extension H′ series, below) |
+| controller_actor_id / session | `42e25099-9d61-4b2a-b9f5-db24bf29e3ba` (fresh session, never saw Round 2 plaintext) |
+| round3_operational_snapshot (S) | live fetch 2026-10-05, `s_reused_from_round2: false`, registry `a759181ca5511d5ccd6115461e6c22b62cc96627cdea6af7e6741c8b77d07a49`, confluence `b3d010b6438677d8…`, jira-platform `e1f7bdb40cb38c15…` (changed vs Round 2), jira-software `cb7e24b331ad9b31…`, 943 ops |
+| round2_regression_snapshot | `29dba38`, `f3c2e9d4…` (AC-R3-02 reference `tests/benchmarks/round3-regression-reference.json`, compared in legacy ordering mode) |
+| verb inventory | unchanged (`d66317db…`), method-safety 39 rows / 0 violations, prefix ok, 26 REVIEW verbs no-widen |
+| lexicon | stage (a) archive re-gate (feedback→comment, iteration→sprint) + stage (b) Round 3 stateless generation ×2 (see attempts); last union: 239 kept (21 words, 218 phrase rules), seed gate rejected fresh/new/release/summary, seed-regression rejected 0 — **left uncommitted and discarded at close** (copies: `round3-work/final-uncommitted/`) |
+| T / B / C / D / F / X | none |
+| hidden set, needle manifest, ciphertext | none (AC-18 scans not applicable) |
+| reference_round2 | not decrypted |
+
+### Design-extension H′ series (spec §8, §15; each reviewed by a fresh reviewer, findings 0 after fixes)
+
+| pointer move | reason | review |
+|---|---|---|
+| 10473ad → dca5b9c | post-S H prime: concept_lexicon_check.validate_review required exact key equality, refusing the… | findings 0 |
+| dca5b9c → c1d91d7 | design-extension H prime (spec v1.24/v1.24.1): H9 37187cb ordering_rules (intent tier, preferre… | findings 0 |
+| c1d91d7 → e4084ab | design-extension H prime (spec v1.24.2): H10 51a6420 lexicon phrase rules/union/renderer/prompt… | findings 0 |
+| e4084ab → 15047bf | design-extension H prime H11 15047bf: synthetic T merges a lexicon-r3 phrase rule (final housek… | findings 0 |
+| 15047bf → 9bf823d | design-extension H prime (spec v1.25/v1.25.1): H12 5c609d9 natural-order phrase keys, in_catalo… | findings 0 |
+
+Commits: H9 `37187cb` + H9′ `c1d91d7` (ordering_rules: intent tier, preferred-method tie-break, terminal-alias full weight; legacy mode; identifier-query exemption), H10 `51a6420` + H10′ `e4084ab` (lexicon phrase→`when_all` rules, union inputs, grounded generation-input renderer, Round 3 lexicon prompts), H11 `15047bf` (simulation), H12 `5c609d9` + H12′ `9bf823d` (natural-order phrase keys, `in_catalog` cross-product exception, `seed-regression` gate). Clean-worktree canonical suite at `9bf823d`: 555 OK; `--phase H` ALL STEPS PASS. In the pre-T window the working-tree suite showed exactly the 3 freeze-dependent tests (expected until T).
+
+### Binding pre-T checkpoints (`round3_simulation --phase pre-T`, real S)
+
+| at | seed | regression raw · effective | fixture failing | equivalence mismatches | verdict |
+|---|---|---|---|---|---|
+| 2026-10-05T13:31:19Z | 31/39 | 10/14 · 14/14 | [] | [] | fail |
+| 2026-10-07T02:22:02Z | 33/39 | 10/14 · 14/14 | [] | [] | fail |
+| 2026-10-07T02:23:46Z | 33/39 | 10/14 · 14/14 | [] | [] | fail |
+| 2026-10-07T03:28:59Z | 35/39 | 10/14 · 14/14 | [] | [] | fail |
+
+Rules-only diagnostic (scratch, after H9): 34/39. Final failing seeds: s-004 (intent-tier side effect; constants domain), s-027 (literal `my` terminal match), s-028 (`release→version` never generated), s-039 (`workspace→space` never generated). Root finding (spec §0/§15 v1.24): the v1.23 figure 36/39 was a post-tuning simulation value; the pre-T policy ranks like the Round 2 baseline (31/39) by AC-R3-02.
+
+### Lexicon generation / review attempts (ChatGPT Temporary chat, personalization off; inputs attached byte-exact, outputs checksum-verified)
+
+| stage | actor_id | input sha | output sha | transport/parse/valid |
+|---|---|---|---|---|
+| lexicon-generation-r3 (run 1) | `6ac5a8b6-35a8-83e8-b910-8a8d19f0ade1` | a8fb621a851b… | 957133966913… | ok/ok/ok |
+| lexicon-review-r3 (run 1) | `6ac5aa98-6124-83ec-bde5-1fd3b34108d6` | 8b3b867784db… | 43c7af333763… | ok/ok/ok |
+| lexicon-generation-r3 (run 2) | `6ac5b8f8-a488-83ec-8f52-d4ec497992e8` | a8fb621a851b… | b34f81d88774… | ok/ok/ok |
+| lexicon-review-r3 (run 2) | `6ac5ba74-c698-83ec-aaaa-33baedfe75b1` | d3a09ea2561a… | 18227e1d81ed… | ok/ok/ok |
+
+Generator ≠ reviewer in both runs (`actor_separation_check_lexicon`). No hidden records were ever created, so no plaintext hygiene step applied.
+
+### Evidence
+
+`~/.atlassian_api_updater/round3-work/controller-events.jsonl` sha256 `c07e586d39dd3e27d519c3be14dab3637f00fe678902de747a37e80e91e9ec5b`, `attempts.jsonl` `a1fdd809cdb2cbbd629d57b2bbb8b386f3e0e1906330005bd53d6b4ead074c76`; review reports `h9-review.md` `d3dbf6229c9bfcbb…`, `h9b-review.md` `40fd039eb0433832…`, `h10-review.md` `10d6728c467e0f00…`, `h10b-review.md` `8c0c5d5db0ee1c59…`, `h11-review.md` `06352eca52aa547e…`, `h12-review.md` `38f3ea1878e7ef27…`, `h12b-review.md` `ca2d14d3a0458cae…`. Archived with S under `~/.atlassian_api_updater/archive/round3/`.
+
+### Attestation (spec v1.25.1 §10)
+
+- AC-01a: `e16c073 < 10473ad ≤ 9bf823d`; no T. AC-05/AC-R3-13a: `TOOLING_FILES`, `search.py`, `policy.py` changed only in the reviewed H′ commits; `policy.py` diff limited to the six declared kinds (test). AC-R3-02: legacy-mode equivalence with the Round 2 reference holds (suite). AC-R3-12: verb inventory unchanged. AC-R3-13b: grid unchanged. AC-R3-14: ordering rules flag-gated, structure committed at H. AC-R3-15: stateless generation/review with actor separation, union provenance, replay ok (run 2).
+- Not attempted (no T): AC-01b, AC-02–04, AC-06b, AC-07, AC-08 freeze comparison, AC-10–12, AC-15, AC-19–23, AC-R3-01 (failed: 31 → 33 → 35 of 39), AC-R3-06–11, AC-18b(R3).
+- Branch: none of D/F/X (`adopted_runs 0`, `failed_runs 0`, `rejected_runs 0`, `hidden_evaluated false`, `ciphertext_retained n/a`).
+
+### Lessons for Round 4
+
+1. Thresholds must be stated for the policy state they are measured on (pre-tuning vs post-tuning).
+2. A stateless reviewer judges what it sees: canonical identity (sorted token sets) and display (natural order) must be separated.
+3. Vocabulary-eligibility gates need a ranking-effect check (`seed-regression`), not only vocabulary membership.
+4. The generator avoids catalog tokens, so cross-product synonyms (`workspace→space`) need an explicit allowance in the prompt or a different source.
+5. Residual structural cases: literal determiner terminals (`/filter/my`), the intent-tier side effect on multi-op expected sets (s-004).

@@ -262,6 +262,8 @@ Round 3 = Round 2의 봉인 절차를 그대로 두고, 어휘를 막던 네 가
 
 단독 alias는 부족했다: entry→worklog(단일 타깃)는 s-030을 살리고 s-036을 깨뜨림(다의어 → 구문 규칙 필요); starred→favourite·release→version 단독으로는 literal 수식어('my', 'project')에 밀림(→ §3.8). 남는 실패: s-004(§3.6 부작용, 상수 영역), s-027(`/filter/my`의 literal 'my').
 
+**종료 (2026-10-07):** 재시도(H12/H12′ + Task 21 재실행) 후 binding pre-T seed **35/39**(< 36) → T 미생성, Round 3는 "pre-T 미달"로 종료(`docs/phase3-readiness.md` Round 3 decision record). 잔여 과제는 Round 4로.
+
 **v1.25.1 (2026-10-07, H12 리뷰 I1–I3):** `in_catalog` 예외는 단어 자체가 자원 토큰일 때만; 사전 게이트 checker는 이미 병합된 항목을 만나면 예외(pre-merge alias 강제), CLI는 `lexicon-r3` 노트가 있는 alias 파일을 거부하고 사용한 alias sha를 출력; checker가 `evaluator.evaluate` raw 판정을 재사용하고 fixture 수준 테스트로 고정.
 
 **v1.25 (2026-10-07, 2차 pre-T 실패 seed 33/39 후):** 구문 키 자연어 순서 유지(검토자 거부 원인 제거), `in_catalog` 교차 제품 예외, 사전 게이트 `seed-regression`; Task 21(생성·검토) 재실행 후 Task 11 재진입. 2차 실패 분석: 규칙만 34/39; 생성 사전은 프로브 어휘 0/5 전달(`entry time` 검토 거부, `blog entry→post`가 s-036을 깨뜨려 −1, `workspace` in_catalog, `release` 아카이브 우선→게이트, `starred`는 구문으로만).
