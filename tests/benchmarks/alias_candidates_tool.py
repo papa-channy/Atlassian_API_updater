@@ -193,7 +193,8 @@ def lexicon_gate(lexicon_doc, bench, by_key, ranking_raw):
     verbs, noise, hints = ranking_raw["verb_methods"], frozenset(ranking_raw["path_noise"]), ranking_raw["product_hints"]
     rejected_now = []
     for syn in sorted(lexicon_doc["lexicon"]):
-        seeds = [r for r in bench["seed"] if syn in norm_tokens(r["query"])]
+        toks = syn.split(" ")                                                       # v1.24: a phrase is gated by seeds containing all its tokens
+        seeds = [r for r in bench["seed"] if all(t in norm_tokens(r["query"]) for t in toks)]
         if not seeds:
             continue
         allowed = set().union(*(expected_vocab(r, by_key, noise) for r in seeds))

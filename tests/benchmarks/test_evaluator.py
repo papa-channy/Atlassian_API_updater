@@ -258,7 +258,9 @@ class TestAliasNotesAndTuningLog(unittest.TestCase):
             elif m.group(3) is not None:                                     # lexicon-r{N}
                 r = int(m.group(3))
                 self.assertEqual(n["origin"], f"lexicon-r{r}", k); self.assertTrue(2 <= r <= rnd, k)
-                self.assertFalse(k.startswith("rule:"), f"{k}: lexicon entries are aliases only")
+                if k.startswith("rule:"):                                                           # v1.24 phrase rule (Round 3 spec §6)
+                    self.assertGreaterEqual(r, 3, k); rule = raw["rules"][int(k.split(":")[1])]
+                    self.assertEqual(len(rule["when_all"]), 2, k); self.assertEqual(len(rule["add"]), 1, k)
                 self.assertIsNone(n["seed_query_id"], k); self.assertEqual(n["failure_classes"], [], k)
                 self.assertTrue(isinstance(n.get("evidence"), str) and n["evidence"], k)
                 if lex is not None and lex.get("round") == r:

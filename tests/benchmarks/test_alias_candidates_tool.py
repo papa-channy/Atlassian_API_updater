@@ -139,6 +139,19 @@ class TestLexiconGate(unittest.TestCase):
         self.assertIn("workspace", out["lexicon"]); self.assertNotIn("document", out["lexicon"]); self.assertIn("note", out["lexicon"])
         self.assertEqual(out["rejected"]["document"]["reason"], "seed-incompatible"); self.assertEqual(rejected, ["document"])
 
+    def test_lexicon_gate_phrase_requires_both_tokens_in_seed(self):                                # Round 3 spec §6 (v1.24)
+        internal = [{"key": "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/worklog", "source": "jira-platform", "method": "GET",
+                     "operation_id": "getIssueWorklog", "summary": "Get issue worklogs", "tags": ["Issue worklogs"]},
+                    {"key": "confluence:GET:/pages", "source": "confluence", "method": "GET", "operation_id": "getPages", "summary": "Get pages", "tags": ["Page"]}]
+        by_key = {op["key"]: op for op in internal}
+        bench = {"seed": [{"id": "s-001", "query": "show time entries for ticket", "expected_top1_any": [internal[0]["key"]], "failure_classes": []}]}
+        doc = {"lexicon": {"time entry": ["worklog"], "blog entry": ["page"]}, "rejected": {}, "catalog_df": {}}
+        doc, rejected = act.lexicon_gate(doc, bench, by_key, RANK)
+        self.assertEqual(rejected, [])                       # 'time entry' targets the seed's vocabulary; no seed contains both 'blog' and 'entry'
+        doc2 = {"lexicon": {"time entry": ["page"]}, "rejected": {}, "catalog_df": {}}
+        doc2, rejected2 = act.lexicon_gate(doc2, bench, by_key, RANK)
+        self.assertEqual(rejected2, ["time entry"]); self.assertEqual(doc2["rejected"]["time entry"]["reason"], "seed-incompatible")
+
 
 class TestVerbPrefixInvariant(unittest.TestCase):
     """AC-R3-12: the live inventory keeps Round 2's rows and each Round 2 list as an exact prefix; suffixes sorted."""
