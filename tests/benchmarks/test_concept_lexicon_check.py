@@ -12,6 +12,12 @@ class TestChecks(unittest.TestCase):
         raw = {"Tickets": ["issue"], "ticket": ["issues"], "notes": ["comment"]}
         self.assertEqual(clc.normalize_raw(raw), {"note": ["comment"], "ticket": ["issue"]})
 
+    def test_normalize_sorts_phrase_tokens_so_reordered_phrases_collide(self):                        # H10 review I2
+        raw = {"entry time": ["blogpost"], "time entry": ["worklog"], "Blog Entries": ["blogpost"]}
+        self.assertEqual(clc.normalize_raw(raw), {"blog entry": ["blogpost"], "entry time": ["blogpost", "worklog"]})
+        kept, rej = clc.structural_check(clc.normalize_raw(raw), CONCEPTS | {"worklog", "blogpost"}, CATALOG, VERBS, HINTS, ALIAS_KEYS)
+        self.assertEqual(rej["entry time"]["reason"], "multi_target"); self.assertEqual(kept, {"blog entry": ["blogpost"]})
+
     def test_plural_synonym_rejected_after_normalization(self):
         kept, rej = clc.prepare_review({"files": ["attachments"], "File": ["attachment"]}, *ARGS)
         self.assertEqual(kept, {}); self.assertEqual({k: v["reason"] for k, v in rej.items()}, {"file": "in_catalog"})

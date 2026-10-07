@@ -264,7 +264,10 @@ class TestAliasNotesAndTuningLog(unittest.TestCase):
                 self.assertIsNone(n["seed_query_id"], k); self.assertEqual(n["failure_classes"], [], k)
                 self.assertTrue(isinstance(n.get("evidence"), str) and n["evidence"], k)
                 if lex is not None and lex.get("round") == r:
-                    self.assertEqual(raw["aliases"][k], lex["lexicon"].get(k), f"{k}: differs from concept_lexicon.json")
+                    if k.startswith("rule:"):                                                       # phrase key == sorted token pair (v1.24)
+                        self.assertEqual(rule["add"], lex["lexicon"].get(" ".join(rule["when_all"])), f"{k}: differs from concept_lexicon.json")
+                    else:
+                        self.assertEqual(raw["aliases"][k], lex["lexicon"].get(k), f"{k}: differs from concept_lexicon.json")
             else:                                                            # phase2.5
                 self.assertIsNone(n["seed_query_id"], k)
         self.assertTrue(all(c <= 1 for c in per_seed.values()), per_seed)
@@ -394,7 +397,7 @@ class TestPolicyVocabularyProvenance(unittest.TestCase):
         from tools.atlassian_docs import sources
         b = json.loads(BENCH.read_text(encoding="utf-8"))
         lexicon, _ = self.frozen_docs()
-        out = set(sources.SOURCES) | self.catalog_tokens() | set(lexicon)
+        out = set(sources.SOURCES) | self.catalog_tokens() | {t for k in lexicon for t in k.split(" ")}   # phrase keys contribute their tokens (v1.24)
         for rec in b["seed"]:
             out |= ev.unigram_set(rec["query"])   # every seed record (r0 + demoted r1) is Round 2 tuning vocabulary
         return out
@@ -617,6 +620,19 @@ class TestLexiconAliasesSha256(unittest.TestCase):
                 edited = json.loads(p.read_text(encoding="utf-8")); edit(edited)
                 self.assertNotEqual(ev.lexicon_aliases_sha256(edited, 2), base)
 
+
+    def test_lexicon_aliases_sha256_covers_lexicon_rules(self):                                        # H10 review I4 (v1.24 phrase rules)
+        raw = {"version": 1, "alias_damping": 0.5, "rule_damping": 1.0, "aliases": {"starred": ["favourite"]},
+               "rules": [{"when_all": ["entry", "time"], "add": ["worklog"]}, {"when_all": ["issue", "key"], "add": ["getissue"]}],
+               "notes": {"starred": {"origin": "lexicon-r3", "seed_query_id": None, "failure_classes": [], "evidence": "x"},
+                         "rule:0": {"origin": "lexicon-r3", "seed_query_id": None, "failure_classes": [], "evidence": "x phrase"},
+                         "rule:1": {"origin": "phase2.5", "seed_query_id": None, "failure_classes": [], "evidence": "legacy"}}}
+        base = ev.lexicon_aliases_sha256(raw, 3)
+        changed = json.loads(json.dumps(raw)); changed["rules"][0]["add"] = ["blogpost"]
+        self.assertNotEqual(base, ev.lexicon_aliases_sha256(changed, 3))                               # a lexicon-r3 rule edit changes the hash
+        legacy = json.loads(json.dumps(raw)); legacy["rules"][1]["add"] = ["other"]
+        self.assertEqual(base, ev.lexicon_aliases_sha256(legacy, 3))                                   # non-lexicon rules stay outside the subset
+        self.assertEqual(ev.lexicon_aliases_sha256(raw, 2), ev.lexicon_aliases_sha256({**raw, "rules": [], "notes": {}}, 2))   # round 2 unaffected
 
 class TestRound3SymmetricJudgement(unittest.TestCase):
     """Round 3 spec §4 / §13: held_out requires actionable; negatives pass when abstained; seed is raw top-1; a legacy

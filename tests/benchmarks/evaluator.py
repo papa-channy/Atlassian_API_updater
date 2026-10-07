@@ -180,7 +180,13 @@ def lexicon_aliases_sha256(raw_aliases: dict, round: int) -> str:
     origin = f"lexicon-r{round}"
     notes = raw_aliases.get("notes") or {}
     words = sorted(w for w, n in notes.items() if isinstance(n, dict) and n.get("origin") == origin and w in (raw_aliases.get("aliases") or {}))
-    return canonical_sha256({"aliases": {w: raw_aliases["aliases"][w] for w in words}, "notes": {w: notes[w] for w in words}})
+    rules = raw_aliases.get("rules") or []
+    rule_keys = sorted((k for k, n in notes.items() if isinstance(n, dict) and n.get("origin") == origin and k.startswith("rule:")
+                        and k.split(":")[1].isdigit() and int(k.split(":")[1]) < len(rules)), key=lambda k: int(k.split(":")[1]))
+    out = {"aliases": {w: raw_aliases["aliases"][w] for w in words}, "notes": {w: notes[w] for w in words}}
+    if rule_keys:                                                                   # v1.24 phrase rules; Round 2 (no lexicon rules) hashes unchanged
+        out["rules"] = {k: rules[int(k.split(":")[1])] for k in rule_keys}; out["rule_notes"] = {k: notes[k] for k in rule_keys}
+    return canonical_sha256(out)
 
 
 def file_sha256(path) -> str:

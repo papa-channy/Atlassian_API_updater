@@ -29,7 +29,7 @@ def normalize_raw(raw) -> dict:
     out = {}
     for syn, targets in (raw or {}).items():
         toks = act.norm_tokens(str(syn))
-        key = " ".join(toks) if toks else str(syn).lower()
+        key = " ".join(sorted(toks) if len(toks) == 2 else toks) if toks else str(syn).lower()   # v1.24: a phrase key is its sorted token pair (when_all is a set)
         vals = [t for target in (targets if isinstance(targets, list) else [targets]) for t in act.norm_tokens(str(target))]
         out.setdefault(key, set()).update(vals)
     return {k: sorted(v) for k, v in sorted(out.items())}
@@ -227,7 +227,7 @@ def cmd_finalize(args):
         e["catalog_df"] = df.get(syn, 0)
     doc = {"round": args.round, "prompt_template_sha256": _sha(args.template[0]), "generation_input_sha256": _sha(args.generation_input[0]),
            "raw_sha256": canonical_sha256(raw), "review_input_sha256": _sha(args.review_input[0]), "review_output_sha256": canonical_sha256(review),
-           "components": {"raw": [canonical_sha256(_read(p)) for p in args.raw], "review": [canonical_sha256(_read(p)) for p in args.review],
+           "components": {"raw": [_sha(p) for p in args.raw], "review": [_sha(p) for p in args.review],                       # file-byte shas (ledger kind)
                           "templates": [_sha(t) for t in args.template], "generation_inputs": [_sha(g) for g in args.generation_input],
                           "review_inputs": [_sha(r) for r in args.review_input]},
            "generated_from": act.provenance(fp, shas, {"verb_inventory": canonical_sha256(ranking["verb_methods"]),
