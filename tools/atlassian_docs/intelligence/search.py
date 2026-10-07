@@ -218,12 +218,19 @@ def _score(entry, lexical_base: frozenset, direct: frozenset, cond: frozenset, b
     return lexical, matched_base
 
 
-def ordering_rules_for(rules, joined_forms) -> dict:
-    """Round 3 spec §3.6/§3.7 scope (v1.24 ruling): the ordering rules read verb intent from natural-language queries. A query
-    that contains an identifier-style word (CamelCase / joined schema or operation name, i.e. joined_query_forms non-empty) is
-    an exact-name lookup whose embedded verbs are not an action intent -> legacy order for tier and tie-break (scoring unchanged)."""
-    if not joined_forms:
-        return rules
+def is_identifier_query(query: str) -> bool:
+    """Round 3 spec §3.6/§3.7 scope (v1.24.1): a single whitespace-free word that splits into 2+ unigrams (CamelCase / joined
+    schema or operation name such as IssueCreateMetadata, createIssue) is an exact-name lookup, not an action query. Multi-word
+    queries are never identifier queries, so hyphenated natural language ("update issue-summary") keeps the ordering rules."""
+    q = (query or "").strip()
+    return bool(q) and not any(ch.isspace() for ch in q) and bool(joined_query_forms(q))
+
+
+def ordering_rules_for(rules, identifier_query: bool) -> dict:
+    """Ordering rules in effect: tier and tie-break are switched off for identifier queries (embedded verbs are not an action
+    intent); scoring rules are unaffected."""
+    if not identifier_query:
+        return dict(rules)
     return {**rules, "intent_tier": False, "preferred_method_tiebreak": False}
 
 
@@ -336,7 +343,7 @@ def search_operations(state, query: str, *, source=None, method=None, tag=None,
     preferred = rp.verb_method_order[verbs[0]][0] if verbs else None
     terminal_full = rp.ordering_rules["terminal_alias_full_weight"]
     joined = joined_query_forms(query)
-    rules = ordering_rules_for(rp.ordering_rules, joined)
+    rules = ordering_rules_for(rp.ordering_rules, is_identifier_query(query))
     exp = expand_query(query, pol)                       # exp.base: unigram forms only (spec §6.1)
     lexical_base = exp.base | joined                     # Phase 2.5 exact-name matching kept (spec §6.6)
     scope = [source] if source else sorted(sources.SOURCES)
@@ -369,7 +376,6 @@ def search_operations(state, query: str, *, source=None, method=None, tag=None,
     payload = {"query": query, "results": results[:limit], "total_matches": len(pinned) + len(non_pinned),
                "exact_match": bool(pinned), "query_tokens": sorted(exp.base),
                "alias_tokens": sorted(exp.direct | exp.cond), "expanded_tokens": sorted(exp.all)}
-    verbs, allowed = intent
     shown = payload["results"]
     payload["method_intent_consistent"] = bool(allowed)
     payload["intent_methods"] = sorted(allowed) if allowed else []

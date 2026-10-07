@@ -169,9 +169,10 @@ def fixture_failures(state, rp, point, bench_r0, alias_policy) -> list:
 
 class GridEvaluator:
     """Memoized grid-stage evaluation (spec §3.4 v1.22). Per query the lexical rows (entry, op, lexical) are computed ONCE per alias
-    state with the production `_score`; every grid point re-runs only the production `_structural_signals` and reproduces
-    search_operations' ordering: key (-final, deprecated, key), DEPRECATED_FACTOR, zero clamp, limit. Bench queries contain
-    whitespace so exact-key pinning never applies; a whitespace-free query falls back to search_operations."""
+    state with the production `_score` (terminal_full fixed at construction, spec §3.8); every grid point re-runs only the
+    production `_structural_signals` and reproduces search_operations' ordering: `_order_key` (tier, -final, tiebreak,
+    deprecated, key), DEPRECATED_FACTOR, zero clamp, limit. Bench queries contain whitespace, so exact-key pinning and the
+    identifier-query exemption never apply; a whitespace-free query falls back to search_operations."""
     def __init__(self, state, queries, alias_policy, terminal_full=False):
         from tools.atlassian_docs.intelligence import search as S
         self.S, self.state, self.ap, self.rows, self.meta, self.terminal_full = S, state, alias_policy, {}, {}, terminal_full
@@ -191,8 +192,9 @@ class GridEvaluator:
             with mock.patch.object(policy, "ranking", return_value=rp), mock.patch.object(policy, "aliases", return_value=self.ap):
                 return _search_fn(self.state)(query)
         unigrams, exp_all, joined = self.meta[query]
+        assert rp.ordering_rules["terminal_alias_full_weight"] == self.terminal_full, "GridEvaluator built for a different terminal_alias_full_weight"
         intent = self.S.method_intent(unigrams, rp.verb_methods)
-        rules = self.S.ordering_rules_for(rp.ordering_rules, joined)
+        rules = self.S.ordering_rules_for(rp.ordering_rules, False)                                  # whitespace query: never an identifier query
         verbs, allowed = intent
         preferred = rp.verb_method_order[verbs[0]][0] if verbs else None
         cands = []

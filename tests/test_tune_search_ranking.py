@@ -328,7 +328,7 @@ class TestGridEvaluator(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.state = tune.fixture_state(); cls.rp = policy.load_ranking(); cls.bench = tune.fixture_bench(tune._BENCH)
-        cls.queries = [r["query"] for r in cls.bench["seed"] + cls.bench["regression_negative"]] + ["issue status field values", "create and delete issue", "list page versions"]
+        cls.queries = [r["query"] for r in cls.bench["seed"] + cls.bench["regression_negative"]] + ["issue status field values", "create and delete issue", "list page versions", "update issue-summary", "get project-versions"]
         cls.ap = tune._alias_policy(json.loads(tune.ALIASES_PATH.read_text(encoding="utf-8")))
         cls.ge = tune.GridEvaluator(cls.state, cls.queries, cls.ap, cls.rp.ordering_rules["terminal_alias_full_weight"])
 

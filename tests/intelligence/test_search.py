@@ -528,12 +528,18 @@ class TestRound3Signals(unittest.TestCase):
         first_out = next((i for i, m in enumerate(methods) if m not in allowed), len(methods))
         self.assertTrue(all(m in allowed for m in methods[:first_out]) and all(m not in allowed for m in methods[first_out:]))
 
-    def test_identifier_queries_keep_legacy_order(self):                                                # v1.24 ruling: spec §3.6/§3.7 scope
+    def test_identifier_queries_keep_legacy_order(self):                                                # spec §3.6/§3.7 scope (v1.24.1)
         on = self._rules(intent_tier=True, preferred_method_tiebreak=True, terminal_alias_full_weight=True)
-        self.assertEqual(search.ordering_rules_for(on, frozenset()), on)
-        self.assertEqual(search.ordering_rules_for(on, search.joined_query_forms("IssueCreateMetadata")),
-                         {"intent_tier": False, "preferred_method_tiebreak": False, "terminal_alias_full_weight": True})
-        self.assertEqual(search.joined_query_forms("update issue summary"), frozenset())                 # plain words never trigger the exemption
+        self.assertEqual(search.ordering_rules_for(on, False), on)
+        self.assertEqual(search.ordering_rules_for(on, True), {"intent_tier": False, "preferred_method_tiebreak": False, "terminal_alias_full_weight": True})
+        for q in ("IssueCreateMetadata", "createIssue", " MultipartFile "):
+            self.assertTrue(search.is_identifier_query(q), q)
+        for q in ("update issue summary", "update issue-summary", "get project-versions", "list jira-software boards", "issue", ""):
+            self.assertFalse(search.is_identifier_query(q), q)                                           # hyphenated natural language keeps the rules
+        out = search.search_operations(make_state("jira-platform"), "update issue-summary", limit=50)
+        methods = [r["key"].split(":")[1] for r in out["results"] if not r.get("match")]; allowed = set(out["intent_methods"])
+        first_out = next((i for i, m in enumerate(methods) if m not in allowed), len(methods))
+        self.assertTrue(allowed and all(m not in allowed for m in methods[first_out:]))                 # tier still applies
 
     def test_pinned_exact_match_precedes_intent_tier(self):                                             # review focus 6 (v1.24)
         out = search.search_operations(make_state("jira-platform"), "createIssue", limit=10)
