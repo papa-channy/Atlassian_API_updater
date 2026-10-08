@@ -163,12 +163,18 @@ def run_pre_t(cache: pathlib.Path, work: pathlib.Path) -> int:
               "known_unreachable_seed_count": sum(len(b["seeds"]) for b in blockers if b["kind"] == "unreachable_seed"),
               "dry_run": {"tuning_accept": result.tuning_accept, "validation_errors": result.validation_errors, "selected_point": result.selected_point,
                           "seed": result.seed_result["passed"], "regression_effective": result.regression_result["effective_passed"], "fixture_final": result.fixture_result["final"]},
-              "pipeline_input_sha256": policy.canonical_sha256({"ranking": ranking_raw, "aliases": aliases_raw, "candidates": cands_doc, "bench": bench, "grid": rp.tuning_grid}),
+              "pipeline_input_sha256": pipeline_input_sha256(ranking_raw, aliases_raw, cands_doc, bench),
               "pipeline_result_sha256": policy.canonical_sha256(dataclasses.asdict(result)), "result": "pass" if (e["pass"] and not blockers) else "stop_for_amendment"})
     work.mkdir(parents=True, exist_ok=True)
     with open(work / "controller-events.jsonl", "a", encoding="utf-8") as fh:
         fh.write(json.dumps(e) + "\n")
     print(json.dumps(e, indent=1)); return 0 if e["result"] == "pass" else 1
+
+
+def pipeline_input_sha256(ranking_raw, aliases_raw, cands_doc, bench) -> str:
+    """Hash of the dry-run's inputs, built from JSON data only (the loaded policy's grid is a read-only mapping proxy)."""
+    from tools.atlassian_docs.intelligence import policy
+    return policy.canonical_sha256({"ranking": ranking_raw, "aliases": aliases_raw, "candidates": cands_doc, "bench": bench, "grid": ranking_raw["tuning_grid"]})
 
 
 def dry_run_pipeline(state, rp, bench, aliases_raw, cands_doc, baseline_seed_res):

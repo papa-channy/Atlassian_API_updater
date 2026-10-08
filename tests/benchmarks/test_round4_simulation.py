@@ -115,3 +115,16 @@ class TestXpreBStates(unittest.TestCase):
             with tempfile.TemporaryDirectory() as td:
                 problems, ledgered_before_delete = sim.simulate_xpreb_in_temp_tree(pathlib.Path(td), state)
                 self.assertEqual(problems, [], state); self.assertTrue(ledgered_before_delete, state)
+
+
+class TestPreTEventSerializable(unittest.TestCase):
+    """H′ (2026-10-09): the real pre-T run crashed with 'mappingproxy is not JSON serializable' — the event hashed the
+    loaded policy's read-only tuning grid instead of the raw JSON. The event's input hash must be built from JSON data only."""
+    def test_pipeline_input_sha256_is_json_based(self):
+        from tests import tune_search_ranking as tune
+        from tools.atlassian_docs.intelligence import policy
+        ranking_raw = json.loads(tune.RANKING_PATH.read_text(encoding="utf-8")); rp = policy.load_ranking(tune.RANKING_PATH)
+        sha = sim.pipeline_input_sha256(ranking_raw, {"aliases": {}}, {"candidates": {}}, {"seed": []})
+        self.assertRegex(sha, r"^[0-9a-f]{64}$")
+        self.assertEqual(sha, policy.canonical_sha256({"ranking": ranking_raw, "aliases": {"aliases": {}}, "candidates": {"candidates": {}}, "bench": {"seed": []}, "grid": ranking_raw["tuning_grid"]}))
+        self.assertEqual(dict(rp.tuning_grid), {k: tuple(v) for k, v in ranking_raw["tuning_grid"].items()})   # same content, but the proxy is never hashed
