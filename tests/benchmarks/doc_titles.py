@@ -87,14 +87,14 @@ def norm_tokens(text: str) -> list:
 
 def default_fetch(url, timeout=30):
     """-> (status, final_url, body); HTTP errors become a failure row, never an exception (spec §5)."""
-    import urllib.error, urllib.request
+    import http.client, urllib.error, urllib.request
     req = urllib.request.Request(url, headers={"User-Agent": "atlassian-api-updater round4 corpus"})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return r.status, r.geturl(), r.read()
     except urllib.error.HTTPError as e:
         return e.code, e.geturl() or url, b""
-    except urllib.error.URLError:
+    except (OSError, http.client.HTTPException):                  # URLError, timeouts, resets, RemoteDisconnected, IncompleteRead …
         return 0, url, b""
 
 

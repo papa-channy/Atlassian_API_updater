@@ -103,3 +103,11 @@ class TestRender(unittest.TestCase):
     def test_module_never_names_the_benchmark(self):
         src = pathlib.Path(dt.__file__).read_text(encoding="utf-8")
         self.assertNotIn("search_queries", src)
+
+
+class TestFetchErrors(unittest.TestCase):
+    def test_default_fetch_turns_read_errors_into_failure_rows(self):
+        import urllib.request
+        for exc in (TimeoutError("read timed out"), ConnectionResetError(), __import__("http.client").client.RemoteDisconnected("gone")):
+            with mock.patch.object(urllib.request, "urlopen", side_effect=exc):
+                self.assertEqual(dt.default_fetch("https://support.atlassian.com/x")[0], 0)

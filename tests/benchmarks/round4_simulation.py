@@ -607,13 +607,13 @@ def apply_XpreB(state=2):
         (plain / "gen-attempt-1.txt").write_text(f"candidate answer is: {' '.join(qw[:3])}\n{' '.join(qw[3:])} because ...\n", encoding="utf-8")
         (plain / "review-input.json").write_text(json.dumps({"records": [{"id": "h-001", "query": q}]}), encoding="utf-8")
         rs.append_attempt_needles(led, [plain / "gen-attempt-1.txt", plain / "review-input.json"])
-    if state in (3, 4):                                              # sealed plaintext, ledgered at seal time
+    if state in (3, 4, 5):                                           # sealed plaintext, ledgered at seal time
         (sealed / f"round{ROUND}-sealed.json").write_text(json.dumps({"held_out": [{"id": "h-001", "query": q}], "negative": []}), encoding="utf-8")
         rs.append_attempt_needles(led, [sealed / f"round{ROUND}-sealed.json"])
-    if state == 4:                                                   # standard needle manifest already written
+    if state in (4, 5):                                              # standard needle manifest already written
         (work / "needle-manifest.json").write_text(json.dumps(rs.needle_manifest([q])), encoding="utf-8")
-    if state == 5:                                                   # ciphertext only
-        (sealed / f"round{ROUND}-sealed.json.enc").write_bytes(b"synthetic ciphertext")
+    if state == 5:                                                   # user encrypted and deleted the plaintext: ciphertext + ledger + manifest remain
+        (sealed / f"round{ROUND}-sealed.json.enc").write_bytes(b"synthetic ciphertext"); (sealed / f"round{ROUND}-sealed.json").unlink()
     e = rs.xpreb_cleanup(work, sealed, ROUND)
     log(e)
     if e.get("cleanup_manifest_sha256"):

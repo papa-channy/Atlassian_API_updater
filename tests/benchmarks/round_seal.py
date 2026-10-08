@@ -445,6 +445,8 @@ def xpreb_cleanup(work, sealed_dir, round: int) -> dict:
     base = {"event": "xpreb_cleanup", "ciphertext_exists": enc.exists(), "unused_due_to_X_preB": (True if enc.exists() else "not_applicable"),
             "ciphertext_sha256": (ev.file_sha256(enc) if enc.exists() else None)}
     if not led.exists() and not std.exists() and not present:
+        if enc.exists():
+            raise SystemExit("REFUSED: a ciphertext exists but no attempt ledger / standard manifest — state (5) requires both (spec §9.4)")
         return {**base, "plaintext_generated": False, "cleanup_manifest": "not_applicable", "all_artifacts_ledgered": True}
     unledgered = [str(p) for p in present if not artifact_is_ledgered(led, p)]
     if unledgered:
@@ -535,6 +537,8 @@ def terminal_problems(round: int, state: str, repo, work, sealed_dir=None) -> li
         if cl.get("cleanup_manifest") == "not_applicable":
             if led.exists() or std.exists() or remaining or cl.get("plaintext_generated") is not False:
                 out.append("cleanup not_applicable claimed but attempt ledger / manifest / plaintext exist")
+            if (sealed_dir / f"round{round}-sealed.json.enc").exists():
+                out.append("ciphertext exists but cleanup is not_applicable (impossible state)")
         else:
             mp = work / "xpreb_cleanup_manifest.json"
             if not mp.exists() or ev.file_sha256(mp) != cl.get("cleanup_manifest_sha256"):
@@ -777,6 +781,7 @@ WINDOW = (3, 7)                                                           # Roun
 
 
 def _json_queries(obj) -> list:
+    """Exact needles: every `query` field at any depth."""
     out = []
     if isinstance(obj, dict):
         for k, v in obj.items():
@@ -790,6 +795,25 @@ def _json_queries(obj) -> list:
     return out
 
 
+def _json_strings(obj) -> list:
+    """Every string leaf of a JSON document (keys included) — windowed like a non-JSON artifact (review fix #2 superset)."""
+    out = []
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            out.append(str(k)); out += _json_strings(v)
+    elif isinstance(obj, list):
+        for v in obj:
+            out += _json_strings(v)
+    elif isinstance(obj, str):
+        out.append(obj)
+    return out
+
+
+def _windows(text: str) -> list:
+    words = _words(text)
+    return [" ".join(words[i:i + n]) for n in range(WINDOW[0], WINDOW[1] + 1) for i in range(len(words) - n + 1)]
+
+
 def cleanup_needle_manifest_from_artifacts(paths) -> list:
     """spec §9.4 / AC-R4-09: JSON artifacts → every `query` field (exact needles); non-JSON artifacts → every contiguous
     3..7-word window of the whole AC-18b-normalized word stream (line breaks are whitespace). Hash-only, deduplicated, sorted."""
@@ -797,10 +821,10 @@ def cleanup_needle_manifest_from_artifacts(paths) -> list:
     for p in paths:
         text = pathlib.Path(p).read_text(encoding="utf-8", errors="ignore")
         try:
-            qs = _json_queries(json.loads(text))
+            obj = json.loads(text)
+            qs = _json_queries(obj) + [w for leaf in _json_strings(obj) for w in _windows(leaf)]   # exact query fields + windows over every string leaf
         except json.JSONDecodeError:
-            words = _words(text)
-            qs = [" ".join(words[i:i + n]) for n in range(WINDOW[0], WINDOW[1] + 1) for i in range(len(words) - n + 1)]
+            qs = _windows(text)
         for q in qs:
             w = _words(q)
             if w:
@@ -811,6 +835,9 @@ def cleanup_needle_manifest_from_artifacts(paths) -> list:
 def append_attempt_needles(ledger_path, paths) -> int:
     """Register hidden-attempt artifacts (hash-only) in $W/hidden_attempt_needles.jsonl before they may be deleted."""
     rows = [{"artifact_sha256": ev.file_sha256(p), "needles": cleanup_needle_manifest_from_artifacts([p])} for p in paths]
+    empty = [str(p) for p, r in zip(paths, rows) if not r["needles"]]
+    if empty:
+        raise SystemExit(f"REFUSED: artifact(s) produced zero cleanup needles, cannot be ledgered for deletion: {empty}")
     with open(ledger_path, "a", encoding="utf-8") as fh:
         for r in rows:
             fh.write(json.dumps(r, sort_keys=True) + "\n")

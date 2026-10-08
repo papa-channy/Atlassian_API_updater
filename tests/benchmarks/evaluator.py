@@ -190,7 +190,8 @@ def changed_files_since(root, base_commit) -> list:
     """Tracked files that differ between base_commit and the working tree (what a T commit would contain)."""
     import subprocess
     out = subprocess.run(["git", "-C", str(root), "diff", "--name-only", base_commit, "--"], check=True, capture_output=True, text=True).stdout.split()
-    return sorted(set(out))
+    untracked = subprocess.run(["git", "-C", str(root), "ls-files", "--others", "--exclude-standard"], check=True, capture_output=True, text=True).stdout.split()
+    return sorted(set(out) | set(untracked))
 
 
 def t_policy_files(root, base_commit) -> list:

@@ -748,3 +748,14 @@ class TestToolingFilesRound4(unittest.TestCase):
             with open(copy / "tests/benchmarks/doc_titles.py", "ab") as fh:
                 fh.write(b"#")
             self.assertNotEqual(ev.tooling_code_sha256(copy), before)
+
+
+class TestChangedFilesSince(unittest.TestCase):
+    def test_changed_files_since_includes_untracked(self):
+        import subprocess, tempfile
+        with tempfile.TemporaryDirectory() as td:
+            repo = pathlib.Path(td); run = lambda *a: subprocess.run(["git", "-C", str(repo), *a], check=True, capture_output=True, text=True)
+            run("init", "-q"); run("config", "user.email", "t@t"); run("config", "user.name", "t")
+            (repo / "a.txt").write_text("a"); run("add", "-A"); run("commit", "-q", "-m", "base")
+            (repo / "a.txt").write_text("b"); (repo / "new.txt").write_text("n")
+            self.assertEqual(ev.changed_files_since(repo, "HEAD"), ["a.txt", "new.txt"])

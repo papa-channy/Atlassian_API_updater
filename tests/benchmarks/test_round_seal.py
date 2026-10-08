@@ -632,3 +632,64 @@ class TestUnchangedSinceAllow(unittest.TestCase):
             hits = rs.scan_for_needles([str(repo)], m, allow=allow)
             for leaked in ("new.md", "tracked-new.md", "ignored.md", "old.md"):
                 self.assertIn(str(repo / leaked), hits, leaked)
+
+
+class TestWholeBranchReviewFixes(unittest.TestCase):
+    """Fix pass after the H13–H15 whole-branch review (Important #1, #2, #4)."""
+    def test_xpreb_cleanup_refuses_ciphertext_without_ledger(self):
+        with tempfile.TemporaryDirectory() as td:
+            work = pathlib.Path(td, "w"); sealed = pathlib.Path(td, "s"); work.mkdir(); sealed.mkdir()
+            (sealed / "round4-sealed.json.enc").write_bytes(b"cipher")
+            with self.assertRaises(SystemExit):                       # ciphertext ∧ "nothing generated" is impossible (spec §9.4 state 5)
+                rs.xpreb_cleanup(work, sealed, 4)
+
+    def test_json_artifacts_without_query_keys_still_yield_needles(self):
+        with tempfile.TemporaryDirectory() as td:
+            q = "show my starred searches"; want = {"words": 4, "sha256": rs._ngram_sha256(q)}
+            a = pathlib.Path(td, "list.json"); a.write_text(json.dumps([q, "other text here"]))
+            b = pathlib.Path(td, "bare.txt"); b.write_text(json.dumps(q))
+            c = pathlib.Path(td, "review.json"); c.write_text(json.dumps({"h-001": {"accept": False, "reason": f"the query {q} copies a summary"}}))
+            for p in (a, b, c):
+                self.assertIn(want, rs.cleanup_needle_manifest_from_artifacts([p]), p.name)
+
+    def test_append_refuses_zero_needle_artifact(self):
+        with tempfile.TemporaryDirectory() as td:
+            empty = pathlib.Path(td, "empty.json"); empty.write_text("{}"); led = pathlib.Path(td, "l.jsonl")
+            with self.assertRaises(SystemExit):
+                rs.append_attempt_needles(led, [empty])
+
+
+class TestRound4FreezeEntry(unittest.TestCase):
+    """spec §9.6 / AC-R4-01: the round-4 freeze_entry path — keys, snapshot equality, T allowlist refusal, t_policy_files."""
+    def _bundle(self, td):
+        from tests.benchmarks import doc_titles as dt
+        from tests.benchmarks.test_doc_titles import SOURCES_FX, PAGES_FX, fake_fetch
+        out = pathlib.Path(td, "src"); dt.acquire(SOURCES_FX, out, fake_fetch(PAGES_FX), delay=0)
+        snap = pathlib.Path(td, "snap.json"); snap.write_text(json.dumps(dt.snapshot(out), sort_keys=True, indent=1) + "\n", encoding="utf-8")
+        return out, snap
+
+    def _entry(self, td, changed, snap_text=None):
+        out, snap = self._bundle(td)
+        if snap_text is not None:
+            snap.write_text(snap_text, encoding="utf-8")
+        hashes = {k: "0" * 64 for k in ev.freeze_key_set(4) - {"round", "structure_sha256", "verb_inventory_sha256", "source_registry_fingerprint", "source_spec_sha256",
+                                                                "reference_set", "hidden_generation_rules", "hidden_set_origin", "doc_titles_source_bundle_sha256", "doc_titles_snapshot_sha256", "t_policy_files"}}
+        with mock.patch.object(rs, "load_catalogs_from_cache", return_value=([], [], "f" * 64, {"jira-platform": "a" * 64})), \
+             mock.patch.object(ev, "round_freeze_hashes", return_value=hashes), mock.patch.object(ev, "changed_files_since", return_value=changed), \
+             mock.patch.object(rs, "_read_json", side_effect=lambda p: {"verb_methods": {"get": ["GET"]}, "path_noise": [], "product_hints": [], "tuning_grid": {}, "baseline": {}, "ordering_rules": {}, "round2_seal": {"held_out_sha256": "1" * 64, "negative_sha256": "2" * 64}}):
+            enc = pathlib.Path(td, "r2.enc"); enc.write_bytes(b"x")
+            return rs.freeze_entry(4, pathlib.Path(td), reference_enc=enc, doc_sources=out, doc_titles_path=snap, base_commit="HEAD")
+
+    def test_happy_path_keys_and_policy_files(self):
+        with tempfile.TemporaryDirectory() as td:
+            e = self._entry(td, [ev.T_DATA_FILES[2], "tests/benchmarks/round_freeze.json"])
+            self.assertEqual(set(e), ev.freeze_key_set(4)); self.assertEqual(e["t_policy_files"], [ev.T_DATA_FILES[2]])
+            self.assertRegex(e["doc_titles_source_bundle_sha256"], r"^[0-9a-f]{64}$"); self.assertEqual(e["hidden_generation_rules"], list(rs.HIDDEN_RULES_R4))
+
+    def test_snapshot_mismatch_refused(self):
+        with tempfile.TemporaryDirectory() as td, self.assertRaises(SystemExit):
+            self._entry(td, [], snap_text="{}\n")
+
+    def test_off_allowlist_change_refused(self):
+        with tempfile.TemporaryDirectory() as td, self.assertRaises(SystemExit):
+            self._entry(td, ["tools/atlassian_docs/intelligence/data/operation_quirks.json"])
