@@ -124,7 +124,8 @@ def load_round_freeze(path=ROUND_FREEZE) -> list:
 
 
 def current_round(freeze=None) -> dict:
-    return (freeze if freeze is not None else load_round_freeze())[-1]
+    """The highest-numbered freeze entry (Round 4 spec §9.1: round_freeze.json may be non-contiguous, e.g. [1, 2, 4])."""
+    return max(freeze if freeze is not None else load_round_freeze(), key=lambda e: e["round"])
 
 
 def freeze_for(round: int, freeze=None) -> dict:
@@ -132,6 +133,69 @@ def freeze_for(round: int, freeze=None) -> dict:
         if e.get("round") == round:
             return e
     raise KeyError(f"round {round} is not in round_freeze.json")
+
+
+OUTCOMES = pathlib.Path(__file__).resolve().parent / "round_outcomes.json"
+RECOVERIES = pathlib.Path(__file__).resolve().parent / "round_recoveries.json"
+ROUND4_EXTRA_KEYS = ("doc_titles_source_bundle_sha256", "doc_titles_snapshot_sha256", "round_outcomes_sha256", "round_recoveries_sha256", "t_policy_files")
+TERMINAL_OUTCOMES = ("pre-T not reached", "aborted-pre-B")
+
+
+def load_round_outcomes(path=OUTCOMES) -> list:
+    """Round 4 spec §9.1: rounds that ended before T (closed) or between T and B (aborted-pre-B); [] when the file is absent."""
+    return json.loads(pathlib.Path(path).read_text(encoding="utf-8")) if pathlib.Path(path).exists() else []
+
+
+def load_round_recoveries(path=RECOVERIES) -> list:
+    """Round 4 spec §9.5: append-only recovery attestations (X -> R -> A); [] when the file is absent."""
+    return json.loads(pathlib.Path(path).read_text(encoding="utf-8")) if pathlib.Path(path).exists() else []
+
+
+def round_states(freeze, outcomes) -> dict:
+    """spec §9.1: every round is exactly one of frozen (freeze entry only) | closed ('pre-T not reached' outcome only) |
+    aborted-pre-B (freeze entry + X_preB outcome with a boolean invalidates_policy); any other combination is a load failure."""
+    fr = {e["round"] for e in freeze}; by = {}
+    for o in outcomes:
+        if o["round"] in by or o.get("outcome") not in TERMINAL_OUTCOMES:
+            raise ValueError(f"round_outcomes.json: bad or duplicate record for round {o['round']}")
+        by[o["round"]] = o
+    out = {}
+    for r in sorted(fr | set(by)):
+        o = by.get(r)
+        if r in fr and o is not None:
+            if o["outcome"] != "aborted-pre-B" or o.get("invalidated_by") != "X_preB" or not isinstance(o.get("invalidates_policy"), bool):
+                raise ValueError(f"round {r}: freeze entry + outcome is only valid as aborted-pre-B/X_preB with invalidates_policy")
+            out[r] = "aborted-pre-B"
+        elif o is not None:
+            if o["outcome"] != "pre-T not reached":
+                raise ValueError(f"round {r}: outcome {o['outcome']!r} without a freeze entry (orphan abort)")
+            out[r] = "closed"
+        else:
+            out[r] = "frozen"
+    return out
+
+
+def closed_rounds(outcomes) -> set:
+    return {o["round"] for o in outcomes}
+
+
+T_DATA_FILES = tuple(f"{DATA_REL}/{n}" for n in ("alias_candidates.json", "concept_lexicon.json", "search_aliases.json", "search_ranking.json"))
+T_ALLOWLIST = T_DATA_FILES + ("tests/benchmarks/round_freeze.json", "tests/benchmarks/search_queries.json", "tests/benchmarks/round4-worker-brief.md",
+                              "tests/benchmarks/round4-hidden-generation-prompt.md", "tests/benchmarks/round4-hidden-reviewer-prompt.md",
+                              "tests/benchmarks/round4-lexicon-generation-prompt.md", "tests/benchmarks/round4-lexicon-review-prompt.md",
+                              "tests/benchmarks/round4-method-safety.json")                  # Round 4 spec §9.6 (exact)
+
+
+def changed_files_since(root, base_commit) -> list:
+    """Tracked files that differ between base_commit and the working tree (what a T commit would contain)."""
+    import subprocess
+    out = subprocess.run(["git", "-C", str(root), "diff", "--name-only", base_commit, "--"], check=True, capture_output=True, text=True).stdout.split()
+    return sorted(set(out))
+
+
+def t_policy_files(root, base_commit) -> list:
+    """Round 4 spec §9.6: the subset of the four policy data files that T actually changes (= RECOVERY_POLICY_FILES, spec §9.5)."""
+    return sorted(p for p in changed_files_since(root, base_commit) if p in T_DATA_FILES)
 
 
 ROUND3_EXTRA_KEYS = ("regression_reference_sha256", "reference_set", "hidden_generation_rules", "tuning_grid_sha256", "hidden_set_origin")
@@ -145,7 +209,7 @@ def freeze_key_set(round: int) -> set:
     ROUND3_EXTRA_KEYS. No entry after round 1 carries commit_T (self-reference)."""
     if round == 1:
         return {"round", "commit_T", "structure_sha256"}
-    return set(_ROUND2_KEYS) | (set(ROUND3_EXTRA_KEYS) if round >= 3 else set())
+    return set(_ROUND2_KEYS) | (set(ROUND3_EXTRA_KEYS) if round >= 3 else set()) | (set(ROUND4_EXTRA_KEYS) if round >= 4 else set())
 
 
 def files_sha256(root, files) -> str:
@@ -210,12 +274,17 @@ def round_freeze_hashes(round: int, root=ROOT) -> dict:
            "tooling_code_sha256": tooling_code_sha256(root),
            "evaluation_code_sha256_at_T": evaluation_code_sha256(root)}
     if round >= 3:
-        out["regression_reference_sha256"] = j(f"tests/benchmarks/round{round}-regression-reference.json")
+        # Round 4 ruling: the AC-R3-02 reference is the Round 2 isolated scorer and is round-independent (byte-invariant file).
+        out["regression_reference_sha256"] = j("tests/benchmarks/round3-regression-reference.json")
         out["tuning_grid_sha256"] = tuning_grid_sha256(json.loads((root / DATA_REL / "search_ranking.json").read_text(encoding="utf-8")))
+    if round >= 4:
+        out["round_outcomes_sha256"] = file_sha256(root / "tests/benchmarks/round_outcomes.json")
+        out["round_recoveries_sha256"] = file_sha256(root / "tests/benchmarks/round_recoveries.json")
     return out
 
 
-PRE_FREEZE_NONVERB_STRUCTURE_SHA256 = {3: "1e99c67ec445163f777b0cdfb933ac6d0cac22d638c1994743028678a862c9f1"}
+PRE_FREEZE_NONVERB_STRUCTURE_SHA256 = {3: "1e99c67ec445163f777b0cdfb933ac6d0cac22d638c1994743028678a862c9f1",
+                                       4: "1e99c67ec445163f777b0cdfb933ac6d0cac22d638c1994743028678a862c9f1"}   # Round 4 spec §3: structure unchanged
 NONVERB_STRUCTURE_KEYS = tuple(k for k in STRUCTURE_KEYS if k != "verb_methods")
 ROUND2_SPEC = ROOT / "docs" / "superpowers" / "specs" / "2026-10-02-search-quality-round2-design.md"
 
@@ -229,12 +298,15 @@ def nonverb_structure_sha256(raw: dict) -> str:
     return canonical_sha256({k: raw[k] for k in NONVERB_STRUCTURE_KEYS})
 
 
-def pending_round(freeze=None):
-    """The round whose H structure/tooling is committed but whose freeze entry (commit T) does not exist yet, or None.
-    While a round is pending, the previous round's freeze entry is history: its file hashes are no longer compared with the
-    live tree (the tooling and the ranking structure legitimately changed at H)."""
-    cur = current_round(freeze)["round"]
-    return next((r for r in sorted(PRE_FREEZE_NONVERB_STRUCTURE_SHA256) if r > cur), None)
+def pending_round(freeze=None, outcomes=None):
+    """The round whose H structure/tooling is committed but whose freeze entry (commit T) does not exist yet, or None:
+    the smallest PRE_FREEZE key above the current freeze round that is not a decided (closed / aborted) round (Round 4
+    spec §9.1). While a round is pending, the previous round's freeze entry is history: its file hashes are no longer
+    compared with the live tree (the tooling and the ranking structure legitimately changed at H)."""
+    freeze = freeze if freeze is not None else load_round_freeze()
+    outcomes = outcomes if outcomes is not None else load_round_outcomes()
+    cur = current_round(freeze)["round"]; decided = set(round_states(freeze, outcomes))
+    return next((r for r in sorted(PRE_FREEZE_NONVERB_STRUCTURE_SHA256) if r > cur and r not in decided), None)
 
 
 def round2_verb_inventory() -> dict:

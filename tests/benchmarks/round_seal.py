@@ -10,7 +10,7 @@ CLI (run from the repo root):
   python tests/benchmarks/round_seal.py scan --manifest M.json --root R [--root R2 ...] [--allow PATH ...] [--expect-sha256 S]
   python tests/benchmarks/round_seal.py reference-check --round N --reference-enc ENC
 Uses tools.atlassian_docs read-only (only to build catalogs from a cache snapshot)."""
-import argparse, hashlib, json, os, pathlib, re, sys
+import argparse, hashlib, json, os, pathlib, re, subprocess, sys
 
 if __package__ in (None, ""):  # executed as a script: make `tests.benchmarks` importable
     sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
@@ -40,6 +40,9 @@ HIDDEN_RULES_R3 = ("schema", "catalog", "words", "ascii", "actionable", "negativ
                    "distribution", "negative-distribution")            # Round 3 spec §4: frozen order; record-level priority = first 10
 RECORD_RULES, SECTION_RULES = HIDDEN_RULES_R3[:10], HIDDEN_RULES_R3[10:]
 _ASCII_QUERY = re.compile(r"^[A-Za-z0-9 '\-]+$")
+HIDDEN_RULES_R4 = tuple(HIDDEN_RULES_R3)                                   # Round 4 spec §4: same ids, same order
+RECOVERY_DIFF_ONLY = ("tests/benchmarks/round_recoveries.json",)
+CANONICAL_SUITE = "python -m unittest discover -s tests -t ."
 
 
 def _ascii_checks(rec) -> list:
@@ -301,6 +304,8 @@ def coverage_manifest(plain, review_attempt_by_id) -> dict:
 
 def verify_freeze(round: int, cache_dir) -> list:
     # S integrity checkpoint (spec 5.7): the snapshot still matches the round_freeze source fields.
+    if ev.round_states(ev.load_round_freeze(), ev.load_round_outcomes()).get(round) == "aborted-pre-B":
+        return []                                   # Round 4 spec §9.1: an X_preB-invalidated freeze entry is verified by the recovery chain, not current-file equality
     _, _, fp, shas = load_catalogs_from_cache(cache_dir, round)
     entry, out = ev.freeze_for(round), []
     if fp != entry.get("source_registry_fingerprint"):
@@ -321,10 +326,125 @@ def cmd_verify_freeze(args):
 
 
 ROUND_FREEZE = pathlib.Path(__file__).resolve().parent / "round_freeze.json"
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 RANKING_PATH = pathlib.Path(__file__).resolve().parents[2] / "tools" / "atlassian_docs" / "intelligence" / "data" / "search_ranking.json"
 
 
-def freeze_entry(round: int, cache_dir, reference_enc=None) -> dict:
+def _git(repo, *args) -> str:
+    return subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, text=True).stdout.strip()
+
+
+def _git_blob(repo, commit, rel) -> bytes:
+    return subprocess.run(["git", "-C", str(repo), "show", f"{commit}:{rel}"], check=True, capture_output=True).stdout
+
+
+def verify_recovery(round: int, repo, r_commit=None) -> list:
+    """Round 4 spec §9.5 / AC-R4-10: the X -> R -> A chain is read from Git history (never from the record alone) and every
+    attested sha is compared with the real blobs: parent(R) == X, diff X..R == t_policy_files, R bytes == HK bytes, before ==
+    T bytes, parent(A) == R, diff R..A == {round_recoveries.json}, append-only ledger, evidence fields, removed_aliases."""
+    repo = pathlib.Path(repo)
+    recs = [r for r in ev.load_round_recoveries(repo / "tests/benchmarks/round_recoveries.json") if r["round"] == round]
+    if len(recs) != 1:
+        return [f"round_recoveries.json: expected exactly one round {round} record, found {len(recs)}"]
+    rec = recs[0]; R = r_commit or rec["recovery_commit"]; out = []
+    try:
+        X = next(c for c in _git(repo, "log", "--format=%H", "-S", f'"round": {round}', "--", "tests/benchmarks/round_outcomes.json").splitlines()[::-1]
+                 if any(o["round"] == round and o["outcome"] == "aborted-pre-B" for o in json.loads(_git_blob(repo, c, "tests/benchmarks/round_outcomes.json"))))
+    except StopIteration:
+        return [f"no commit introduces an aborted-pre-B outcome for round {round}"]
+    t_hits = _git(repo, "log", "--format=%H", "-S", f'"round": {round}', "--", "tests/benchmarks/round_freeze.json").splitlines()
+    a_hits = _git(repo, "log", "--format=%H", "-S", f'"round": {round}', "--", "tests/benchmarks/round_recoveries.json").splitlines()
+    if not t_hits or not a_hits:
+        return [f"T or A commit for round {round} is not in HEAD history (HEAD is not a descendant of the recovery chain)"]
+    T, A = t_hits[-1], a_hits[-1]
+    readiness = _git_blob(repo, X, "docs/phase3-readiness.md").decode("utf-8", errors="replace")
+    m = re.search(r"housekeeping_commit:\s*([0-9a-f]{7,40})", readiness.split(f"Round {round} ")[-1])
+    if not m:
+        return ["X readiness block has no housekeeping_commit line"]
+    HK = _git(repo, "rev-parse", m.group(1))
+    if not X.startswith(rec.get("xpreb_terminal_commit", "?")): out.append("xpreb_terminal_commit != the commit that introduced the aborted-pre-B outcome")
+    if not T.startswith(rec.get("t_commit", "?")): out.append("t_commit != the commit that added the freeze entry")
+    cur_list = ev.load_round_recoveries(repo / "tests/benchmarks/round_recoveries.json")
+    a_list = json.loads(_git_blob(repo, A, "tests/benchmarks/round_recoveries.json"))
+    if cur_list[:len(a_list)] != a_list or any(r["round"] <= round for r in cur_list[len(a_list):]):
+        out.append("round_recoveries.json is not an append-only extension of the A blob (edited after attestation)")
+    if _git(repo, "rev-parse", f"{R}^") != X: out.append("parent(R) != X")
+    if _git(repo, "rev-parse", f"{A}^") != R: out.append("parent(A) != R")
+    freeze = json.loads(_git_blob(repo, X, "tests/benchmarks/round_freeze.json"))
+    policy_files = sorted(ev.freeze_for(round, freeze)["t_policy_files"])
+    if sorted(_git(repo, "diff", "--name-only", f"{X}..{R}").splitlines()) != policy_files: out.append("diff X..R != RECOVERY_POLICY_FILES")
+    if _git(repo, "diff", "--name-only", f"{R}..{A}").splitlines() != list(RECOVERY_DIFF_ONLY): out.append("diff R..A != {round_recoveries.json}")
+    if sorted(f["path"] for f in rec.get("files", [])) != policy_files: out.append("files[] != t_policy_files")
+    for f in rec.get("files", []):
+        sha = lambda c: hashlib.sha256(_git_blob(repo, c, f["path"])).hexdigest()
+        if sha(T) != f.get("before_sha256"): out.append(f"{f['path']}: before_sha256 != sha(git show T:path)")
+        if sha(R) != sha(HK): out.append(f"{f['path']}: sha(R:path) != sha(HK:path) — rollback did not restore the known-good bytes")
+        if sha(R) != f.get("after_sha256") or f.get("after_sha256") != f.get("known_good_sha256") or sha(HK) != f.get("known_good_sha256"):
+            out.append(f"{f['path']}: after/known-good sha mismatch")
+    if rec.get("reviewed_base") != X or rec.get("reviewed_head") != R or rec.get("suite_commit") != R: out.append("reviewed_base/head or suite_commit != X/R")
+    if rec.get("review_findings") != 0 or rec.get("suite_exit_code") != 0: out.append("review_findings/suite_exit_code != 0")
+    hexsha = lambda v: isinstance(v, str) and re.fullmatch(r"[0-9a-f]{64}", v) is not None
+    if not (hexsha(rec.get("review_output_sha256")) and hexsha(rec.get("suite_output_sha256"))): out.append("review_output_sha256/suite_output_sha256 missing or not sha256 hex")
+    if rec.get("recovery_mode") != "rollback" or not str(rec.get("reviewed_by", "")).strip(): out.append("recovery_mode/reviewed_by incomplete")
+    if rec.get("suite_command") != CANONICAL_SUITE: out.append(f"suite_command != {CANONICAL_SUITE!r}")
+    lex = lambda c: {w for w, n in json.loads(_git_blob(repo, c, "tools/atlassian_docs/intelligence/data/search_aliases.json")).get("notes", {}).items() if n.get("origin") == f"lexicon-r{round}"}
+    if lex(R): out.append(f"lexicon-r{round} aliases still present at R")
+    if sorted(lex(T) - lex(R)) != sorted(rec.get("removed_aliases", [])): out.append("removed_aliases != lexicon-r4 words present at T and absent at R")
+    return out
+
+
+def freeze_guard_problems(round: int, freeze, outcomes, repo) -> list:
+    """Round 4 spec §9.1: freeze --round N only when N == pending_round and every lower round is decided; an aborted-pre-B
+    lower round that invalidated its policy needs a verified recovery attestation (spec §9.5)."""
+    pending = ev.pending_round(freeze, outcomes)
+    if pending != round:
+        return [f"pending_round is {pending}, not {round}"]
+    out, states = [], ev.round_states(freeze, outcomes)
+    missing = [r for r in range(1, round) if r not in states]
+    if missing:
+        out.append(f"undecided lower rounds: {missing}")
+    for r, st in states.items():
+        if st == "aborted-pre-B" and next(o for o in outcomes if o["round"] == r).get("invalidates_policy"):
+            if not [x for x in ev.load_round_recoveries() if x["round"] == r]:
+                out.append(f"round {r} invalidated its policy: recovery attestation required before round {round}")
+            elif repo is not None:
+                out += [f"round {r} recovery: {p}" for p in verify_recovery(r, repo)]
+    return out
+
+
+def round_start_guard_problems(round: int, repo) -> list:
+    """Round 4 spec §9.5: the next round may not create S / pin initial_housekeeping_commit until the state model allows it
+    and HEAD descends from every recovery attestation commit A."""
+    out = freeze_guard_problems(round, ev.load_round_freeze(), ev.load_round_outcomes(), repo)
+    for rec in ev.load_round_recoveries():
+        found = _git(repo, "log", "--all", "--format=%H", "-S", f'"round": {rec["round"]}', "--", "tests/benchmarks/round_recoveries.json").splitlines()
+        a = found[-1] if found else None
+        if a is None or subprocess.run(["git", "-C", str(repo), "merge-base", "--is-ancestor", a, "HEAD"], capture_output=True).returncode != 0:
+            out.append(f"HEAD is not a descendant of recovery attestation {(a or '?')[:7]} (round {rec['round']})")
+    return out
+
+
+def cmd_round_start_guard(args):
+    problems = round_start_guard_problems(args.round, ROOT)
+    for m in problems:
+        print(f"REFUSED: {m}")
+    print("round start ok" if not problems else f"{len(problems)} problem(s)")
+    return 1 if problems else 0
+
+
+def terminal_problems(round: int, state: str, repo, work) -> list:
+    raise NotImplementedError("Round 4 plan Task 3 implements terminal_problems (validate-terminal)")
+
+
+def cmd_validate_terminal(args):
+    problems = terminal_problems(args.round, args.state, ROOT, pathlib.Path(args.work))
+    for m in problems:
+        print(f"PROBLEM {m}")
+    print("terminal ok" if not problems else f"{len(problems)} problem(s)")
+    return 1 if problems else 0
+
+
+def freeze_entry(round: int, cache_dir, reference_enc=None, doc_sources=None, doc_titles_path=None, base_commit=None) -> dict:
     """Round 2 spec §4: the per-round freeze record (hashes completed in evaluator.round_freeze_hashes).
     Round 3 spec §9 adds the reference_set binding to the archived Round 2 ciphertext and the frozen generation rules."""
     _, _, fp, shas = load_catalogs_from_cache(cache_dir, round)
@@ -339,8 +459,22 @@ def freeze_entry(round: int, cache_dir, reference_enc=None) -> dict:
         r2 = _read_json(BENCH_PATH)["round2_seal"]
         entry["reference_set"] = {"origin": "round2", "enc_sha256": ev.file_sha256(reference_enc),
                                   "held_out_sha256": r2["held_out_sha256"], "negative_sha256": r2["negative_sha256"]}
-        entry["hidden_generation_rules"] = list(HIDDEN_RULES_R3)
+        entry["hidden_generation_rules"] = list(HIDDEN_RULES_R4 if round >= 4 else HIDDEN_RULES_R3)
         entry["hidden_set_origin"] = f"round{round}"
+    if round >= 4:
+        from tests.benchmarks import doc_titles as dt                  # Round 4 spec §5 / §9.6 (Task 2)
+        if doc_sources is None or doc_titles_path is None or base_commit is None:
+            raise SystemExit("round >= 4 freeze needs --doc-title-sources, --doc-titles and --base-commit")
+        rendered = json.dumps(dt.snapshot(doc_sources), sort_keys=True, indent=1) + "\n"
+        if pathlib.Path(doc_titles_path).read_text(encoding="utf-8") != rendered:
+            raise SystemExit("REFUSED: doc-titles snapshot file differs from a fresh render of the raw bundle")
+        entry["doc_titles_source_bundle_sha256"] = dt.bundle_sha256(doc_sources)
+        entry["doc_titles_snapshot_sha256"] = ev.file_sha256(doc_titles_path)
+        changed = ev.changed_files_since(ROOT, base_commit)
+        outside = [p for p in changed if p not in ev.T_ALLOWLIST]
+        if outside:
+            raise SystemExit(f"REFUSED: files outside the T allowlist changed since {base_commit}: {outside}")
+        entry["t_policy_files"] = ev.t_policy_files(ROOT, base_commit)
     return entry
 
 
@@ -351,7 +485,13 @@ def cmd_freeze(args):
     if any(e.get("round") == args.round for e in freeze):
         print(f"REFUSED: round_freeze.json already has a round {args.round} entry")
         return 1
-    entry = freeze_entry(args.round, args.cache_dir, reference_enc=getattr(args, "reference_enc", None))
+    problems = freeze_guard_problems(args.round, freeze, ev.load_round_outcomes(), repo=ROOT) if args.round >= 4 else []
+    for m in problems:
+        print(f"REFUSED: {m}")
+    if problems:
+        return 1
+    entry = freeze_entry(args.round, args.cache_dir, reference_enc=getattr(args, "reference_enc", None), doc_sources=getattr(args, "doc_title_sources", None),
+                         doc_titles_path=getattr(args, "doc_titles", None), base_commit=getattr(args, "base_commit", None))
     _write_json(ROUND_FREEZE, freeze + [entry])
     for k, v in entry.items():
         print(f"{k}: {v}")
@@ -731,7 +871,10 @@ def main(argv=None):
     p = sub.add_parser("unseal"); _round(p); p.add_argument("--plain", required=True); p.add_argument("--bench", required=True)
     p.set_defaults(fn=cmd_unseal)
     p = sub.add_parser("freeze"); _round(p); p.add_argument("--cache-dir", required=True)
-    p.add_argument("--reference-enc", default=None); p.set_defaults(fn=cmd_freeze)
+    p.add_argument("--reference-enc", default=None); p.add_argument("--doc-title-sources", default=None); p.add_argument("--doc-titles", default=None)
+    p.add_argument("--base-commit", default=None); p.set_defaults(fn=cmd_freeze)
+    p = sub.add_parser("round-start-guard"); _round(p); p.set_defaults(fn=cmd_round_start_guard)
+    p = sub.add_parser("validate-terminal"); _round(p); p.add_argument("--state", required=True, choices=("X_preB",)); p.add_argument("--work", required=True); p.set_defaults(fn=cmd_validate_terminal)
     p = sub.add_parser("verify-freeze"); _round(p); p.add_argument("--cache-dir", required=True); p.set_defaults(fn=cmd_verify_freeze)
     p = sub.add_parser("scan"); p.add_argument("--manifest", required=True); p.add_argument("--root", action="append", required=True)
     p.add_argument("--allow", action="append", help="file or directory to exclude from the scan"); p.add_argument("--expect-sha256", default=None); p.set_defaults(fn=cmd_scan)

@@ -1,4 +1,6 @@
-import json, unittest
+import hashlib, json, pathlib, subprocess, tempfile, unittest
+from unittest import mock
+from tests.benchmarks import evaluator as ev
 from tests.benchmarks import round_seal as rs
 
 CAT = [  # A..H: 8 synthetic ops covering jira-platform / jira-software / confluence and GET/POST/PUT/DELETE
@@ -479,3 +481,98 @@ class TestRound3FreezeEntry(unittest.TestCase):
             with mock.patch.object(rs, "load_catalogs_from_cache", lambda cache_dir, round=1: ([], CAT, "f" * 64, dict(shas))), \
                  mock.patch.object(rs.ev, "round_freeze_hashes", lambda r: dict(hashes)):
                 rs.freeze_entry(3, "x")                                                               # round >= 3 needs --reference-enc
+
+
+# ---------------------------------------------------------------- Round 4 spec §9.1 / §9.5: freeze guard, recovery verifier
+ALIASES_REL = "tools/atlassian_docs/intelligence/data/search_aliases.json"
+CANON = "python -m unittest discover -s tests -t ."
+
+
+def _mk_recovery_repo(root, tamper=None):
+    """H -> T -> X -> R (rollback) -> A (attestation) with real shas; `tamper` breaks exactly one contract (spec §9.5)."""
+    root = pathlib.Path(root); run = lambda *a: subprocess.run(["git", "-C", str(root), *a], check=True, capture_output=True, text=True).stdout.strip()
+    run("init", "-q"); run("config", "user.email", "t@t"); run("config", "user.name", "t")
+    w = lambda rel, obj: ((root / rel).parent.mkdir(parents=True, exist_ok=True), (root / rel).write_text(json.dumps(obj, indent=1) + "\n", encoding="utf-8"))
+    sha = lambda c, rel: hashlib.sha256(subprocess.run(["git", "-C", str(root), "show", f"{c}:{rel}"], check=True, capture_output=True).stdout).hexdigest()
+    good = {"version": 1, "aliases": {"ticket": ["issue"]}, "rules": [], "notes": {"ticket": {"origin": "seed"}}}
+    w(ALIASES_REL, good); w("tests/benchmarks/round_outcomes.json", [{"round": 3, "outcome": "pre-T not reached"}]); w("tests/benchmarks/round_recoveries.json", [])
+    (root / "docs").mkdir(); (root / "docs/phase3-readiness.md").write_text("# readiness\n", encoding="utf-8")
+    run("add", "-A"); run("commit", "-q", "-m", "H"); H = run("rev-parse", "HEAD")
+    bad = {**good, "aliases": {**good["aliases"], "release": ["version"]}, "notes": {**good["notes"], "release": {"origin": "lexicon-r4"}}}
+    w(ALIASES_REL, bad)
+    w("tests/benchmarks/round_freeze.json", [{"round": 1}, {"round": 2}, {"round": 4, "t_policy_files": [ALIASES_REL],
+                                              "round_outcomes_sha256": ev.file_sha256(root / "tests/benchmarks/round_outcomes.json"),
+                                              "round_recoveries_sha256": ev.file_sha256(root / "tests/benchmarks/round_recoveries.json")}])
+    run("add", "-A"); run("commit", "-q", "-m", "T"); T = run("rev-parse", "HEAD")
+    w("tests/benchmarks/round_outcomes.json", [{"round": 3, "outcome": "pre-T not reached"},
+                                               {"round": 4, "outcome": "aborted-pre-B", "invalidated_by": "X_preB", "invalidates_policy": True, "reject_reason": "t", "t_commit": T}])
+    (root / "docs/phase3-readiness.md").write_text(f"# readiness\n\n## Search Quality Round 4 — aborted before B\nhousekeeping_commit: {H}\n", encoding="utf-8")
+    run("add", "-A"); run("commit", "-q", "-m", "X"); X = run("rev-parse", "HEAD")
+    w(ALIASES_REL, {**good, "aliases": {"ticket": ["issue"], "zz": ["issue"]}} if tamper == "r_not_hk_bytes" else good)
+    run("add", "-A"); run("commit", "-q", "-m", "R"); R = run("rev-parse", "HEAD")
+    rec = {"round": 4, "t_commit": T, "xpreb_terminal_commit": X, "recovery_commit": R, "recovery_mode": "rollback", "reviewed_base": X, "reviewed_head": R,
+           "reviewed_by": "test-reviewer", "review_findings": 0, "review_output_sha256": "00" * 32, "suite_commit": R, "suite_command": CANON,
+           "suite_exit_code": 0, "suite_output_sha256": "11" * 32,
+           "files": [{"path": ALIASES_REL, "before_sha256": sha(T, ALIASES_REL), "after_sha256": sha(R, ALIASES_REL), "known_good_sha256": sha(H, ALIASES_REL)}],
+           "removed_aliases": ["release"]}
+    if tamper == "before_sha_wrong": rec["files"][0]["before_sha256"] = "ab" * 32
+    if tamper == "removed_aliases_wrong": rec["removed_aliases"] = []
+    if tamper == "evidence_missing": del rec["review_output_sha256"]
+    if tamper == "bad_suite_command": rec["suite_command"] = "pytest"
+    w("tests/benchmarks/round_recoveries.json", [rec]); run("add", "-A"); run("commit", "-q", "-m", "A"); A = run("rev-parse", "HEAD")
+    if tamper == "attestation_edited_after_A":
+        rec["reviewed_by"] = "someone-else"; w("tests/benchmarks/round_recoveries.json", [rec]); run("add", "-A"); run("commit", "-q", "-m", "edit")
+    if tamper == "edited_after_A":
+        w("tests/benchmarks/round_recoveries.json", [{**rec, "review_findings": 0, "reviewed_by": "rewritten"}]); run("add", "-A"); run("commit", "-q", "-m", "rewrite")
+    (root / "scratch.txt").write_text("x"); run("add", "-A"); run("commit", "-q", "-m", "bad-r-candidate"); bad_r = run("rev-parse", "HEAD")
+    return {"path": root, "H": H, "T": T, "X": X, "R": R, "A": A, "bad_r": bad_r}
+
+
+class TestFreezeGuardAndRecovery(unittest.TestCase):
+    F = [{"round": 1}, {"round": 2}]; O3 = [{"round": 3, "outcome": "pre-T not reached"}]
+
+    def test_freeze_guard_round4_needs_closed_round3(self):
+        with mock.patch.dict(ev.PRE_FREEZE_NONVERB_STRUCTURE_SHA256, {3: "a", 4: "b"}, clear=True):
+            self.assertEqual(rs.freeze_guard_problems(4, self.F, self.O3, repo=None), [])
+            self.assertIn("pending_round", rs.freeze_guard_problems(4, self.F, [], repo=None)[0])
+            self.assertIn("pending_round", rs.freeze_guard_problems(5, self.F, self.O3, repo=None)[0])
+
+    def test_freeze_guard_requires_recovery_attestation(self):
+        f = self.F + [{"round": 4, "t_policy_files": [ALIASES_REL]}]
+        ab = lambda inv: self.O3 + [{"round": 4, "outcome": "aborted-pre-B", "invalidated_by": "X_preB", "invalidates_policy": inv}]
+        with mock.patch.dict(ev.PRE_FREEZE_NONVERB_STRUCTURE_SHA256, {3: "a", 4: "b", 5: "c"}, clear=True):
+            self.assertEqual(rs.freeze_guard_problems(5, f, ab(False), repo=None), [])
+            with mock.patch.object(ev, "load_round_recoveries", return_value=[]):
+                self.assertIn("recovery", rs.freeze_guard_problems(5, f, ab(True), repo=None)[0])
+
+    def test_verify_recovery_exact_chain(self):
+        with tempfile.TemporaryDirectory() as td:
+            repo = _mk_recovery_repo(pathlib.Path(td))
+            self.assertEqual(rs.verify_recovery(4, repo["path"]), [])
+            self.assertTrue(any("parent(R)" in p for p in rs.verify_recovery(4, repo["path"], r_commit=repo["bad_r"])))
+
+    def test_verify_recovery_tamper_cases(self):
+        for tamper, needle in (("r_not_hk_bytes", "sha(HK:path)"), ("attestation_edited_after_A", "append-only"), ("before_sha_wrong", "sha(git show T:path)"),
+                               ("removed_aliases_wrong", "removed_aliases"), ("evidence_missing", "review_output_sha256"), ("bad_suite_command", "suite_command"),
+                               ("edited_after_A", "append-only")):
+            with tempfile.TemporaryDirectory() as td:
+                repo = _mk_recovery_repo(pathlib.Path(td), tamper=tamper)
+                self.assertTrue(any(needle in p for p in rs.verify_recovery(4, repo["path"])), tamper)
+
+    def test_verify_recovery_allows_later_round_appends(self):
+        with tempfile.TemporaryDirectory() as td:
+            repo = _mk_recovery_repo(pathlib.Path(td)); path = repo["path"] / "tests/benchmarks/round_recoveries.json"
+            cur = json.loads(path.read_text()); path.write_text(json.dumps(cur + [{**cur[0], "round": 5}], indent=1) + "\n")
+            subprocess.run(["git", "-C", str(repo["path"]), "commit", "-qam", "A5"], check=True)
+            self.assertEqual(rs.verify_recovery(4, repo["path"]), [])
+
+    def test_round_start_guard_refuses_head_not_descendant_of_A(self):
+        with tempfile.TemporaryDirectory() as td:
+            repo = _mk_recovery_repo(pathlib.Path(td))
+            with mock.patch.object(ev, "load_round_freeze", return_value=json.loads(subprocess.run(["git", "-C", str(repo["path"]), "show", "HEAD:tests/benchmarks/round_freeze.json"], capture_output=True, text=True).stdout)), \
+                 mock.patch.object(ev, "load_round_outcomes", return_value=json.loads((repo["path"] / "tests/benchmarks/round_outcomes.json").read_text())), \
+                 mock.patch.object(ev, "load_round_recoveries", return_value=json.loads((repo["path"] / "tests/benchmarks/round_recoveries.json").read_text())), \
+                 mock.patch.dict(ev.PRE_FREEZE_NONVERB_STRUCTURE_SHA256, {3: "a", 4: "b", 5: "c"}, clear=True):
+                self.assertEqual(rs.round_start_guard_problems(5, repo["path"]), [])
+                subprocess.run(["git", "-C", str(repo["path"]), "checkout", "-q", "-b", "side", repo["X"]], check=True)
+                self.assertTrue(any("descendant" in p for p in rs.round_start_guard_problems(5, repo["path"])))

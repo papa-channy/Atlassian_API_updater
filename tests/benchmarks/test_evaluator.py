@@ -1,4 +1,5 @@
 import json, os, pathlib, re, unittest
+from unittest import mock
 from tests.benchmarks.evaluator import evaluate
 from tests.benchmarks import evaluator as ev
 
@@ -129,10 +130,11 @@ class TestRankingTablesFrozen(unittest.TestCase):
         raw = json.loads(RANKING.read_text(encoding="utf-8"))
         self.assertEqual(ev.structure_check_problems(raw), [])
         if ev.current_round()["round"] >= 3:
-            self.assertIsNone(ev.pending_round()); self.assertEqual(ranking_structure_sha256(raw), ev.freeze_for(3)["structure_sha256"])
+            self.assertIsNone(ev.pending_round()); self.assertEqual(ranking_structure_sha256(raw), ev.freeze_for(ev.current_round()["round"])["structure_sha256"])
         else:
-            self.assertEqual(ev.pending_round(), 3); self.assertEqual(raw["version"], 2)
-            self.assertEqual(ev.nonverb_structure_sha256(raw), ev.PRE_FREEZE_NONVERB_STRUCTURE_SHA256[3])
+            pending = ev.pending_round()                      # Round 4 spec §9.1: Round 3 is closed in round_outcomes.json, so 4 is pending
+            self.assertEqual(pending, 4); self.assertEqual(raw["version"], 2)
+            self.assertEqual(ev.nonverb_structure_sha256(raw), ev.PRE_FREEZE_NONVERB_STRUCTURE_SHA256[pending])
             suffixed = json.loads(json.dumps(raw)); suffixed["verb_methods"]["get"] = ["GET", "POST"]            # a T-style suffix is allowed before T
             self.assertEqual(ev.structure_check_problems(suffixed), [])
             reordered = json.loads(json.dumps(raw)); reordered["verb_methods"]["change"] = ["POST", "PUT"]
@@ -683,3 +685,36 @@ class TestRound3FreezeKeys(unittest.TestCase):
         self.assertEqual(ev.freeze_key_set(3), ev.freeze_key_set(2) | set(ev.ROUND3_EXTRA_KEYS))
         self.assertNotIn("commit_T", ev.freeze_key_set(3))
         self.assertEqual(ev.freeze_key_set(2), set(ev.freeze_for(2)))
+
+
+class TestRoundStateModel(unittest.TestCase):
+    """Round 4 spec §9.1: closed / frozen / aborted-pre-B states, pending_round skips decided rounds, round 4 freeze keys."""
+    F12 = [{"round": 1}, {"round": 2}]
+
+    def test_pending_round_skips_closed_round(self):
+        with mock.patch.dict(ev.PRE_FREEZE_NONVERB_STRUCTURE_SHA256, {3: "a", 4: "b"}, clear=True):
+            self.assertEqual(ev.pending_round(self.F12, [{"round": 3, "outcome": "pre-T not reached"}]), 4)
+            self.assertEqual(ev.pending_round(self.F12, []), 3)                       # Round 3 history without outcomes
+
+    def test_round_states_three_kinds_and_rejections(self):
+        f = self.F12 + [{"round": 4}]
+        o = [{"round": 3, "outcome": "pre-T not reached"}, {"round": 4, "outcome": "aborted-pre-B", "invalidated_by": "X_preB", "invalidates_policy": False}]
+        self.assertEqual(ev.round_states(f, o), {1: "frozen", 2: "frozen", 3: "closed", 4: "aborted-pre-B"})
+        with self.assertRaises(ValueError):
+            ev.round_states(f, [{"round": 4, "outcome": "pre-T not reached"}])        # freeze + ordinary outcome
+        with self.assertRaises(ValueError):
+            ev.round_states(self.F12, [{"round": 3, "outcome": "aborted-pre-B", "invalidated_by": "X_preB"}])   # orphan abort (no freeze)
+        with self.assertRaises(ValueError):
+            ev.round_states(f, [{"round": 4, "outcome": "aborted-pre-B"}])            # abort without invalidated_by
+
+    def test_current_round_is_max_not_last(self):
+        self.assertEqual(ev.current_round([{"round": 4}, {"round": 2}])["round"], 4)
+
+    def test_freeze_key_set_round4(self):
+        self.assertEqual(ev.freeze_key_set(4), ev.freeze_key_set(3) | set(ev.ROUND4_EXTRA_KEYS))
+        self.assertNotIn("commit_T", ev.freeze_key_set(4))
+
+    def test_committed_outcomes_file_shape(self):
+        o = ev.load_round_outcomes()
+        self.assertEqual([e["round"] for e in o], [3]); self.assertEqual(o[0]["outcome"], "pre-T not reached")
+        self.assertEqual(ev.load_round_recoveries(), [])
