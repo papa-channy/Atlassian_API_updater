@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-09-search-quality-round4-design.md` **v1.11** (v1.10 passed external review 11 with P0 0 / P1 4 "구현 계획으로 진행 가능"; v1.11 applied the four P1 items). The spec inherits Round 3 v1.25.1 (`docs/superpowers/specs/2026-10-05-search-quality-round3-design.md`) by delta; where this plan says "as Round 3 plan v16 Task N Step M" it means `docs/superpowers/plans/2026-10-05-search-quality-round3-implementation.md` with the substitution table of §"Name substitutions" applied verbatim.
 
-**Plan version:** v1 (2026-10-09).
+**Plan version:** v2 (2026-10-09; v1 → external plan review 1 P0 4 / P1 5: strict compound state, Git-bound recovery verifier, TOOLING_FILES timing, cleanup deletion/terminal machine checks, fetch errors, not_applicable branch, sha helpers, full post-T allowlist check, no runtime placeholders).
 
 ## Global Constraints
 
@@ -92,6 +92,10 @@ class TestRoundStateModel(unittest.TestCase):
         self.assertEqual(ev.round_states(f, o), {1: "frozen", 2: "frozen", 3: "closed", 4: "aborted-pre-B"})
         with self.assertRaises(ValueError):
             ev.round_states(f, [{"round": 4, "outcome": "pre-T not reached"}])        # freeze + ordinary outcome
+        with self.assertRaises(ValueError):
+            ev.round_states(self.F12, [{"round": 3, "outcome": "aborted-pre-B", "invalidated_by": "X_preB"}])   # orphan abort (no freeze)
+        with self.assertRaises(ValueError):
+            ev.round_states(f, [{"round": 4, "outcome": "aborted-pre-B"}])            # abort without invalidated_by
     def test_current_round_is_max_not_last(self):
         self.assertEqual(ev.current_round([{"round": 4}, {"round": 2}])["round"], 4)
     def test_freeze_key_set_round4(self):
@@ -133,12 +137,17 @@ def round_states(freeze, outcomes) -> dict:
         by[o["round"]] = o
     out = {}
     for r in sorted(fr | set(by)):
-        if r in fr and r in by:
-            if by[r]["outcome"] != "aborted-pre-B" or by[r].get("invalidated_by") != "X_preB":
-                raise ValueError(f"round {r}: freeze entry and a non-abort outcome")
+        o = by.get(r)
+        if r in fr and o is not None:
+            if o["outcome"] != "aborted-pre-B" or o.get("invalidated_by") != "X_preB" or not isinstance(o.get("invalidates_policy"), bool):
+                raise ValueError(f"round {r}: freeze entry + outcome is only valid as aborted-pre-B/X_preB with invalidates_policy")
             out[r] = "aborted-pre-B"
+        elif o is not None:
+            if o["outcome"] != "pre-T not reached":
+                raise ValueError(f"round {r}: outcome {o['outcome']!r} without a freeze entry (orphan abort)")
+            out[r] = "closed"
         else:
-            out[r] = "frozen" if r in fr else "closed"
+            out[r] = "frozen"
     return out
 
 def closed_rounds(outcomes) -> set:
@@ -178,12 +187,17 @@ class TestFreezeGuardAndRecovery(unittest.TestCase):
                 self.assertIn("recovery", rs.freeze_guard_problems(5, f, ab(True), repo=None)[0])
     def test_verify_recovery_exact_chain(self):
         with tempfile.TemporaryDirectory() as td:
-            repo = _mk_recovery_repo(pathlib.Path(td))            # helper below: X -> R (rollback) -> A (attestation)
+            repo = _mk_recovery_repo(pathlib.Path(td))            # helper below: H -> T -> X -> R (rollback) -> A (attestation)
             self.assertEqual(rs.verify_recovery(4, repo["path"]), [])
             self.assertTrue(any("parent(R)" in p for p in rs.verify_recovery(4, repo["path"], r_commit=repo["bad_r"])))
+    def test_verify_recovery_tamper_cases(self):
+        for tamper, needle in (("r_not_hk_bytes", "sha(HK:path)"), ("attestation_edited_after_A", "A blob"), ("before_sha_wrong", "sha(git show T:path)"), ("removed_aliases_wrong", "removed_aliases")):
+            with tempfile.TemporaryDirectory() as td:
+                repo = _mk_recovery_repo(pathlib.Path(td), tamper=tamper)
+                self.assertTrue(any(needle in p for p in rs.verify_recovery(4, repo["path"])), tamper)
 ```
 
-`_mk_recovery_repo` (test helper, ~40 lines): `git init` a temp repo, commit H with `search_aliases.json` containing no lexicon-r4 entries (known-good), commit T adding one `origin: lexicon-r4` alias and `round_freeze.json` with `{"round": 4, "t_policy_files": [...search_aliases.json], "round_recoveries_sha256": <sha of []>}`, commit X appending the `aborted-pre-B` outcome, commit R restoring the H bytes of `search_aliases.json` (and nothing else), commit A appending the attestation record (fields of spec §9.5 with real shas: `before_sha256 = sha(T blob)`, `after_sha256 = known_good_sha256 = sha(H blob)`, `removed_aliases = [<the word>]`, `reviewed_base = X`, `reviewed_head = suite_commit = R`, `review_findings = 0`, `suite_exit_code = 0`, `review_output_sha256`, `suite_output_sha256` any hex); `bad_r` = a second R made on top of R (so `parent(bad_r) != X`). Run → FAIL (`freeze_guard_problems`, `verify_recovery` missing).
+`_mk_recovery_repo(root, tamper=None)` (test helper, ~60 lines): `git init` a temp repo; commit **H** with `search_aliases.json` containing no lexicon-r4 entries (known-good) and `round_outcomes.json`/`round_recoveries.json` (`[]`); commit **T** adding one `origin: lexicon-r4` alias (`notes[word] = {"origin": "lexicon-r4"}`) and `round_freeze.json` `[{"round": 4, "t_policy_files": ["tools/atlassian_docs/intelligence/data/search_aliases.json"], "round_recoveries_sha256": <sha of the [] file>, "round_outcomes_sha256": …}]`; commit **X** appending the `aborted-pre-B` outcome and a `docs/phase3-readiness.md` Round 4 section containing the line `housekeeping_commit: <H sha>` (the binding HK provenance); commit **R** restoring the H bytes of `search_aliases.json` and nothing else; commit **A** appending the attestation `{"round": 4, "t_commit": T, "xpreb_terminal_commit": X, "recovery_commit": R, "recovery_mode": "rollback", "reviewed_base": X, "reviewed_head": R, "reviewed_by": "test", "review_findings": 0, "review_output_sha256": "00"*32, "suite_commit": R, "suite_command": "python -m unittest discover -s tests -t .", "suite_exit_code": 0, "suite_output_sha256": "11"*32, "files": [{"path": …search_aliases.json, "before_sha256": sha(T blob), "after_sha256": sha(R blob), "known_good_sha256": sha(H blob)}], "removed_aliases": [word]}`. `tamper` variants: `r_not_hk_bytes` (R restores different bytes; attestation shas copied from R so only the HK comparison catches it), `attestation_edited_after_A` (a later commit edits `reviewed_by`), `before_sha_wrong`, `removed_aliases_wrong` (`[]`); `bad_r` = a second R on top of R (`parent(bad_r) != X`). Run → FAIL (`freeze_guard_problems`, `verify_recovery` missing).
 
 - [ ] **Step 4: Implement guard, verifier and the Round 4 freeze entry in `round_seal.py`**
 
@@ -199,11 +213,19 @@ def verify_recovery(round: int, repo, r_commit=None) -> list:
     recs = [r for r in ev.load_round_recoveries(pathlib.Path(repo) / "tests/benchmarks/round_recoveries.json") if r["round"] == round]
     if len(recs) != 1:
         return [f"round_recoveries.json: expected exactly one round {round} record, found {len(recs)}"]
-    rec = recs[0]; X, R, A = rec["xpreb_terminal_commit"], r_commit or rec["recovery_commit"], None
-    out = []
-    A = _git(repo, "log", "--format=%H", "--diff-filter=AM", "-S", f'"round": {round}', "--", "tests/benchmarks/round_recoveries.json").splitlines()[-1]
-    first_x = _git(repo, "log", "--format=%H", "-S", '"aborted-pre-B"', "--", "tests/benchmarks/round_outcomes.json").splitlines()[-1]
-    if not first_x.startswith(X): out.append(f"xpreb_terminal_commit {X} is not the commit that introduced the aborted-pre-B outcome ({first_x[:7]})")
+    rec = recs[0]; R = r_commit or rec["recovery_commit"]; out = []
+    # Binding provenance (spec §9.5): X, T and HK come from Git history / the X readiness block, never from the record alone.
+    X = _git(repo, "log", "--format=%H", "-S", '"aborted-pre-B"', "--", "tests/benchmarks/round_outcomes.json").splitlines()[-1]
+    T = _git(repo, "log", "--format=%H", "-S", f'"round": {round}', "--", "tests/benchmarks/round_freeze.json").splitlines()[-1]
+    A = _git(repo, "log", "--format=%H", "-S", f'"round": {round}', "--", "tests/benchmarks/round_recoveries.json").splitlines()[-1]
+    m = re.search(r"housekeeping_commit:\s*([0-9a-f]{7,40})", _git(repo, "show", f"{X}:docs/phase3-readiness.md").split(f"Round {round} ")[-1])
+    if not m: return ["X readiness block has no housekeeping_commit line"]
+    HK = _git(repo, "rev-parse", m.group(1))
+    if not X.startswith(rec["xpreb_terminal_commit"]): out.append("xpreb_terminal_commit != the commit that introduced the aborted-pre-B outcome")
+    if not T.startswith(rec["t_commit"]): out.append("t_commit != the commit that added the freeze entry")
+    cur = hashlib.sha256((pathlib.Path(repo) / "tests/benchmarks/round_recoveries.json").read_bytes()).hexdigest()
+    blob = hashlib.sha256(subprocess.run(["git", "-C", str(repo), "show", f"{A}:tests/benchmarks/round_recoveries.json"], check=True, capture_output=True).stdout).hexdigest()
+    if cur != blob: out.append("current round_recoveries.json != A blob (edited after attestation)")
     if _git(repo, "rev-parse", f"{R}^") != _git(repo, "rev-parse", X): out.append("parent(R) != X")
     if _git(repo, "rev-parse", f"{A}^") != _git(repo, "rev-parse", R): out.append("parent(A) != R")
     freeze = json.loads(_git(repo, "show", f"{X}:tests/benchmarks/round_freeze.json"))
@@ -211,19 +233,20 @@ def verify_recovery(round: int, repo, r_commit=None) -> list:
     if sorted(_git(repo, "diff", "--name-only", f"{X}..{R}").splitlines()) != policy_files: out.append("diff X..R != RECOVERY_POLICY_FILES")
     if _git(repo, "diff", "--name-only", f"{R}..{A}").splitlines() != list(RECOVERY_DIFF_ONLY): out.append("diff R..A != {round_recoveries.json}")
     if sorted(f["path"] for f in rec["files"]) != policy_files: out.append("files[] != t_policy_files")
-    T = rec["t_commit"]                                                       # the Round N T commit (attested; parent chain T ..< X)
     for f in rec["files"]:
         sha = lambda c: hashlib.sha256(subprocess.run(["git", "-C", str(repo), "show", f"{c}:{f['path']}"], check=True, capture_output=True).stdout).hexdigest()
         if sha(T) != f["before_sha256"]: out.append(f"{f['path']}: before_sha256 != sha(git show T:path)")
-        if sha(R) != f["after_sha256"] or f["after_sha256"] != f["known_good_sha256"]: out.append(f"{f['path']}: after/known-good sha mismatch")
+        if sha(R) != sha(HK): out.append(f"{f['path']}: sha(R:path) != sha(HK:path) — rollback did not restore the known-good bytes")
+        if sha(R) != f["after_sha256"] or f["after_sha256"] != f["known_good_sha256"] or sha(HK) != f["known_good_sha256"]: out.append(f"{f['path']}: after/known-good sha mismatch")
     if rec.get("reviewed_base") != X or rec.get("reviewed_head") != R or rec.get("suite_commit") != R: out.append("reviewed_base/head or suite_commit != X/R")
     if rec.get("review_findings") != 0 or rec.get("suite_exit_code") != 0: out.append("review_findings/suite_exit_code != 0")
-    aliases_r = json.loads(_git(repo, "show", f"{R}:tools/atlassian_docs/intelligence/data/search_aliases.json"))
-    if any(n.get("origin") == f"lexicon-r{round}" for n in aliases_r.get("notes", {}).values()): out.append(f"lexicon-r{round} aliases still present at R")
+    lex = lambda c: {w for w, n in json.loads(_git(repo, "show", f"{c}:tools/atlassian_docs/intelligence/data/search_aliases.json")).get("notes", {}).items() if n.get("origin") == f"lexicon-r{round}"}
+    if lex(R): out.append(f"lexicon-r{round} aliases still present at R")
+    if sorted(lex(T) - lex(R)) != sorted(rec.get("removed_aliases", [])): out.append("removed_aliases != lexicon-r4 words present at T and absent at R")
     return out
 ```
 
-(`t_commit` is a required attestation field; `_mk_recovery_repo` sets it to the T commit sha. `removed_aliases` is compared with the exact set of `lexicon-r{round}` words present at T and absent at R — add that comparison as the last check.) Then:
+(`import re` at the top of `round_seal.py` already exists; `t_commit`/`xpreb_terminal_commit` in the record are cross-checked against the Git-derived values, never trusted.) Then:
 
 ```python
 def freeze_guard_problems(round: int, freeze, outcomes, repo) -> list:
@@ -251,7 +274,7 @@ def t_policy_files(root, base_commit) -> list:
     return sorted(p for p in set(changed) if p in T_DATA_FILES)
 ```
 
-(in `evaluator.py`; `freeze_entry` refuses when `changed` contains a path outside the §9.6 allowlist — `T_ALLOWLIST = T_DATA_FILES + ("tests/benchmarks/round_freeze.json", "tests/benchmarks/search_queries.json", "tests/benchmarks/round4-worker-brief.md", "tests/benchmarks/round4-hidden-generation-prompt.md", "tests/benchmarks/round4-hidden-reviewer-prompt.md", "tests/benchmarks/round4-lexicon-generation-prompt.md", "tests/benchmarks/round4-lexicon-review-prompt.md", "tests/benchmarks/round4-method-safety.json")`). `hidden_generation_rules = list(HIDDEN_RULES_R4)` for round 4. CLI: `freeze` gains `--doc-title-sources`, `--doc-titles`, `--base-commit`; new subcommand `validate-terminal --round N --state X_preB --work DIR` → `cmd_validate_terminal` (Task 3 fills its checks; here it returns the problems of `terminal_problems()` which Task 3 implements — leave a `NotImplementedError` guarded by the test being added in Task 3). `verify-freeze` skips entries whose outcome is `aborted-pre-B` (spec §9.1: invalidated freeze 4 is excluded from current-file equality).
+(both in `evaluator.py`; `freeze_entry` refuses when `changed` contains a path outside the §9.6 allowlist — `ev.T_ALLOWLIST = T_DATA_FILES + ("tests/benchmarks/round_freeze.json", "tests/benchmarks/search_queries.json", "tests/benchmarks/round4-worker-brief.md", "tests/benchmarks/round4-hidden-generation-prompt.md", "tests/benchmarks/round4-hidden-reviewer-prompt.md", "tests/benchmarks/round4-lexicon-generation-prompt.md", "tests/benchmarks/round4-lexicon-review-prompt.md", "tests/benchmarks/round4-method-safety.json")`). `hidden_generation_rules = list(HIDDEN_RULES_R4)` for round 4. CLI: `freeze` gains `--doc-title-sources`, `--doc-titles`, `--base-commit`; new subcommand `validate-terminal --round N --state X_preB --work DIR` → `cmd_validate_terminal` (Task 3 fills its checks; here it returns the problems of `terminal_problems()` which Task 3 implements — leave a `NotImplementedError` guarded by the test being added in Task 3). `verify-freeze` skips entries whose outcome is `aborted-pre-B` (spec §9.1: invalidated freeze 4 is excluded from current-file equality).
 
 Run `tests.benchmarks.test_round_seal` → PASS; canonical suite → OK (expect 555 + new).
 
@@ -424,30 +447,38 @@ def norm_tokens(text: str) -> list:
     return out
 
 def default_fetch(url, timeout=30):
-    import urllib.request
-    with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "atlassian-api-updater round4 corpus"}), timeout=timeout) as r:
-        return r.status, r.geturl(), r.read()
+    import urllib.error, urllib.request
+    req = urllib.request.Request(url, headers={"User-Agent": "atlassian-api-updater round4 corpus"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return r.status, r.geturl(), r.read()
+    except urllib.error.HTTPError as e:                      # 4xx/5xx become a failure row, never an exception
+        return e.code, e.geturl() or url, b""
+    except urllib.error.URLError as e:
+        return 0, url, b""
 
 def acquire(sources, out_dir, fetch=default_fetch, delay=0.25, epoch=1) -> dict:
     out_dir = pathlib.Path(out_dir); (out_dir / "pages").mkdir(parents=True, exist_ok=True)
     manifest = {"epoch": epoch, "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "sources": []}
     for src in sources:
         status, _, sm = fetch(src["sitemap_url"])
-        if status != 200: raise SystemExit(f"{src['product']}: sitemap HTTP {status}")
+        if not 200 <= status < 300: raise SystemExit(f"{src['product']}: sitemap HTTP {status}")
         (out_dir / f"{src['product']}.sitemap.xml").write_bytes(sm)
         kind, _ = parse_sitemap(sm); children = []
         locs, discarded, problems = preflight(src, sm)
         if kind == "sitemapindex":                                      # one level, every child kept raw
             kept, locs = locs, []
             for i, child in enumerate(kept, 1):
-                st, _, cb = fetch(child); (out_dir / f"{src['product']}.child-{i}.sitemap.xml").write_bytes(cb)
+                st, _, cb = fetch(child)
+                if not 200 <= st < 300: raise SystemExit(f"{src['product']}: child sitemap HTTP {st}")
+                (out_dir / f"{src['product']}.child-{i}.sitemap.xml").write_bytes(cb)
                 children.append({"file": f"{src['product']}.child-{i}.sitemap.xml", "sha256": hashlib.sha256(cb).hexdigest()})
                 l, d, p = preflight(src, cb); locs += l; discarded += d; problems += p
         if problems: raise SystemExit("preflight: " + "; ".join(problems))
         rows, ok = [], 0
         for loc in locs:
             st, final, body = fetch(loc); time.sleep(delay)
-            if st != 200: rows.append({"url": loc, "final_url": final, "http_status": st, "fail_reason": f"http-{st}"}); continue
+            if not 200 <= st < 300: rows.append({"url": loc, "final_url": final, "http_status": st, "fail_reason": f"http-{st}"}); continue
             if urlsplit(final).netloc != HOST or not final.startswith(src["allowed_loc_prefix"]):
                 rows.append({"url": loc, "final_url": final, "http_status": st, "fail_reason": "redirect-outside-prefix"}); continue
             sha = hashlib.sha256(body).hexdigest(); (out_dir / "pages" / f"{sha}.html.gz").write_bytes(gzip.compress(body, mtime=0))
@@ -554,9 +585,9 @@ resource. Propose those words as synonyms. Include such a word even when it is i
 if users of this product call this resource by it.
 ```
 
-`round4-lexicon-review-prompt.md` = `round3-lexicon-review-prompt.md` byte-identical except the round name. CLI `main()` for `doc_titles.py`: `acquire --out-dir DIR [--epoch k] [--delay 0.25]` (uses `DOC_SOURCES`, `default_fetch`; prints the manifest), `snapshot --sources DIR --out FILE` (writes the snapshot JSON with `sort_keys`, prints both shas), `render-check --sources DIR --snapshot FILE` (exit 1 if `snapshot(DIR)` != file bytes). `evaluator.TOOLING_FILES += ("tests/benchmarks/doc_titles.py", "tests/benchmarks/test_doc_titles.py", "tests/benchmarks/round4_simulation.py", "tests/benchmarks/test_round4_simulation.py")` — the last two are created in Task 3; add a test `test_tooling_files_exist_and_one_byte_changes_sha` (writes a temp copy of the tree with one byte appended to `doc_titles.py` and asserts `tooling_code_sha256` differs). `round_seal.freeze_entry` (Task 1 Step 4) now imports `doc_titles` for the two shas.
+`round4-lexicon-review-prompt.md` = `round3-lexicon-review-prompt.md` byte-identical except the round name. CLI `main()` for `doc_titles.py`: `acquire --out-dir DIR [--epoch k] [--delay 0.25]` (uses `DOC_SOURCES`, `default_fetch`; prints the manifest), `snapshot --sources DIR --out FILE` (writes the snapshot JSON with `sort_keys`, prints both shas), `render-check --sources DIR --snapshot FILE` (exit 1 if `snapshot(DIR)` != file bytes). `evaluator.TOOLING_FILES += ("tests/benchmarks/doc_titles.py", "tests/benchmarks/test_doc_titles.py")` **only** (the simulation files are added in Task 3 when they exist — `tooling_code_sha256` reads every listed file, so a missing file would make the hash undefined); add `test_tooling_files_exist_and_one_byte_changes_sha` (every `TOOLING_FILES` path exists; a temp copy of the tree with one byte appended to `doc_titles.py` gives a different `tooling_code_sha256`). `round_seal.freeze_entry` (Task 1 Step 4) now imports `doc_titles` for the two shas.
 
-Run `tests.benchmarks.test_doc_titles tests.benchmarks.test_concept_lexicon_check tests.benchmarks.test_evaluator` → PASS (the `TOOLING_FILES` existence test is marked `expectedFailure` until Task 3 adds the simulation files — remove the decorator in Task 3).
+Run `tests.benchmarks.test_doc_titles tests.benchmarks.test_concept_lexicon_check tests.benchmarks.test_evaluator` → PASS.
 
 - [ ] **Step 7: AC-R4-04 check, commit H14**
 
@@ -574,7 +605,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ### Task 3: Pipeline dry-run gate, cleanup needles, hidden-attempt ledger, `round4_simulation.py` (synthetic bundle, pre-T blockers, X_preB lifecycle), `validate-terminal`, Round 4 names, whole-branch review (commit H15 = `housekeeping_commit`)
 
 **Files:**
-- Modify: `tests/tune_search_ranking.py` (`PipelineResult`, `run_pipeline_result`, `main` uses it, `require_round`), `tests/benchmarks/round_seal.py` (`cleanup_needle_manifest_from_artifacts`, `append_attempt_needles`, `cleanup_authority`, `terminal_problems`, `cmd_validate_terminal`), `tests/diag_search_queries.py` (no code change needed — `--round 4` is data-driven; verify), `tests/benchmarks/evaluator.py` (remove the `expectedFailure` from Task 2)
+- Modify: `tests/tune_search_ranking.py` (`PipelineResult`, `run_pipeline_result`, `main` uses it, `require_round`), `tests/benchmarks/round_seal.py` (`cleanup_needle_manifest_from_artifacts`, `append_attempt_needles`, `artifact_is_ledgered`, `cleanup_authority`, `terminal_problems`, `cmd_validate_terminal`), `tests/diag_search_queries.py` (no code change needed — `--round 4` is data-driven; verify), `tests/benchmarks/evaluator.py` (`TOOLING_FILES += round4_simulation.py, test_round4_simulation.py` — now that both exist)
 - Create: `tests/benchmarks/round4_simulation.py`, `tests/benchmarks/test_round4_simulation.py`
 - Test: `tests/test_tune_search_ranking.py`, `tests/benchmarks/test_round_seal.py`, `tests/benchmarks/test_round4_simulation.py`
 
@@ -651,10 +682,12 @@ class TestCleanupNeedles(unittest.TestCase):
             self.assertEqual(sorted(map(json.dumps, rs.cleanup_authority(led, None, []))), sorted(map(json.dumps, rs.cleanup_needle_manifest_from_artifacts([a, b]))))
             std = pathlib.Path(td, "std.json"); std.write_text(json.dumps(rs.needle_manifest(["final set query here"])))
             self.assertIn({"words": 4, "sha256": rs._ngram_sha256("final set query here")}, rs.cleanup_authority(led, std, [a]))
-    def test_delete_guard_rejects_unledgered_artifact(self):
+    def test_delete_guard_requires_sha_and_needle_coverage(self):
         with tempfile.TemporaryDirectory() as td:
             a = pathlib.Path(td, "a.txt"); a.write_text("alpha beta gamma\n"); led = pathlib.Path(td, "l.jsonl")
             self.assertFalse(rs.artifact_is_ledgered(led, a)); rs.append_attempt_needles(led, [a]); self.assertTrue(rs.artifact_is_ledgered(led, a))
+            rows = [json.loads(l) for l in led.read_text().splitlines()]; rows[0]["needles"] = rows[0]["needles"][:-1]       # a row that under-covers its artifact
+            led.write_text("".join(json.dumps(r) + "\n" for r in rows)); self.assertFalse(rs.artifact_is_ledgered(led, a))
 ```
 
 Run → FAIL.
@@ -696,9 +729,13 @@ def append_attempt_needles(ledger_path, paths) -> int:
     return sum(len(r["needles"]) for r in rows)
 
 def artifact_is_ledgered(ledger_path, path) -> bool:
+    """Deletion guard (spec §9.4): the artifact's sha appears in the ledger AND its recomputed needles ⊆ the union of ledgered needles."""
     if not pathlib.Path(ledger_path).exists(): return False
+    rows = [json.loads(l) for l in pathlib.Path(ledger_path).read_text(encoding="utf-8").splitlines()]
     sha = ev.file_sha256(path)
-    return any(json.loads(l)["artifact_sha256"] == sha for l in pathlib.Path(ledger_path).read_text(encoding="utf-8").splitlines())
+    if not any(r["artifact_sha256"] == sha for r in rows): return False
+    ledgered = {(e["words"], e["sha256"]) for r in rows for e in r["needles"]}
+    return all((e["words"], e["sha256"]) in ledgered for e in cleanup_needle_manifest_from_artifacts([path]))
 
 def cleanup_authority(ledger_path, standard_manifest_path, present_paths) -> list:
     """union(historical attempt ledger, standard final-set manifest if any, needles recomputed from artifacts still present)."""
@@ -801,9 +838,9 @@ def append_outcome(work, record, outcomes_path=None):
 
 `run_pre_t(cache, work)`: as Round 3, then build the dry-run inputs exactly as `tune.main` does (`GridEvaluator` on `state`, `evaluate_point_fast` with the pre-T aliases as the "B" aliases, `cands_doc = alias_candidates.json`, `grid/baseline` from `rp`, `fixture_fn = fixture_failures_fast`, `queries/classes` from the classified bench), call `tune.run_pipeline_result(...)`, compute diagnostics `reachable_by_grid` (per failing seed: any grid point whose seed failures exclude it while fixture/regression invariants hold) and `dry_run_fixed`, then `blockers = pre_t_blockers(result, e, diagnostics)`; the event gains `pre_t_blockers`, `pipeline_input_sha256` (canonical sha of ranking, aliases, candidates, classified bench, grid), `pipeline_result_sha256` (canonical sha of `dataclasses.asdict(result)`), `result: "pass" | "stop_for_amendment"`, `blocking_reasons`; exit 0 iff `e["pass"] and not blockers`. **No file is written by the dry-run** (test: `tests.test_tune_search_ranking.test_main_uses_run_pipeline_result` plus a simulation test that patches `tune.write_constants`/`_write_log` to raise). `apply_T()`: before the freeze call, `bundle = synthetic_doc_bundle(ROOT / SIM_DIR / "doc-title-sources")`, `snap = dt.snapshot(bundle)` written to `ROOT / SIM_DIR / "doc-titles-snapshot.json"`, and the freeze call becomes `rs.main(["freeze", "--round", "4", "--cache-dir", str(cache), "--reference-enc", str(enc_path), "--doc-title-sources", str(bundle), "--doc-titles", str(snapshot_path), "--base-commit", "HEAD"])`; the synthetic lexicon merge uses `lexicon-r4`. `apply_XpreB()` (new branch, applied after T in its own tree, **without** B): write two synthetic attempt artifacts (one JSON with a `query`, one parse-invalid text with a line-split query) under `SIM_DIR/plain/`, `rs.append_attempt_needles(SIM_DIR/"hidden_attempt_needles.jsonl", …)`, delete them only after `artifact_is_ledgered` is true, write `SIM_DIR/xpreb_cleanup_manifest.json = rs.cleanup_authority(ledger, None, [])`, scan the tree with it (`unexpected_hits == []`), restore tracked policy files to the T tree (`git checkout T -- tools/atlassian_docs/intelligence/data tests/benchmarks/search_queries.json`), append the compound outcome `{"round": 4, "outcome": "aborted-pre-B", "invalidated_by": "X_preB", "invalidates_policy": true, "reject_reason": "synthetic acquisition defect after T"}` with the sha chain events (`round_outcomes_sha256_at_T` from the freeze, pre-append equality assert, `round_outcomes_sha256_after_append`), render the readiness "Round 4 aborted before B" block, commit touching only `docs/phase3-readiness.md` and `tests/benchmarks/round_outcomes.json`, then `rs.main(["validate-terminal", "--round", "4", "--state", "X_preB", "--work", str(SIM_DIR)])` must return 0 and the suite must be green. `_run_suite_step` for `XpreB` applies it on a copy of the post-T tree (not post-B): adjust `drive()` so branch `XpreB` copies `tree_after_T` (saved right after step `T`).
 
-`rs.terminal_problems(round, state, repo, work)` for `state == "X_preB"` checks, each producing a message: freeze entry for `round` exists and no `round{round}_seal` with sealed sections (B absent: `search_queries.json` hidden sections `[]`); `git diff --name-only <T>..HEAD` ⊆ `{docs/phase3-readiness.md, tests/benchmarks/round_outcomes.json}` where `T` = the commit that added the freeze entry (`git log -S'"round": 4' -- round_freeze.json`); no `tests/benchmarks/round{round}-final.json`; outcomes record is compound with `invalidates_policy` a bool and `reject_reason`; ledger has `round_outcomes_sha256_at_T == freeze[round].round_outcomes_sha256`, `round_outcomes_sha256_after_append == current file sha`; ledger has `xpreb_cleanup` event with `cleanup_manifest_sha256` (or `not_applicable` + `plaintext_generated: false`) and a scan verdict `unexpected_hits: []`; `ciphertext_exists` consistent with `unused_due_to_X_preB` (`true` + sha, or `"not_applicable"`). `cmd_validate_terminal` prints the problems and returns 1 if any.
+`rs.terminal_problems(round, state, repo, work)` for `state == "X_preB"` checks, each producing a message: freeze entry for `round` exists and no `round{round}_seal` with sealed sections (B absent: `search_queries.json` hidden sections `[]`); `git diff --name-only <T>..HEAD` ⊆ `{docs/phase3-readiness.md, tests/benchmarks/round_outcomes.json}` where `T` = the commit that added the freeze entry (`git log -S'"round": 4' -- round_freeze.json`); no `tests/benchmarks/round{round}-final.json`; outcomes record is compound with `invalidates_policy` a bool and `reject_reason`; ledger has `round_outcomes_sha256_at_T == freeze[round].round_outcomes_sha256`, `round_outcomes_sha256_after_append == current file sha`; ledger has `xpreb_cleanup` event with `cleanup_manifest_sha256` (or `cleanup_manifest: "not_applicable"` + `plaintext_generated: false` when `$W/hidden_attempt_needles.jsonl`, `$W/needle-manifest.json` and `$W/plain/` are all absent) and a scan verdict `unexpected_hits: []`; **the validator recomputes** `rs.cleanup_authority($W/hidden_attempt_needles.jsonl, $W/needle-manifest.json if present else None, remaining plaintext under $W/plain and sealed/round{round}-sealed.json if present)` and requires exact equality with `$W/xpreb_cleanup_manifest.json` (and that no plaintext remains); `hidden_evaluation_count == 0` as its own item: no `tests/benchmarks/round{round}-final.json`, no ledger event among `round{round}_gate_checkpoint`, `diag_run`, `hidden_evaluation`; `ciphertext_exists` consistent with `unused_due_to_X_preB` (`true` + sha, or `"not_applicable"`). `cmd_validate_terminal` prints the problems and returns 1 if any; tests cover each item with a synthetic `$W`.
 
-Also: `tests/benchmarks/test_evaluator.py` — remove the `expectedFailure` on the `TOOLING_FILES` existence test (both simulation files now exist). Run the three test modules → PASS.
+Also: `evaluator.TOOLING_FILES += ("tests/benchmarks/round4_simulation.py", "tests/benchmarks/test_round4_simulation.py")` (the existence test of Task 2 covers them). Run the three test modules → PASS.
 
 - [ ] **Step 7: Suite, `--phase H`, AC-R4-04, commit H15**
 
@@ -903,9 +940,12 @@ python - <<'EOF2'
 import json, subprocess
 from tests.benchmarks import evaluator as ev
 hk = open(__import__("os").path.expanduser("~/.atlassian_api_updater/round4-work/housekeeping_commit")).read().strip()
-changed = sorted(p for p in subprocess.run(["git", "diff", "--name-only", f"{hk}..HEAD"], capture_output=True, text=True).stdout.split() if p in ev.T_DATA_FILES)
+actual = sorted(subprocess.run(["git", "diff", "--name-only", f"{hk}..HEAD"], capture_output=True, text=True).stdout.split())
+outside = [p for p in actual if p not in ev.T_ALLOWLIST]
+assert not outside, f"T touched files outside the §9.6 allowlist: {outside}"
+changed = [p for p in actual if p in ev.T_DATA_FILES]
 assert changed == sorted(ev.freeze_for(4)["t_policy_files"]), (changed, ev.freeze_for(4)["t_policy_files"])
-print(json.dumps({"event": "post_t_policy_files_check", "t_policy_files": changed, "ok": True}))
+print(json.dumps({"event": "post_t_policy_files_check", "t_files": actual, "t_policy_files": changed, "ok": True}))
 EOF2
 ```
 
@@ -914,7 +954,7 @@ Ledger the printed events, the freeze printout (`reference_set.enc_sha256 == c1a
 ### Task 7: **[controller]** Hidden-set generation, machine check, stateless review, attempt-needle ledger, AC-18b hygiene, commit B, encryption
 
 Round 3 plan v16 Task 12 Steps 1–4 with substitutions, plus the spec §9.4 hygiene additions:
-- Every artifact that may contain hidden text (generator raw output, each replacement output, the review input/outputs, section-replacement outputs, parse-invalid responses saved for the ledger) is written under `$W/plain/` and **immediately** registered: `python -c "from tests.benchmarks import round_seal as rs; rs.append_attempt_needles('$W/hidden_attempt_needles.jsonl', ['<path>'])"`. A file is deleted only after `rs.artifact_is_ledgered` is true (the controller script for Step 4's `rm -rf $W/plain` first asserts every file under it is ledgered).
+- Every artifact that may contain hidden text (generator raw output, each replacement output, the review input/outputs, section-replacement outputs, parse-invalid responses saved for the ledger) is written under `$W/plain/` and **immediately** registered: `python -c "import sys; from tests.benchmarks import round_seal as rs; rs.append_attempt_needles(sys.argv[1], sys.argv[2:])" $W/hidden_attempt_needles.jsonl $W/plain/<the file just written>` — run once per artifact right after writing it, with the artifact's actual path as the argument. A file is deleted only after `rs.artifact_is_ledgered` is true (the controller script for Step 4's `rm -rf $W/plain` first asserts every file under it is ledgered, exactly as Task 9 Step 2d's hygiene script does).
 - Step 4 order stays: delete `$W/plain` → standard needle manifest (final 24) → seal `--needle-manifest` → pre-encryption scan → user encrypts → absence/ciphertext checks → commit B → post-B scan. Add after the manifest: ledger `cleanup_authority_sha256 = sha256(json.dumps(rs.cleanup_authority(ledger, manifest, [])))` so a later X check can prove the union was computed.
 - If an acquisition/freeze defect is discovered at any point between T and B → **Task 9 Step 2d (X_preB)**, not X.
 
@@ -925,12 +965,57 @@ Round 3 plan v16 Task 13 with substitutions (`ROUND4-WORKER-HANDSHAKE`, `verify-
 ### Task 9: **[controller]** Provenance check, then C (success), F (tuning failure), X (abort) or X_preB (abort before B)
 
 - [ ] **Steps 1, 2a, 2b, 2c** — Round 3 plan v16 Task 14 with substitutions (`verify-freeze --round 4`, readiness rendered by Task 11, AC-18a/AC-R3-06 checkpoints with `round4` names).
-- [ ] **Step 2d: X_preB (spec §9.4, AC-R4-09)** — triggered by a corpus/freeze invalidation found after T and before B (ruling on the thread first: `invalidates_policy` true iff the invalid corpus reached `lexicon-r4`/`concept_lexicon.json`):
-  1. Ledger `xpreb_start` (`reason`, `found_at_commit`, `invalid_doc_titles_source_bundle_sha256`, `freeze_entry_sha256`, `invalidates_policy`).
-  2. Hidden hygiene by state (spec §9.4): assert every file under `$W/plain/` is ledgered (`artifact_is_ledgered`), then `rm -rf $W/plain`; `manifest = rs.cleanup_authority($W/hidden_attempt_needles.jsonl, $W/needle-manifest.json if exists else None, [])` → `$W/xpreb_cleanup_manifest.json`; ledger `xpreb_cleanup` (`cleanup_manifest_sha256`, `plaintext_generated`, `ciphertext_exists`, `unused_due_to_X_preB: true|"not_applicable"`, ciphertext sha if any); scan `--manifest $W/xpreb_cleanup_manifest.json --root ~/.atlassian_api_updater --root . --allow $S --allow $W/doc-title-sources --allow ~/.atlassian_api_updater/archive/round2/round2-cache [--allow sealed/round4-sealed.json.enc]` → `unexpected_hits == []` (ledger); an unsealed `sealed/round4-sealed.json` is deleted first (it is itself ledgered as an artifact).
-  3. Restore the T tree: `T=$(git log --format=%H -S'"round": 4' -- tests/benchmarks/round_freeze.json | tail -1); git checkout "$T" -- tools/atlassian_docs/intelligence/data tests/benchmarks/search_queries.json`; `git diff --name-only "$T" -- . ':!docs/phase3-readiness.md' ':!tests/benchmarks/round_outcomes.json'` must be empty.
-  4. Outcomes chain: `at=$(shasum -a 256 tests/benchmarks/round_outcomes.json)`; assert it equals `freeze_for(4)["round_outcomes_sha256"]` (ledger `round_outcomes_sha256_at_T`); `python -m tests.benchmarks.round4_simulation --apply-outcome '{"round": 4, "outcome": "aborted-pre-B", "invalidated_by": "X_preB", "invalidates_policy": <bool>, "reject_reason": "<text>", "t_commit": "<T>"}'` (the CLI wrapper of `append_outcome`, which also bypasses the STOP check for `aborted-pre-B`); ledger `round_outcomes_sha256_after_append`.
-  5. Render the readiness "Round 4 aborted before B" block (Task 11), commit `X_preB: Round 4 aborted before B (<reason>)` touching only `docs/phase3-readiness.md` and `tests/benchmarks/round_outcomes.json`; `python tests/benchmarks/round_seal.py validate-terminal --round 4 --state X_preB --work $W` → exit 0; suite green; `terminal_commit` ledger. Continue with Task 12; the recovery protocol (spec §9.5) is executed only when the next round starts and only after a ruling on the thread (R = rollback commit of exactly `freeze_for(4)["t_policy_files"]` to the `housekeeping_commit` bytes; A = attestation append with the §9.5 fields; `rs.verify_recovery(4, ROOT) == []`).
+- [ ] **Step 2d: X_preB (spec §9.4, AC-R4-09)** — triggered by a corpus/freeze invalidation found after T and before B. First the ruling on the review thread (`invalidates_policy` true iff the invalid corpus reached `lexicon-r4`/`concept_lexicon.json`); then, with `REASON`, `INVALIDATES` (`true`|`false`) and `FOUND_AT=$(git rev-parse HEAD)` set from that ruling:
+
+```bash
+W=~/.atlassian_api_updater/round4-work; SEALED=~/.atlassian_api_updater/sealed
+T=$(git log --format=%H -S'"round": 4' -- tests/benchmarks/round_freeze.json | tail -1)
+sha() { python -c "from tests.benchmarks import evaluator as ev, sys; print(ev.file_sha256('$1'))"; }
+python - "$REASON" "$INVALIDATES" "$FOUND_AT" "$T" <<'EOF2'                                   # 1. xpreb_start
+import json, sys, pathlib
+from tests.benchmarks import evaluator as ev
+W = pathlib.Path.home() / ".atlassian_api_updater" / "round4-work"; reason, inv, found, t = sys.argv[1:5]
+e = {"event": "xpreb_start", "reason": reason, "found_at_commit": found, "t_commit": t, "invalidates_policy": inv == "true",
+     "invalid_doc_titles_source_bundle_sha256": ev.freeze_for(4)["doc_titles_source_bundle_sha256"], "freeze_entry_sha256": ev.canonical_sha256(ev.freeze_for(4))}
+open(W / "controller-events.jsonl", "a").write(json.dumps(e) + "\n"); print(json.dumps(e))
+EOF2
+python - <<'EOF2'                                                                              # 2. hidden hygiene by state (spec §9.4)
+import json, pathlib, shutil
+from tests.benchmarks import round_seal as rs, evaluator as ev
+H = pathlib.Path.home() / ".atlassian_api_updater"; W = H / "round4-work"; led = W / "hidden_attempt_needles.jsonl"; std = W / "needle-manifest.json"
+plain = sorted(p for p in (W / "plain").rglob("*") if p.is_file()) if (W / "plain").exists() else []
+unsealed = H / "sealed" / "round4-sealed.json"; enc = H / "sealed" / "round4-sealed.json.enc"
+present = plain + ([unsealed] if unsealed.exists() else [])
+if not led.exists() and not std.exists() and not present:                                    # state (1): nothing was ever generated
+    e = {"event": "xpreb_cleanup", "plaintext_generated": False, "cleanup_manifest": "not_applicable", "ciphertext_exists": enc.exists(),
+         "unused_due_to_X_preB": (True if enc.exists() else "not_applicable"), "ciphertext_sha256": (ev.file_sha256(enc) if enc.exists() else None)}
+else:                                                                                        # states (2)–(5)
+    for p in present:
+        assert rs.artifact_is_ledgered(led, p), f"unledgered plaintext artifact: {p}"           # ledger first (append_attempt_needles), never delete blind
+    manifest = rs.cleanup_authority(led, std if std.exists() else None, present)
+    (W / "xpreb_cleanup_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    for p in present: p.unlink()
+    if (W / "plain").exists(): shutil.rmtree(W / "plain")
+    e = {"event": "xpreb_cleanup", "plaintext_generated": True, "cleanup_manifest_sha256": ev.file_sha256(W / "xpreb_cleanup_manifest.json"),
+         "standard_manifest_used": std.exists(), "ciphertext_exists": enc.exists(), "unused_due_to_X_preB": (True if enc.exists() else "not_applicable"),
+         "ciphertext_sha256": (ev.file_sha256(enc) if enc.exists() else None)}
+open(W / "controller-events.jsonl", "a").write(json.dumps(e) + "\n"); print(json.dumps(e))
+EOF2
+if [ -e $W/xpreb_cleanup_manifest.json ]; then
+  python tests/benchmarks/round_seal.py scan --manifest $W/xpreb_cleanup_manifest.json --expect-sha256 "$(sha $W/xpreb_cleanup_manifest.json)" \
+    --root ~/.atlassian_api_updater --root . --allow ~/.atlassian_api_updater/round4-cache --allow $W/doc-title-sources --allow ~/.atlassian_api_updater/archive/round2/round2-cache \
+    $( [ -e $SEALED/round4-sealed.json.enc ] && echo --allow $SEALED/round4-sealed.json.enc ) | tee -a $W/controller-events.jsonl          # unexpected_hits must be []
+fi
+git checkout "$T" -- tools/atlassian_docs/intelligence/data tests/benchmarks/search_queries.json                        # 3. restore the T tree
+test -z "$(git diff --name-only "$T" -- . ':!docs/phase3-readiness.md' ':!tests/benchmarks/round_outcomes.json')"
+AT=$(sha tests/benchmarks/round_outcomes.json)                                                                          # 4. outcomes chain
+test "$AT" = "$(python -c "from tests.benchmarks import evaluator as ev; print(ev.freeze_for(4)['round_outcomes_sha256'])")"
+echo "{\"event\": \"round_outcomes_sha256_at_T\", \"sha256\": \"$AT\"}" >> $W/controller-events.jsonl
+python -m tests.benchmarks.round4_simulation --apply-outcome "{\"round\": 4, \"outcome\": \"aborted-pre-B\", \"invalidated_by\": \"X_preB\", \"invalidates_policy\": $INVALIDATES, \"reject_reason\": \"$REASON\", \"t_commit\": \"$T\"}"
+echo "{\"event\": \"round_outcomes_sha256_after_append\", \"sha256\": \"$(sha tests/benchmarks/round_outcomes.json)\"}" >> $W/controller-events.jsonl
+```
+
+(`--apply-outcome` is the CLI wrapper of `append_outcome`; for `aborted-pre-B` it bypasses the STOP check and verifies the compound shape via `ev.round_states`.) Then render the readiness "Round 4 aborted before B" block (Task 11; it carries `housekeeping_commit: <sha>` — the binding provenance `verify_recovery` reads), commit `X_preB: Round 4 aborted before B ($REASON)` touching only `docs/phase3-readiness.md` and `tests/benchmarks/round_outcomes.json`; `python tests/benchmarks/round_seal.py validate-terminal --round 4 --state X_preB --work $W` → exit 0; suite green; `terminal_commit` ledger. Continue with Task 12. The recovery protocol (spec §9.5) runs only when the next round starts and only after a ruling on the thread: **R** = `git checkout $HK -- <freeze_for(4)["t_policy_files"]>` committed alone; **A** = the attestation append (fields as Task 1 Step 3's helper, real shas from `git show`), committed alone; `python -c "from tests.benchmarks import round_seal as rs; print(rs.verify_recovery(4, '.'))"` → `[]`.
 
 ### Task 10: **[D controller (fresh actor) + user]** Commit D — single gate evaluation, gate checkpoint, Round 2 reference observation
 
@@ -966,5 +1051,5 @@ Append `## Search Quality Round 4 — decision record (<date>)` after the Round 
 
 - Spec coverage: §4.1 (Task 3 + Task 6), §5/§5.1 (Task 2 + Task 4), §6.1–6.2 (Task 2 + Task 5), §9.1–9.6 (Task 1, Task 3, Task 6 Step 5, Task 9 Step 2d), §10 (map above), §11 B amendment (Task 6 Step 3 ruling path), §13 (H13/H14/H15 = Tasks 1–3).
 - Type consistency: `PipelineResult` field names are the spec §4.1 names; `t_policy_files` is produced by `ev.t_policy_files` (Task 1) and consumed by `verify_recovery` (Task 1) and the post-T check (Task 6); `cleanup_needle_manifest_from_artifacts` / `append_attempt_needles` / `cleanup_authority` / `artifact_is_ledgered` are defined in Task 3 Step 4 and used by Task 7 and Task 9.
-- Placeholders: none ("as Round 3 plan v16 Task N Step M" imports a committed, reviewed procedure verbatim with the substitution table; the Round 4 deltas are written out).
+- Placeholders: none — "as Round 3 plan v16 Task N Step M" imports a committed, reviewed procedure verbatim with the substitution table (accepted by plan review 1 as a modular import, not a placeholder); runtime values in commands are shell/Python variables set in an earlier line of the same step (`$T`, `$HK`, `$REASON`, `$INVALIDATES`, `$FOUND_AT`); the only angle-bracket text left is `<the file just written>` in Task 7, which names the argument the controller substitutes per artifact.
 - Rulings carried into the plan (to be ledgered at Task 4): (1) `round_freeze_hashes(4)` reads `round3-regression-reference.json` (AC-R3-02 reference is round-independent); (2) `round_outcomes.json`/`round_recoveries.json` are hashed as freeze keys, not as `TOOLING_FILES`; (3) the existing `run_pipeline` is kept and wrapped by `run_pipeline_result` so the Round 3 `run_pipeline` tests stay byte-invariant.
