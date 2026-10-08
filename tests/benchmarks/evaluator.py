@@ -229,7 +229,8 @@ TOOLING_FILES = tuple(sorted(EVALUATION_CODE_FILES + ("tests/benchmarks/concept_
                                                       "tests/test_diag_search_queries.py", "tests/intelligence/test_policy.py",
                                                       "tests/benchmarks/test_regression_reference.py",
                                                       "tests/benchmarks/round3_simulation.py", "tests/benchmarks/test_round3_simulation.py",
-                                                      "tests/benchmarks/doc_titles.py", "tests/benchmarks/test_doc_titles.py")))      # Round 4 (H14)
+                                                      "tests/benchmarks/doc_titles.py", "tests/benchmarks/test_doc_titles.py",            # Round 4 (H14)
+                                                      "tests/benchmarks/round4_simulation.py", "tests/benchmarks/test_round4_simulation.py")))   # Round 4 (H15)
 
 
 def evaluation_code_sha256(root) -> str:

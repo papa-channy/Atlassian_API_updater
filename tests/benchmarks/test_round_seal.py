@@ -576,3 +576,52 @@ class TestFreezeGuardAndRecovery(unittest.TestCase):
                 self.assertEqual(rs.round_start_guard_problems(5, repo["path"]), [])
                 subprocess.run(["git", "-C", str(repo["path"]), "checkout", "-q", "-b", "side", repo["X"]], check=True)
                 self.assertTrue(any("descendant" in p for p in rs.round_start_guard_problems(5, repo["path"])))
+
+
+class TestCleanupNeedles(unittest.TestCase):
+    """Round 4 spec §9.4: hash-only cleanup needles over every hidden-attempt artifact; deletion guard; canonical authority union."""
+    def test_json_query_fields_exact_and_nonjson_windows(self):
+        with tempfile.TemporaryDirectory() as td:
+            j = pathlib.Path(td, "a.json"); j.write_text(json.dumps({"held_out": [{"query": "show my starred searches"}], "x": {"query": "list open bugs now"}}))
+            m = rs.cleanup_needle_manifest_from_artifacts([j])
+            self.assertIn({"words": 4, "sha256": rs._ngram_sha256("show my starred searches")}, m)
+            self.assertIn({"words": 4, "sha256": rs._ngram_sha256("list open bugs now")}, m)
+
+    def test_cleanup_needles_span_line_breaks(self):
+        with tempfile.TemporaryDirectory() as td:
+            raw = pathlib.Path(td, "attempt.txt"); raw.write_text("candidate answer is: show my starred\nsearches because ...\n")
+            m = rs.cleanup_needle_manifest_from_artifacts([raw])
+            self.assertIn({"words": 4, "sha256": rs._ngram_sha256("show my starred searches")}, m)
+            leak = pathlib.Path(td, "leak.md"); leak.write_text("note: show my starred searches\n")
+            self.assertEqual(rs.scan_for_needles([td], m, allow=[raw]), [str(leak)])
+
+    def test_attempt_ledger_union_equals_recomputation(self):
+        with tempfile.TemporaryDirectory() as td:
+            a = pathlib.Path(td, "a.txt"); a.write_text("alpha beta gamma delta\n"); b = pathlib.Path(td, "b.json"); b.write_text('{"query": "one two three"}')
+            led = pathlib.Path(td, "hidden_attempt_needles.jsonl")
+            rs.append_attempt_needles(led, [a]); rs.append_attempt_needles(led, [b])
+            self.assertEqual(sorted(map(json.dumps, rs.cleanup_authority(led, None, []))), sorted(map(json.dumps, rs.cleanup_needle_manifest_from_artifacts([a, b]))))
+            std = pathlib.Path(td, "std.json"); std.write_text(json.dumps(rs.needle_manifest(["final set query here"])))
+            self.assertIn({"words": 4, "sha256": rs._ngram_sha256("final set query here")}, rs.cleanup_authority(led, std, [a]))
+
+    def test_delete_guard_requires_sha_and_needle_coverage(self):
+        with tempfile.TemporaryDirectory() as td:
+            a = pathlib.Path(td, "a.txt"); a.write_text("alpha beta gamma\n"); led = pathlib.Path(td, "l.jsonl")
+            self.assertFalse(rs.artifact_is_ledgered(led, a)); rs.append_attempt_needles(led, [a]); self.assertTrue(rs.artifact_is_ledgered(led, a))
+            rows = [json.loads(l) for l in led.read_text().splitlines()]; rows[0]["needles"] = rows[0]["needles"][:-1]       # a row that under-covers its artifact
+            led.write_text("".join(json.dumps(r) + "\n" for r in rows)); self.assertFalse(rs.artifact_is_ledgered(led, a))
+
+
+class TestUnchangedSinceAllow(unittest.TestCase):
+    def test_unchanged_files_are_allowed_and_new_files_are_scanned(self):
+        with tempfile.TemporaryDirectory() as td:
+            repo = pathlib.Path(td).resolve(); run = lambda *a: subprocess.run(["git", "-C", str(repo), *a], check=True, capture_output=True, text=True)
+            run("init", "-q"); run("config", "user.email", "t@t"); run("config", "user.name", "t")
+            (repo / "old.md").write_text("candidate answer is here\n"); run("add", "-A"); run("commit", "-q", "-m", "T")
+            T = run("rev-parse", "HEAD").stdout.strip()
+            (repo / "new.md").write_text("candidate answer is leaked\n"); (repo / "old2.md").write_text("x\n"); run("add", "old2.md"); run("commit", "-q", "-m", "later")
+            m = rs.cleanup_needle_manifest_from_artifacts([repo / "new.md"])
+            allow = rs.unchanged_since(repo, T) + [str(repo / ".git")]
+            self.assertIn(str(repo / "old.md"), allow)
+            self.assertEqual(rs.scan_for_needles([str(repo)], m, allow=allow + [str(repo / "new.md")]), [])        # old.md shares the 3-gram but predates T
+            self.assertEqual(rs.scan_for_needles([str(repo)], m, allow=allow), [str(repo / "new.md")])             # a post-T file with the same 3-gram is a hit

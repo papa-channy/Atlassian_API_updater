@@ -432,12 +432,126 @@ def cmd_round_start_guard(args):
     return 1 if problems else 0
 
 
-def terminal_problems(round: int, state: str, repo, work) -> list:
-    raise NotImplementedError("Round 4 plan Task 3 implements terminal_problems (validate-terminal)")
+def xpreb_cleanup(work, sealed_dir, round: int) -> dict:
+    """Round 4 spec §9.4 hidden hygiene at X_preB, by state: (1) nothing generated → not_applicable; (2)-(5) → every plaintext
+    artifact must already be ledgered (deletion guard), cleanup authority = ledger ∪ standard manifest ∪ present artifacts,
+    plaintext deleted, ciphertext kept as unused. Returns the `xpreb_cleanup` ledger event."""
+    work, sealed_dir = pathlib.Path(work), pathlib.Path(sealed_dir)
+    led, std = work / "hidden_attempt_needles.jsonl", work / "needle-manifest.json"
+    plain_dir = work / "plain"
+    plain = sorted(p for p in plain_dir.rglob("*") if p.is_file()) if plain_dir.exists() else []
+    unsealed, enc = sealed_dir / f"round{round}-sealed.json", sealed_dir / f"round{round}-sealed.json.enc"
+    present = plain + ([unsealed] if unsealed.exists() else [])
+    base = {"event": "xpreb_cleanup", "ciphertext_exists": enc.exists(), "unused_due_to_X_preB": (True if enc.exists() else "not_applicable"),
+            "ciphertext_sha256": (ev.file_sha256(enc) if enc.exists() else None)}
+    if not led.exists() and not std.exists() and not present:
+        return {**base, "plaintext_generated": False, "cleanup_manifest": "not_applicable", "all_artifacts_ledgered": True}
+    unledgered = [str(p) for p in present if not artifact_is_ledgered(led, p)]
+    if unledgered:
+        raise SystemExit(f"REFUSED: unledgered plaintext artifacts (append_attempt_needles first): {unledgered}")
+    manifest = cleanup_authority(led, std if std.exists() else None, present)
+    (work / "xpreb_cleanup_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    for p in present:
+        p.unlink()
+    if plain_dir.exists():
+        import shutil
+        shutil.rmtree(plain_dir)
+    return {**base, "plaintext_generated": True, "cleanup_manifest_sha256": ev.file_sha256(work / "xpreb_cleanup_manifest.json"),
+            "standard_manifest_used": std.exists(), "all_artifacts_ledgered": True}
+
+
+HIDDEN_EVAL_EVENTS = ("round4_gate_checkpoint", "diag_run", "hidden_evaluation")
+
+
+def unchanged_since(repo, commit) -> list:
+    """Absolute paths of tracked files whose working-tree bytes equal their blob at `commit`: they predate every hidden
+    generation of the round, so they cannot carry a leak and are allowed in the X_preB cleanup scan (spec §9.4 ruling)."""
+    repo = pathlib.Path(repo).resolve()
+    tracked = _git(repo, "ls-files").split("\n")
+    changed = set(_git(repo, "diff", "--name-only", commit, "--").split("\n"))
+    return [str(repo / rel) for rel in tracked if rel and rel not in changed]
+
+
+def terminal_problems(round: int, state: str, repo, work, sealed_dir=None) -> list:
+    """validate-terminal (AC-R4-09): the X_preB terminal state is machine-checked against the T tree, the ledger, the outcomes
+    sha chain, the recomputed cleanup authority and the hidden-evaluation count."""
+    if state != "X_preB":
+        return [f"unknown terminal state {state}"]
+    repo, work = pathlib.Path(repo), pathlib.Path(work)
+    sealed_dir = pathlib.Path(sealed_dir) if sealed_dir else pathlib.Path.home() / ".atlassian_api_updater" / "sealed"
+    out = []
+    t_hits = _git(repo, "log", "--format=%H", "-S", f'"round": {round}', "--", "tests/benchmarks/round_freeze.json").splitlines()
+    if not t_hits:
+        return [f"no T commit (freeze entry) for round {round} in history"]
+    T = t_hits[-1]
+    try:
+        work_rel = str(work.resolve().relative_to(repo.resolve()))
+    except ValueError:
+        work_rel = None
+    excl = ["--", ".", ":!docs/phase3-readiness.md", ":!tests/benchmarks/round_outcomes.json"] + ([f":!{work_rel}"] if work_rel else [])
+    changed = _git(repo, "diff", "--name-only", T, *excl).split()
+    if changed:
+        out.append(f"files other than readiness/outcomes differ from T: {changed[:5]}")
+    untracked = [u for u in _git(repo, "ls-files", "--others", "--exclude-standard").split() if not (work_rel and u.startswith(work_rel))]
+    if untracked:
+        out.append(f"untracked files present: {untracked[:5]}")
+    bench = json.loads((repo / "tests/benchmarks/search_queries.json").read_text(encoding="utf-8"))
+    if bench.get("held_out") or bench.get("negative") or bench.get(f"round{round}_seal"):
+        out.append("B artifacts present (hidden sections or seal metadata) — X_preB requires B absent")
+    if (repo / "tests/benchmarks" / f"round{round}-final.json").exists():
+        out.append(f"round{round}-final.json exists (hidden evaluation happened)")
+    events = [json.loads(l) for l in (work / "controller-events.jsonl").read_text(encoding="utf-8").splitlines()] if (work / "controller-events.jsonl").exists() else []
+    if any(e.get("event") in HIDDEN_EVAL_EVENTS for e in events):
+        out.append("ledger records a hidden evaluation (hidden_evaluation_count != 0)")
+    outcomes = ev.load_round_outcomes(repo / "tests/benchmarks/round_outcomes.json")
+    rec = next((o for o in outcomes if o["round"] == round), None)
+    if rec is None or rec.get("outcome") != "aborted-pre-B" or rec.get("invalidated_by") != "X_preB" or not isinstance(rec.get("invalidates_policy"), bool) or not rec.get("reject_reason"):
+        out.append("round_outcomes.json lacks a well-formed aborted-pre-B record (outcome/invalidated_by/invalidates_policy/reject_reason)")
+    freeze = json.loads((repo / "tests/benchmarks/round_freeze.json").read_text(encoding="utf-8"))
+    try:
+        ev.round_states(freeze, outcomes)
+    except ValueError as e:
+        out.append(f"state model: {e}")
+    fz = next((f for f in freeze if f.get("round") == round), {})
+    at = next((e for e in events if e.get("event") == "round_outcomes_sha256_at_T"), None)
+    after = next((e for e in events if e.get("event") == "round_outcomes_sha256_after_append"), None)
+    if not at or at.get("sha256") != fz.get("round_outcomes_sha256"):
+        out.append("round_outcomes_sha256_at_T event missing or != freeze entry")
+    if not after or after.get("sha256") != ev.file_sha256(repo / "tests/benchmarks/round_outcomes.json"):
+        out.append("round_outcomes_sha256_after_append event missing or != current file")
+    cl = next((e for e in events if e.get("event") == "xpreb_cleanup"), None)
+    if cl is None:
+        out.append("xpreb_cleanup event missing")
+    else:
+        led, std = work / "hidden_attempt_needles.jsonl", work / "needle-manifest.json"
+        remaining = [p for p in ((work / "plain").rglob("*") if (work / "plain").exists() else []) if p.is_file()] + ([sealed_dir / f"round{round}-sealed.json"] if (sealed_dir / f"round{round}-sealed.json").exists() else [])
+        if remaining:
+            out.append(f"plaintext still present: {[str(p) for p in remaining][:3]}")
+        if cl.get("cleanup_manifest") == "not_applicable":
+            if led.exists() or std.exists() or remaining or cl.get("plaintext_generated") is not False:
+                out.append("cleanup not_applicable claimed but attempt ledger / manifest / plaintext exist")
+        else:
+            mp = work / "xpreb_cleanup_manifest.json"
+            if not mp.exists() or ev.file_sha256(mp) != cl.get("cleanup_manifest_sha256"):
+                out.append("xpreb_cleanup_manifest.json missing or sha != ledger")
+            elif json.loads(mp.read_text(encoding="utf-8")) != cleanup_authority(led, std if std.exists() else None, remaining):
+                out.append("cleanup manifest != recomputed authority (ledger ∪ standard manifest ∪ remaining plaintext)")
+            scan = next((e for e in events if e.get("event") == "xpreb_cleanup_scan"), None)
+            if scan is None or scan.get("unexpected_hits") != [] or scan.get("manifest_sha256") != cl.get("cleanup_manifest_sha256"):
+                out.append("cleanup scan verdict missing, not clean, or bound to another manifest")
+        enc = sealed_dir / f"round{round}-sealed.json.enc"
+        if enc.exists() and (cl.get("unused_due_to_X_preB") is not True or cl.get("ciphertext_sha256") != ev.file_sha256(enc)):
+            out.append("ciphertext exists but unused_due_to_X_preB/ciphertext_sha256 not recorded correctly")
+        if not enc.exists() and cl.get("unused_due_to_X_preB") != "not_applicable":
+            out.append("no ciphertext but unused_due_to_X_preB != not_applicable")
+    readiness = (repo / "docs/phase3-readiness.md").read_text(encoding="utf-8")
+    if f"Round {round} " not in readiness or not re.search(r"housekeeping_commit:\s*[0-9a-f]{7,40}", readiness.split(f"Round {round} ")[-1]):
+        out.append("readiness lacks the Round 4 abort block with a housekeeping_commit line")
+    return out
 
 
 def cmd_validate_terminal(args):
-    problems = terminal_problems(args.round, args.state, ROOT, pathlib.Path(args.work))
+    problems = terminal_problems(args.round, args.state, ROOT, pathlib.Path(args.work), sealed_dir=getattr(args, "sealed_dir", None))
     for m in problems:
         print(f"PROBLEM {m}")
     print("terminal ok" if not problems else f"{len(problems)} problem(s)")
@@ -652,6 +766,79 @@ def _words(text: str) -> list:
 def needle_manifest(queries) -> list:
     """AC-18b scanner input (spec §5 v1.22): per query the word count and sha256 of the normalized n-gram — never the text."""
     return [{"words": len(_words(q)), "sha256": _ngram_sha256(" ".join(_words(q)))} for q in queries]
+
+
+WINDOW = (3, 7)                                                           # Round 4 spec §9.4: hidden queries are 3–7 words
+
+
+def _json_queries(obj) -> list:
+    out = []
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if k == "query" and isinstance(v, str):
+                out.append(v)
+            else:
+                out += _json_queries(v)
+    elif isinstance(obj, list):
+        for v in obj:
+            out += _json_queries(v)
+    return out
+
+
+def cleanup_needle_manifest_from_artifacts(paths) -> list:
+    """spec §9.4 / AC-R4-09: JSON artifacts → every `query` field (exact needles); non-JSON artifacts → every contiguous
+    3..7-word window of the whole AC-18b-normalized word stream (line breaks are whitespace). Hash-only, deduplicated, sorted."""
+    seen = {}
+    for p in paths:
+        text = pathlib.Path(p).read_text(encoding="utf-8", errors="ignore")
+        try:
+            qs = _json_queries(json.loads(text))
+        except json.JSONDecodeError:
+            words = _words(text)
+            qs = [" ".join(words[i:i + n]) for n in range(WINDOW[0], WINDOW[1] + 1) for i in range(len(words) - n + 1)]
+        for q in qs:
+            w = _words(q)
+            if w:
+                seen[(len(w), _ngram_sha256(" ".join(w)))] = True
+    return [{"words": n, "sha256": h} for n, h in sorted(seen)]
+
+
+def append_attempt_needles(ledger_path, paths) -> int:
+    """Register hidden-attempt artifacts (hash-only) in $W/hidden_attempt_needles.jsonl before they may be deleted."""
+    rows = [{"artifact_sha256": ev.file_sha256(p), "needles": cleanup_needle_manifest_from_artifacts([p])} for p in paths]
+    with open(ledger_path, "a", encoding="utf-8") as fh:
+        for r in rows:
+            fh.write(json.dumps(r, sort_keys=True) + "\n")
+    return sum(len(r["needles"]) for r in rows)
+
+
+def _ledger_rows(ledger_path) -> list:
+    p = pathlib.Path(ledger_path)
+    return [json.loads(l) for l in p.read_text(encoding="utf-8").splitlines()] if p.exists() else []
+
+
+def artifact_is_ledgered(ledger_path, path) -> bool:
+    """Deletion guard (spec §9.4): the artifact's sha appears in the ledger AND its recomputed needles ⊆ the ledgered needles."""
+    rows = _ledger_rows(ledger_path)
+    sha = ev.file_sha256(path)
+    if not any(r["artifact_sha256"] == sha for r in rows):
+        return False
+    ledgered = {(e["words"], e["sha256"]) for r in rows for e in r["needles"]}
+    return all((e["words"], e["sha256"]) in ledgered for e in cleanup_needle_manifest_from_artifacts([path]))
+
+
+def cleanup_authority(ledger_path, standard_manifest_path, present_paths) -> list:
+    """union(historical attempt ledger, standard final-set manifest if any, needles recomputed from artifacts still present)."""
+    seen = {}
+    for r in _ledger_rows(ledger_path):
+        for e in r["needles"]:
+            seen[(e["words"], e["sha256"])] = True
+    if standard_manifest_path:
+        for e in json.loads(pathlib.Path(standard_manifest_path).read_text(encoding="utf-8")):
+            seen[(e["words"], e["sha256"])] = True
+    for e in cleanup_needle_manifest_from_artifacts(present_paths):
+        seen[(e["words"], e["sha256"])] = True
+    return [{"words": n, "sha256": h} for n, h in sorted(seen)]
 
 
 def scan_for_needles(roots, manifest, allow=()) -> list:
@@ -874,7 +1061,8 @@ def main(argv=None):
     p.add_argument("--reference-enc", default=None); p.add_argument("--doc-title-sources", default=None); p.add_argument("--doc-titles", default=None)
     p.add_argument("--base-commit", default=None); p.set_defaults(fn=cmd_freeze)
     p = sub.add_parser("round-start-guard"); _round(p); p.set_defaults(fn=cmd_round_start_guard)
-    p = sub.add_parser("validate-terminal"); _round(p); p.add_argument("--state", required=True, choices=("X_preB",)); p.add_argument("--work", required=True); p.set_defaults(fn=cmd_validate_terminal)
+    p = sub.add_parser("validate-terminal"); _round(p); p.add_argument("--state", required=True, choices=("X_preB",)); p.add_argument("--work", required=True)
+    p.add_argument("--sealed-dir", default=None); p.set_defaults(fn=cmd_validate_terminal)
     p = sub.add_parser("verify-freeze"); _round(p); p.add_argument("--cache-dir", required=True); p.set_defaults(fn=cmd_verify_freeze)
     p = sub.add_parser("scan"); p.add_argument("--manifest", required=True); p.add_argument("--root", action="append", required=True)
     p.add_argument("--allow", action="append", help="file or directory to exclude from the scan"); p.add_argument("--expect-sha256", default=None); p.set_defaults(fn=cmd_scan)

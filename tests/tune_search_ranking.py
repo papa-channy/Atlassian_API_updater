@@ -467,6 +467,29 @@ def run_pipeline(evaluate_fn, bench, aliases_raw, cands_doc, grid, baseline, fix
     return results, selected, working, patch, seed_res, reg_res, {"constants": excluded, "final": list(fixture_fn(selected, working))}
 
 
+@dataclasses.dataclass
+class PipelineResult:
+    """Round 4 spec §4.1: the outcome of one production tuning run (no shas inside; the controller hashes it canonically)."""
+    selected_point: dict
+    proposed_actions: dict
+    validation_errors: list
+    seed_result: dict
+    regression_result: dict
+    fixture_result: dict
+    tuning_accept: bool
+
+
+def run_pipeline_result(evaluate_fn, bench, aliases_raw, cands_doc, grid, baseline, fixture_fn, queries, classes) -> PipelineResult:
+    """The ONE production orchestration, pure: run_pipeline (grid → select_candidate once → propose_aliases once) then
+    validate_alias_change and tuning_accept. main() and round4_simulation --phase pre-T both call this."""
+    results, selected, working, patch, seed_res, reg_res, fixture_fail = run_pipeline(evaluate_fn, bench, aliases_raw, cands_doc, grid, baseline, fixture_fn)
+    errors = validate_alias_change(aliases_raw, working, cands_doc["candidates"], queries, classes)
+    accept = tuning_accept(seed_res, reg_res, fixture_fail["final"]) and not errors
+    res = PipelineResult(selected, patch, errors, seed_res, reg_res, fixture_fail, accept)
+    res.grid_results, res.working_aliases = results, working          # extra attributes for main()'s log line (not part of the dataclass)
+    return res
+
+
 def _parse(argv):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--cache-dir", type=pathlib.Path)
@@ -567,8 +590,10 @@ def main(argv=None) -> int:
         def fixture_fn(point, raw):
             return fixture_failures_fast(ge_fx, rp, point, fx_bench) if raw_sha(raw) == b_sha else fixture_failures(fx_state, rp, point, fx_bench, _alias_policy(raw))
         t0 = time.perf_counter()
-        results, selected, working, patch, seed_res, reg_res, fixture_fail = run_pipeline(
-            evaluate_fn, bench, aliases_raw, cands_doc, rp.tuning_grid, dict(rp.baseline), fixture_fn)
+        res = run_pipeline_result(evaluate_fn, bench, aliases_raw, cands_doc, rp.tuning_grid, dict(rp.baseline), fixture_fn,
+                                  {r["id"]: r["query"] for r in bench["seed"]}, {r["id"]: r["failure_classes"] for r in bench["seed"]})
+        results, selected, working, patch = res.grid_results, res.selected_point, res.working_aliases, res.proposed_actions
+        seed_res, reg_res, fixture_fail = res.seed_result, res.regression_result, res.fixture_result
         grid_runtime = time.perf_counter() - t0
         fixture_diag = fixture_negative_diagnostic(fx_state, rp, selected, fx_bench, _alias_policy(working))   # AC-R3-11a diagnostic, final config
         slow_s, slow_r = evaluate_point(state, rp, selected, bench, _alias_policy(aliases_raw))        # cross-check the memoized path once
@@ -578,8 +603,7 @@ def main(argv=None) -> int:
         if counts_differ or id_mismatch:
             raise SystemExit("error: memoized grid evaluator disagrees with search_operations at the selected point"
                               f" (differing ids: {id_mismatch})")
-        violations = validate_alias_change(aliases_raw, working, cands_doc["candidates"], {r["id"]: r["query"] for r in bench["seed"]},
-                                           {r["id"]: r["failure_classes"] for r in bench["seed"]})
+        violations = res.validation_errors
         if violations:
             raise SystemExit("\n".join(f"VIOLATION {v}" for v in violations))
         for f in seed_res["failed"] + reg_res["failed"]:
