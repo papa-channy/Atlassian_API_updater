@@ -718,3 +718,19 @@ class TestRoundStateModel(unittest.TestCase):
         o = ev.load_round_outcomes()
         self.assertEqual([e["round"] for e in o], [3]); self.assertEqual(o[0]["outcome"], "pre-T not reached")
         self.assertEqual(ev.load_round_recoveries(), [])
+
+
+class TestToolingFilesRound4(unittest.TestCase):
+    def test_tooling_files_exist_and_one_byte_changes_sha(self):
+        import shutil, tempfile
+        for rel in ev.TOOLING_FILES:
+            self.assertTrue((ROOT / rel).exists(), rel)
+        self.assertIn("tests/benchmarks/doc_titles.py", ev.TOOLING_FILES)
+        with tempfile.TemporaryDirectory() as td:
+            copy = pathlib.Path(td)
+            for rel in ev.TOOLING_FILES:
+                (copy / rel).parent.mkdir(parents=True, exist_ok=True); shutil.copy(ROOT / rel, copy / rel)
+            before = ev.tooling_code_sha256(copy)
+            with open(copy / "tests/benchmarks/doc_titles.py", "ab") as fh:
+                fh.write(b"#")
+            self.assertNotEqual(ev.tooling_code_sha256(copy), before)
