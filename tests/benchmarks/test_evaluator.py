@@ -179,6 +179,8 @@ class TestRankingTablesFrozen(unittest.TestCase):
             print("round 2 not frozen yet: hash equality checked after commit T"); return
         if ev.pending_round() is not None:
             print(f"round {ev.pending_round()} structure/tooling committed at H; freeze hashes checked after its commit T"); return
+        if ev.round_states(ev.load_round_freeze(), ev.load_round_outcomes()).get(e["round"]) == "aborted-pre-B":
+            print(f"round {e['round']} freeze entry invalidated by X_preB: verified by the recovery chain, not current-file equality (spec §9.1)"); return
         got = ev.round_freeze_hashes(e["round"])
         for k, v in got.items():
             self.assertEqual(e[k], v, k)
@@ -725,8 +727,11 @@ class TestRoundStateModel(unittest.TestCase):
 
     def test_committed_outcomes_file_shape(self):
         o = ev.load_round_outcomes()
-        self.assertEqual([e["round"] for e in o], [3]); self.assertEqual(o[0]["outcome"], "pre-T not reached")
-        self.assertEqual(ev.load_round_recoveries(), [])
+        self.assertEqual(o[0]["round"], 3); self.assertEqual(o[0]["outcome"], "pre-T not reached")
+        self.assertEqual([e["round"] for e in o], sorted(e["round"] for e in o))
+        ev.round_states(ev.load_round_freeze(), o)                                       # every record is a valid decided state (raises otherwise)
+        for r in ev.load_round_recoveries():
+            self.assertEqual(r.get("recovery_mode"), "rollback")
 
 
 class TestToolingFilesRound4(unittest.TestCase):
