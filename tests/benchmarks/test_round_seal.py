@@ -621,7 +621,14 @@ class TestUnchangedSinceAllow(unittest.TestCase):
             T = run("rev-parse", "HEAD").stdout.strip()
             (repo / "new.md").write_text("candidate answer is leaked\n"); (repo / "old2.md").write_text("x\n"); run("add", "old2.md"); run("commit", "-q", "-m", "later")
             m = rs.cleanup_needle_manifest_from_artifacts([repo / "new.md"])
-            allow = rs.unchanged_since(repo, T) + [str(repo / ".git")]
+            allow = rs.t_baseline_identical_files(repo, T) + [str(repo / ".git")]
             self.assertIn(str(repo / "old.md"), allow)
             self.assertEqual(rs.scan_for_needles([str(repo)], m, allow=allow + [str(repo / "new.md")]), [])        # old.md shares the 3-gram but predates T
-            self.assertEqual(rs.scan_for_needles([str(repo)], m, allow=allow), [str(repo / "new.md")])             # a post-T file with the same 3-gram is a hit
+            self.assertEqual(rs.scan_for_needles([str(repo)], m, allow=allow), [str(repo / "new.md")])             # a post-T untracked file with the same 3-gram is a hit
+            (repo / "tracked-new.md").write_text("candidate answer is tracked\n"); run("add", "tracked-new.md"); run("commit", "-q", "-m", "new tracked")
+            (repo / ".gitignore").write_text("ignored.md\n"); (repo / "ignored.md").write_text("candidate answer is ignored\n")
+            (repo / "old.md").write_text("candidate answer is here!\n")                                             # 1-byte change to a T path
+            allow = rs.t_baseline_identical_files(repo, T) + [str(repo / ".git")]
+            hits = rs.scan_for_needles([str(repo)], m, allow=allow)
+            for leaked in ("new.md", "tracked-new.md", "ignored.md", "old.md"):
+                self.assertIn(str(repo / leaked), hits, leaked)

@@ -117,6 +117,7 @@ ROUND2_HASH_KEYS = {"structure_sha256", "verb_inventory_sha256", "concept_lexico
                     "alias_candidates_sha256", "worker_brief_sha256", "hidden_generation_prompt_sha256",
                     "hidden_reviewer_prompt_sha256", "tooling_code_sha256", "evaluation_code_sha256_at_T"}
 SHA_KEYS_R3 = ROUND2_HASH_KEYS | {"regression_reference_sha256", "tuning_grid_sha256"}
+SHA_KEYS_R4 = SHA_KEYS_R3 | {"doc_titles_source_bundle_sha256", "doc_titles_snapshot_sha256", "round_outcomes_sha256", "round_recoveries_sha256"}   # t_policy_files is a list
 
 
 def ranking_structure_sha256(raw: dict) -> str:
@@ -150,13 +151,21 @@ class TestRankingTablesFrozen(unittest.TestCase):
 
     def test_round_freeze_file_shape(self):
         f = ev.load_round_freeze()
-        self.assertIsInstance(f, list); self.assertEqual([e["round"] for e in f], list(range(1, len(f) + 1)))
+        rounds = [e["round"] for e in f]
+        self.assertIsInstance(f, list); self.assertEqual(rounds, sorted(rounds)); self.assertEqual(rounds[0], 1)
+        decided = ev.round_states(f, ev.load_round_outcomes())                                 # Round 4 spec §9.1: gaps are closed rounds
+        for r in range(1, rounds[-1] + 1):
+            self.assertIn(r, decided, f"round {r} is neither frozen nor decided in round_outcomes.json")
         self.assertEqual(set(f[0]), {"round", "commit_T", "structure_sha256"})
         for e in f[1:]:
             self.assertEqual(set(e), ev.freeze_key_set(e["round"]), e["round"])
             self.assertNotIn("commit_T", e)                                                     # spec §9: T sha is not inside the T file
-            for k in (SHA_KEYS_R3 if e["round"] >= 3 else ROUND2_HASH_KEYS) | {"source_registry_fingerprint"}:
+            sha_keys = SHA_KEYS_R4 if e["round"] >= 4 else (SHA_KEYS_R3 if e["round"] >= 3 else ROUND2_HASH_KEYS)
+            for k in sha_keys | {"source_registry_fingerprint"}:
                 self.assertRegex(e[k], r"^[0-9a-f]{64}$", k)
+            if e["round"] >= 4:
+                self.assertEqual(e["t_policy_files"], sorted(set(e["t_policy_files"])))
+                self.assertTrue(set(e["t_policy_files"]) <= set(ev.T_DATA_FILES))
             self.assertEqual(set(e["source_spec_sha256"]), {"jira-platform", "jira-software", "confluence"})
             if e["round"] >= 3:
                 self.assertEqual(set(e["reference_set"]), {"origin", "enc_sha256", "held_out_sha256", "negative_sha256"})

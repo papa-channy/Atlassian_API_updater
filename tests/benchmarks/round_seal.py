@@ -463,13 +463,18 @@ def xpreb_cleanup(work, sealed_dir, round: int) -> dict:
 HIDDEN_EVAL_EVENTS = ("round4_gate_checkpoint", "diag_run", "hidden_evaluation")
 
 
-def unchanged_since(repo, commit) -> list:
-    """Absolute paths of tracked files whose working-tree bytes equal their blob at `commit`: they predate every hidden
-    generation of the round, so they cannot carry a leak and are allowed in the X_preB cleanup scan (spec §9.4 ruling)."""
+def t_baseline_identical_files(repo, commit) -> list:
+    """Spec §9.4 (v1.12 ruling): absolute paths of files that were tracked at `commit` (T) and whose current working-tree bytes
+    equal that blob. They predate every hidden generation of the round, so they cannot carry a leak and are the only
+    provenance allow of the X_preB cleanup scan; every other file under the scan roots (changed, new, untracked, ignored)
+    is scanned. The rule never looks at hidden text."""
     repo = pathlib.Path(repo).resolve()
-    tracked = _git(repo, "ls-files").split("\n")
+    at_t = set(_git(repo, "ls-tree", "-r", "--name-only", commit).split("\n"))
     changed = set(_git(repo, "diff", "--name-only", commit, "--").split("\n"))
-    return [str(repo / rel) for rel in tracked if rel and rel not in changed]
+    return [str(repo / rel) for rel in sorted(at_t) if rel and rel not in changed and (repo / rel).is_file()]
+
+
+unchanged_since = t_baseline_identical_files                      # name used by the Task 3 ledger
 
 
 def terminal_problems(round: int, state: str, repo, work, sealed_dir=None) -> list:
@@ -1002,6 +1007,8 @@ def cmd_seal(args):
 
 
 def cmd_scan(args):
+    if getattr(args, "allow_baseline_commit", None):
+        args.allow = list(args.allow or []) + t_baseline_identical_files(ROOT, args.allow_baseline_commit)
     sha = ev.file_sha256(args.manifest)
     if args.expect_sha256 and sha != args.expect_sha256:
         print(json.dumps({"manifest_sha256": sha, "error": f"manifest sha != expected {args.expect_sha256}"})); return 2
@@ -1065,7 +1072,8 @@ def main(argv=None):
     p.add_argument("--sealed-dir", default=None); p.set_defaults(fn=cmd_validate_terminal)
     p = sub.add_parser("verify-freeze"); _round(p); p.add_argument("--cache-dir", required=True); p.set_defaults(fn=cmd_verify_freeze)
     p = sub.add_parser("scan"); p.add_argument("--manifest", required=True); p.add_argument("--root", action="append", required=True)
-    p.add_argument("--allow", action="append", help="file or directory to exclude from the scan"); p.add_argument("--expect-sha256", default=None); p.set_defaults(fn=cmd_scan)
+    p.add_argument("--allow", action="append", help="file or directory to exclude from the scan"); p.add_argument("--expect-sha256", default=None)
+    p.add_argument("--allow-baseline-commit", default=None, help="X_preB cleanup scan: also allow every tracked file byte-identical to this commit (T)"); p.set_defaults(fn=cmd_scan)
     p = sub.add_parser("reference-check"); _round(p); p.add_argument("--reference-enc", required=True); p.set_defaults(fn=cmd_reference_check)
     args = ap.parse_args(argv)
     return args.fn(args)

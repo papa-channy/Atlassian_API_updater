@@ -617,7 +617,7 @@ def apply_XpreB(state=2):
     e = rs.xpreb_cleanup(work, sealed, ROUND)
     log(e)
     if e.get("cleanup_manifest_sha256"):
-        allow = [str(work / "xpreb_cleanup_manifest.json"), str(ROOT / ".git")] + rs.unchanged_since(ROOT, T)   # files unchanged since T cannot leak post-T text
+        allow = [str(work / "xpreb_cleanup_manifest.json"), str(ROOT / ".git")] + rs.t_baseline_identical_files(ROOT, T)   # files unchanged since T cannot leak post-T text
         hits = rs.scan_for_needles([str(ROOT)], json.loads((work / "xpreb_cleanup_manifest.json").read_text(encoding="utf-8")), allow=allow)
         log({"event": "xpreb_cleanup_scan", "manifest_sha256": e["cleanup_manifest_sha256"], "unexpected_hits": hits})
         assert not hits, hits

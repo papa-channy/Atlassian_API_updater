@@ -43,6 +43,7 @@ class TestRegressionReference(unittest.TestCase):
         self.assertEqual(dict(rp.ordering_rules), search.LEGACY_ORDERING_RULES)
 
     def test_round3_freeze_pins_the_reference(self):
-        if ev.current_round()["round"] < 3:
+        cur = ev.current_round()["round"]
+        if cur < 3:
             print("round 3 not frozen yet: regression_reference_sha256 checked after commit T"); return
-        self.assertEqual(ev.freeze_for(3)["regression_reference_sha256"], ev.canonical_sha256(self.ref))
+        self.assertEqual(ev.freeze_for(cur)["regression_reference_sha256"], ev.canonical_sha256(self.ref))   # round-independent reference (Round 4 ruling)
