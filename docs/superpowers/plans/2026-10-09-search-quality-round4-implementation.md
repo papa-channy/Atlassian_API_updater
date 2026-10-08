@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-09-search-quality-round4-design.md` **v1.11** (v1.10 passed external review 11 with P0 0 / P1 4 "구현 계획으로 진행 가능"; v1.11 applied the four P1 items). The spec inherits Round 3 v1.25.1 (`docs/superpowers/specs/2026-10-05-search-quality-round3-design.md`) by delta; where this plan says "as Round 3 plan v16 Task N Step M" it means `docs/superpowers/plans/2026-10-05-search-quality-round3-implementation.md` with the substitution table of §"Name substitutions" applied verbatim.
 
-**Plan version:** v2 (2026-10-09; v1 → external plan review 1 P0 4 / P1 5: strict compound state, Git-bound recovery verifier, TOOLING_FILES timing, cleanup deletion/terminal machine checks, fetch errors, not_applicable branch, sha helpers, full post-T allowlist check, no runtime placeholders).
+**Plan version:** v3 (2026-10-09; v2 → plan review 2 P0 2 / P1 5: `append_outcome` with the real freeze + `--apply-outcome` CLI and four tests, the sealed plaintext registered in the attempt ledger (states 3–5 simulated), independent blockers, attestation evidence checks, child-sitemap kind, sha helper; v1 → plan review 1 P0 4 / P1 5: strict compound state, Git-bound recovery verifier, TOOLING_FILES timing, cleanup deletion/terminal machine checks, fetch errors, not_applicable branch, sha helpers, full post-T allowlist check, no runtime placeholders).
 
 ## Global Constraints
 
@@ -191,13 +191,13 @@ class TestFreezeGuardAndRecovery(unittest.TestCase):
             self.assertEqual(rs.verify_recovery(4, repo["path"]), [])
             self.assertTrue(any("parent(R)" in p for p in rs.verify_recovery(4, repo["path"], r_commit=repo["bad_r"])))
     def test_verify_recovery_tamper_cases(self):
-        for tamper, needle in (("r_not_hk_bytes", "sha(HK:path)"), ("attestation_edited_after_A", "A blob"), ("before_sha_wrong", "sha(git show T:path)"), ("removed_aliases_wrong", "removed_aliases")):
+        for tamper, needle in (("r_not_hk_bytes", "sha(HK:path)"), ("attestation_edited_after_A", "A blob"), ("before_sha_wrong", "sha(git show T:path)"), ("removed_aliases_wrong", "removed_aliases"), ("evidence_missing", "review_output_sha256")):
             with tempfile.TemporaryDirectory() as td:
                 repo = _mk_recovery_repo(pathlib.Path(td), tamper=tamper)
                 self.assertTrue(any(needle in p for p in rs.verify_recovery(4, repo["path"])), tamper)
 ```
 
-`_mk_recovery_repo(root, tamper=None)` (test helper, ~60 lines): `git init` a temp repo; commit **H** with `search_aliases.json` containing no lexicon-r4 entries (known-good) and `round_outcomes.json`/`round_recoveries.json` (`[]`); commit **T** adding one `origin: lexicon-r4` alias (`notes[word] = {"origin": "lexicon-r4"}`) and `round_freeze.json` `[{"round": 4, "t_policy_files": ["tools/atlassian_docs/intelligence/data/search_aliases.json"], "round_recoveries_sha256": <sha of the [] file>, "round_outcomes_sha256": …}]`; commit **X** appending the `aborted-pre-B` outcome and a `docs/phase3-readiness.md` Round 4 section containing the line `housekeeping_commit: <H sha>` (the binding HK provenance); commit **R** restoring the H bytes of `search_aliases.json` and nothing else; commit **A** appending the attestation `{"round": 4, "t_commit": T, "xpreb_terminal_commit": X, "recovery_commit": R, "recovery_mode": "rollback", "reviewed_base": X, "reviewed_head": R, "reviewed_by": "test", "review_findings": 0, "review_output_sha256": "00"*32, "suite_commit": R, "suite_command": "python -m unittest discover -s tests -t .", "suite_exit_code": 0, "suite_output_sha256": "11"*32, "files": [{"path": …search_aliases.json, "before_sha256": sha(T blob), "after_sha256": sha(R blob), "known_good_sha256": sha(H blob)}], "removed_aliases": [word]}`. `tamper` variants: `r_not_hk_bytes` (R restores different bytes; attestation shas copied from R so only the HK comparison catches it), `attestation_edited_after_A` (a later commit edits `reviewed_by`), `before_sha_wrong`, `removed_aliases_wrong` (`[]`); `bad_r` = a second R on top of R (`parent(bad_r) != X`). Run → FAIL (`freeze_guard_problems`, `verify_recovery` missing).
+`_mk_recovery_repo(root, tamper=None)` (test helper, ~60 lines): `git init` a temp repo; commit **H** with `search_aliases.json` containing no lexicon-r4 entries (known-good) and `round_outcomes.json`/`round_recoveries.json` (`[]`); commit **T** adding one `origin: lexicon-r4` alias (`notes[word] = {"origin": "lexicon-r4"}`) and `round_freeze.json` `[{"round": 4, "t_policy_files": ["tools/atlassian_docs/intelligence/data/search_aliases.json"], "round_recoveries_sha256": <sha of the [] file>, "round_outcomes_sha256": …}]`; commit **X** appending the `aborted-pre-B` outcome and a `docs/phase3-readiness.md` Round 4 section containing the line `housekeeping_commit: <H sha>` (the binding HK provenance); commit **R** restoring the H bytes of `search_aliases.json` and nothing else; commit **A** appending the attestation `{"round": 4, "t_commit": T, "xpreb_terminal_commit": X, "recovery_commit": R, "recovery_mode": "rollback", "reviewed_base": X, "reviewed_head": R, "reviewed_by": "test", "review_findings": 0, "review_output_sha256": "00"*32, "suite_commit": R, "suite_command": "python -m unittest discover -s tests -t .", "suite_exit_code": 0, "suite_output_sha256": "11"*32, "files": [{"path": …search_aliases.json, "before_sha256": sha(T blob), "after_sha256": sha(R blob), "known_good_sha256": sha(H blob)}], "removed_aliases": [word]}`. `tamper` variants: `r_not_hk_bytes` (R restores different bytes; attestation shas copied from R so only the HK comparison catches it), `attestation_edited_after_A` (a later commit edits `reviewed_by`), `before_sha_wrong`, `removed_aliases_wrong` (`[]`), `evidence_missing` (`review_output_sha256` absent); `bad_r` = a second R on top of R (`parent(bad_r) != X`). Run → FAIL (`freeze_guard_problems`, `verify_recovery` missing).
 
 - [ ] **Step 4: Implement guard, verifier and the Round 4 freeze entry in `round_seal.py`**
 
@@ -240,6 +240,9 @@ def verify_recovery(round: int, repo, r_commit=None) -> list:
         if sha(R) != f["after_sha256"] or f["after_sha256"] != f["known_good_sha256"] or sha(HK) != f["known_good_sha256"]: out.append(f"{f['path']}: after/known-good sha mismatch")
     if rec.get("reviewed_base") != X or rec.get("reviewed_head") != R or rec.get("suite_commit") != R: out.append("reviewed_base/head or suite_commit != X/R")
     if rec.get("review_findings") != 0 or rec.get("suite_exit_code") != 0: out.append("review_findings/suite_exit_code != 0")
+    hexsha = lambda v: isinstance(v, str) and re.fullmatch(r"[0-9a-f]{64}", v) is not None
+    if not (hexsha(rec.get("review_output_sha256")) and hexsha(rec.get("suite_output_sha256"))): out.append("review_output_sha256/suite_output_sha256 missing or not sha256 hex")
+    if rec.get("recovery_mode") != "rollback" or not str(rec.get("reviewed_by", "")).strip() or not str(rec.get("suite_command", "")).strip(): out.append("recovery_mode/reviewed_by/suite_command incomplete")
     lex = lambda c: {w for w, n in json.loads(_git(repo, "show", f"{c}:tools/atlassian_docs/intelligence/data/search_aliases.json")).get("notes", {}).items() if n.get("origin") == f"lexicon-r{round}"}
     if lex(R): out.append(f"lexicon-r{round} aliases still present at R")
     if sorted(lex(T) - lex(R)) != sorted(rec.get("removed_aliases", [])): out.append("removed_aliases != lexicon-r4 words present at T and absent at R")
@@ -399,6 +402,9 @@ class TestAcquireAndSnapshot(unittest.TestCase):
             m = dt.acquire(SOURCES_FX, pathlib.Path(td), fake_fetch(PAGES_FX, redirects={LOC1: "https://support.atlassian.com/confluence-cloud/docs/x/"}), delay=0)
             row = next(r for r in dt.read_pages(pathlib.Path(td), "jira-software-cloud") if r["url"] == LOC1)
             self.assertEqual(row["fail_reason"], "redirect-outside-prefix"); self.assertNotIn("html_sha256", row)
+    def test_acquire_rejects_nested_sitemapindex(self):
+        with tempfile.TemporaryDirectory() as td, self.assertRaises(SystemExit):
+            dt.acquire([dict(dt.DOC_SOURCES[0], sitemap_url=IDX_URL)], pathlib.Path(td), fake_fetch({**PAGES_FX, IDX_URL: FX("index.sitemap.xml"), CHILD_URL: FX("index.sitemap.xml")}), delay=0)
     def test_acquire_aborts_over_fail_rate(self):
         with tempfile.TemporaryDirectory() as td, self.assertRaises(SystemExit):
             dt.acquire(SOURCES_FX, pathlib.Path(td), fake_fetch(PAGES_FX, statuses={LOC1: 500}), delay=0)   # 1/3 > 5 %
@@ -473,6 +479,7 @@ def acquire(sources, out_dir, fetch=default_fetch, delay=0.25, epoch=1) -> dict:
                 if not 200 <= st < 300: raise SystemExit(f"{src['product']}: child sitemap HTTP {st}")
                 (out_dir / f"{src['product']}.child-{i}.sitemap.xml").write_bytes(cb)
                 children.append({"file": f"{src['product']}.child-{i}.sitemap.xml", "sha256": hashlib.sha256(cb).hexdigest()})
+                if parse_sitemap(cb)[0] != "urlset": raise SystemExit(f"{src['product']}: child sitemap {child} is not a urlset (one level only)")
                 l, d, p = preflight(src, cb); locs += l; discarded += d; problems += p
         if problems: raise SystemExit("preflight: " + "; ".join(problems))
         rows, ok = [], 0
@@ -768,6 +775,8 @@ class TestPreTBlockers(unittest.TestCase):
         b = sim.pre_t_blockers(self._res(seed_failed=["s-027"]), {"pass": True})
         self.assertEqual([x["kind"] for x in b], ["unreachable_seed"]); self.assertEqual(b[0]["seeds"], ["s-027"])
         b2 = sim.pre_t_blockers(self._res(reg_eff=13), {"pass": True}); self.assertEqual([x["kind"] for x in b2], ["tuning_accept_false"])
+        both = sim.pre_t_blockers(self._res(seed_failed=["s-027"], reg_eff=13, errors=["budget exceeded"]), {"pass": False})
+        self.assertEqual([x["kind"] for x in both], ["unreachable_seed", "tuning_accept_false", "alias_validation_error", "inherited_ac_r3_01_failure"])
         b3 = sim.pre_t_blockers(self._res(errors=["budget exceeded"]), {"pass": True}); self.assertEqual([x["kind"] for x in b3], ["alias_validation_error"])
         b4 = sim.pre_t_blockers(self._res(), {"pass": False}); self.assertEqual([x["kind"] for x in b4], ["inherited_ac_r3_01_failure"])
     def test_pre_t_gate_uses_dry_run_not_grid_reachability(self):
@@ -784,15 +793,30 @@ class TestSyntheticBundle(unittest.TestCase):
             self.assertTrue(any(l.startswith("issue\tjira-software-cloud\t") for l in dt.render_block(snap, ["issue"]).splitlines()))
 
 class TestStopSemantics(unittest.TestCase):
-    def test_outcome_append_refused_in_stop_state(self):
+    F124 = [{"round": 1}, {"round": 2}, {"round": 4}]; F12 = [{"round": 1}, {"round": 2}]
+    O3 = [{"round": 3, "outcome": "pre-T not reached"}]
+    ABORT = {"round": 4, "outcome": "aborted-pre-B", "invalidated_by": "X_preB", "invalidates_policy": True, "reject_reason": "t", "t_commit": "abc"}
+    def _w(self, td, *events):
+        w = pathlib.Path(td); (w / "controller-events.jsonl").write_text("".join(json.dumps(e) + "\n" for e in events)); (w / "o.json").write_text(json.dumps(self.O3)); return w
+    def test_outcome_append_refused_in_stop_state_then_allowed_after_user_decision(self):
         with tempfile.TemporaryDirectory() as td:
-            w = pathlib.Path(td); (w / "controller-events.jsonl").write_text(json.dumps({"event": "pre_t_checkpoint", "result": "stop_for_amendment"}) + "\n")
-            with self.assertRaises(SystemExit): sim.append_outcome(w, {"round": 4, "outcome": "pre-T not reached"}, outcomes_path=w / "o.json")
+            w = self._w(td, {"event": "pre_t_checkpoint", "result": "stop_for_amendment"})
+            with self.assertRaises(SystemExit): sim.append_outcome(w, {"round": 4, "outcome": "pre-T not reached"}, outcomes_path=w / "o.json", freeze=self.F12)
             (w / "controller-events.jsonl").open("a").write(json.dumps({"event": "user_decision", "decision": "TERMINAL_PRE_T_NOT_REACHED"}) + "\n")
-            sim.append_outcome(w, {"round": 4, "outcome": "pre-T not reached"}, outcomes_path=w / "o.json")
+            sim.append_outcome(w, {"round": 4, "outcome": "pre-T not reached"}, outcomes_path=w / "o.json", freeze=self.F12)   # closed without a freeze 4
+    def test_aborted_pre_b_needs_the_real_freeze_entry(self):
+        with tempfile.TemporaryDirectory() as td:
+            w = self._w(td)
+            sim.append_outcome(w, dict(self.ABORT), outcomes_path=w / "o.json", freeze=self.F124)                                  # freeze 4 present → ok
+            w2 = self._w(td + "/x" if False else tempfile.mkdtemp())
+            with self.assertRaises(ValueError): sim.append_outcome(w2, dict(self.ABORT), outcomes_path=w2 / "o.json", freeze=self.F12)   # orphan abort → refused
+    def test_apply_outcome_cli_uses_repo_freeze(self):
+        with tempfile.TemporaryDirectory() as td, mock.patch.object(ev, "load_round_freeze", return_value=self.F124), mock.patch.object(ev, "OUTCOMES", pathlib.Path(td, "o.json")):
+            w = self._w(td); self.assertEqual(sim.main(["--apply-outcome", json.dumps(self.ABORT), "--work", str(w)]), 0)
+            self.assertEqual(ev.load_round_outcomes(pathlib.Path(td, "o.json"))[-1]["outcome"], "aborted-pre-B")
 ```
 
-`--phase H` acceptance (not a unittest; run in Step 8): the driver must print `ALL STEPS PASS` for `T, B` then branches `D, F, X, XpreB`. `tests/benchmarks/test_round4_simulation.py` also carries the Round 3 synthetic tests adapted (`TestSyntheticHidden` with `round=4`, `TestSyntheticLexiconPhrase` with `sim.ROUND == 4`). Run → FAIL (`round4_simulation` missing).
+`--phase H` acceptance (not a unittest; run in Step 8): the driver must print `ALL STEPS PASS` for `T, B` then branches `D, F, X, XpreB2, XpreB3, XpreB4, XpreB5`. `tests/benchmarks/test_round4_simulation.py` also carries the Round 3 synthetic tests adapted (`TestSyntheticHidden` with `round=4`, `TestSyntheticLexiconPhrase` with `sim.ROUND == 4`). Run → FAIL (`round4_simulation` missing).
 
 - [ ] **Step 6: Create `round4_simulation.py`**
 
@@ -813,30 +837,34 @@ def synthetic_doc_bundle(out_dir) -> pathlib.Path:
 
 def pre_t_blockers(result, event, diagnostics=None) -> list:
     """spec §4.1: the four blocker kinds; any → STOP_FOR_AMENDMENT (non-terminal)."""
-    out = []
+    out = []                                                   # the four kinds are computed independently (spec §4.1, plan review 2 P1-2)
     unreachable = sorted(f["id"] for f in result.seed_result["failed"])
     if unreachable: out.append({"kind": "unreachable_seed", "seeds": unreachable, "diagnostics": diagnostics or {}})
-    if not result.tuning_accept and not unreachable:
-        broken = {"regression_effective": result.regression_result["effective_passed"], "fixture_final": result.fixture_result["final"]}
-        if not result.validation_errors: out.append({"kind": "tuning_accept_false", "invariants": broken})
-    if result.validation_errors: out.append({"kind": "alias_validation_error", "errors": result.validation_errors})
+    broken = {"regression_effective": result.regression_result["effective_passed"], "regression_failed": sorted(f["id"] for f in result.regression_result.get("failed", [])),
+              "fixture_final": list(result.fixture_result["final"])}
+    if result.regression_result["effective_passed"] != 14 or result.fixture_result["final"]:
+        out.append({"kind": "tuning_accept_false", "invariants": broken})
+    if result.validation_errors: out.append({"kind": "alias_validation_error", "errors": list(result.validation_errors)})
     if not event["pass"]: out.append({"kind": "inherited_ac_r3_01_failure", "event": {k: event[k] for k in ("seed", "regression_raw", "regression_effective", "fixture_failing", "equivalence_mismatches") if k in event}})
     return out
 
-def append_outcome(work, record, outcomes_path=None):
-    """TERMINAL_PRE_T_NOT_REACHED only after a ledgered user decision; refused while the last pre-T event is STOP_FOR_AMENDMENT."""
+def append_outcome(work, record, outcomes_path=None, freeze=None):
+    """pre-T not reached: only after a ledgered user decision (refused while the last pre-T event is STOP_FOR_AMENDMENT).
+    aborted-pre-B: no STOP check (the round has a T), but the strict compound shape against the real freeze."""
     events = [json.loads(l) for l in (pathlib.Path(work) / "controller-events.jsonl").read_text(encoding="utf-8").splitlines()]
-    last = next((e for e in reversed(events) if e.get("event") == "pre_t_checkpoint"), None)
-    decided = any(e.get("event") == "user_decision" and e.get("decision") == "TERMINAL_PRE_T_NOT_REACHED" for e in events)
-    if last and last.get("result") == "stop_for_amendment" and not decided:
-        raise SystemExit("REFUSED: STOP_FOR_AMENDMENT is not terminal; a user_decision TERMINAL_PRE_T_NOT_REACHED event is required")
+    if record["outcome"] == "pre-T not reached":
+        last = next((e for e in reversed(events) if e.get("event") == "pre_t_checkpoint"), None)
+        decided = any(e.get("event") == "user_decision" and e.get("decision") == "TERMINAL_PRE_T_NOT_REACHED" for e in events)
+        if last and last.get("result") == "stop_for_amendment" and not decided:
+            raise SystemExit("REFUSED: STOP_FOR_AMENDMENT is not terminal; a user_decision TERMINAL_PRE_T_NOT_REACHED event is required")
     from tests.benchmarks import evaluator as ev
     path = pathlib.Path(outcomes_path or ev.OUTCOMES); cur = ev.load_round_outcomes(path) if path.exists() else []
-    ev.round_states([{"round": r} for r in range(1, 3)], cur + [record])           # shape check
+    fz = freeze if freeze is not None else ev.load_round_freeze()
+    ev.round_states(fz, cur + [record])                        # strict shape check against the REAL freeze (aborted-pre-B needs freeze[N])
     path.write_text(json.dumps(cur + [record], indent=1) + "\n", encoding="utf-8")
 ```
 
-`run_pre_t(cache, work)`: as Round 3, then build the dry-run inputs exactly as `tune.main` does (`GridEvaluator` on `state`, `evaluate_point_fast` with the pre-T aliases as the "B" aliases, `cands_doc = alias_candidates.json`, `grid/baseline` from `rp`, `fixture_fn = fixture_failures_fast`, `queries/classes` from the classified bench), call `tune.run_pipeline_result(...)`, compute diagnostics `reachable_by_grid` (per failing seed: any grid point whose seed failures exclude it while fixture/regression invariants hold) and `dry_run_fixed`, then `blockers = pre_t_blockers(result, e, diagnostics)`; the event gains `pre_t_blockers`, `pipeline_input_sha256` (canonical sha of ranking, aliases, candidates, classified bench, grid), `pipeline_result_sha256` (canonical sha of `dataclasses.asdict(result)`), `result: "pass" | "stop_for_amendment"`, `blocking_reasons`; exit 0 iff `e["pass"] and not blockers`. **No file is written by the dry-run** (test: `tests.test_tune_search_ranking.test_main_uses_run_pipeline_result` plus a simulation test that patches `tune.write_constants`/`_write_log` to raise). `apply_T()`: before the freeze call, `bundle = synthetic_doc_bundle(ROOT / SIM_DIR / "doc-title-sources")`, `snap = dt.snapshot(bundle)` written to `ROOT / SIM_DIR / "doc-titles-snapshot.json"`, and the freeze call becomes `rs.main(["freeze", "--round", "4", "--cache-dir", str(cache), "--reference-enc", str(enc_path), "--doc-title-sources", str(bundle), "--doc-titles", str(snapshot_path), "--base-commit", "HEAD"])`; the synthetic lexicon merge uses `lexicon-r4`. `apply_XpreB()` (new branch, applied after T in its own tree, **without** B): write two synthetic attempt artifacts (one JSON with a `query`, one parse-invalid text with a line-split query) under `SIM_DIR/plain/`, `rs.append_attempt_needles(SIM_DIR/"hidden_attempt_needles.jsonl", …)`, delete them only after `artifact_is_ledgered` is true, write `SIM_DIR/xpreb_cleanup_manifest.json = rs.cleanup_authority(ledger, None, [])`, scan the tree with it (`unexpected_hits == []`), restore tracked policy files to the T tree (`git checkout T -- tools/atlassian_docs/intelligence/data tests/benchmarks/search_queries.json`), append the compound outcome `{"round": 4, "outcome": "aborted-pre-B", "invalidated_by": "X_preB", "invalidates_policy": true, "reject_reason": "synthetic acquisition defect after T"}` with the sha chain events (`round_outcomes_sha256_at_T` from the freeze, pre-append equality assert, `round_outcomes_sha256_after_append`), render the readiness "Round 4 aborted before B" block, commit touching only `docs/phase3-readiness.md` and `tests/benchmarks/round_outcomes.json`, then `rs.main(["validate-terminal", "--round", "4", "--state", "X_preB", "--work", str(SIM_DIR)])` must return 0 and the suite must be green. `_run_suite_step` for `XpreB` applies it on a copy of the post-T tree (not post-B): adjust `drive()` so branch `XpreB` copies `tree_after_T` (saved right after step `T`).
+`main()` gains `--apply-outcome JSON --work DIR` → `append_outcome(args.work, json.loads(args.apply_outcome))` (real freeze via `ev.load_round_freeze()`, real `ev.OUTCOMES`), exit 0 on success; this is the CLI Task 9 Step 2d calls. `run_pre_t(cache, work)`: as Round 3, then build the dry-run inputs exactly as `tune.main` does (`GridEvaluator` on `state`, `evaluate_point_fast` with the pre-T aliases as the "B" aliases, `cands_doc = alias_candidates.json`, `grid/baseline` from `rp`, `fixture_fn = fixture_failures_fast`, `queries/classes` from the classified bench), call `tune.run_pipeline_result(...)`, compute diagnostics `reachable_by_grid` (per failing seed: any grid point whose seed failures exclude it while fixture/regression invariants hold) and `dry_run_fixed`, then `blockers = pre_t_blockers(result, e, diagnostics)`; the event gains `pre_t_blockers`, `pipeline_input_sha256` (canonical sha of ranking, aliases, candidates, classified bench, grid), `pipeline_result_sha256` (canonical sha of `dataclasses.asdict(result)`), `result: "pass" | "stop_for_amendment"`, `blocking_reasons`; exit 0 iff `e["pass"] and not blockers`. **No file is written by the dry-run** (test: `tests.test_tune_search_ranking.test_main_uses_run_pipeline_result` plus a simulation test that patches `tune.write_constants`/`_write_log` to raise). `apply_T()`: before the freeze call, `bundle = synthetic_doc_bundle(ROOT / SIM_DIR / "doc-title-sources")`, `snap = dt.snapshot(bundle)` written to `ROOT / SIM_DIR / "doc-titles-snapshot.json"`, and the freeze call becomes `rs.main(["freeze", "--round", "4", "--cache-dir", str(cache), "--reference-enc", str(enc_path), "--doc-title-sources", str(bundle), "--doc-titles", str(snapshot_path), "--base-commit", "HEAD"])`; the synthetic lexicon merge uses `lexicon-r4`. `apply_XpreB()` (new branch, applied after T in its own tree, **without** B): write two synthetic attempt artifacts (one JSON with a `query`, one parse-invalid text with a line-split query) under `SIM_DIR/plain/`, `rs.append_attempt_needles(SIM_DIR/"hidden_attempt_needles.jsonl", …)`, delete them only after `artifact_is_ledgered` is true, write `SIM_DIR/xpreb_cleanup_manifest.json = rs.cleanup_authority(ledger, None, [])`, scan the tree with it (`unexpected_hits == []`), restore tracked policy files to the T tree (`git checkout T -- tools/atlassian_docs/intelligence/data tests/benchmarks/search_queries.json`), append the compound outcome `{"round": 4, "outcome": "aborted-pre-B", "invalidated_by": "X_preB", "invalidates_policy": true, "reject_reason": "synthetic acquisition defect after T"}` with the sha chain events (`round_outcomes_sha256_at_T` from the freeze, pre-append equality assert, `round_outcomes_sha256_after_append`), render the readiness "Round 4 aborted before B" block, commit touching only `docs/phase3-readiness.md` and `tests/benchmarks/round_outcomes.json`, then `rs.main(["validate-terminal", "--round", "4", "--state", "X_preB", "--work", str(SIM_DIR)])` must return 0 and the suite must be green. `_run_suite_step` for `XpreB` applies it on a copy of the post-T tree (not post-B): adjust `drive()` so branch `XpreB` copies `tree_after_T` (saved right after step `T`). `apply_XpreB(state=2)` takes the spec §9.4 state to simulate: `2` (generator/review plaintext only), `3` (sealed plaintext only, ledgered at seal time), `4` (standard manifest + sealed plaintext, no ciphertext), `5` (ciphertext present, no plaintext); `--phase H` runs the XpreB branch once per state (`XpreB2..XpreB5`) and each must end with `validate-terminal` exit 0 — the unit test `test_xpreb_states_3_4_5_pass_terminal_validation` drives `apply_XpreB` for states 3–5 in a temp tree and asserts `terminal_problems(...) == []` and that the sealed plaintext was ledgered before deletion.
 
 `rs.terminal_problems(round, state, repo, work)` for `state == "X_preB"` checks, each producing a message: freeze entry for `round` exists and no `round{round}_seal` with sealed sections (B absent: `search_queries.json` hidden sections `[]`); `git diff --name-only <T>..HEAD` ⊆ `{docs/phase3-readiness.md, tests/benchmarks/round_outcomes.json}` where `T` = the commit that added the freeze entry (`git log -S'"round": 4' -- round_freeze.json`); no `tests/benchmarks/round{round}-final.json`; outcomes record is compound with `invalidates_policy` a bool and `reject_reason`; ledger has `round_outcomes_sha256_at_T == freeze[round].round_outcomes_sha256`, `round_outcomes_sha256_after_append == current file sha`; ledger has `xpreb_cleanup` event with `cleanup_manifest_sha256` (or `cleanup_manifest: "not_applicable"` + `plaintext_generated: false` when `$W/hidden_attempt_needles.jsonl`, `$W/needle-manifest.json` and `$W/plain/` are all absent) and a scan verdict `unexpected_hits: []`; **the validator recomputes** `rs.cleanup_authority($W/hidden_attempt_needles.jsonl, $W/needle-manifest.json if present else None, remaining plaintext under $W/plain and sealed/round{round}-sealed.json if present)` and requires exact equality with `$W/xpreb_cleanup_manifest.json` (and that no plaintext remains); `hidden_evaluation_count == 0` as its own item: no `tests/benchmarks/round{round}-final.json`, no ledger event among `round{round}_gate_checkpoint`, `diag_run`, `hidden_evaluation`; `ciphertext_exists` consistent with `unused_due_to_X_preB` (`true` + sha, or `"not_applicable"`). `cmd_validate_terminal` prints the problems and returns 1 if any; tests cover each item with a synthetic `$W`.
 
@@ -846,7 +874,7 @@ Also: `evaluator.TOOLING_FILES += ("tests/benchmarks/round4_simulation.py", "tes
 
 ```bash
 python -m unittest discover -s tests -t .                                  # expect OK
-python -m tests.benchmarks.round4_simulation --phase H                     # expect ALL STEPS PASS (T, B, D, F, X, XpreB)
+python -m tests.benchmarks.round4_simulation --phase H                     # expect ALL STEPS PASS (T, B, D, F, X, XpreB2..5)
 git diff --stat HEAD -- tools/atlassian_docs/intelligence/search.py tools/atlassian_docs/intelligence/policy.py tools/atlassian_docs/intelligence/data/search_ranking.json   # empty
 git add tests/tune_search_ranking.py tests/test_tune_search_ranking.py tests/benchmarks/round_seal.py tests/benchmarks/test_round_seal.py tests/benchmarks/round4_simulation.py tests/benchmarks/test_round4_simulation.py tests/benchmarks/evaluator.py tests/benchmarks/test_evaluator.py
 git commit -m "H15: pipeline dry-run gate (PipelineResult, pre_t_blockers), cleanup needles + attempt ledger, round4_simulation (synthetic bundle, X_preB lifecycle), validate-terminal
@@ -955,6 +983,7 @@ Ledger the printed events, the freeze printout (`reference_set.enc_sha256 == c1a
 
 Round 3 plan v16 Task 12 Steps 1–4 with substitutions, plus the spec §9.4 hygiene additions:
 - Every artifact that may contain hidden text (generator raw output, each replacement output, the review input/outputs, section-replacement outputs, parse-invalid responses saved for the ledger) is written under `$W/plain/` and **immediately** registered: `python -c "import sys; from tests.benchmarks import round_seal as rs; rs.append_attempt_needles(sys.argv[1], sys.argv[2:])" $W/hidden_attempt_needles.jsonl $W/plain/<the file just written>` — run once per artifact right after writing it, with the artifact's actual path as the argument. A file is deleted only after `rs.artifact_is_ledgered` is true (the controller script for Step 4's `rm -rf $W/plain` first asserts every file under it is ledgered, exactly as Task 9 Step 2d's hygiene script does).
+- The sealed plaintext itself is a hidden-text artifact: right after Step 1 stores `~/.atlassian_api_updater/sealed/round4-sealed.json` (and after every `merge_replacements` rewrite of it) run `python -c "import sys; from tests.benchmarks import round_seal as rs; rs.append_attempt_needles(sys.argv[1], sys.argv[2:])" $W/hidden_attempt_needles.jsonl ~/.atlassian_api_updater/sealed/round4-sealed.json` — so spec §9.4 states (3) and (4) can pass the deletion guard (plan review 2 P0-2).
 - Step 4 order stays: delete `$W/plain` → standard needle manifest (final 24) → seal `--needle-manifest` → pre-encryption scan → user encrypts → absence/ciphertext checks → commit B → post-B scan. Add after the manifest: ledger `cleanup_authority_sha256 = sha256(json.dumps(rs.cleanup_authority(ledger, manifest, [])))` so a later X check can prove the union was computed.
 - If an acquisition/freeze defect is discovered at any point between T and B → **Task 9 Step 2d (X_preB)**, not X.
 
@@ -970,7 +999,7 @@ Round 3 plan v16 Task 13 with substitutions (`ROUND4-WORKER-HANDSHAKE`, `verify-
 ```bash
 W=~/.atlassian_api_updater/round4-work; SEALED=~/.atlassian_api_updater/sealed
 T=$(git log --format=%H -S'"round": 4' -- tests/benchmarks/round_freeze.json | tail -1)
-sha() { python -c "from tests.benchmarks import evaluator as ev, sys; print(ev.file_sha256('$1'))"; }
+sha() { python -c "from tests.benchmarks import evaluator as ev; print(ev.file_sha256('$1'))"; }
 python - "$REASON" "$INVALIDATES" "$FOUND_AT" "$T" <<'EOF2'                                   # 1. xpreb_start
 import json, sys, pathlib
 from tests.benchmarks import evaluator as ev
@@ -1023,7 +1052,7 @@ Round 3 plan v16 Task 15 with substitutions (`round4-sealed.json`, `--round 4`, 
 
 ### Task 11: **[controller]** Subroutine — render the readiness Round 4 section from the ledgers
 
-Append `## Search Quality Round 4 — decision record (<date>)` after the Round 3 section (never inside it). Fields: Round 3's list with `round4_start_commit 237d2c9`, `initial_housekeeping_commit`, `housekeeping_commit` (+ every `housekeeping_commit_moved` with `h_prime_kind`), spec v1.11 / plan v1, `s_reused_from_round3`, `round4_operational_snapshot`, `round2_regression_snapshot`, `reference_set` (Round 2), **`doc_titles_snapshot`** (sources, fetch time, url/page counts, failed counts, bundle sha, snapshot sha, final `doc_titles_epoch`, `replaces_bundle_sha256[]`), `concept_lexicon.components.doc_titles_snapshot_sha256`, `t_policy_files`, `round_outcomes_sha256` (at T; and `_after_append` on `TERMINAL_PRE_T_NOT_REACHED` / X_preB), `round_recoveries_sha256_at_T`, the pre-T event(s) with `pre_t_blockers`, `pipeline_input_sha256`/`pipeline_result_sha256`, STOP rulings, terminal branch enum `D | F | X | X_preB | pre-T-not-reached`, and on X_preB the `xpreb_cleanup`/`unused_due_to_X_preB`/`invalidates_policy` block.
+Append `## Search Quality Round 4 — decision record (<date>)` after the Round 3 section (never inside it). Fields: Round 3's list with `round4_start_commit 237d2c9`, `initial_housekeeping_commit`, `housekeeping_commit` (+ every `housekeeping_commit_moved` with `h_prime_kind`), spec v1.11 / the plan version that was executed (this file's header — v3 or later), `s_reused_from_round3`, `round4_operational_snapshot`, `round2_regression_snapshot`, `reference_set` (Round 2), **`doc_titles_snapshot`** (sources, fetch time, url/page counts, failed counts, bundle sha, snapshot sha, final `doc_titles_epoch`, `replaces_bundle_sha256[]`), `concept_lexicon.components.doc_titles_snapshot_sha256`, `t_policy_files`, `round_outcomes_sha256` (at T; and `_after_append` on `TERMINAL_PRE_T_NOT_REACHED` / X_preB), `round_recoveries_sha256_at_T`, the pre-T event(s) with `pre_t_blockers`, `pipeline_input_sha256`/`pipeline_result_sha256`, STOP rulings, terminal branch enum `D | F | X | X_preB | pre-T-not-reached`, and on X_preB the `xpreb_cleanup`/`unused_due_to_X_preB`/`invalidates_policy` block.
 
 ### Task 12: **[controller]** Post-terminal provenance review, memory, archive, dashboard, finishing
 
