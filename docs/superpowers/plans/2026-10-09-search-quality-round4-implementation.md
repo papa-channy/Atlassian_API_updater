@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-09-search-quality-round4-design.md` **v1.11** (v1.10 passed external review 11 with P0 0 / P1 4 "구현 계획으로 진행 가능"; v1.11 applied the four P1 items). The spec inherits Round 3 v1.25.1 (`docs/superpowers/specs/2026-10-05-search-quality-round3-design.md`) by delta; where this plan says "as Round 3 plan v16 Task N Step M" it means `docs/superpowers/plans/2026-10-05-search-quality-round3-implementation.md` with the substitution table of §"Name substitutions" applied verbatim.
 
-**Plan version:** v4 (2026-10-09; v3 → plan review 3 P0 2 / P1 4: `--apply-outcome … --work $W`, `freeze_entry(doc_titles_path=…)`, exact `suite_command`, TOOLING_FILES timing sentence, single `BRANCHES` contract, `round_start_guard_problems`; v2 → plan review 2 P0 2 / P1 5: `append_outcome` with the real freeze + `--apply-outcome` CLI and four tests, the sealed plaintext registered in the attempt ledger (states 3–5 simulated), independent blockers, attestation evidence checks, child-sitemap kind, sha helper; v1 → plan review 1 P0 4 / P1 5: strict compound state, Git-bound recovery verifier, TOOLING_FILES timing, cleanup deletion/terminal machine checks, fetch errors, not_applicable branch, sha helpers, full post-T allowlist check, no runtime placeholders).
+**Plan version:** v5 (2026-10-09; **plan review 4 of v4 = P0 0 / P1 4 "구현 진행 가능"**; v5 applies the P1s: user-decision ordering in `append_outcome`, append-only `round_recoveries` check, multi-round-safe X lookup, ancestry test; v3 → plan review 3 P0 2 / P1 4: `--apply-outcome … --work $W`, `freeze_entry(doc_titles_path=…)`, exact `suite_command`, TOOLING_FILES timing sentence, single `BRANCHES` contract, `round_start_guard_problems`; v2 → plan review 2 P0 2 / P1 5: `append_outcome` with the real freeze + `--apply-outcome` CLI and four tests, the sealed plaintext registered in the attempt ledger (states 3–5 simulated), independent blockers, attestation evidence checks, child-sitemap kind, sha helper; v1 → plan review 1 P0 4 / P1 5: strict compound state, Git-bound recovery verifier, TOOLING_FILES timing, cleanup deletion/terminal machine checks, fetch errors, not_applicable branch, sha helpers, full post-T allowlist check, no runtime placeholders).
 
 ## Global Constraints
 
@@ -191,13 +191,13 @@ class TestFreezeGuardAndRecovery(unittest.TestCase):
             self.assertEqual(rs.verify_recovery(4, repo["path"]), [])
             self.assertTrue(any("parent(R)" in p for p in rs.verify_recovery(4, repo["path"], r_commit=repo["bad_r"])))
     def test_verify_recovery_tamper_cases(self):
-        for tamper, needle in (("r_not_hk_bytes", "sha(HK:path)"), ("attestation_edited_after_A", "A blob"), ("before_sha_wrong", "sha(git show T:path)"), ("removed_aliases_wrong", "removed_aliases"), ("evidence_missing", "review_output_sha256"), ("bad_suite_command", "suite_command")):
+        for tamper, needle in (("r_not_hk_bytes", "sha(HK:path)"), ("attestation_edited_after_A", "A blob"), ("before_sha_wrong", "sha(git show T:path)"), ("removed_aliases_wrong", "removed_aliases"), ("evidence_missing", "review_output_sha256"), ("bad_suite_command", "suite_command"), ("edited_after_A", "append-only")):
             with tempfile.TemporaryDirectory() as td:
                 repo = _mk_recovery_repo(pathlib.Path(td), tamper=tamper)
                 self.assertTrue(any(needle in p for p in rs.verify_recovery(4, repo["path"])), tamper)
 ```
 
-`_mk_recovery_repo(root, tamper=None)` (test helper, ~60 lines): `git init` a temp repo; commit **H** with `search_aliases.json` containing no lexicon-r4 entries (known-good) and `round_outcomes.json`/`round_recoveries.json` (`[]`); commit **T** adding one `origin: lexicon-r4` alias (`notes[word] = {"origin": "lexicon-r4"}`) and `round_freeze.json` `[{"round": 4, "t_policy_files": ["tools/atlassian_docs/intelligence/data/search_aliases.json"], "round_recoveries_sha256": <sha of the [] file>, "round_outcomes_sha256": …}]`; commit **X** appending the `aborted-pre-B` outcome and a `docs/phase3-readiness.md` Round 4 section containing the line `housekeeping_commit: <H sha>` (the binding HK provenance); commit **R** restoring the H bytes of `search_aliases.json` and nothing else; commit **A** appending the attestation `{"round": 4, "t_commit": T, "xpreb_terminal_commit": X, "recovery_commit": R, "recovery_mode": "rollback", "reviewed_base": X, "reviewed_head": R, "reviewed_by": "test", "review_findings": 0, "review_output_sha256": "00"*32, "suite_commit": R, "suite_command": "python -m unittest discover -s tests -t .", "suite_exit_code": 0, "suite_output_sha256": "11"*32, "files": [{"path": …search_aliases.json, "before_sha256": sha(T blob), "after_sha256": sha(R blob), "known_good_sha256": sha(H blob)}], "removed_aliases": [word]}`. `tamper` variants: `r_not_hk_bytes` (R restores different bytes; attestation shas copied from R so only the HK comparison catches it), `attestation_edited_after_A` (a later commit edits `reviewed_by`), `before_sha_wrong`, `removed_aliases_wrong` (`[]`), `evidence_missing` (`review_output_sha256` absent), `bad_suite_command` (`"pytest"`); `bad_r` = a second R on top of R (`parent(bad_r) != X`). Run → FAIL (`freeze_guard_problems`, `verify_recovery` missing).
+`_mk_recovery_repo(root, tamper=None)` (test helper, ~60 lines): `git init` a temp repo; commit **H** with `search_aliases.json` containing no lexicon-r4 entries (known-good) and `round_outcomes.json`/`round_recoveries.json` (`[]`); commit **T** adding one `origin: lexicon-r4` alias (`notes[word] = {"origin": "lexicon-r4"}`) and `round_freeze.json` `[{"round": 4, "t_policy_files": ["tools/atlassian_docs/intelligence/data/search_aliases.json"], "round_recoveries_sha256": <sha of the [] file>, "round_outcomes_sha256": …}]`; commit **X** appending the `aborted-pre-B` outcome and a `docs/phase3-readiness.md` Round 4 section containing the line `housekeeping_commit: <H sha>` (the binding HK provenance); commit **R** restoring the H bytes of `search_aliases.json` and nothing else; commit **A** appending the attestation `{"round": 4, "t_commit": T, "xpreb_terminal_commit": X, "recovery_commit": R, "recovery_mode": "rollback", "reviewed_base": X, "reviewed_head": R, "reviewed_by": "test", "review_findings": 0, "review_output_sha256": "00"*32, "suite_commit": R, "suite_command": "python -m unittest discover -s tests -t .", "suite_exit_code": 0, "suite_output_sha256": "11"*32, "files": [{"path": …search_aliases.json, "before_sha256": sha(T blob), "after_sha256": sha(R blob), "known_good_sha256": sha(H blob)}], "removed_aliases": [word]}`. `tamper` variants: `r_not_hk_bytes` (R restores different bytes; attestation shas copied from R so only the HK comparison catches it), `attestation_edited_after_A` (a later commit edits `reviewed_by`), `before_sha_wrong`, `removed_aliases_wrong` (`[]`), `evidence_missing` (`review_output_sha256` absent), `bad_suite_command` (`"pytest"`), `edited_after_A` (a later commit rewrites the round 4 record in place; a later *append* of a round 5 record must still pass — `test_verify_recovery_allows_later_round_appends`); `bad_r` = a second R on top of R (`parent(bad_r) != X`). Run → FAIL (`freeze_guard_problems`, `verify_recovery` missing).
 
 - [ ] **Step 4: Implement guard, verifier and the Round 4 freeze entry in `round_seal.py`**
 
@@ -216,7 +216,8 @@ def verify_recovery(round: int, repo, r_commit=None) -> list:
         return [f"round_recoveries.json: expected exactly one round {round} record, found {len(recs)}"]
     rec = recs[0]; R = r_commit or rec["recovery_commit"]; out = []
     # Binding provenance (spec §9.5): X, T and HK come from Git history / the X readiness block, never from the record alone.
-    X = _git(repo, "log", "--format=%H", "-S", '"aborted-pre-B"', "--", "tests/benchmarks/round_outcomes.json").splitlines()[-1]
+    X = next(c for c in reversed(_git(repo, "log", "--format=%H", "-S", f'"round": {round}', "--", "tests/benchmarks/round_outcomes.json").splitlines())
+             if any(o["round"] == round and o["outcome"] == "aborted-pre-B" for o in json.loads(_git(repo, "show", f"{c}:tests/benchmarks/round_outcomes.json"))))   # multi-round safe (plan review 4 P1-3)
     T = _git(repo, "log", "--format=%H", "-S", f'"round": {round}', "--", "tests/benchmarks/round_freeze.json").splitlines()[-1]
     A = _git(repo, "log", "--format=%H", "-S", f'"round": {round}', "--", "tests/benchmarks/round_recoveries.json").splitlines()[-1]
     m = re.search(r"housekeeping_commit:\s*([0-9a-f]{7,40})", _git(repo, "show", f"{X}:docs/phase3-readiness.md").split(f"Round {round} ")[-1])
@@ -224,9 +225,10 @@ def verify_recovery(round: int, repo, r_commit=None) -> list:
     HK = _git(repo, "rev-parse", m.group(1))
     if not X.startswith(rec["xpreb_terminal_commit"]): out.append("xpreb_terminal_commit != the commit that introduced the aborted-pre-B outcome")
     if not T.startswith(rec["t_commit"]): out.append("t_commit != the commit that added the freeze entry")
-    cur = hashlib.sha256((pathlib.Path(repo) / "tests/benchmarks/round_recoveries.json").read_bytes()).hexdigest()
-    blob = hashlib.sha256(subprocess.run(["git", "-C", str(repo), "show", f"{A}:tests/benchmarks/round_recoveries.json"], check=True, capture_output=True).stdout).hexdigest()
-    if cur != blob: out.append("current round_recoveries.json != A blob (edited after attestation)")
+    cur_list = ev.load_round_recoveries(pathlib.Path(repo) / "tests/benchmarks/round_recoveries.json")
+    a_list = json.loads(_git(repo, "show", f"{A}:tests/benchmarks/round_recoveries.json"))
+    if cur_list[:len(a_list)] != a_list or any(r["round"] <= round for r in cur_list[len(a_list):]):      # append-only: A's array is a prefix; later records are higher rounds (plan review 4 P1-2)
+        out.append("round_recoveries.json is not an append-only extension of the A blob (edited after attestation)")
     if _git(repo, "rev-parse", f"{R}^") != _git(repo, "rev-parse", X): out.append("parent(R) != X")
     if _git(repo, "rev-parse", f"{A}^") != _git(repo, "rev-parse", R): out.append("parent(A) != R")
     freeze = json.loads(_git(repo, "show", f"{X}:tests/benchmarks/round_freeze.json"))
@@ -280,7 +282,7 @@ def round_start_guard_problems(round: int, repo) -> list:
     return out
 ```
 
-CLI `round_seal.py round-start-guard --round N` prints the problems (exit 1 if any); Task 4 Step 1 runs it first. Test: `[1,2]+outcomes{3}` → `[]` for round 4; `aborted-pre-B(true)` without attestation → non-empty for round 5. `cmd_freeze`: after the duplicate check, `problems = freeze_guard_problems(args.round, freeze, ev.load_round_outcomes(), repo=ROOT)`; print `REFUSED: …` and return 1 if non-empty. `freeze_entry(round, cache_dir, reference_enc=None, doc_sources=None, doc_titles_path=None, base_commit=None)` (module import `from tests.benchmarks import doc_titles as dt`; `cmd_freeze` passes `doc_titles_path=args.doc_titles`): for `round >= 4` require `--doc-title-sources`, `--doc-titles`, `--base-commit` (= `$W/housekeeping_commit`), set `entry["doc_titles_source_bundle_sha256"] = dt.bundle_sha256(doc_sources)`, `entry["doc_titles_snapshot_sha256"] = ev.file_sha256(doc_titles_path)` after asserting `json.dumps(dt.snapshot(doc_sources), sort_keys=True, indent=1) + "\n"` equals the file text (the `snapshot` CLI writes exactly that), `entry["t_policy_files"] = ev.t_policy_files(ROOT, base_commit)` where
+CLI `round_seal.py round-start-guard --round N` prints the problems (exit 1 if any); Task 4 Step 1 runs it first. Test: `[1,2]+outcomes{3}` → `[]` for round 4; `aborted-pre-B(true)` without attestation → non-empty for round 5; `_mk_recovery_repo` + `git checkout -b side X` (HEAD not a descendant of A while the attestation file exists) → the ancestry problem is reported (`test_round_start_guard_refuses_head_not_descendant_of_A`). `cmd_freeze`: after the duplicate check, `problems = freeze_guard_problems(args.round, freeze, ev.load_round_outcomes(), repo=ROOT)`; print `REFUSED: …` and return 1 if non-empty. `freeze_entry(round, cache_dir, reference_enc=None, doc_sources=None, doc_titles_path=None, base_commit=None)` (module import `from tests.benchmarks import doc_titles as dt`; `cmd_freeze` passes `doc_titles_path=args.doc_titles`): for `round >= 4` require `--doc-title-sources`, `--doc-titles`, `--base-commit` (= `$W/housekeeping_commit`), set `entry["doc_titles_source_bundle_sha256"] = dt.bundle_sha256(doc_sources)`, `entry["doc_titles_snapshot_sha256"] = ev.file_sha256(doc_titles_path)` after asserting `json.dumps(dt.snapshot(doc_sources), sort_keys=True, indent=1) + "\n"` equals the file text (the `snapshot` CLI writes exactly that), `entry["t_policy_files"] = ev.t_policy_files(ROOT, base_commit)` where
 
 ```python
 T_DATA_FILES = tuple(f"{DATA_REL}/{n}" for n in ("alias_candidates.json", "concept_lexicon.json", "search_aliases.json", "search_ranking.json"))
@@ -816,6 +818,12 @@ class TestStopSemantics(unittest.TestCase):
             with self.assertRaises(SystemExit): sim.append_outcome(w, {"round": 4, "outcome": "pre-T not reached"}, outcomes_path=w / "o.json", freeze=self.F12)
             (w / "controller-events.jsonl").open("a").write(json.dumps({"event": "user_decision", "decision": "TERMINAL_PRE_T_NOT_REACHED"}) + "\n")
             sim.append_outcome(w, {"round": 4, "outcome": "pre-T not reached"}, outcomes_path=w / "o.json", freeze=self.F12)   # closed without a freeze 4
+    def test_pre_t_terminal_needs_checkpoint_and_a_decision_after_it(self):
+        with tempfile.TemporaryDirectory() as td:
+            w = self._w(td, {"event": "user_decision", "decision": "TERMINAL_PRE_T_NOT_REACHED"})                       # decision but no checkpoint
+            with self.assertRaises(SystemExit): sim.append_outcome(w, {"round": 4, "outcome": "pre-T not reached"}, outcomes_path=w / "o.json", freeze=self.F12)
+            (w / "controller-events.jsonl").open("a").write(json.dumps({"event": "pre_t_checkpoint", "result": "stop_for_amendment"}) + "\n")   # stale decision before a new checkpoint
+            with self.assertRaises(SystemExit): sim.append_outcome(w, {"round": 4, "outcome": "pre-T not reached"}, outcomes_path=w / "o.json", freeze=self.F12)
     def test_aborted_pre_b_needs_the_real_freeze_entry(self):
         with tempfile.TemporaryDirectory() as td:
             w = self._w(td)
@@ -864,11 +872,13 @@ def append_outcome(work, record, outcomes_path=None, freeze=None):
     """pre-T not reached: only after a ledgered user decision (refused while the last pre-T event is STOP_FOR_AMENDMENT).
     aborted-pre-B: no STOP check (the round has a T), but the strict compound shape against the real freeze."""
     events = [json.loads(l) for l in (pathlib.Path(work) / "controller-events.jsonl").read_text(encoding="utf-8").splitlines()]
-    if record["outcome"] == "pre-T not reached":
-        last = next((e for e in reversed(events) if e.get("event") == "pre_t_checkpoint"), None)
-        decided = any(e.get("event") == "user_decision" and e.get("decision") == "TERMINAL_PRE_T_NOT_REACHED" for e in events)
-        if last and last.get("result") == "stop_for_amendment" and not decided:
-            raise SystemExit("REFUSED: STOP_FOR_AMENDMENT is not terminal; a user_decision TERMINAL_PRE_T_NOT_REACHED event is required")
+    if record["outcome"] == "pre-T not reached":                 # user decision only, and only AFTER the last checkpoint (plan review 4 P1-1)
+        idx = [i for i, e in enumerate(events) if e.get("event") == "pre_t_checkpoint"]
+        if not idx:
+            raise SystemExit("REFUSED: no pre_t_checkpoint event; a pre-T terminal needs a checkpoint and a user decision")
+        decided = any(e.get("event") == "user_decision" and e.get("decision") == "TERMINAL_PRE_T_NOT_REACHED" for e in events[idx[-1] + 1:])
+        if not decided:
+            raise SystemExit("REFUSED: pre-T terminal requires a user_decision TERMINAL_PRE_T_NOT_REACHED event after the last pre_t_checkpoint")
     from tests.benchmarks import evaluator as ev
     path = pathlib.Path(outcomes_path or ev.OUTCOMES); cur = ev.load_round_outcomes(path) if path.exists() else []
     fz = freeze if freeze is not None else ev.load_round_freeze()
