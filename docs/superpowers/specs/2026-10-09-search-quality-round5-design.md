@@ -1,6 +1,6 @@
 # Search Quality Round 5 — Technical Specification
 
-**문서 버전:** v1.2 (2026-10-09; v1.2 = 검수 2(P0 2/P1 4) 반영: 제안기 입력에서 KU 제외(§4.2), counterexample 대상 = Round 4·Round 5 정책 map의 대칭차(§8), §2 문구 정합, counterexample ranking = prospective-T ranking(§8), KU 레코드 machine-check(§4.1), KU 승인 provenance 해시(§4.1); v1.1 = 검수 1(P0 3/P1 5) 반영: union 해석에서 seed 제거·후행 gate·fallback 금지(§6.1), `search_ranking.json` 불변식과 튜닝 계약 정합(§3), 실제 코퍼스 exact 결과를 portable 단위 테스트와 컨트롤러 binding check로 분리(§6.2·§8), source identity rank(§6.1), 과거 판정 충돌 시 재검토(§6.3), counterexample 기준 고정(§8), full sha 바인딩(§5), Round 5 T allowlist exact(§9); v1.0 = brainstorming 초안. 접근 결정은 검수 스레드 2의 두 판정에 따른다: 1차 "A 수정 후 채택 / B 좁게 수정 후 채택 / C 기각", 2차(비표적 counterexample 측정 후) "S2 채택 — union 정정 + §11 B만, 스코어러 무변경, known-unreachable 3개를 exact registry로 동결")
+**문서 버전:** v1.3 (2026-10-09; v1.3 = 검수 3(P0 1/P1 4) 반영: selector fallback도 reachable 성능만(§4.2), 해석 이름 `source-precedence`(§6.1), KU `record_sha256` = 전체 seed 레코드(§4.1), 승인 해시의 바이트 계약·archive authority(§4.1), 채택 constants에서 counterexample 재검사를 tuning_accept 조건으로(§4.2·§8); v1.2 = 검수 2(P0 2/P1 4) 반영: 제안기 입력에서 KU 제외(§4.2), counterexample 대상 = Round 4·Round 5 정책 map의 대칭차(§8), §2 문구 정합, counterexample ranking = prospective-T ranking(§8), KU 레코드 machine-check(§4.1), KU 승인 provenance 해시(§4.1); v1.1 = 검수 1(P0 3/P1 5) 반영: union 해석에서 seed 제거·후행 gate·fallback 금지(§6.1), `search_ranking.json` 불변식과 튜닝 계약 정합(§3), 실제 코퍼스 exact 결과를 portable 단위 테스트와 컨트롤러 binding check로 분리(§6.2·§8), source identity rank(§6.1), 과거 판정 충돌 시 재검토(§6.3), counterexample 기준 고정(§8), full sha 바인딩(§5), Round 5 T allowlist exact(§9); v1.0 = brainstorming 초안. 접근 결정은 검수 스레드 2의 두 판정에 따른다: 1차 "A 수정 후 채택 / B 좁게 수정 후 채택 / C 기각", 2차(비표적 counterexample 측정 후) "S2 채택 — union 정정 + §11 B만, 스코어러 무변경, known-unreachable 3개를 exact registry로 동결")
 **기준일:** 2026-10-09
 **선행:** Round 4 (spec v1.13 `6f99ae7`, plan v7; 종료 2026-10-09 "pre-T not reached": binding pre-T seed 35/39, dry-run tuning_accept false, T·B·hidden set 없음; `docs/phase3-readiness.md` Round 4 decision record; PR #1 병합 `56b4b0e`). Round 5는 Round 4 종결 커밋 `f745f80`에서 이미 **pending round**로 등록됐다(`PRE_FREEZE_NONVERB_STRUCTURE_SHA256[5]` = Round 4 H 구조, `pending_round() == 5`).
 **상속:** 이 문서에 적지 않은 것은 **Round 4 스펙 v1.13을 그대로 상속**한다(그 상속 체인으로 Round 3 v1.25.1 포함: 스코어러·상수·격자·legacy 모드, 평가·게이트, 수명주기·역할·봉인·needle·AC-18b, 상태 모델 §9.1–§9.6, X_preB·recovery, T allowlist, 코퍼스 번들 계약). 이름 치환: `round4`→`round5`, `-r4`→`-r5`, `lexicon-r4`→`lexicon-r5`, `round4_seal`→`round5_seal`, `round4-sealed.json.enc`→`round5-sealed.json.enc`, `search-tuning-round4.jsonl`→`search-tuning-round5.jsonl`, `round4-*.md`→`round5-*.md`, `round4_simulation`→`round5_simulation`, `ROUND4_EXTRA_KEYS`→`ROUND5_EXTRA_KEYS`(§7), `POLICY_VERSIONS["search"]` 4 유지. 이 문서는 **델타**만 규정하며, 충돌 시 이 문서가 우선한다.
@@ -22,7 +22,7 @@ Round 4 pre-T(2026-10-08T22:00Z): seed 35/39, regression raw 10/14 · effective 
 | s-004 `transition issue status` | `POST /bulk/issues/transition` summary가 질의 3단어 전부 포함(all-match) 46 vs 정답 42 | bulk-variant 강등 v1(모든 bulk 세그먼트) / v2(비터미널 bulk 세그먼트) | v1: 대량 손실. v2: 35/6 → 33/8(명확한 손실 1 `Get issue panel pin status for projects`, 모호 1) | 기각 → **KU** |
 | s-039 `browse pages inside this workspace` | `workspace→space` 근거 없음: 문서 제목 1,359개 중 workspace 0회, Confluence API 설명의 workspace는 사이트 전체 의미, jira-software는 DevOps workspace | 일반 복합어 분해(카탈로그 토큰이라 미적용, 벤치 영향 0) / stateless 생성 재시도(생성 결과만으로는 채택 근거 아님) | — | **KU** |
 
-조합 측정(근사): Round 4 first-wins 병합 결과에 alias `release→version`·`search→filter` 두 개만 더하면 seed 36/39(실패 = 정확히 {s-004, s-027, s-039}), regression raw 10 · eff 14, fixture 0. §6.1의 newest-eligible 해석 전체(다른 key의 선택 변화 포함)와 재검토 결과는 측정하지 않았다 — 그 효과는 pre-T와 §8 counterexample 스위트가 판정한다.
+조합 측정(근사): Round 4 first-wins 병합 결과에 alias `release→version`·`search→filter` 두 개만 더하면 seed 36/39(실패 = 정확히 {s-004, s-027, s-039}), regression raw 10 · eff 14, fixture 0. §6.1의 source-precedence 해석 전체(다른 key의 선택 변화 포함)와 재검토 결과는 측정하지 않았다 — 그 효과는 pre-T와 §8 counterexample 스위트가 판정한다.
 
 ## 1. 목표
 
@@ -49,19 +49,19 @@ Round 4 pre-T(2026-10-08T22:00Z): seed 35/39, regression raw 10/14 · effective 
 
 ### 4.1 known-unreachable registry
 
-`KNOWN_UNREACHABLE = {5: ("s-004", "s-027", "s-039")}` (`tests/benchmarks/evaluator.py`, 정렬된 tuple). 각 항목의 근거는 `tests/benchmarks/round5-known-unreachable.json`(커밋, T allowlist 밖의 H 산출물)에 기록한다: `{"round": 5, "approval": {"rulings": [{"thread": "review thread 2", "date": "2026-10-09", "summary", "review_output_sha256"}, …], "user_decision": {"date": "2026-10-09", "words": "좋아 Round 5 진행해보자", "event_sha256"}}, "seeds": [{"id", "record_sha256", "query_sha256", "cause", "mechanisms_tried": [{"mechanism", "counterexample": {"slice", "hit_miss_before", "hit_miss_after", "losses": [...]}}], "official_source_check"}]}`. `review_output_sha256`은 검수 스레드 판정 원문을 저장한 파일(`$W/rulings/*.md`, 아카이브됨)의 sha이고, 이 파일 전체 sha가 freeze 키 `known_unreachable_registry_sha256`이므로 승인 provenance도 T에 고정된다(검수 2 P1-4). 질의 원문은 seed가 공개 레코드이므로 그대로 둘 수 있으나 파일은 id·sha·원인만으로도 충분해야 한다.
+`KNOWN_UNREACHABLE = {5: ("s-004", "s-027", "s-039")}` (`tests/benchmarks/evaluator.py`, 정렬된 tuple). 각 항목의 근거는 `tests/benchmarks/round5-known-unreachable.json`(커밋, T allowlist 밖의 H 산출물)에 기록한다: `{"round": 5, "approval": {"rulings": [{"thread": "review thread 2", "date": "2026-10-09", "summary", "review_output_sha256"}, …], "user_decision": {"date": "2026-10-09", "words": "좋아 Round 5 진행해보자", "event_sha256"}}, "seeds": [{"id", "record_sha256", "query_sha256", "cause", "mechanisms_tried": [{"mechanism", "counterexample": {"slice", "hit_miss_before", "hit_miss_after", "losses": [...]}}], "official_source_check"}]}`. `review_output_sha256 = sha256(아카이브된 판정 원문 파일의 exact UTF-8 바이트)` — 판정 원문은 검수 스레드 답변 텍스트를 가공 없이(헤더 없음, 끝 개행 하나) `$W/rulings/<date>-<n>.md`로 저장한다; `event_sha256 = canonical_sha256({"role": "user", "timestamp", "exact_text"})`이며 원문 이벤트는 `$W/controller-events.jsonl`에 있다. 두 원문 파일은 Round 5 archive authority(종료 archive 목록)에 반드시 포함된다(검수 3 P1-3). 근거 파일 전체 sha가 freeze 키 `known_unreachable_registry_sha256`이므로 승인 provenance도 T에 고정된다(검수 2 P1-4). 질의 원문은 seed가 공개 레코드이므로 그대로 둘 수 있으나 파일은 id·sha·원인만으로도 충분해야 한다.
 
 계약:
 - registry는 **이 스펙 v1.x에 exact ID로 동결**되며 Round 5 동안 추가·삭제할 수 없다. 코드 상수와 이 문서의 집합이 같아야 한다(테스트가 스펙 본문에서 집합을 파싱해 비교).
-- **레코드 machine-check(검수 2 P1-3):** 각 KU id에 대해 `query_sha256 == sha256(현재 seed query)`, `record_sha256 == canonical_sha256(현재 seed 레코드의 query·expected_top1_any·forbidden_top1)`이고, 그 레코드가 `56b4b0e`의 `tests/benchmarks/search_queries.json`과 같아야 한다. H 테스트와 pre-T 이벤트가 둘 다 확인한다; 불일치 → STOP(같은 id라도 레코드가 바뀌면 면제되지 않는다). "record_unchanged"는 선언이 아니라 이 검사 결과로만 기록된다.
+- **레코드 machine-check(검수 2 P1-3):** 각 KU id에 대해 `query_sha256 == sha256(현재 seed query)`, `record_sha256 == canonical_sha256(현재 seed 레코드 전체)`(검수 3 P1-2; `query_sha256`은 사람이 확인하기 쉬운 보조 필드)이고, 그 레코드가 `56b4b0e`의 `tests/benchmarks/search_queries.json`과 같아야 한다. H 테스트와 pre-T 이벤트가 둘 다 확인한다; 불일치 → STOP(같은 id라도 레코드가 바뀌면 면제되지 않는다). "record_unchanged"는 선언이 아니라 이 검사 결과로만 기록된다.
 - `reachable(seed) = seed ∖ registry`. registry의 seed가 우연히 통과해도 문제 없다(통과는 금지되지 않는다).
 - registry는 freeze 키 `known_unreachable_seeds`(정렬 id 목록)와 `known_unreachable_registry_sha256`(근거 파일 sha)로 T에 고정된다.
 - 실패 seed가 registry 밖에 하나라도 있으면 pre-T는 `STOP_FOR_AMENDMENT`(blocker kind `unreachable_seed`, Round 4 §4.1 의미 그대로). 그 seed를 registry에 넣는 것은 자동 허용되지 않으며 스펙 정정·검수가 필요하다.
 
 ### 4.2 수용 조건
 
-- `tuning_accept := failed_seed_ids ⊆ registry ∧ regression_effective == 14/14 ∧ fixture_positive == 23/23 ∧ fixture_negative_raw == 6/6`. registry가 비면 Round 4 정의(seed 39/39)와 같다(테스트).
-- `select_candidate`의 후보 풀 조건 `seed == SEED_TOTAL`은 `failed_seed_ids ⊆ registry`로 바뀐다(격자 결과에 실패 id 집합을 함께 보존). 우선순위 규칙(Round 3)은 그대로.
+- `tuning_accept := failed_seed_ids ⊆ registry ∧ regression_effective == 14/14 ∧ fixture_positive == 23/23 ∧ fixture_negative_raw == 6/6 ∧ counterexample_loss_at_selected == []`. 마지막 항은 §8의 counterexample 스위트(같은 `changed_keys`)를 **선택된 constants**와 최종 alias 정책으로 다시 돌린 결과다(검수 3 P1-4; pre는 같은 constants의 `round4_map` 정책). registry가 비고 `changed_keys`가 비면 Round 4 정의(seed 39/39)와 같다(테스트).
+- **selector(검수 3 P0-1):** 격자 결과마다 실패 id 집합을 보존하고 `reachable_failed = failed − registry`, `reachable_passed = reachable_total − |reachable_failed|`를 계산한다. (1) 수용 풀 = `reachable_failed == ∅ ∧ regression_effective == total ∧ fixture 하드 제약 통과`인 점; 풀이 있으면 KU 통과 수는 무시하고 Round 3 보수적 tie-break만 적용한다. (2) 풀이 없으면 `(reachable_passed, regression_effective_passed)`를 최대화하는 점들 → Round 3 보수적 tie-break. KU 통과 수는 어느 단계에서도 순위에 들어가지 않는다. registry가 비면 `reachable_passed == seed_passed`이므로 Round 3/4 selector와 exact 동등. 테스트: reachable 성능이 같고 KU 통과 수만 다른 두 점 → 선택 동일; reachable 성능이 높은 점이 KU 통과 수가 적어도 우선; 빈 registry → 기존 selector와 모든 fixture에서 동일.
 - **제안기 입력(검수 2 P0-1):** `actionable_failed_seed_ids = failed_seed_ids − registry`. 상속된 제안기(`propose_aliases`, 원자 액션 예산)는 actionable 실패만 입력으로 받는다: KU 실패만 있으면 제안기는 KU를 보지 않으며 제안은 빈 패치(no-op)일 수 있다; KU와 non-KU가 섞이면 non-KU id만 받는다; 최종적으로 non-KU 실패가 남으면 `unreachable_seed` blocker. registry가 비면 Round 4 파이프라인(제안 입력·결과)과 exact 동등(테스트 3종: KU만 실패 → 제안 입력에 KU id 없음; 혼합 → 입력 == non-KU id; 빈 registry → Round 4와 동일).
 - pre-T 판정(AC-R3-01 계승): `failed ⊆ registry ∧ regression raw ≥ 10 ∧ effective 14 ∧ fixture 0`. 이때 seed 통과 수는 자동으로 ≥ 36이다.
 - pre-T 게이트(Round 4 §4.1 계승): `pre_t_blockers == []`; `unreachable_seed` blocker는 **registry 밖** 실패만 센다. dry-run(write-free production pipeline) 계약은 그대로.
@@ -99,9 +99,9 @@ Round 3–4의 `union_docs`(같은 key는 첫 입력이 이김)를 다음으로 
 1. **source identity rank(고정):** `round2_archive` = 0, `round4_generation` = 1, `doc_relation` = 2. rank는 입력의 source id 메타데이터에서 오며 CLI 인자 순서와 무관하다(입력 나열 순서를 바꿔도 결과 동일).
 2. **보존:** 각 source의 각 key k에 대해 후보 `(k, 정렬 targets, rank)`를 모두 보존한다.
 3. **자격(seed 무관):** `eligible(c) = structural_ok(c) ∧ review_ok(c)`. `structural_ok`는 Round 3/4 구조 단계 정의(동사·제품명·카탈로그·자격 규칙; §6.2 후보의 `in_catalog` 면제 포함)를 후보 하나에 적용한 것이고, `review_ok`는 §6.3. 둘 다 benchmark 파일을 읽지 않는다(테스트: 해석 함수에 benchmark 경로가 전달되지 않음).
-4. **해석:** key마다 eligible 후보 중 **rank가 가장 큰 후보 하나**를 고른다. eligible 후보가 없으면 key는 rejected(후보별 사유 목록).
+4. **해석:** key마다 eligible 후보 중 **source precedence(rank)가 가장 높은 후보 하나**를 고른다. eligible 후보가 없으면 key는 rejected(후보별 사유 목록).
 5. **후행 gate(상속, 대체 없음):** 해석된 lexicon 전체에 상속된 lexicon gate(`seed-incompatible`, `seed-regression`)를 적용한다. gate는 해석된 entry를 **제거만** 할 수 있고, 같은 key의 다른(오래된) 후보로 **대체하지 않는다**(fallback 금지). 제거로 reachable seed가 실패하면 그것은 pre-T(§4)·counterexample(§8)에서 드러나며 STOP_FOR_AMENDMENT다.
-6. **기록:** `concept_lexicon.json`의 각 entry에 `source`·`provenance_rank`, rejected 항목에 후보별 사유, gate 제거 항목에 `gate_reason`; `components`에 `union_resolution: "newest-eligible"`와 source 표(§5).
+6. **기록:** `concept_lexicon.json`의 각 entry에 `source`·`provenance_rank`, rejected 항목에 후보별 사유, gate 제거 항목에 `gate_reason`; `components`에 `union_resolution: "source-precedence"`와 source 표(§5).
 7. 구문(phrase) key도 같은 규칙(정렬 토큰 집합이 canonical key, Round 3 v1.25 표시 규칙 유지).
 
 ### 6.2 문서 근거 같은 제품 동의어 (Round 4 §11 B의 좁은 활성화)
@@ -132,7 +132,7 @@ Round 3–4의 `union_docs`(같은 key는 첫 입력이 이김)를 다음으로 
 - union: (a) 낮은 rank 부적격 → 높은 rank 적격 후보, (b) 둘 다 적격 → 높은 rank, (c) 높은 rank 부적격(구조·검토) → 낮은 rank 적격, (d) 모두 부적격 → rejected에 후보별 사유, (e) 입력 나열 순서를 바꿔도 결과 동일(rank는 source id에서), (f) **seed-independence:** benchmark seed 레코드를 임의로 바꿔도 해석 결과 `(key, targets, rank)` 집합이 동일, (g) 후행 gate가 entry를 제거해도 같은 key의 다른 후보로 대체되지 않음.
 - doc relations: 저장소에 커밋된 축소 fixture(`tests/fixtures/doc_titles/relations-snapshot.json`; P1·P2 일치, 동사 syn, 제품명, 비카탈로그 tgt, 다른 제품 tgt, 다단어, syn == tgt 사례 포함)로 패턴·조건·결정성·`in_catalog` 면제 범위를 portable 단위 테스트한다. 실제 아카이브 스냅샷의 exact 결과는 컨트롤러 binding check(§6.2)이며 canonical suite에 들어가지 않는다.
 - KU: registry 상수 == 스펙 본문 집합; registry가 비면 수용 조건이 Round 4와 동일; registry 밖 실패 → blocker; registry 안 실패만 → blocker 없음; registry seed 통과 허용.
-- **비표적 counterexample 스위트(pre-T 게이트의 일부, 검수 1 P1-3):** 대상 key = `changed_keys = { k | round4_map.get(k) != round5_map.get(k) }` — `round4_map` = Round 4 first-wins 해석(같은 raw·검토 입력, Round 3/4 `union_docs`) 후 후행 gate를 거친 key→targets map, `round5_map` = Round 5 해석(§6.1, doc_relation 포함) 후 후행 gate를 거친 map. 대칭차이므로 old→new targets, old→absent(새 후보가 선택됐다가 gate에서 제거되고 fallback이 없어 key가 사라진 경우), absent→new, 구문 key 변화가 모두 포함된다(검수 2 P0-2; 회귀 테스트: 새 후보 선택 → gate 제거 → Round 4에는 있던 key가 Round 5에서 사라짐 → 그 key가 대상에 포함). slice(key) = summary의 norm 토큰 집합이 key의 모든 토큰을 포함하는 카탈로그 operation 전부(구문 key는 모든 토큰). pre/post는 같은 S와 같은 **prospective-T ranking**(constants = `56b4b0e` 값, `verb_methods` = 검증된 prospective-T suffix 상태, 나머지 구조 `56b4b0e`)을 쓰고, 두 정책의 유일한 차이는 lexicon 해석이다(검수 2 P1-2): pre = `round4_map`을 병합한 alias 정책, post = `round5_map`을 병합한 alias 정책. 손실 = pre에서 "summary를 질의로 넣으면 그 operation이 top-1"이었는데 post에서 아닌 operation. 손실이 하나라도 있으면 pre-T blocker `counterexample_loss`(STOP_FOR_AMENDMENT). pre-T 이벤트에 key별 slice 크기·pre/post hit 수·손실 목록을 기록.
+- **비표적 counterexample 스위트(pre-T 게이트의 일부, 검수 1 P1-3):** 대상 key = `changed_keys = { k | round4_map.get(k) != round5_map.get(k) }` — `round4_map` = Round 4 first-wins 해석(같은 raw·검토 입력, Round 3/4 `union_docs`) 후 후행 gate를 거친 key→targets map, `round5_map` = Round 5 해석(§6.1, doc_relation 포함) 후 후행 gate를 거친 map. 대칭차이므로 old→new targets, old→absent(새 후보가 선택됐다가 gate에서 제거되고 fallback이 없어 key가 사라진 경우), absent→new, 구문 key 변화가 모두 포함된다(검수 2 P0-2; 회귀 테스트: 새 후보 선택 → gate 제거 → Round 4에는 있던 key가 Round 5에서 사라짐 → 그 key가 대상에 포함). slice(key) = summary의 norm 토큰 집합이 key의 모든 토큰을 포함하는 카탈로그 operation 전부(구문 key는 모든 토큰). pre/post는 같은 S와 같은 **prospective-T ranking**(constants = `56b4b0e` 값, `verb_methods` = 검증된 prospective-T suffix 상태, 나머지 구조 `56b4b0e`)을 쓰고, 두 정책의 유일한 차이는 lexicon 해석이다(검수 2 P1-2): pre = `round4_map`을 병합한 alias 정책, post = `round5_map`을 병합한 alias 정책. 손실 = pre에서 "summary를 질의로 넣으면 그 operation이 top-1"이었는데 post에서 아닌 operation. 손실이 하나라도 있으면 pre-T blocker `counterexample_loss`(STOP_FOR_AMENDMENT). pre-T 이벤트에 key별 slice 크기·pre/post hit 수·손실 목록을 기록. 같은 스위트를 튜닝이 선택한 constants와 최종 alias 정책으로 다시 돌려 `tuning_accept`의 마지막 항(§4.2)으로 쓴다(pre-T dry-run에서도 같은 경로로 계산; B..C에서 손실 → F).
 - AC-R5-05 diff 공란, 시뮬레이션 `--phase H`(T, B, D, F, X, XpreB2–5) 통과.
 
 ## 9. 상태 모델·readiness 델타
@@ -147,21 +147,21 @@ Round 3–4의 `union_docs`(같은 key는 첫 입력이 이김)를 다음으로 
 
 | AC | 내용 |
 |---|---|
-| AC-R5-01 | union이 §6.1대로 동작한다(테스트 (a)–(g), 해석은 benchmark를 읽지 않음); `components.union_resolution == "newest-eligible"`, entry별 `source`·`provenance_rank` 기록 |
+| AC-R5-01 | union이 §6.1대로 동작한다(테스트 (a)–(g), 해석은 benchmark를 읽지 않음); `components.union_resolution == "source-precedence"`, entry별 `source`·`provenance_rank` 기록 |
 | AC-R5-02a | 문서 관계 추출 알고리즘이 커밋된 fixture로 portable 단위 테스트를 통과한다 |
 | AC-R5-02b | 컨트롤러 binding check: §5 sha 확인 뒤 실제 스냅샷에서 exact `{"search": ["filter"]}`(아니면 STOP), ledger 기록; 해당 entry는 후행 gate를 통과해야 merge된다 |
 | AC-R5-03 | KU registry == 스펙 집합 `{s-004, s-027, s-039}`; 근거 파일 필드 완비(승인 provenance 해시 포함); 레코드 machine-check 통과(§4.1); freeze 키로 T에 고정; T에서 근거 파일 불변 |
-| AC-R5-04 | 수용 조건(§4.2)이 `tuning_accept`·`select_candidate`·제안기 입력(actionable 실패만)·pre-T verdict·blockers에 일관 적용; registry 공집합에서 Round 4 동작과 동일 |
+| AC-R5-04 | KU 의미가 수용(`failed ⊆ registry`)·제안기 입력(actionable 실패만)·selector(reachable 성능만, fallback 포함)·pre-T verdict·blockers에 일관 적용; registry 공집합에서 Round 4 동작과 동일 |
 | AC-R5-05 | §3 불변식: `search.py`·`policy.py` diff(56b4b0e..) 공란; `search_ranking.json`은 `constants` 값(B..C 채택 커밋에서만)과 `verb_methods` suffix(T에서만) 외 diff 공란 |
 | AC-R5-06 | 검토 재사용이 쌍 단위; 미검토 쌍만 Round 5 검토에 감; 검토자 actor ≠ 이전 생성자·검토자; 바이트 검증 ledger |
 | AC-R5-07 | 생성 없음: §5 표의 full sha가 모두 일치; 코퍼스 번들·스냅샷 sha 일치 |
-| AC-R5-08 | 비표적 counterexample 스위트(대상 = 정책 map 대칭차, prospective-T ranking) 손실 0(pre-T 게이트) |
+| AC-R5-08 | 비표적 counterexample 스위트(대상 = 정책 map 대칭차, prospective-T ranking) 손실 0(pre-T 게이트)이고, 선택된 constants에서도 손실 0(`tuning_accept`) |
 | AC-R5-09 | pre-T 게이트 `pre_t_blockers == []`(registry 밖 미도달 0, tuning_accept, validation_errors 0, AC-R3-01, counterexample 손실 0) 후에만 T |
 | (상속) | Round 4 AC-R4-01…10과 Round 3 AC 전부(이름 치환), Discovery 게이트 불변 |
 
 ## 11. 위험과 완화
 
-- **union 정정의 광범위 효과:** newest-eligible은 release 외의 key에서도 Round 2 대신 Round 4 후보를 고를 수 있다. 완화: pre-T 전체 재평가와 §8 counterexample 스위트(Round 4 해석과 다른 모든 key 대상); 손실 시 STOP.
+- **union 정정의 광범위 효과:** source-precedence은 release 외의 key에서도 Round 2 대신 Round 4 후보를 고를 수 있다. 완화: pre-T 전체 재평가와 §8 counterexample 스위트(Round 4 해석과 다른 모든 key 대상); 손실 시 STOP.
 - **재검토 비결정성:** 검토자가 `release→version`을 거부하면 s-028이 다시 미도달 → registry 밖 실패 → STOP_FOR_AMENDMENT(자동 KU 추가 금지). 완화 없음(정직한 결과).
 - **튜닝 단계의 변동:** dry-run이 다른 격자점을 고르거나 제안기가 alias를 추가해 reachable seed가 깨질 수 있다. 완화: Round 4 dry-run 게이트 그대로; 실패 시 STOP.
 - **KU가 hidden 일반화를 가리는 위험:** KU 3개는 학습 세트의 표현 한계를 기록할 뿐 hidden 게이트를 바꾸지 않는다. hidden 생성 규칙·검토는 Round 4 그대로.
