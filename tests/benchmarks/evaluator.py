@@ -287,7 +287,8 @@ def round_freeze_hashes(round: int, root=ROOT) -> dict:
 
 
 PRE_FREEZE_NONVERB_STRUCTURE_SHA256 = {3: "1e99c67ec445163f777b0cdfb933ac6d0cac22d638c1994743028678a862c9f1",
-                                       4: "1e99c67ec445163f777b0cdfb933ac6d0cac22d638c1994743028678a862c9f1"}   # Round 4 spec §3: structure unchanged
+                                       4: "1e99c67ec445163f777b0cdfb933ac6d0cac22d638c1994743028678a862c9f1",   # Round 4 spec §3: structure unchanged
+                                       5: "1e99c67ec445163f777b0cdfb933ac6d0cac22d638c1994743028678a862c9f1"}   # Round 5 (registered at Round 4 closure 2026-10-09): structure unchanged
 NONVERB_STRUCTURE_KEYS = tuple(k for k in STRUCTURE_KEYS if k != "verb_methods")
 ROUND2_SPEC = ROOT / "docs" / "superpowers" / "specs" / "2026-10-02-search-quality-round2-design.md"
 

@@ -109,8 +109,8 @@ class TestSyntheticLexiconPhrase(unittest.TestCase):
 class TestXpreBStates(unittest.TestCase):
     def test_xpreb_states_3_4_5_pass_terminal_validation(self):
         """spec §9.4 states (3), (4), (5) each leave a validate-terminal-clean tree; the sealed plaintext is ledgered before deletion."""
-        if ev.current_round()["round"] >= 4:
-            print("round 4 already frozen in this tree: the X_preB lifecycle is checked in the pre-T tree / --phase H"); return
+        if ev.pending_round() != 4:
+            self.skipTest("round 4 is not pending in this tree (frozen or decided): the X_preB lifecycle runs only in a Round 4 pre-T tree")
         for state in (3, 4, 5):
             with tempfile.TemporaryDirectory() as td:
                 problems, ledgered_before_delete = sim.simulate_xpreb_in_temp_tree(pathlib.Path(td), state)

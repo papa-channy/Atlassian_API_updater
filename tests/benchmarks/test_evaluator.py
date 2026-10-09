@@ -133,8 +133,9 @@ class TestRankingTablesFrozen(unittest.TestCase):
         if ev.current_round()["round"] >= 3:
             self.assertIsNone(ev.pending_round()); self.assertEqual(ranking_structure_sha256(raw), ev.freeze_for(ev.current_round()["round"])["structure_sha256"])
         else:
-            pending = ev.pending_round()                      # Round 4 spec §9.1: Round 3 is closed in round_outcomes.json, so 4 is pending
-            self.assertEqual(pending, 4); self.assertEqual(raw["version"], 2)
+            pending = ev.pending_round()                      # Round 4 spec §9.1: the round after the last decided one is pending (3, 4 closed -> 5)
+            decided = {o["round"] for o in ev.load_round_outcomes()}
+            self.assertEqual(pending, max(decided | {ev.current_round()["round"]}) + 1); self.assertEqual(raw["version"], 2)
             self.assertEqual(ev.nonverb_structure_sha256(raw), ev.PRE_FREEZE_NONVERB_STRUCTURE_SHA256[pending])
             suffixed = json.loads(json.dumps(raw)); suffixed["verb_methods"]["get"] = ["GET", "POST"]            # a T-style suffix is allowed before T
             self.assertEqual(ev.structure_check_problems(suffixed), [])
@@ -759,3 +760,16 @@ class TestChangedFilesSince(unittest.TestCase):
             (repo / "a.txt").write_text("a"); run("add", "-A"); run("commit", "-q", "-m", "base")
             (repo / "a.txt").write_text("b"); (repo / "new.txt").write_text("n")
             self.assertEqual(ev.changed_files_since(repo, "HEAD"), ["a.txt", "new.txt"])
+
+
+class TestRound5Pending(unittest.TestCase):
+    """Round 4 closed 2026-10-09 "pre-T not reached" (user decision); the next round is 5. Its H structure equals Round 4's
+    (structure unchanged), so it is the pending round while freeze = [1, 2] and rounds 3 and 4 are decided."""
+    def test_round5_is_pending_after_round4_closure(self):
+        fz = [{"round": 1}, {"round": 2}]
+        oc = [{"round": 3, "outcome": "pre-T not reached"}, {"round": 4, "outcome": "pre-T not reached"}]
+        self.assertEqual(ev.pending_round(fz, oc), 5)
+        self.assertEqual(ev.PRE_FREEZE_NONVERB_STRUCTURE_SHA256[5], ev.PRE_FREEZE_NONVERB_STRUCTURE_SHA256[4])
+
+    def test_live_tree_pending_round_is_5(self):
+        self.assertEqual(ev.pending_round(), 5)
