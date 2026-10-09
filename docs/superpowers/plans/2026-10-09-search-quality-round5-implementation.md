@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-09-search-quality-round5-design.md` **v1.10** (v1.7 passed review 8 with P0 0 / P1 3 "구현 계획으로 진행 가능"; v1.8 applied those P1s; v1.9 and v1.10 are planning-time deltas ruled on review thread 2: counterexample reference file at T, per-round T allowlist, and removal of §6.2 doc-relation extraction). The spec inherits Round 4 v1.13 (`docs/superpowers/specs/2026-10-09-search-quality-round4-design.md`) and, through it, Round 3 v1.25.1. "As Round 4 plan v7 Task N Step M" means `docs/superpowers/plans/2026-10-09-search-quality-round4-implementation.md` with the substitution table below applied verbatim.
 
-**Plan version:** v1 (2026-10-09).
+**Plan version:** v2 (2026-10-09; v2 = plan review 1 (P0 3/P1 3): fresh Round 5 verdicts replace only pending pairs (`resolve_verdicts`), tuning round identity pinned by tests (dynamic `current_round`, KU via pending round before T), counterexample result carries scope/policy shas/selected constants and the final call gets titles+provenance with strict provenance validation, richer reference-file provenance, normalized path tokens, split blocker kinds).
 
 ## Global Constraints
 
@@ -61,7 +61,7 @@
 
 **Interfaces:**
 - Consumes: `normalize_raw`, `structural_check`, `cap_per_concept`, `build`, `union_docs`, `_context` (existing); `act.norm_tokens`.
-- Produces: `SOURCE_RANK: dict[str, int]` (`{"round2_archive": 0, "round4_generation": 1}`); `canonical_key(syn: str) -> tuple`; `review_pairs(review_input_text: str, review: dict) -> dict[tuple, bool]` keyed by `(canonical_key, tuple(sorted(targets)))`; `merge_verdicts(pair_maps: list) -> (dict, list)` = (agreed verdicts, conflicting pairs); `resolve_sources(sources: list[dict], ctx: tuple, verdicts: dict) -> dict` with keys `lexicon`, `rejected`, `selected`, `pending` (each `sources` item is `{"id": <source id>, "raw": <dict>}`; `ctx` is the 7-tuple `_context` returns); `render_pending_review(template: str, pending: list) -> list[str]` (one review-input text per batch of unique display keys). Task 2 consumes `canonical_key`; Task 5 consumes the CLI.
+- Produces: `SOURCE_RANK: dict[str, int]` (`{"round2_archive": 0, "round4_generation": 1}`); `canonical_key(syn: str) -> tuple`; `review_pairs(review_input_text: str, review: dict) -> dict[tuple, bool]` keyed by `(canonical_key, tuple(sorted(targets)))`; `merge_verdicts(pair_maps: list) -> (dict, list)` = (agreed historical verdicts, conflicting pairs); `resolve_verdicts(historical_maps: list, fresh_maps: list) -> (dict, list)` = (effective verdicts, conflicts left without a fresh verdict) — a fresh verdict replaces a pair only if that pair has no agreed historical verdict; `resolve_sources(sources: list[dict], ctx: tuple, verdicts: dict) -> dict` with keys `lexicon`, `rejected`, `selected`, `pending` (each `sources` item is `{"id": <source id>, "raw": <dict>}`; `ctx` is the 7-tuple `_context` returns); `render_pending_review(template: str, pending: list) -> list[str]` (one review-input text per batch of unique display keys). Task 2 consumes `canonical_key`; Task 5 consumes the CLI.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -133,6 +133,16 @@ class TestRound5Union(unittest.TestCase):
         out = clc.resolve_sources(self._src(None, {"release": ["version"]}), CTX5, agreed)
         self.assertEqual(out["pending"], [(("release",), ("version",), "release")]); self.assertNotIn("release", out["lexicon"])
 
+    def test_fresh_verdict_resolves_conflict(self):
+        past = [{(("release",), ("version",)): True}, {(("release",), ("version",)): False}]
+        for fresh_v in (True, False):
+            eff, left = clc.resolve_verdicts(past, [{(("release",), ("version",)): fresh_v}])
+            self.assertEqual(eff[(("release",), ("version",))], fresh_v); self.assertEqual(left, [])
+        eff, left = clc.resolve_verdicts(past, [])
+        self.assertNotIn((("release",), ("version",)), eff); self.assertEqual(left, [(("release",), ("version",))])
+        eff, _ = clc.resolve_verdicts([{(("ticket",), ("issue",)): True}], [{(("ticket",), ("issue",)): False}])
+        self.assertTrue(eff[(("ticket",), ("issue",))])                                   # fresh never overrides an agreed past verdict
+
     def test_render_pending_review_batches_unique_keys(self):
         tpl = 'Reply ONLY with JSON.\n\nENTRIES:\n<the "lexicon" object of lexicon_structural.json>\n'
         texts = clc.render_pending_review(tpl, [(("release",), ("version",), "release"), (("release",), ("build",), "release")])
@@ -177,6 +187,21 @@ def merge_verdicts(pair_maps) -> tuple:
         for pair, v in m.items():
             seen.setdefault(pair, set()).add(v)
     return {p: next(iter(v)) for p, v in seen.items() if len(v) == 1}, sorted(p for p, v in seen.items() if len(v) > 1)
+
+
+def resolve_verdicts(historical_maps, fresh_maps) -> tuple:
+    """Round 5 spec §6.3: agreed historical verdicts are reused; a fresh (Round 5) verdict is authoritative only for pairs without an
+    agreed historical verdict (unreviewed or conflicting) and is never merged into the conflicting set."""
+    agreed, conflicts = merge_verdicts(historical_maps)
+    fresh = {}
+    for m in fresh_maps:
+        for pair, v in m.items():
+            if pair in agreed:
+                continue                                            # fresh verdicts never override an agreed historical verdict
+            if fresh.get(pair, v) != v:
+                raise ValueError(f"two fresh reviews disagree on {pair}")
+            fresh[pair] = v
+    return {**agreed, **fresh}, [c for c in conflicts if c not in fresh]
 
 
 def resolve_sources(sources, ctx, verdicts) -> dict:
@@ -238,7 +263,7 @@ def render_pending_review(template: str, pending) -> list:
 - [ ] **Step 4: Run the tests**
 
 Run: `python -m unittest tests.benchmarks.test_concept_lexicon_check.TestRound5Union -v`
-Expected: 10 tests OK.
+Expected: 11 tests OK.
 
 - [ ] **Step 5: CLI `resolve` and `round4-reference` (failing test first)**
 
@@ -271,15 +296,15 @@ Implement in `concept_lexicon_check.py` (before `main`):
 ```python
 def cmd_resolve(args):
     internal, fp, shas, ranking, aliases, ctx = _context(args)
-    sources, pair_maps, comp = [], [], []
+    sources, pair_maps, fresh_maps, comp = [], [], [], []
     for sid, raw_p, rev_p, rin_p in args.source:
         raw = _read(raw_p); sources.append({"id": sid, "raw": raw})
         pair_maps.append(review_pairs(pathlib.Path(rin_p).read_text(encoding="utf-8"), _read(rev_p)))
         comp.append({"id": sid, "rank": SOURCE_RANK[sid], "raw_sha256": _sha(raw_p), "review_sha256": _sha(rev_p), "review_input_sha256": _sha(rin_p)})
     for rev_p, rin_p in args.review_r5 or []:
-        pair_maps.append(review_pairs(pathlib.Path(rin_p).read_text(encoding="utf-8"), _read(rev_p)))
+        fresh_maps.append(review_pairs(pathlib.Path(rin_p).read_text(encoding="utf-8"), _read(rev_p)))
         comp.append({"id": "round5_review", "review_sha256": _sha(rev_p), "review_input_sha256": _sha(rin_p)})
-    verdicts, conflicts = merge_verdicts(pair_maps)
+    verdicts, conflicts = resolve_verdicts(pair_maps, fresh_maps)
     out = resolve_sources(sources, ctx, verdicts)
     if out["pending"]:
         d = pathlib.Path(args.pending_out); d.mkdir(parents=True, exist_ok=True)
@@ -572,8 +597,28 @@ class TestCounterexample(unittest.TestCase):
 
     def test_uncovered_static_is_recorded_not_blocking(self):
         top1 = lambda policy, q: "a:GET:/version"
-        out = cx.suite(INDEX, top1, raw(), raw({"zzword": ["version"]}), raw({"zzword": ["version"]}), summaries={k["key"]: " ".join(sorted(k["summary_tokens"])) for k in INDEX})
+        out = cx.suite(INDEX, top1, raw(), raw({"zzword": ["version"]}), raw({"zzword": ["version"]}), summaries={k["key"]: " ".join(sorted(k["summary_tokens"])) for k in INDEX},
+                       provenance={("alias", "zzword"): {"source": "round4_generation", "provenance_rank": 1}})
         self.assertTrue(out["ok"]); self.assertEqual([d["key"] for d in out["uncovered_static_diagnostics"]], [["alias", "zzword"]])
+
+    def test_missing_provenance_is_incomplete_and_shas_bound(self):
+        top1 = lambda policy, q: "a:GET:/version"
+        sm = {k["key"]: " ".join(sorted(k["summary_tokens"])) for k in INDEX}
+        out = cx.suite(INDEX, top1, raw(), raw({"zzword": ["version"]}), raw({"zzword": ["version"]}), summaries=sm)
+        self.assertIn("counterexample_diagnostic_incomplete", out["validation_errors"]); self.assertFalse(out["ok"])
+        good = cx.suite(INDEX, top1, raw(), raw({"zzword": ["version"]}), raw({"zzword": ["version"]}), summaries=sm,
+                        provenance={("alias", "zzword"): {"source": "round4_generation", "provenance_rank": 1}}, scope="final_policy", selected_constants={"a": 1})
+        self.assertTrue(good["ok"]); self.assertEqual(good["scope"], "final_policy"); self.assertEqual(good["selected_constants"], {"a": 1})
+        other = cx.suite(INDEX, top1, raw(), raw({"zzword": ["version"]}), raw({"zzword": ["version"], "yy": ["build"]}), summaries=sm,
+                         provenance={("alias", "zzword"): {"source": "round4_generation", "provenance_rank": 1}})
+        self.assertNotEqual(good["post_policy_sha256"], other["post_policy_sha256"])
+
+    def test_provenance_from_lexicon(self):
+        doc = {"selected": {"release": {"source": "round4_generation", "provenance_rank": 1}}, "rejected": {"release": {"reason": "seed-incompatible"},
+               "fresh": {"reason": "no-eligible-candidate", "candidates": [{"source": "round2_archive"}]}}}
+        prov = cx.provenance_from_lexicon(doc)
+        self.assertEqual(prov[("alias", "release")], {"source": "round4_generation", "provenance_rank": 1, "gate_reason": "seed-incompatible"})
+        self.assertIsNone(prov[("alias", "fresh")]["source"])
 
     def test_partition_invariant(self):
         top1 = lambda policy, q: "a:GET:/version"
@@ -594,6 +639,7 @@ import pathlib, sys
 if __package__ in (None, ""):
     sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 from tests.benchmarks import alias_candidates_tool as act
+from tests.benchmarks.evaluator import canonical_sha256
 
 CLASSES = ("covered_static", "uncovered_static", "covered_proposer", "uncovered_proposer")
 DIAG_FIELDS = ("key", "provenance", "summary_slice_size", "opid_path_coverage", "title_rows", "changed_title_rows")
@@ -615,9 +661,25 @@ def counterexample_tokens(ckey) -> tuple:
     return (body,) if tag == "alias" else tuple(body)
 
 
-def suite(index, top1, pre_raw, static_raw, post_raw, summaries, titles=(), provenance=None) -> dict:
+def provenance_from_lexicon(lexicon_doc) -> dict:
+    """Spec §8 provenance rules from concept_lexicon.json: selected entry → source/rank (+ gate_reason when the post-resolution gate
+    removed it); no eligible candidate → source null + rejected_candidates."""
+    out, rej = {}, lexicon_doc.get("rejected") or {}
+    def ck(word):
+        toks = tuple(word.split(" "))
+        return ("phrase", tuple(sorted(toks))) if len(toks) > 1 else ("alias", word)
+    for word, sel in (lexicon_doc.get("selected") or {}).items():
+        out[ck(word)] = {"source": sel["source"], "provenance_rank": sel["provenance_rank"], **({"gate_reason": rej[word]["reason"]} if word in rej else {})}
+    for word, r in rej.items():
+        if ck(word) not in out and r.get("candidates"):
+            out[ck(word)] = {"source": None, "rejected_candidates": r["candidates"]}
+    return out
+
+
+def suite(index, top1, pre_raw, static_raw, post_raw, summaries, titles=(), provenance=None, scope="lexicon_only", selected_constants=None) -> dict:
     """index: [{key, summary_tokens, opid_path_tokens}]; top1(policy_raw, query) -> op key or None; summaries: {op key: summary};
     titles: [{product, url, title}] (diagnostic only); provenance: {ckey: dict} for uncovered-static rows."""
+    scope_name = scope
     pre, static, post = (canonical_policy_map(r) for r in (pre_raw, static_raw, post_raw))
     proposer = set(diff(static, post)); scope = diff(pre, post)
     classes = {c: [] for c in CLASSES}; losses, counts, diags, errors = [], {}, [], []
@@ -639,7 +701,10 @@ def suite(index, top1, pre_raw, static_raw, post_raw, summaries, titles=(), prov
                 if r[1] not in seen:
                     seen.add(r[1]); uniq.append(r)
             changed = [{"title": r[2], "url": r[1], "pre_top1": top1(pre_raw, r[2]), "post_top1": top1(post_raw, r[2])} for r in uniq]
-            diags.append({"key": list(k), "provenance": (provenance or {}).get(k, {"source": None}), "summary_slice_size": 0,
+            prov = (provenance or {}).get(k)
+            if prov is None or (prov.get("source") is None and not prov.get("rejected_candidates")):
+                errors.append("counterexample_diagnostic_incomplete")
+            diags.append({"key": list(k), "provenance": prov, "summary_slice_size": 0,
                           "opid_path_coverage": sorted(e["key"] for e in index if toks <= e["opid_path_tokens"]),
                           "title_rows": len(uniq), "changed_title_rows": [c for c in changed if c["pre_top1"] != c["post_top1"]]})
     flat = [tuple(map(lambda x: tuple(x) if isinstance(x, list) else x, v)) for c in CLASSES for v in classes[c]]
@@ -648,8 +713,10 @@ def suite(index, top1, pre_raw, static_raw, post_raw, summaries, titles=(), prov
     if sorted(tuple(map(lambda x: tuple(x) if isinstance(x, list) else x, d["key"])) for d in diags) != sorted(map(tuple, (tuple(map(lambda x: tuple(x) if isinstance(x, list) else x, v)) for v in classes["uncovered_static"]))) \
             or any(f not in d for d in diags for f in DIAG_FIELDS):
         errors.append("counterexample_diagnostic_incomplete")
-    return {"scope_keys": [list(k) for k in scope], "classes": classes, "losses": losses, "per_key_counts": counts,
-            "uncovered_static_diagnostics": diags, "validation_errors": errors,
+    errors = sorted(set(errors))
+    return {"scope": scope_name, "scope_keys": [list(k) for k in scope], "classes": classes, "losses": losses, "per_key_counts": counts,
+            "uncovered_static_diagnostics": diags, "validation_errors": errors, "selected_constants": dict(selected_constants or {}),
+            "pre_policy_sha256": canonical_sha256(pre_raw), "static_policy_sha256": canonical_sha256(static_raw), "post_policy_sha256": canonical_sha256(post_raw),
             "ok": not losses and not classes["uncovered_proposer"] and not errors}
 
 
@@ -659,7 +726,7 @@ def catalog_index(state):
         for e in sr.search_index.entries:
             op = sr.operations_by_key[e.key]; summaries[e.key] = op.summary or ""
             index.append({"key": e.key, "summary_tokens": frozenset(act.norm_tokens(op.summary or "")),
-                          "opid_path_tokens": frozenset(act.norm_tokens(op.operation_id or "")) | frozenset(p.origin for p in e.path_tokens)})
+                          "opid_path_tokens": frozenset(act.norm_tokens(op.operation_id or "")) | frozenset(t for p in e.path_tokens for t in act.norm_tokens(p.origin))})
     return index, summaries
 
 
@@ -677,7 +744,7 @@ def production_top1(state, rp, point):
     return top1
 ```
 
-Run: `python -m unittest tests.benchmarks.test_counterexample -v` → Expected: 7 OK. (Keys in `classes`/`losses` are JSON-ready lists; `scope_keys` is the canonical tuple list as lists.)
+Run: `python -m unittest tests.benchmarks.test_counterexample -v` → Expected: 9 OK. (Keys in `classes`/`losses` are JSON-ready lists; `scope_keys` is the canonical tuple list as lists.)
 
 - [ ] **Step 6: KU-aware pipeline and the counterexample term in `tune_search_ranking.py` — failing tests, then implementation**
 
@@ -754,7 +821,7 @@ def run_pipeline_result(evaluate_fn, bench, aliases_raw, cands_doc, grid, baseli
     return res
 ```
 
-In `main`, when `ROUND >= 5`: load `pre_raw = json.loads((ROOT / f"tests/benchmarks/round{ROUND}-counterexample-reference.json").read_text())["policy"]`, build `index, summaries = cx.catalog_index(state)` inside `body`, and pass `counterexample_fn=lambda point, working: cx.suite(index, cx.production_top1(state, rp, point), pre_raw, aliases_raw, working, summaries)`. Pass `res.tuning_accept` into `_finish` (new parameter `accept`) and delete the recomputation `accept = tuning_accept(...)` there; add `"counterexample": res.counterexample_result` to the log line. The `--adopt` path is unchanged (it reads `tuning_accept` from the log line). Run: `python -m unittest tests.test_tune_search_ranking -v` → Expected: all OK. `KU` is non-empty in this tree (pending round 5); any pre-existing `run_pipeline` test whose fake seed ids collide with `s-004`/`s-027`/`s-039` patches `tune.KU` to `frozenset()` for that test (ledger a `Task 2: Ruling:` line naming each such test); `test_proposer_never_sees_ku` patches `KU` itself.
+In `main`, when `ROUND >= 5`: load `ref = json.loads((ROOT / f"tests/benchmarks/round{ROUND}-counterexample-reference.json").read_text())`, `pre_raw = ref["policy"]`, `titles = ref["titles"]`, `prov = cx.provenance_from_lexicon(json.loads(policy.DATA_DIR.joinpath("concept_lexicon.json").read_text()))`, build `index, summaries = cx.catalog_index(state)` inside `body`, and pass `counterexample_fn=lambda point, working: cx.suite(index, cx.production_top1(state, rp, point), pre_raw, aliases_raw, working, summaries, titles=titles, provenance=prov, scope="final_policy", selected_constants=point)`. Pin tests (append to `TestRound5KU`): `test_round_identity` — in this tree before T `tune.KU == ev.known_unreachable(5)`; with `ev.load_round_freeze` patched to `[{"round": 1}, {"round": 2}, {"round": 5}]`, `importlib.reload(tune)` gives `tune.ROUND == 5`, `tune.KU == ev.known_unreachable(5)`, `tune.LOG_REL.endswith("search-tuning-round5.jsonl")` and `tune.round_note("w", "s-001", "t")["origin"] == "round5"` (reload again afterwards to restore); `test_main_loads_reference` — a `main` dry-run with the reference file and `_with_state` patched asserts `counterexample_fn` was built with `scope="final_policy"`. (`tune.ROUND` is `ev.current_round()["round"]`, i.e. 5 from T on; `KU` uses `pending_round()` only before T, when the freeze round is still 2.) Pass `res.tuning_accept` into `_finish` (new parameter `accept`) and delete the recomputation `accept = tuning_accept(...)` there; add `"counterexample": res.counterexample_result` to the log line. The `--adopt` path is unchanged (it reads `tuning_accept` from the log line). Run: `python -m unittest tests.test_tune_search_ranking -v` → Expected: all OK. `KU` is non-empty in this tree (pending round 5); any pre-existing `run_pipeline` test whose fake seed ids collide with `s-004`/`s-027`/`s-039` patches `tune.KU` to `frozenset()` for that test (ledger a `Task 2: Ruling:` line naming each such test); `test_proposer_never_sees_ku` patches `KU` itself.
 
 - [ ] **Step 7: `round5_simulation.py` — failing tests, then the module**
 
@@ -782,7 +849,7 @@ class TestRound5PreT(unittest.TestCase):
         self.assertEqual([x["kind"] for x in b], ["unreachable_seed"]); self.assertEqual(b[0]["seeds"], ["s-028"])
 
     def test_counterexample_loss_and_record_mismatch_are_blockers(self):
-        b = sim.pre_t_blockers(self._res([]), {"pass": True}, cx={"ok": False, "losses": [{"key": ["alias", "release"], "op": "x"}], "classes": {"uncovered_proposer": []}},
+        b = sim.pre_t_blockers(self._res([]), {"pass": True}, cx={"ok": False, "losses": [{"key": ["alias", "release"], "op": "x"}], "classes": {"uncovered_proposer": []}, "validation_errors": []},
                                extra=[{"kind": "ku_record_mismatch", "problems": ["s-004: seed record differs from the start commit"]}])
         self.assertEqual(sorted(x["kind"] for x in b), ["counterexample_loss", "ku_record_mismatch"])
 
@@ -859,14 +926,18 @@ def pre_t_blockers(result, event, diagnostics=None, ku=None, cx=None, extra=()) 
         out.append({"kind": "alias_validation_error", "errors": list(result.validation_errors)})
     if not event["pass"]:
         out.append({"kind": "inherited_ac_r3_01_failure", "event": {k: event.get(k) for k in ("seed", "regression_raw", "regression_effective", "fixture_failing")}})
-    if cx is not None and not cx["ok"]:
-        out.append({"kind": "counterexample_loss", "losses": cx.get("losses", []), "uncovered_proposer": cx["classes"].get("uncovered_proposer", [])})
+    if cx is not None and cx.get("losses"):
+        out.append({"kind": "counterexample_loss", "losses": cx["losses"]})
+    if cx is not None and cx["classes"].get("uncovered_proposer"):
+        out.append({"kind": "counterexample_uncovered_proposer", "keys": cx["classes"]["uncovered_proposer"]})
+    if cx is not None and cx.get("validation_errors"):
+        out.append({"kind": "alias_validation_error", "errors": list(cx["validation_errors"])})
     return out + list(extra)
 ```
 
 4. `pre_t_verdict(seed_passed, …)` becomes `pre_t_verdict(failed_ids, reg_raw, reg_eff, fixture_failing)` = `set(failed_ids) <= ev.known_unreachable(ROUND) and reg_raw >= 10 and reg_eff == 14 and not fixture_failing`; `pre_t_event` passes the failed id list.
-5. `run_pre_t(cache, work)`: before the dry-run compute `extra = input_blockers(work) + registry_blockers(bench, base_bench, registry_doc) + approval_blockers(work, registry_doc)` where `base_bench` is the `56b4b0e` blob of `tests/benchmarks/search_queries.json` (`git show 56b4b0e:tests/benchmarks/search_queries.json`) and `registry_doc` the committed `round5-known-unreachable.json`; compute the lexicon-only counterexample at baseline constants: `cxr = cx.suite(index, cx.production_top1(state, rp, dict(rp.constants)), pre_raw, aliases_raw, aliases_raw, summaries, titles=snapshot_titles, provenance=prov)` where `pre_raw` is `tests/benchmarks/round5-counterexample-reference.json["policy"]` (written by the controller in Task 5 before this step), `snapshot_titles` = `$W/inputs/round4/doc-titles-snapshot.json["titles"]`, `prov` = the `selected`/`rejected` provenance of `concept_lexicon.json` keyed by canonical key; pass `counterexample_fn=lambda point, working: cx.suite(index, cx.production_top1(state, rp, point), pre_raw, aliases_raw, working, summaries)` into `dry_run_pipeline` → `tune.run_pipeline_result`; record `cxr`, `result.counterexample_result`, all blockers and `pipeline_result_sha256` (which now includes `counterexample_result`) in the event. Event name stays `pre_t_checkpoint`.
-6. `apply_T`: after the synthetic merge write `concept_lexicon.json["components"]["union_resolution"] = "source-precedence"` and write `tests/benchmarks/round5-counterexample-reference.json` = `{"round": 5, "policy": <pre-merge aliases raw>, "policy_canonical_sha256": canonical_sha256(…)}` before the freeze call.
+5. `run_pre_t(cache, work)`: before the dry-run compute `extra = input_blockers(work) + registry_blockers(bench, base_bench, registry_doc) + approval_blockers(work, registry_doc)` where `base_bench` is the `56b4b0e` blob of `tests/benchmarks/search_queries.json` (`git show 56b4b0e:tests/benchmarks/search_queries.json`) and `registry_doc` the committed `round5-known-unreachable.json`; compute the lexicon-only counterexample at baseline constants: `cxr = cx.suite(index, cx.production_top1(state, rp, dict(rp.constants)), pre_raw, aliases_raw, aliases_raw, summaries, titles=snapshot_titles, provenance=prov)` where `pre_raw` is `tests/benchmarks/round5-counterexample-reference.json["policy"]` (written by the controller in Task 5 before this step), `snapshot_titles` = `$W/inputs/round4/doc-titles-snapshot.json["titles"]`, `prov` = the `selected`/`rejected` provenance of `concept_lexicon.json` keyed by canonical key; pass `counterexample_fn=lambda point, working: cx.suite(index, cx.production_top1(state, rp, point), pre_raw, aliases_raw, working, summaries, titles=snapshot_titles, provenance=prov, scope="final_policy", selected_constants=point)` into `dry_run_pipeline` → `tune.run_pipeline_result`; `prov = cx.provenance_from_lexicon(concept_lexicon.json)`; record `cxr`, `result.counterexample_result`, all blockers and `pipeline_result_sha256` (which now includes `counterexample_result`) in the event. Event name stays `pre_t_checkpoint`.
+6. `apply_T`: after the synthetic merge write `concept_lexicon.json["components"]["union_resolution"] = "source-precedence"` and `concept_lexicon.json["selected"]` for the synthetic entries (`{"source": "round4_generation", "provenance_rank": 1}`), and write `tests/benchmarks/round5-counterexample-reference.json` = `{"round": 5, "policy": <pre-merge aliases raw>, "policy_canonical_sha256": canonical_sha256(…), "canonical_policy_map": …, "titles": <synthetic bundle snapshot titles>, "inputs": {}}` before the freeze call.
 7. `BRANCHES`, X_preB and recovery helpers are unchanged apart from the round number.
 
 Run: `python -m unittest tests.benchmarks.test_round5_simulation -v` → Expected: 5 OK.
@@ -929,8 +1000,17 @@ python - <<'EOF'
 import json, pathlib
 from tests.benchmarks.evaluator import canonical_sha256
 W = pathlib.Path.home() / ".atlassian_api_updater/round5-work"; pol = json.loads((W / "round4-reference-aliases.json").read_text(encoding="utf-8"))
-doc = {"round": 5, "policy": pol, "policy_canonical_sha256": canonical_sha256(pol),
-       "inputs": {"round4_reference_lexicon_sha256": canonical_sha256(json.loads((W / "round4-reference-lexicon.json").read_text(encoding="utf-8")))}}
+from tests.benchmarks import counterexample as cx, evaluator as ev
+snap = json.loads((W / "inputs/round4/doc-titles-snapshot.json").read_text(encoding="utf-8"))
+cmap = {json.dumps(list(k)): list(v) for k, v in cx.canonical_policy_map(pol).items()}
+doc = {"round": 5, "policy": pol, "policy_canonical_sha256": canonical_sha256(pol), "canonical_policy_map": cmap, "canonical_policy_map_sha256": canonical_sha256(cmap),
+       "titles": sorted(({"product": t["product"], "url": t["url"], "title": t["title"]} for t in snap["titles"]), key=lambda t: (t["product"], t["url"])),
+       "inputs": {"aliases_premerge_sha256": ev.file_sha256(W / "aliases-premerge.json"),
+                  "round4_reference_lexicon_sha256": ev.file_sha256(W / "round4-reference-lexicon.json"),
+                  **{n: ev.file_sha256(W / "inputs" / n) for n in ("round2/lexicon_raw.json", "round2/lexicon_review.json", "round2/lexicon-review-input.txt",
+                                                                    "round4/lexicon_raw_r4.json", "round4/lexicon_review_r4.json", "round4/lexicon-review-input-r4.txt",
+                                                                    "round4/doc-titles-snapshot.json")},
+                  "registry_fingerprint": json.loads((W / "round5-internal-catalog.json").read_text(encoding="utf-8")).get("registry_fingerprint")}}
 pathlib.Path("tests/benchmarks/round5-counterexample-reference.json").write_text(json.dumps(doc, indent=1, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
 print(doc["policy_canonical_sha256"])
 EOF
