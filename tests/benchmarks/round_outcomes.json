@@ -1,0 +1,24 @@
+[
+ {
+  "round": 3,
+  "outcome": "pre-T not reached",
+  "decided": "2026-10-07",
+  "decision_record": "docs/phase3-readiness.md#search-quality-round-3--decision-record-2026-10-07",
+  "final_housekeeping_commit": "9bf823d",
+  "last_checkpoint": {
+   "seed": "35/39",
+   "threshold": 36
+  }
+ },
+ {
+  "round": 4,
+  "outcome": "pre-T not reached",
+  "decided": "2026-10-09",
+  "decision_record": "docs/phase3-readiness.md#search-quality-round-4--decision-record-2026-10-09",
+  "final_housekeeping_commit": "d4b7435",
+  "last_checkpoint": {
+   "seed": "35/39",
+   "threshold": 36
+  }
+ }
+]

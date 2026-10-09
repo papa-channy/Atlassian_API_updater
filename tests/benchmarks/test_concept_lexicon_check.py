@@ -1,4 +1,5 @@
 import json, unittest
+from unittest import mock
 from tests.benchmarks import concept_lexicon_check as clc
 
 CONCEPTS = {"issue", "comment", "page", "sprint", "attachment", "version", "space"}
@@ -148,3 +149,30 @@ class TestChecks(unittest.TestCase):
         self.assertEqual(out["aliases"], {"ticket": ["issue"], "note": ["comment"]}); self.assertEqual(skipped, ["ticket"])
         self.assertEqual(out["notes"]["note"], {"origin": "lexicon-r2", "seed_query_id": None, "failure_classes": [], "evidence": "concept lexicon r2"})
         self.assertEqual(aliases["aliases"], {"ticket": ["issue"]})      # input untouched
+
+
+class TestRound4DocTitles(unittest.TestCase):
+    INTERNAL = [{"key": "jira-platform:GET:/rest/api/3/issue/{id}/worklog", "source": "jira-platform", "method": "GET", "operation_id": "getIssueWorklog",
+                 "summary": "Get issue worklogs", "tags": ["Issue worklogs"], "description": "Returns worklogs for an issue."},
+                {"key": "jira-platform:POST:/rest/api/3/issue", "source": "jira-platform", "method": "POST", "operation_id": "createIssue", "summary": "Create issue", "tags": ["Issues"], "description": ""}]
+    RANKING = {"path_noise": ["rest", "api", "3"], "verb_methods": {"get": ["GET"], "create": ["POST"]}}
+    TPL = ('C:\n<one line per concept: "<token>\\t<count>\\t<products>\\t<excerpt>">\nT:\n<one line per concept title: "<token>\\t<product>\\t<title words>">\nV:\n<verb keys>\n')
+    SNAP = {"titles": [{"product": "jira-software-cloud", "url": "u", "title": "Create an issue", "tokens": ["create", "an", "issue"]}]}
+
+    def test_render_generation_input_with_doc_titles_block_and_attachment(self):
+        out = clc.render_lexicon_generation_input(self.TPL, self.INTERNAL, self.RANKING, doc_snapshot=self.SNAP)
+        self.assertIn("issue\tjira-software-cloud\tCreate an issue", out); self.assertNotIn("<one line per concept title", out)
+        self.assertIn("worklog\t-", out)
+        self.assertEqual(clc.render_lexicon_generation_input(self.TPL, self.INTERNAL, self.RANKING, doc_snapshot=self.SNAP), out)
+
+    def test_render_generation_input_never_opens_benchmark(self):
+        import builtins, pathlib
+        real_open, real_read = builtins.open, pathlib.Path.read_text
+        def guard_open(path, *a, **k):
+            if "search_queries" in str(path): raise AssertionError("benchmark read")
+            return real_open(path, *a, **k)
+        def guard_read(self_, *a, **k):
+            if "search_queries" in str(self_): raise AssertionError("benchmark read")
+            return real_read(self_, *a, **k)
+        with mock.patch("builtins.open", guard_open), mock.patch.object(pathlib.Path, "read_text", guard_read):
+            clc.render_lexicon_generation_input(self.TPL, self.INTERNAL, self.RANKING, doc_snapshot={"titles": []})

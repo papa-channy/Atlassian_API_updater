@@ -1,4 +1,6 @@
-import json, unittest
+import hashlib, json, pathlib, subprocess, tempfile, unittest
+from unittest import mock
+from tests.benchmarks import evaluator as ev
 from tests.benchmarks import round_seal as rs
 
 CAT = [  # A..H: 8 synthetic ops covering jira-platform / jira-software / confluence and GET/POST/PUT/DELETE
@@ -479,3 +481,215 @@ class TestRound3FreezeEntry(unittest.TestCase):
             with mock.patch.object(rs, "load_catalogs_from_cache", lambda cache_dir, round=1: ([], CAT, "f" * 64, dict(shas))), \
                  mock.patch.object(rs.ev, "round_freeze_hashes", lambda r: dict(hashes)):
                 rs.freeze_entry(3, "x")                                                               # round >= 3 needs --reference-enc
+
+
+# ---------------------------------------------------------------- Round 4 spec §9.1 / §9.5: freeze guard, recovery verifier
+ALIASES_REL = "tools/atlassian_docs/intelligence/data/search_aliases.json"
+CANON = "python -m unittest discover -s tests -t ."
+
+
+def _mk_recovery_repo(root, tamper=None):
+    """H -> T -> X -> R (rollback) -> A (attestation) with real shas; `tamper` breaks exactly one contract (spec §9.5)."""
+    root = pathlib.Path(root); run = lambda *a: subprocess.run(["git", "-C", str(root), *a], check=True, capture_output=True, text=True).stdout.strip()
+    run("init", "-q"); run("config", "user.email", "t@t"); run("config", "user.name", "t")
+    w = lambda rel, obj: ((root / rel).parent.mkdir(parents=True, exist_ok=True), (root / rel).write_text(json.dumps(obj, indent=1) + "\n", encoding="utf-8"))
+    sha = lambda c, rel: hashlib.sha256(subprocess.run(["git", "-C", str(root), "show", f"{c}:{rel}"], check=True, capture_output=True).stdout).hexdigest()
+    good = {"version": 1, "aliases": {"ticket": ["issue"]}, "rules": [], "notes": {"ticket": {"origin": "seed"}}}
+    w(ALIASES_REL, good); w("tests/benchmarks/round_outcomes.json", [{"round": 3, "outcome": "pre-T not reached"}]); w("tests/benchmarks/round_recoveries.json", [])
+    (root / "docs").mkdir(); (root / "docs/phase3-readiness.md").write_text("# readiness\n", encoding="utf-8")
+    run("add", "-A"); run("commit", "-q", "-m", "H"); H = run("rev-parse", "HEAD")
+    bad = {**good, "aliases": {**good["aliases"], "release": ["version"]}, "notes": {**good["notes"], "release": {"origin": "lexicon-r4"}}}
+    w(ALIASES_REL, bad)
+    w("tests/benchmarks/round_freeze.json", [{"round": 1}, {"round": 2}, {"round": 4, "t_policy_files": [ALIASES_REL],
+                                              "round_outcomes_sha256": ev.file_sha256(root / "tests/benchmarks/round_outcomes.json"),
+                                              "round_recoveries_sha256": ev.file_sha256(root / "tests/benchmarks/round_recoveries.json")}])
+    run("add", "-A"); run("commit", "-q", "-m", "T"); T = run("rev-parse", "HEAD")
+    w("tests/benchmarks/round_outcomes.json", [{"round": 3, "outcome": "pre-T not reached"},
+                                               {"round": 4, "outcome": "aborted-pre-B", "invalidated_by": "X_preB", "invalidates_policy": True, "reject_reason": "t", "t_commit": T}])
+    (root / "docs/phase3-readiness.md").write_text(f"# readiness\n\n## Search Quality Round 4 — aborted before B\nhousekeeping_commit: {H}\n", encoding="utf-8")
+    run("add", "-A"); run("commit", "-q", "-m", "X"); X = run("rev-parse", "HEAD")
+    w(ALIASES_REL, {**good, "aliases": {"ticket": ["issue"], "zz": ["issue"]}} if tamper == "r_not_hk_bytes" else good)
+    run("add", "-A"); run("commit", "-q", "-m", "R"); R = run("rev-parse", "HEAD")
+    rec = {"round": 4, "t_commit": T, "xpreb_terminal_commit": X, "recovery_commit": R, "recovery_mode": "rollback", "reviewed_base": X, "reviewed_head": R,
+           "reviewed_by": "test-reviewer", "review_findings": 0, "review_output_sha256": "00" * 32, "suite_commit": R, "suite_command": CANON,
+           "suite_exit_code": 0, "suite_output_sha256": "11" * 32,
+           "files": [{"path": ALIASES_REL, "before_sha256": sha(T, ALIASES_REL), "after_sha256": sha(R, ALIASES_REL), "known_good_sha256": sha(H, ALIASES_REL)}],
+           "removed_aliases": ["release"]}
+    if tamper == "before_sha_wrong": rec["files"][0]["before_sha256"] = "ab" * 32
+    if tamper == "removed_aliases_wrong": rec["removed_aliases"] = []
+    if tamper == "evidence_missing": del rec["review_output_sha256"]
+    if tamper == "bad_suite_command": rec["suite_command"] = "pytest"
+    w("tests/benchmarks/round_recoveries.json", [rec]); run("add", "-A"); run("commit", "-q", "-m", "A"); A = run("rev-parse", "HEAD")
+    if tamper == "attestation_edited_after_A":
+        rec["reviewed_by"] = "someone-else"; w("tests/benchmarks/round_recoveries.json", [rec]); run("add", "-A"); run("commit", "-q", "-m", "edit")
+    if tamper == "edited_after_A":
+        w("tests/benchmarks/round_recoveries.json", [{**rec, "review_findings": 0, "reviewed_by": "rewritten"}]); run("add", "-A"); run("commit", "-q", "-m", "rewrite")
+    (root / "scratch.txt").write_text("x"); run("add", "-A"); run("commit", "-q", "-m", "bad-r-candidate"); bad_r = run("rev-parse", "HEAD")
+    return {"path": root, "H": H, "T": T, "X": X, "R": R, "A": A, "bad_r": bad_r}
+
+
+class TestFreezeGuardAndRecovery(unittest.TestCase):
+    F = [{"round": 1}, {"round": 2}]; O3 = [{"round": 3, "outcome": "pre-T not reached"}]
+
+    def test_freeze_guard_round4_needs_closed_round3(self):
+        with mock.patch.dict(ev.PRE_FREEZE_NONVERB_STRUCTURE_SHA256, {3: "a", 4: "b"}, clear=True):
+            self.assertEqual(rs.freeze_guard_problems(4, self.F, self.O3, repo=None), [])
+            self.assertIn("pending_round", rs.freeze_guard_problems(4, self.F, [], repo=None)[0])
+            self.assertIn("pending_round", rs.freeze_guard_problems(5, self.F, self.O3, repo=None)[0])
+
+    def test_freeze_guard_requires_recovery_attestation(self):
+        f = self.F + [{"round": 4, "t_policy_files": [ALIASES_REL]}]
+        ab = lambda inv: self.O3 + [{"round": 4, "outcome": "aborted-pre-B", "invalidated_by": "X_preB", "invalidates_policy": inv}]
+        with mock.patch.dict(ev.PRE_FREEZE_NONVERB_STRUCTURE_SHA256, {3: "a", 4: "b", 5: "c"}, clear=True):
+            self.assertEqual(rs.freeze_guard_problems(5, f, ab(False), repo=None), [])
+            with mock.patch.object(ev, "load_round_recoveries", return_value=[]):
+                self.assertIn("recovery", rs.freeze_guard_problems(5, f, ab(True), repo=None)[0])
+
+    def test_verify_recovery_exact_chain(self):
+        with tempfile.TemporaryDirectory() as td:
+            repo = _mk_recovery_repo(pathlib.Path(td))
+            self.assertEqual(rs.verify_recovery(4, repo["path"]), [])
+            self.assertTrue(any("parent(R)" in p for p in rs.verify_recovery(4, repo["path"], r_commit=repo["bad_r"])))
+
+    def test_verify_recovery_tamper_cases(self):
+        for tamper, needle in (("r_not_hk_bytes", "sha(HK:path)"), ("attestation_edited_after_A", "append-only"), ("before_sha_wrong", "sha(git show T:path)"),
+                               ("removed_aliases_wrong", "removed_aliases"), ("evidence_missing", "review_output_sha256"), ("bad_suite_command", "suite_command"),
+                               ("edited_after_A", "append-only")):
+            with tempfile.TemporaryDirectory() as td:
+                repo = _mk_recovery_repo(pathlib.Path(td), tamper=tamper)
+                self.assertTrue(any(needle in p for p in rs.verify_recovery(4, repo["path"])), tamper)
+
+    def test_verify_recovery_allows_later_round_appends(self):
+        with tempfile.TemporaryDirectory() as td:
+            repo = _mk_recovery_repo(pathlib.Path(td)); path = repo["path"] / "tests/benchmarks/round_recoveries.json"
+            cur = json.loads(path.read_text()); path.write_text(json.dumps(cur + [{**cur[0], "round": 5}], indent=1) + "\n")
+            subprocess.run(["git", "-C", str(repo["path"]), "commit", "-qam", "A5"], check=True)
+            self.assertEqual(rs.verify_recovery(4, repo["path"]), [])
+
+    def test_round_start_guard_refuses_head_not_descendant_of_A(self):
+        with tempfile.TemporaryDirectory() as td:
+            repo = _mk_recovery_repo(pathlib.Path(td))
+            with mock.patch.object(ev, "load_round_freeze", return_value=json.loads(subprocess.run(["git", "-C", str(repo["path"]), "show", "HEAD:tests/benchmarks/round_freeze.json"], capture_output=True, text=True).stdout)), \
+                 mock.patch.object(ev, "load_round_outcomes", return_value=json.loads((repo["path"] / "tests/benchmarks/round_outcomes.json").read_text())), \
+                 mock.patch.object(ev, "load_round_recoveries", return_value=json.loads((repo["path"] / "tests/benchmarks/round_recoveries.json").read_text())), \
+                 mock.patch.dict(ev.PRE_FREEZE_NONVERB_STRUCTURE_SHA256, {3: "a", 4: "b", 5: "c"}, clear=True):
+                self.assertEqual(rs.round_start_guard_problems(5, repo["path"]), [])
+                subprocess.run(["git", "-C", str(repo["path"]), "checkout", "-q", "-b", "side", repo["X"]], check=True)
+                self.assertTrue(any("descendant" in p for p in rs.round_start_guard_problems(5, repo["path"])))
+
+
+class TestCleanupNeedles(unittest.TestCase):
+    """Round 4 spec §9.4: hash-only cleanup needles over every hidden-attempt artifact; deletion guard; canonical authority union."""
+    def test_json_query_fields_exact_and_nonjson_windows(self):
+        with tempfile.TemporaryDirectory() as td:
+            j = pathlib.Path(td, "a.json"); j.write_text(json.dumps({"held_out": [{"query": "show my starred searches"}], "x": {"query": "list open bugs now"}}))
+            m = rs.cleanup_needle_manifest_from_artifacts([j])
+            self.assertIn({"words": 4, "sha256": rs._ngram_sha256("show my starred searches")}, m)
+            self.assertIn({"words": 4, "sha256": rs._ngram_sha256("list open bugs now")}, m)
+
+    def test_cleanup_needles_span_line_breaks(self):
+        with tempfile.TemporaryDirectory() as td:
+            raw = pathlib.Path(td, "attempt.txt"); raw.write_text("candidate answer is: show my starred\nsearches because ...\n")
+            m = rs.cleanup_needle_manifest_from_artifacts([raw])
+            self.assertIn({"words": 4, "sha256": rs._ngram_sha256("show my starred searches")}, m)
+            leak = pathlib.Path(td, "leak.md"); leak.write_text("note: show my starred searches\n")
+            self.assertEqual(rs.scan_for_needles([td], m, allow=[raw]), [str(leak)])
+
+    def test_attempt_ledger_union_equals_recomputation(self):
+        with tempfile.TemporaryDirectory() as td:
+            a = pathlib.Path(td, "a.txt"); a.write_text("alpha beta gamma delta\n"); b = pathlib.Path(td, "b.json"); b.write_text('{"query": "one two three"}')
+            led = pathlib.Path(td, "hidden_attempt_needles.jsonl")
+            rs.append_attempt_needles(led, [a]); rs.append_attempt_needles(led, [b])
+            self.assertEqual(sorted(map(json.dumps, rs.cleanup_authority(led, None, []))), sorted(map(json.dumps, rs.cleanup_needle_manifest_from_artifacts([a, b]))))
+            std = pathlib.Path(td, "std.json"); std.write_text(json.dumps(rs.needle_manifest(["final set query here"])))
+            self.assertIn({"words": 4, "sha256": rs._ngram_sha256("final set query here")}, rs.cleanup_authority(led, std, [a]))
+
+    def test_delete_guard_requires_sha_and_needle_coverage(self):
+        with tempfile.TemporaryDirectory() as td:
+            a = pathlib.Path(td, "a.txt"); a.write_text("alpha beta gamma\n"); led = pathlib.Path(td, "l.jsonl")
+            self.assertFalse(rs.artifact_is_ledgered(led, a)); rs.append_attempt_needles(led, [a]); self.assertTrue(rs.artifact_is_ledgered(led, a))
+            rows = [json.loads(l) for l in led.read_text().splitlines()]; rows[0]["needles"] = rows[0]["needles"][:-1]       # a row that under-covers its artifact
+            led.write_text("".join(json.dumps(r) + "\n" for r in rows)); self.assertFalse(rs.artifact_is_ledgered(led, a))
+
+
+class TestUnchangedSinceAllow(unittest.TestCase):
+    def test_unchanged_files_are_allowed_and_new_files_are_scanned(self):
+        with tempfile.TemporaryDirectory() as td:
+            repo = pathlib.Path(td).resolve(); run = lambda *a: subprocess.run(["git", "-C", str(repo), *a], check=True, capture_output=True, text=True)
+            run("init", "-q"); run("config", "user.email", "t@t"); run("config", "user.name", "t")
+            (repo / "old.md").write_text("candidate answer is here\n"); run("add", "-A"); run("commit", "-q", "-m", "T")
+            T = run("rev-parse", "HEAD").stdout.strip()
+            (repo / "new.md").write_text("candidate answer is leaked\n"); (repo / "old2.md").write_text("x\n"); run("add", "old2.md"); run("commit", "-q", "-m", "later")
+            m = rs.cleanup_needle_manifest_from_artifacts([repo / "new.md"])
+            allow = rs.t_baseline_identical_files(repo, T) + [str(repo / ".git")]
+            self.assertIn(str(repo / "old.md"), allow)
+            self.assertEqual(rs.scan_for_needles([str(repo)], m, allow=allow + [str(repo / "new.md")]), [])        # old.md shares the 3-gram but predates T
+            self.assertEqual(rs.scan_for_needles([str(repo)], m, allow=allow), [str(repo / "new.md")])             # a post-T untracked file with the same 3-gram is a hit
+            (repo / "tracked-new.md").write_text("candidate answer is tracked\n"); run("add", "tracked-new.md"); run("commit", "-q", "-m", "new tracked")
+            (repo / ".gitignore").write_text("ignored.md\n"); (repo / "ignored.md").write_text("candidate answer is ignored\n")
+            (repo / "old.md").write_text("candidate answer is here!\n")                                             # 1-byte change to a T path
+            allow = rs.t_baseline_identical_files(repo, T) + [str(repo / ".git")]
+            hits = rs.scan_for_needles([str(repo)], m, allow=allow)
+            for leaked in ("new.md", "tracked-new.md", "ignored.md", "old.md"):
+                self.assertIn(str(repo / leaked), hits, leaked)
+
+
+class TestWholeBranchReviewFixes(unittest.TestCase):
+    """Fix pass after the H13–H15 whole-branch review (Important #1, #2, #4)."""
+    def test_xpreb_cleanup_refuses_ciphertext_without_ledger(self):
+        with tempfile.TemporaryDirectory() as td:
+            work = pathlib.Path(td, "w"); sealed = pathlib.Path(td, "s"); work.mkdir(); sealed.mkdir()
+            (sealed / "round4-sealed.json.enc").write_bytes(b"cipher")
+            with self.assertRaises(SystemExit):                       # ciphertext ∧ "nothing generated" is impossible (spec §9.4 state 5)
+                rs.xpreb_cleanup(work, sealed, 4)
+
+    def test_json_artifacts_without_query_keys_still_yield_needles(self):
+        with tempfile.TemporaryDirectory() as td:
+            q = "show my starred searches"; want = {"words": 4, "sha256": rs._ngram_sha256(q)}
+            a = pathlib.Path(td, "list.json"); a.write_text(json.dumps([q, "other text here"]))
+            b = pathlib.Path(td, "bare.txt"); b.write_text(json.dumps(q))
+            c = pathlib.Path(td, "review.json"); c.write_text(json.dumps({"h-001": {"accept": False, "reason": f"the query {q} copies a summary"}}))
+            for p in (a, b, c):
+                self.assertIn(want, rs.cleanup_needle_manifest_from_artifacts([p]), p.name)
+
+    def test_append_refuses_zero_needle_artifact(self):
+        with tempfile.TemporaryDirectory() as td:
+            empty = pathlib.Path(td, "empty.json"); empty.write_text("{}"); led = pathlib.Path(td, "l.jsonl")
+            with self.assertRaises(SystemExit):
+                rs.append_attempt_needles(led, [empty])
+
+
+class TestRound4FreezeEntry(unittest.TestCase):
+    """spec §9.6 / AC-R4-01: the round-4 freeze_entry path — keys, snapshot equality, T allowlist refusal, t_policy_files."""
+    def _bundle(self, td):
+        from tests.benchmarks import doc_titles as dt
+        from tests.benchmarks.test_doc_titles import SOURCES_FX, PAGES_FX, fake_fetch
+        out = pathlib.Path(td, "src"); dt.acquire(SOURCES_FX, out, fake_fetch(PAGES_FX), delay=0)
+        snap = pathlib.Path(td, "snap.json"); snap.write_text(json.dumps(dt.snapshot(out), sort_keys=True, indent=1) + "\n", encoding="utf-8")
+        return out, snap
+
+    def _entry(self, td, changed, snap_text=None):
+        out, snap = self._bundle(td)
+        if snap_text is not None:
+            snap.write_text(snap_text, encoding="utf-8")
+        hashes = {k: "0" * 64 for k in ev.freeze_key_set(4) - {"round", "structure_sha256", "verb_inventory_sha256", "source_registry_fingerprint", "source_spec_sha256",
+                                                                "reference_set", "hidden_generation_rules", "hidden_set_origin", "doc_titles_source_bundle_sha256", "doc_titles_snapshot_sha256", "t_policy_files"}}
+        with mock.patch.object(rs, "load_catalogs_from_cache", return_value=([], [], "f" * 64, {"jira-platform": "a" * 64})), \
+             mock.patch.object(ev, "round_freeze_hashes", return_value=hashes), mock.patch.object(ev, "changed_files_since", return_value=changed), \
+             mock.patch.object(rs, "_read_json", side_effect=lambda p: {"verb_methods": {"get": ["GET"]}, "path_noise": [], "product_hints": [], "tuning_grid": {}, "baseline": {}, "ordering_rules": {}, "round2_seal": {"held_out_sha256": "1" * 64, "negative_sha256": "2" * 64}}):
+            enc = pathlib.Path(td, "r2.enc"); enc.write_bytes(b"x")
+            return rs.freeze_entry(4, pathlib.Path(td), reference_enc=enc, doc_sources=out, doc_titles_path=snap, base_commit="HEAD")
+
+    def test_happy_path_keys_and_policy_files(self):
+        with tempfile.TemporaryDirectory() as td:
+            e = self._entry(td, [ev.T_DATA_FILES[2], "tests/benchmarks/round_freeze.json"])
+            self.assertEqual(set(e), ev.freeze_key_set(4)); self.assertEqual(e["t_policy_files"], [ev.T_DATA_FILES[2]])
+            self.assertRegex(e["doc_titles_source_bundle_sha256"], r"^[0-9a-f]{64}$"); self.assertEqual(e["hidden_generation_rules"], list(rs.HIDDEN_RULES_R4))
+
+    def test_snapshot_mismatch_refused(self):
+        with tempfile.TemporaryDirectory() as td, self.assertRaises(SystemExit):
+            self._entry(td, [], snap_text="{}\n")
+
+    def test_off_allowlist_change_refused(self):
+        with tempfile.TemporaryDirectory() as td, self.assertRaises(SystemExit):
+            self._entry(td, ["tools/atlassian_docs/intelligence/data/operation_quirks.json"])

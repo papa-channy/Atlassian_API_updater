@@ -1,4 +1,5 @@
 import json, os, pathlib, re, unittest
+from unittest import mock
 from tests.benchmarks.evaluator import evaluate
 from tests.benchmarks import evaluator as ev
 
@@ -116,6 +117,7 @@ ROUND2_HASH_KEYS = {"structure_sha256", "verb_inventory_sha256", "concept_lexico
                     "alias_candidates_sha256", "worker_brief_sha256", "hidden_generation_prompt_sha256",
                     "hidden_reviewer_prompt_sha256", "tooling_code_sha256", "evaluation_code_sha256_at_T"}
 SHA_KEYS_R3 = ROUND2_HASH_KEYS | {"regression_reference_sha256", "tuning_grid_sha256"}
+SHA_KEYS_R4 = SHA_KEYS_R3 | {"doc_titles_source_bundle_sha256", "doc_titles_snapshot_sha256", "round_outcomes_sha256", "round_recoveries_sha256"}   # t_policy_files is a list
 
 
 def ranking_structure_sha256(raw: dict) -> str:
@@ -129,10 +131,12 @@ class TestRankingTablesFrozen(unittest.TestCase):
         raw = json.loads(RANKING.read_text(encoding="utf-8"))
         self.assertEqual(ev.structure_check_problems(raw), [])
         if ev.current_round()["round"] >= 3:
-            self.assertIsNone(ev.pending_round()); self.assertEqual(ranking_structure_sha256(raw), ev.freeze_for(3)["structure_sha256"])
+            self.assertIsNone(ev.pending_round()); self.assertEqual(ranking_structure_sha256(raw), ev.freeze_for(ev.current_round()["round"])["structure_sha256"])
         else:
-            self.assertEqual(ev.pending_round(), 3); self.assertEqual(raw["version"], 2)
-            self.assertEqual(ev.nonverb_structure_sha256(raw), ev.PRE_FREEZE_NONVERB_STRUCTURE_SHA256[3])
+            pending = ev.pending_round()                      # Round 4 spec §9.1: the round after the last decided one is pending (3, 4 closed -> 5)
+            decided = {o["round"] for o in ev.load_round_outcomes()}
+            self.assertEqual(pending, max(decided | {ev.current_round()["round"]}) + 1); self.assertEqual(raw["version"], 2)
+            self.assertEqual(ev.nonverb_structure_sha256(raw), ev.PRE_FREEZE_NONVERB_STRUCTURE_SHA256[pending])
             suffixed = json.loads(json.dumps(raw)); suffixed["verb_methods"]["get"] = ["GET", "POST"]            # a T-style suffix is allowed before T
             self.assertEqual(ev.structure_check_problems(suffixed), [])
             reordered = json.loads(json.dumps(raw)); reordered["verb_methods"]["change"] = ["POST", "PUT"]
@@ -148,13 +152,21 @@ class TestRankingTablesFrozen(unittest.TestCase):
 
     def test_round_freeze_file_shape(self):
         f = ev.load_round_freeze()
-        self.assertIsInstance(f, list); self.assertEqual([e["round"] for e in f], list(range(1, len(f) + 1)))
+        rounds = [e["round"] for e in f]
+        self.assertIsInstance(f, list); self.assertEqual(rounds, sorted(rounds)); self.assertEqual(rounds[0], 1)
+        decided = ev.round_states(f, ev.load_round_outcomes())                                 # Round 4 spec §9.1: gaps are closed rounds
+        for r in range(1, rounds[-1] + 1):
+            self.assertIn(r, decided, f"round {r} is neither frozen nor decided in round_outcomes.json")
         self.assertEqual(set(f[0]), {"round", "commit_T", "structure_sha256"})
         for e in f[1:]:
             self.assertEqual(set(e), ev.freeze_key_set(e["round"]), e["round"])
             self.assertNotIn("commit_T", e)                                                     # spec §9: T sha is not inside the T file
-            for k in (SHA_KEYS_R3 if e["round"] >= 3 else ROUND2_HASH_KEYS) | {"source_registry_fingerprint"}:
+            sha_keys = SHA_KEYS_R4 if e["round"] >= 4 else (SHA_KEYS_R3 if e["round"] >= 3 else ROUND2_HASH_KEYS)
+            for k in sha_keys | {"source_registry_fingerprint"}:
                 self.assertRegex(e[k], r"^[0-9a-f]{64}$", k)
+            if e["round"] >= 4:
+                self.assertEqual(e["t_policy_files"], sorted(set(e["t_policy_files"])))
+                self.assertTrue(set(e["t_policy_files"]) <= set(ev.T_DATA_FILES))
             self.assertEqual(set(e["source_spec_sha256"]), {"jira-platform", "jira-software", "confluence"})
             if e["round"] >= 3:
                 self.assertEqual(set(e["reference_set"]), {"origin", "enc_sha256", "held_out_sha256", "negative_sha256"})
@@ -168,6 +180,8 @@ class TestRankingTablesFrozen(unittest.TestCase):
             print("round 2 not frozen yet: hash equality checked after commit T"); return
         if ev.pending_round() is not None:
             print(f"round {ev.pending_round()} structure/tooling committed at H; freeze hashes checked after its commit T"); return
+        if ev.round_states(ev.load_round_freeze(), ev.load_round_outcomes()).get(e["round"]) == "aborted-pre-B":
+            print(f"round {e['round']} freeze entry invalidated by X_preB: verified by the recovery chain, not current-file equality (spec §9.1)"); return
         got = ev.round_freeze_hashes(e["round"])
         for k, v in got.items():
             self.assertEqual(e[k], v, k)
@@ -683,3 +697,79 @@ class TestRound3FreezeKeys(unittest.TestCase):
         self.assertEqual(ev.freeze_key_set(3), ev.freeze_key_set(2) | set(ev.ROUND3_EXTRA_KEYS))
         self.assertNotIn("commit_T", ev.freeze_key_set(3))
         self.assertEqual(ev.freeze_key_set(2), set(ev.freeze_for(2)))
+
+
+class TestRoundStateModel(unittest.TestCase):
+    """Round 4 spec §9.1: closed / frozen / aborted-pre-B states, pending_round skips decided rounds, round 4 freeze keys."""
+    F12 = [{"round": 1}, {"round": 2}]
+
+    def test_pending_round_skips_closed_round(self):
+        with mock.patch.dict(ev.PRE_FREEZE_NONVERB_STRUCTURE_SHA256, {3: "a", 4: "b"}, clear=True):
+            self.assertEqual(ev.pending_round(self.F12, [{"round": 3, "outcome": "pre-T not reached"}]), 4)
+            self.assertEqual(ev.pending_round(self.F12, []), 3)                       # Round 3 history without outcomes
+
+    def test_round_states_three_kinds_and_rejections(self):
+        f = self.F12 + [{"round": 4}]
+        o = [{"round": 3, "outcome": "pre-T not reached"}, {"round": 4, "outcome": "aborted-pre-B", "invalidated_by": "X_preB", "invalidates_policy": False}]
+        self.assertEqual(ev.round_states(f, o), {1: "frozen", 2: "frozen", 3: "closed", 4: "aborted-pre-B"})
+        with self.assertRaises(ValueError):
+            ev.round_states(f, [{"round": 4, "outcome": "pre-T not reached"}])        # freeze + ordinary outcome
+        with self.assertRaises(ValueError):
+            ev.round_states(self.F12, [{"round": 3, "outcome": "aborted-pre-B", "invalidated_by": "X_preB"}])   # orphan abort (no freeze)
+        with self.assertRaises(ValueError):
+            ev.round_states(f, [{"round": 4, "outcome": "aborted-pre-B"}])            # abort without invalidated_by
+
+    def test_current_round_is_max_not_last(self):
+        self.assertEqual(ev.current_round([{"round": 4}, {"round": 2}])["round"], 4)
+
+    def test_freeze_key_set_round4(self):
+        self.assertEqual(ev.freeze_key_set(4), ev.freeze_key_set(3) | set(ev.ROUND4_EXTRA_KEYS))
+        self.assertNotIn("commit_T", ev.freeze_key_set(4))
+
+    def test_committed_outcomes_file_shape(self):
+        o = ev.load_round_outcomes()
+        self.assertEqual(o[0]["round"], 3); self.assertEqual(o[0]["outcome"], "pre-T not reached")
+        self.assertEqual([e["round"] for e in o], sorted(e["round"] for e in o))
+        ev.round_states(ev.load_round_freeze(), o)                                       # every record is a valid decided state (raises otherwise)
+        for r in ev.load_round_recoveries():
+            self.assertEqual(r.get("recovery_mode"), "rollback")
+
+
+class TestToolingFilesRound4(unittest.TestCase):
+    def test_tooling_files_exist_and_one_byte_changes_sha(self):
+        import shutil, tempfile
+        for rel in ev.TOOLING_FILES:
+            self.assertTrue((ROOT / rel).exists(), rel)
+        self.assertIn("tests/benchmarks/doc_titles.py", ev.TOOLING_FILES)
+        with tempfile.TemporaryDirectory() as td:
+            copy = pathlib.Path(td)
+            for rel in ev.TOOLING_FILES:
+                (copy / rel).parent.mkdir(parents=True, exist_ok=True); shutil.copy(ROOT / rel, copy / rel)
+            before = ev.tooling_code_sha256(copy)
+            with open(copy / "tests/benchmarks/doc_titles.py", "ab") as fh:
+                fh.write(b"#")
+            self.assertNotEqual(ev.tooling_code_sha256(copy), before)
+
+
+class TestChangedFilesSince(unittest.TestCase):
+    def test_changed_files_since_includes_untracked(self):
+        import subprocess, tempfile
+        with tempfile.TemporaryDirectory() as td:
+            repo = pathlib.Path(td); run = lambda *a: subprocess.run(["git", "-C", str(repo), *a], check=True, capture_output=True, text=True)
+            run("init", "-q"); run("config", "user.email", "t@t"); run("config", "user.name", "t")
+            (repo / "a.txt").write_text("a"); run("add", "-A"); run("commit", "-q", "-m", "base")
+            (repo / "a.txt").write_text("b"); (repo / "new.txt").write_text("n")
+            self.assertEqual(ev.changed_files_since(repo, "HEAD"), ["a.txt", "new.txt"])
+
+
+class TestRound5Pending(unittest.TestCase):
+    """Round 4 closed 2026-10-09 "pre-T not reached" (user decision); the next round is 5. Its H structure equals Round 4's
+    (structure unchanged), so it is the pending round while freeze = [1, 2] and rounds 3 and 4 are decided."""
+    def test_round5_is_pending_after_round4_closure(self):
+        fz = [{"round": 1}, {"round": 2}]
+        oc = [{"round": 3, "outcome": "pre-T not reached"}, {"round": 4, "outcome": "pre-T not reached"}]
+        self.assertEqual(ev.pending_round(fz, oc), 5)
+        self.assertEqual(ev.PRE_FREEZE_NONVERB_STRUCTURE_SHA256[5], ev.PRE_FREEZE_NONVERB_STRUCTURE_SHA256[4])
+
+    def test_live_tree_pending_round_is_5(self):
+        self.assertEqual(ev.pending_round(), 5)

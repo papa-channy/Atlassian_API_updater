@@ -340,3 +340,63 @@ Generator ≠ reviewer in both runs (`actor_separation_check_lexicon`). No hidde
 3. Vocabulary-eligibility gates need a ranking-effect check (`seed-regression`), not only vocabulary membership.
 4. The generator avoids catalog tokens, so cross-product synonyms (`workspace→space`) need an explicit allowance in the prompt or a different source.
 5. Residual structural cases: literal determiner terminals (`/filter/my`), the intent-tier side effect on multi-op expected sets (s-004).
+
+## Search Quality Round 4 — decision record (2026-10-09)
+
+**Outcome: closed before T — the binding pre-T gate (spec v1.13 §4.1: AC-R3-01 seed ≥ 36/39 ∧ `pre_t_blockers == []`) was not reached.** Terminal branch `pre-T-not-reached` (user decision 2026-10-09 after the review-thread ruling). No T, B, hidden set, tuning run or gate evaluation exists for Round 4; the Round 2 reference set was never decrypted. Next: **Round 5** (registered as the pending round at closure). Spec v1.13 (`6f99ae7`), plan v7.
+
+| item | value |
+|---|---|
+| round4_start_commit | `237d2c9` |
+| initial_housekeeping_commit | `e804252` (H15‴, after the whole-branch review fix pass) |
+| housekeeping_commit (final) | `d4b7435` (H′, bundle-preserving; below) |
+| controller_actor_id / session | `42e25099-9d61-4b2a-b9f5-db24bf29e3ba` |
+| round4_operational_snapshot (S) | live fetch 2026-10-08T20:23Z, `s_reused_from_round3: false`, registry `d69b9ca6e6f106939d5f9d19515365df05006652d659ce7b8169cf8b6b24e882`, confluence `b3d010b6438677d8…`, jira-platform `8ee2e0bbe2553e3e…` (changed vs Round 3), jira-software `cb7e24b331ad9b31…`, 943 ops |
+| verb inventory | unchanged (`d66317db…`), method-safety 0 violations, prefix ok, REVIEW verbs transition/trash/unwatch/update no-widen |
+| doc_titles_snapshot | epoch 1; sitemaps jira-cloud.xml / confluence-cloud.xml / jira-cloud-administration.xml; url 645 / 457 / 258, page_failed 0 / 1 / 0; bundle `44f3378684201473d6267dd6f0296bb8babf904dc120320d594ed569d9de14fe`; snapshot `2d3caa6e02e0a67c523940add30e083cac415564302deb7e51a832ead50e6453` (1,359 titles); `replaces_bundle_sha256: []` |
+| lexicon | union (Round 2 archive + Round 4 generation with DOCUMENTATION TITLES): structural 481 kept, final 345 kept → seed gate rejected fresh/new/release/space/summary → 340 entries; lexicon-r4 merge 19 words + 321 phrase rules; `components.doc_titles_snapshot_sha256` = snapshot above; AC-13 replay ok (generation input re-render identical) — **left uncommitted and discarded at close** (copies: `round4-work/final-uncommitted/`) |
+| t_policy_files / round_outcomes_sha256 at T / round_recoveries_sha256_at_T | none (no T) |
+| round_outcomes_sha256_after_append | `e0913e3d38f60299507ceb90f27e91be3d648e3fed16c8cfe9b6386cec9b7fdc` |
+| T / B / C / D / F / X / X_preB | none |
+| hidden set, needle manifest, ciphertext | none (cleanup scans not applicable) |
+
+### H′ during the controller run
+
+| pointer move | kind | reason | review |
+|---|---|---|---|
+| e804252 → d4b7435 | bundle-preserving | the real pre-T run crashed: the event hashed the loaded policy's read-only `tuning_grid` (mapping proxy); `pipeline_input_sha256` now hashes the raw JSON grid (TDD) | fresh reviewer, findings 0 (2 minors deferred) |
+
+Tooling commits: H13 `0f7d716`, H14 `da9ab8c`, H15 `5417993`, H15′ `1cff453`, H15″ `11df50d`, H15‴ `e804252` (whole-branch review: Critical 0, Important 5 fixed, Minor 10 deferred), H′ `d4b7435`.
+
+### Binding pre-T checkpoint (`round4_simulation --phase pre-T`, real S)
+
+| at | seed | regression raw · effective | fixture failing | equivalence | dry-run tuning_accept | blockers | verdict |
+|---|---|---|---|---|---|---|---|
+| 2026-10-08T22:00:39Z | 35/39 | 10/14 · 14/14 | [] | [] | false (validation_errors []) | unreachable_seed [s-004, s-027, s-028, s-039]; inherited_ac_r3_01_failure | stop_for_amendment |
+
+`pipeline_input_sha256` `66ee65745963fc6b…`, `pipeline_result_sha256` `a261cdf867f14862…`. Per-seed cause: s-004 constants domain (bulk transition ranks first); s-027 §6 known-unreachable (search→filter, same-product token); **s-028: the Round 4 generator proposed release→version, but the union keeps the first (archive) entry release→build, which the seed gate rejected — the correct synonym never reached the gate**; s-039: workspace→space was not generated (the titles say "space").
+
+STOP ruling (review thread 2): (a) §11 B rejected for Round 4 (fixes s-027 only; tuning_accept stays false); (b) union precedence fix adopted as a Round 5 design input only; (c) `TERMINAL_PRE_T_NOT_REACHED` adopted → user decision.
+
+### Lexicon attempts (ChatGPT Temporary chat, personalization off; attachments + byte-exact body; outputs checksum-verified)
+
+| stage | actor_id | input sha | output sha | transport/parse/valid |
+|---|---|---|---|---|
+| lexicon-generation-r4 (two attachments) | `6ac806e9-e77c-83ee-af34-32be7838d3aa` | 6bfacc2589ab… | 929e996ea4b6… | ok/ok/ok (571 keys) |
+| lexicon-review-r4 | `6ac80af3-31c8-83e8-95e0-cfe048c72d1c` | 8da851f5f008… | 308e115be3d9… | ok/ok/ok (481/481 bool) |
+
+### Evidence
+
+`~/.atlassian_api_updater/archive/round4/round4-work/controller-events.jsonl` sha256 `6e4d391d309d98398790c4171f1990937e35094550217ea31029a6cc204f8ded`, `attempts.jsonl` `472b410b6b310e25641de08ea7a1ea9ee47c612a910451b41342294825754fec`, `pre-t-blocker-report.md` `04559e57f4eb10cc197502b2e21299a371b8414c71634414a26e9b79fd7d8577`; doc-title bundle under `round4-work/doc-title-sources/` (read-only).
+
+### Attestation (spec v1.13)
+
+- AC-R4-01 (corpus bundle + snapshot reproducible, render-check ok), AC-R4-02 (generation input re-render identical), AC-R4-03 (lexicon components record the snapshot sha), AC-R4-04 (`search.py`, `policy.py`, `search_ranking.json` unchanged across H13..H′), AC-R4-05 (no benchmark read in the renderer, test), AC-R4-06 (pre-T gate = exact write-free dry-run; STOP recorded, non-terminal until the user decision), AC-R4-07/08 (state model: rounds 3 and 4 closed, freeze [1, 2], pending round 5).
+- Not attempted (no T): AC-R4-09 (X_preB), AC-R4-10 (recovery), the Round 3-inherited T..D criteria.
+
+### Lessons for Round 5
+
+1. Union precedence: "first wins" let a stale archive entry (release→build) mask a better later-round entry (release→version); a gate-rejected entry should not block the same key from another input.
+2. A seed-independent corpus changes the generator's output (s-028) but not where the product's own words differ from the query's (s-039 "workspace" vs "space"; s-027 "searches" vs "filter").
+3. s-004 is not a vocabulary problem; it needs a constants or ordering change, which the fixed grid cannot reach.
+4. The AC-R3-01 threshold (36) is necessary, not sufficient: the dry-run requires 39/39, so a round that can only reach 36 should be designed against the dry-run target from the start.

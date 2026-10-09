@@ -186,9 +186,14 @@ def _excerpt(description: str, limit: int = 160) -> str:
     return first[:limit]
 
 
-def render_lexicon_generation_input(template: str, internal, ranking_raw) -> str:
+DOC_TITLES_PLACEHOLDER = '<one line per concept title: "<token>\\t<product>\\t<title words>">'
+
+
+def render_lexicon_generation_input(template: str, internal, ranking_raw, doc_snapshot=None) -> str:
     """Round 3 spec §5(b): every concept token with count/products and a grounding excerpt (first sentence of the description of
-    the lexicographically smallest op whose terminal literal segment is that token; '-' when none), plus the verb keys."""
+    the lexicographically smallest op whose terminal literal segment is that token; '-' when none), plus the verb keys.
+    Round 4 spec §6.1: with `doc_snapshot` the DOCUMENTATION TITLES placeholder becomes doc_titles.render_block(...). The bench
+    is never an input of this function (AC-R4-05)."""
     noise = frozenset(ranking_raw["path_noise"])
     tokens = act.concept_tokens(internal, noise)
     by_terminal = {}
@@ -199,6 +204,9 @@ def render_lexicon_generation_input(template: str, internal, ranking_raw) -> str
     lines = [f"{t}\t{e['count']}\t{','.join(e['sources'])}\t{_excerpt((by_terminal.get(t) or {}).get('description', ''))}" for t, e in tokens.items()]
     out = template.replace('<one line per concept: "<token>\\t<count>\\t<products>\\t<excerpt>">', "\n".join(lines))
     out = out.replace("<verb keys>", ", ".join(sorted(ranking_raw["verb_methods"])))
+    if doc_snapshot is not None:
+        from tests.benchmarks import doc_titles as dt
+        out = out.replace(DOC_TITLES_PLACEHOLDER, dt.render_block(doc_snapshot, list(tokens)))
     if "<one line per concept" in out or "<verb keys>" in out:
         raise ValueError("generation template placeholders not found")
     return out
@@ -251,7 +259,8 @@ def cmd_finalize(args):
            "raw_sha256": canonical_sha256(raw), "review_input_sha256": _sha(args.review_input[0]), "review_output_sha256": canonical_sha256(review),
            "components": {"raw": [_sha(p) for p in args.raw], "review": [_sha(p) for p in args.review],                       # file-byte shas (ledger kind)
                           "templates": [_sha(t) for t in args.template], "generation_inputs": [_sha(g) for g in args.generation_input],
-                          "review_inputs": [_sha(r) for r in args.review_input]},
+                          "review_inputs": [_sha(r) for r in args.review_input],
+                          **({"doc_titles_snapshot_sha256": _sha(args.doc_titles)} if getattr(args, "doc_titles", None) else {})},   # Round 4 spec §9
            "generated_from": act.provenance(fp, shas, {"verb_inventory": canonical_sha256(ranking["verb_methods"]),
                                                         "aliases": canonical_sha256(aliases), "raw_generation": canonical_sha256(raw),
                                                         "semantic_review": canonical_sha256(review)}),
@@ -263,10 +272,18 @@ def cmd_finalize(args):
 
 def cmd_render_generation_input(args):
     internal, _, _, ranking, _, _ = _context(args)
-    text = render_lexicon_generation_input(pathlib.Path(args.template).read_text(encoding="utf-8"), internal, ranking)
+    snap = _read(args.doc_titles) if args.doc_titles else None
+    text = render_lexicon_generation_input(pathlib.Path(args.template).read_text(encoding="utf-8"), internal, ranking, doc_snapshot=snap)
     pathlib.Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     pathlib.Path(args.out).write_text(text, encoding="utf-8")
-    print(json.dumps({"rendered_sha256": _sha(args.out), "template_sha256": _sha(args.template), "concepts": len(act.concept_tokens(internal, ranking["path_noise"]))}))
+    info = {"rendered_sha256": _sha(args.out), "template_sha256": _sha(args.template), "concepts": len(act.concept_tokens(internal, ranking["path_noise"]))}
+    if snap is not None:
+        from tests.benchmarks import doc_titles as dt
+        info["doc_titles_snapshot_sha256"] = _sha(args.doc_titles)
+        if args.attachment_out:
+            pathlib.Path(args.attachment_out).write_text(dt.attachment_text(snap), encoding="utf-8")
+            info["doc_titles_attachment_sha256"] = _sha(args.attachment_out)
+    print(json.dumps(info))
     return 0
 
 
@@ -290,9 +307,10 @@ def main(argv=None):
         p.add_argument(f"--{name}", required=True, nargs="+")
     for name in ("structural", "out"):
         p.add_argument(f"--{name}", required=True)
-    p.set_defaults(fn=cmd_finalize)
+    p.add_argument("--doc-titles", default=None); p.set_defaults(fn=cmd_finalize)
     p = sub.add_parser("render-generation-input"); p.add_argument("--cache-dir", required=True); p.add_argument("--round", type=int, default=3)
-    p.add_argument("--template", required=True); p.add_argument("--out", required=True); p.set_defaults(fn=cmd_render_generation_input)
+    p.add_argument("--template", required=True); p.add_argument("--out", required=True)
+    p.add_argument("--doc-titles", default=None); p.add_argument("--attachment-out", default=None); p.set_defaults(fn=cmd_render_generation_input)
     p = sub.add_parser("merge"); p.add_argument("--lexicon", required=True); p.add_argument("--aliases", required=True)
     p.add_argument("--round", type=int, default=2); p.set_defaults(fn=cmd_merge)
     args = ap.parse_args(argv)

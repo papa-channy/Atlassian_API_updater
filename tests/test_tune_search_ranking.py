@@ -521,3 +521,23 @@ class TestRunLifecycleGuards(unittest.TestCase):
         with mock.patch.object(tune, "_read_log", return_value=[adopted]), mock.patch.object(tune, "_with_state", return_value=[]), \
              mock.patch.object(tune, "_current_result_sha256", return_value="a" * 64), mock.patch("builtins.print"):
             self.assertEqual(tune._verify(pathlib.Path("unused"), tune._BENCH, rp, BASE_RAW, {}, cands), 0)
+
+
+class TestPipelineResult(unittest.TestCase):
+    """Round 4 spec §4.1: ONE pure production orchestration (run_pipeline_result) shared by main() and the pre-T dry-run."""
+    PERFECT = staticmethod(lambda point, raw: ({"passed": S, "failed": []}, {"raw_passed": R, "effective_passed": R, "passed": R, "failed": []}))
+
+    def test_run_pipeline_result_fields_and_purity(self):
+        res = tune.run_pipeline_result(self.PERFECT, tune._BENCH, BASE_RAW, {"candidates": {}}, GRID, BASE, lambda p, r: [], QUERIES, CLASSES)
+        self.assertIsInstance(res, tune.PipelineResult); self.assertTrue(res.tuning_accept); self.assertEqual(res.validation_errors, [])
+        self.assertEqual(res.selected_point, BASE); self.assertEqual(res.fixture_result["final"], [])
+
+    def test_tuning_accept_false_when_regression_effective_short(self):
+        short = lambda point, raw: ({"passed": S, "failed": []}, {"raw_passed": 10, "effective_passed": R - 1, "passed": R - 1, "failed": [{"id": "rn-001", "query": "q"}]})
+        res = tune.run_pipeline_result(short, tune._BENCH, BASE_RAW, {"candidates": {}}, GRID, BASE, lambda p, r: [], QUERIES, CLASSES)
+        self.assertFalse(res.tuning_accept)
+
+    def test_main_uses_run_pipeline_result(self):
+        import inspect
+        src = inspect.getsource(tune.main)
+        self.assertIn("run_pipeline_result(", src); self.assertNotIn(" run_pipeline(", src)
