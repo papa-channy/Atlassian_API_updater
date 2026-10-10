@@ -1,0 +1,1858 @@
+{
+  "run_at": "2026-10-10T13:06:19Z",
+  "git_commit": "8de757eb755f3cc5b241545f79de8f51728a25ad",
+  "git_dirty": false,
+  "round": 5,
+  "registry_fingerprint": "e308a232d6c9b19a7413e8a38c89b895e44e503581d529c2a31b31fbde179853",
+  "intelligence_fingerprint": "f5687a3679da3c3a45b06c800e4c7358ff85af2558557689eb9d0590d2105a4f",
+  "ranking_sha256": "8345e9e624f0942b7aff540532fdc554d2e371d6faf01e4c89faa2d4bbc1d986",
+  "ranking_structure_sha256": "6d782083cf4d030c5ead778ac9ccacb98cfe81895b5d8d9cf34e6493836d31f5",
+  "alias_sha256": "a17b484ca37a06ec651b3141271c49c8ebfe538dfcf86663ab4438338dd47954",
+  "alias_candidates_sha256": "2e9ede5e9c1b393e337b95c9806ee5a2b05deca6b56aaab7781de4a82d75d54c",
+  "concept_lexicon_sha256": "f4441be53183759a381634e8772dbc3294987f30092f912390ddeca19bceaad9",
+  "evaluation_code_sha256": "83eaee4e79d0bee9e9fe699ddeb0ba42fdfa2afd903a4bb4fd5fefe7bd56054d",
+  "spec_sha256": {
+    "jira-platform": "a7a330f1e293c58d57420fa58f1b95c22976dad5390ce466b55150051040fe9e",
+    "jira-software": "cb7e24b331ad9b31944fa9a588f70d4ea60d74d1dfb52d39a59770230b79207a",
+    "confluence": "b3d010b6438677d864495ce15828f57080ff72afe190efdf7f86f0f5140b700d"
+  },
+  "evaluation_domain": "actionable recommendation queries",
+  "policy_version": 4,
+  "tuning_grid_sha256": "cff9c9c9b89ae78eeaea7d59ddc66c9721bc254e0370d9f3437498feefc84f6e",
+  "seal_match": true,
+  "held_out_top3": {
+    "passed": 15,
+    "total": 16
+  },
+  "negative_actionable": {
+    "total": 4,
+    "raw_passed": 2
+  },
+  "negative_abstained": {
+    "total": 4,
+    "effective_passed": 4
+  },
+  "sets": {
+    "seed": {
+      "passed": 36,
+      "failed": [
+        {
+          "id": "s-004",
+          "query": "transition issue status",
+          "top1": "jira-platform:POST:/rest/api/3/bulk/issues/transition",
+          "expected_top1_any": [
+            "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/transitions",
+            "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/transitions"
+          ],
+          "forbidden_top1": [],
+          "actionable": true,
+          "raw_ok": false
+        },
+        {
+          "id": "s-027",
+          "query": "show my starred searches",
+          "top1": "jira-platform:GET:/rest/api/3/workflows/search",
+          "expected_top1_any": [
+            "jira-platform:GET:/rest/api/3/filter/favourite"
+          ],
+          "forbidden_top1": [],
+          "actionable": true,
+          "raw_ok": false
+        },
+        {
+          "id": "s-039",
+          "query": "browse pages inside this workspace",
+          "top1": "confluence:GET:/pages",
+          "expected_top1_any": [
+            "confluence:GET:/spaces/{id}/pages"
+          ],
+          "forbidden_top1": [],
+          "actionable": true,
+          "raw_ok": false
+        }
+      ],
+      "total": 39
+    },
+    "regression_negative": {
+      "passed": 14,
+      "failed": [],
+      "total": 14,
+      "raw_passed": 10,
+      "effective_passed": 14,
+      "actionable": {
+        "total": 6,
+        "raw_passed": 6
+      },
+      "abstained": {
+        "total": 8,
+        "effective_passed": 8
+      }
+    },
+    "held_out": {
+      "passed": 14,
+      "failed": [
+        {
+          "id": "h-010",
+          "top1": "jira-software:GET:/rest/security/1.0/linkedWorkspaces",
+          "expected_top1_any": [
+            "jira-software:GET:/rest/security/1.0/linkedWorkspaces/{workspaceId}"
+          ],
+          "forbidden_top1": [],
+          "actionable": true,
+          "raw_ok": false,
+          "query_sha256": "d65807caa670561e1a0137500259f31bf722b5096ff8118bf31443979027c108"
+        },
+        {
+          "id": "h-011",
+          "top1": "jira-platform:GET:/rest/api/3/configuration",
+          "expected_top1_any": [
+            "jira-platform:GET:/rest/api/3/myself"
+          ],
+          "forbidden_top1": [],
+          "actionable": true,
+          "raw_ok": false,
+          "query_sha256": "6ecee46cd55f3347a1ff284f0019a619185a4945aa3132e83cc645cb1cf594e4"
+        }
+      ],
+      "total": 16,
+      "raw_passed": 14,
+      "effective_passed": 14,
+      "actionable": {
+        "total": 16,
+        "raw_passed": 14
+      },
+      "abstained": {
+        "total": 0,
+        "effective_passed": 0
+      }
+    },
+    "negative": {
+      "passed": 6,
+      "failed": [
+        {
+          "id": "n-002",
+          "top1": "jira-software:DELETE:/rest/agile/1.0/board/{boardId}",
+          "expected_top1_any": [],
+          "forbidden_top1": [
+            "jira-software:DELETE:/rest/agile/1.0/board/{boardId}"
+          ],
+          "actionable": true,
+          "raw_ok": false,
+          "query_sha256": "79ca8c341fdbd158a61c488bc737f837acb91019798b796ea4caceab0ac3cf33"
+        },
+        {
+          "id": "n-004",
+          "top1": "confluence:DELETE:/pages/{id}",
+          "expected_top1_any": [],
+          "forbidden_top1": [
+            "confluence:DELETE:/pages/{id}"
+          ],
+          "actionable": true,
+          "raw_ok": false,
+          "query_sha256": "3278f61c8f55c35c4c360a87e58e32f254ec742047b416b8dd3ed02dbd2dd844"
+        }
+      ],
+      "total": 8,
+      "raw_passed": 6,
+      "effective_passed": 6,
+      "actionable": {
+        "total": 4,
+        "raw_passed": 2
+      },
+      "abstained": {
+        "total": 4,
+        "effective_passed": 4
+      }
+    }
+  },
+  "failures": [
+    {
+      "set": "seed",
+      "id": "s-004",
+      "query": "transition issue status",
+      "top1": "jira-platform:POST:/rest/api/3/bulk/issues/transition",
+      "expected_top1_any": [
+        "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/transitions",
+        "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/transitions"
+      ],
+      "forbidden_top1": [],
+      "actionable": true,
+      "raw_ok": false,
+      "top5": [
+        {
+          "key": "jira-platform:POST:/rest/api/3/bulk/issues/transition",
+          "score": 46.0,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "POST",
+                "PUT"
+              ]
+            },
+            "path_unmatched": {
+              "value": -1.0,
+              "tokens": [
+                "bulk"
+              ]
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "transition"
+              ]
+            },
+            "method_order": {
+              "value": 0.0,
+              "verb": "transition",
+              "preferred": "PUT"
+            },
+            "path_coverage": {
+              "value": 0.0,
+              "matched": [
+                "issues",
+                "transition"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/transitions",
+          "score": 42.0,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "POST",
+                "PUT"
+              ]
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "transitions"
+              ]
+            },
+            "method_order": {
+              "value": 0.0,
+              "verb": "transition",
+              "preferred": "PUT"
+            },
+            "path_coverage": {
+              "value": 0.0,
+              "matched": [
+                "issue",
+                "transitions"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}",
+          "score": 32.0,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "POST",
+                "PUT"
+              ]
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "issue"
+              ]
+            },
+            "method_order": {
+              "value": 0.0,
+              "verb": "transition",
+              "preferred": "PUT"
+            },
+            "path_coverage": {
+              "value": 0.0,
+              "matched": [
+                "issue"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-platform:POST:/rest/api/3/forge/panel/action/bulk/status",
+          "score": 32.0,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "POST",
+                "PUT"
+              ]
+            },
+            "path_unmatched": {
+              "value": -3.0,
+              "tokens": [
+                "action",
+                "bulk",
+                "forge",
+                "panel"
+              ]
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "status"
+              ]
+            },
+            "method_order": {
+              "value": 0.0,
+              "verb": "transition",
+              "preferred": "PUT"
+            },
+            "path_coverage": {
+              "value": 0.0,
+              "matched": [
+                "status"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-platform:POST:/rest/api/3/issue",
+          "score": 31.0,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "POST",
+                "PUT"
+              ]
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "issue"
+              ]
+            },
+            "method_order": {
+              "value": 0.0,
+              "verb": "transition",
+              "preferred": "PUT"
+            },
+            "path_coverage": {
+              "value": 0.0,
+              "matched": [
+                "issue"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "set": "seed",
+      "id": "s-027",
+      "query": "show my starred searches",
+      "top1": "jira-platform:GET:/rest/api/3/workflows/search",
+      "expected_top1_any": [
+        "jira-platform:GET:/rest/api/3/filter/favourite"
+      ],
+      "forbidden_top1": [],
+      "actionable": true,
+      "raw_ok": false,
+      "top5": [
+        {
+          "key": "jira-platform:GET:/rest/api/3/workflows/search",
+          "score": 25.0,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "GET"
+              ]
+            },
+            "path_unmatched": {
+              "value": -1.0,
+              "tokens": [
+                "workflows"
+              ]
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "search"
+              ]
+            },
+            "method_order": {
+              "value": 0.0,
+              "verb": "show",
+              "preferred": "GET"
+            },
+            "path_coverage": {
+              "value": 0.0,
+              "matched": [
+                "search"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-platform:GET:/rest/api/3/issuesecurityschemes/search",
+          "score": 24.0,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "GET"
+              ]
+            },
+            "path_unmatched": {
+              "value": -1.0,
+              "tokens": [
+                "issuesecurityschemes"
+              ]
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "search"
+              ]
+            },
+            "method_order": {
+              "value": 0.0,
+              "verb": "show",
+              "preferred": "GET"
+            },
+            "path_coverage": {
+              "value": 0.0,
+              "matched": [
+                "search"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-platform:GET:/rest/api/3/statuses/search",
+          "score": 24.0,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "GET"
+              ]
+            },
+            "path_unmatched": {
+              "value": -1.0,
+              "tokens": [
+                "statuses"
+              ]
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "search"
+              ]
+            },
+            "method_order": {
+              "value": 0.0,
+              "verb": "show",
+              "preferred": "GET"
+            },
+            "path_coverage": {
+              "value": 0.0,
+              "matched": [
+                "search"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-platform:GET:/rest/api/3/filter/my",
+          "score": 23.0,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "GET"
+              ]
+            },
+            "path_unmatched": {
+              "value": -1.0,
+              "tokens": [
+                "filter"
+              ]
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "my"
+              ]
+            },
+            "method_order": {
+              "value": 0.0,
+              "verb": "show",
+              "preferred": "GET"
+            },
+            "path_coverage": {
+              "value": 0.0,
+              "matched": [
+                "my"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-platform:GET:/rest/api/3/priority/search",
+          "score": 23.0,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "GET"
+              ]
+            },
+            "path_unmatched": {
+              "value": -1.0,
+              "tokens": [
+                "priority"
+              ]
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "search"
+              ]
+            },
+            "method_order": {
+              "value": 0.0,
+              "verb": "show",
+              "preferred": "GET"
+            },
+            "path_coverage": {
+              "value": 0.0,
+              "matched": [
+                "search"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "set": "seed",
+      "id": "s-039",
+      "query": "browse pages inside this workspace",
+      "top1": "confluence:GET:/pages",
+      "expected_top1_any": [
+        "confluence:GET:/spaces/{id}/pages"
+      ],
+      "forbidden_top1": [],
+      "actionable": true,
+      "raw_ok": false,
+      "top5": [
+        {
+          "key": "confluence:GET:/pages",
+          "score": 43.0,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "GET"
+              ]
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "pages"
+              ]
+            },
+            "method_order": {
+              "value": 0.0,
+              "verb": "browse",
+              "preferred": "GET"
+            },
+            "path_coverage": {
+              "value": 0.0,
+              "matched": [
+                "pages"
+              ]
+            }
+          }
+        },
+        {
+          "key": "confluence:GET:/labels/{id}/pages",
+          "score": 42.0,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "GET"
+              ]
+            },
+            "path_unmatched": {
+              "value": -1.0,
+              "tokens": [
+                "labels"
+              ]
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "pages"
+              ]
+            },
+            "method_order": {
+              "value": 0.0,
+              "verb": "browse",
+              "preferred": "GET"
+            },
+            "path_coverage": {
+              "value": 0.0,
+              "matched": [
+                "pages"
+              ]
+            }
+          }
+        },
+        {
+          "key": "confluence:GET:/spaces/{id}/pages",
+          "score": 42.0,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "GET"
+              ]
+            },
+            "path_unmatched": {
+              "value": -1.0,
+              "tokens": [
+                "spaces"
+              ]
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "pages"
+              ]
+            },
+            "method_order": {
+              "value": 0.0,
+              "verb": "browse",
+              "preferred": "GET"
+            },
+            "path_coverage": {
+              "value": 0.0,
+              "matched": [
+                "pages"
+              ]
+            }
+          }
+        },
+        {
+          "key": "confluence:GET:/pages/{id}",
+          "score": 33.0,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "GET"
+              ]
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "pages"
+              ]
+            },
+            "method_order": {
+              "value": 0.0,
+              "verb": "browse",
+              "preferred": "GET"
+            },
+            "path_coverage": {
+              "value": 0.0,
+              "matched": [
+                "pages"
+              ]
+            }
+          }
+        },
+        {
+          "key": "confluence:GET:/pages/{id}/children",
+          "score": 20.3,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "GET"
+              ]
+            },
+            "path_unmatched": {
+              "value": -1.0,
+              "tokens": [
+                "children"
+              ]
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 0.0,
+              "tokens": [
+                "children"
+              ]
+            },
+            "method_order": {
+              "value": 0.0,
+              "verb": "browse",
+              "preferred": "GET"
+            },
+            "path_coverage": {
+              "value": 0.0,
+              "matched": [
+                "pages"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "set": "held_out",
+      "id": "h-010",
+      "top1": "jira-software:GET:/rest/security/1.0/linkedWorkspaces",
+      "expected_top1_any": [
+        "jira-software:GET:/rest/security/1.0/linkedWorkspaces/{workspaceId}"
+      ],
+      "forbidden_top1": [],
+      "actionable": true,
+      "raw_ok": false,
+      "top5": [
+        {
+          "key": "jira-software:GET:/rest/security/1.0/linkedWorkspaces",
+          "score": 54.0,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "GET"
+              ]
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "linked",
+                "workspaces"
+              ]
+            },
+            "method_order": {
+              "value": 0.0,
+              "preferred": "GET"
+            },
+            "path_coverage": {
+              "value": 0.0,
+              "matched": [
+                "linked",
+                "security",
+                "workspaces"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-software:GET:/rest/security/1.0/linkedWorkspaces/{workspaceId}",
+          "score": 54.0,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "GET"
+              ]
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "linked",
+                "workspaces"
+              ]
+            },
+            "method_order": {
+              "value": 0.0,
+              "preferred": "GET"
+            },
+            "path_coverage": {
+              "value": 0.0,
+              "matched": [
+                "linked",
+                "security",
+                "workspaces"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-software:GET:/rest/operations/1.0/linkedWorkspaces",
+          "score": 32.5,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "GET"
+              ]
+            },
+            "path_unmatched": {
+              "value": -1.0,
+              "tokens": [
+                "operations"
+              ]
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "linked",
+                "workspaces"
+              ]
+            },
+            "method_order": {
+              "value": 0.0,
+              "preferred": "GET"
+            },
+            "path_coverage": {
+              "value": 0.0,
+              "matched": [
+                "linked",
+                "workspaces"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-platform:GET:/rest/api/3/project/{projectIdOrKey}/roledetails",
+          "score": 29.0,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "GET"
+              ]
+            },
+            "path_unmatched": {
+              "value": -2.0,
+              "tokens": [
+                "project",
+                "roledetails"
+              ]
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 0.0,
+              "tokens": [
+                "roledetails"
+              ]
+            },
+            "method_order": {
+              "value": 0.0,
+              "preferred": "GET"
+            },
+            "path_coverage": {
+              "value": 0.0,
+              "matched": []
+            }
+          }
+        },
+        {
+          "key": "confluence:GET:/attachments/{attachment-id}/versions/{version-number}",
+          "score": 25.0,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "GET"
+              ]
+            },
+            "path_unmatched": {
+              "value": -2.0,
+              "tokens": [
+                "attachments",
+                "versions"
+              ]
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": []
+            },
+            "resource_match": {
+              "value": 0.0,
+              "tokens": [
+                "versions"
+              ]
+            },
+            "method_order": {
+              "value": 0.0,
+              "preferred": "GET"
+            },
+            "path_coverage": {
+              "value": 0.0,
+              "matched": []
+            }
+          }
+        }
+      ],
+      "query_sha256": "d65807caa670561e1a0137500259f31bf722b5096ff8118bf31443979027c108"
+    },
+    {
+      "set": "held_out",
+      "id": "h-011",
+      "top1": "jira-platform:GET:/rest/api/3/configuration",
+      "expected_top1_any": [
+        "jira-platform:GET:/rest/api/3/myself"
+      ],
+      "forbidden_top1": [],
+      "actionable": true,
+      "raw_ok": false,
+      "top5": [
+        {
+          "key": "jira-platform:GET:/rest/api/3/configuration",
+          "score": 8.0,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "GET"
+              ]
+            },
+            "path_unmatched": {
+              "value": -1.0,
+              "tokens": [
+                "configuration"
+              ]
+            },
+            "product_hint": {
+              "value": 3.0,
+              "sources": [
+                "jira-platform",
+                "jira-software"
+              ]
+            },
+            "resource_match": {
+              "value": 0.0,
+              "tokens": [
+                "configuration"
+              ]
+            },
+            "method_order": {
+              "value": 0.0,
+              "preferred": "GET"
+            },
+            "path_coverage": {
+              "value": 0.0,
+              "matched": []
+            }
+          }
+        },
+        {
+          "key": "jira-platform:GET:/rest/api/3/serverInfo",
+          "score": 8.0,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "GET"
+              ]
+            },
+            "path_unmatched": {
+              "value": -2.0,
+              "tokens": [
+                "info",
+                "server"
+              ]
+            },
+            "product_hint": {
+              "value": 3.0,
+              "sources": [
+                "jira-platform",
+                "jira-software"
+              ]
+            },
+            "resource_match": {
+              "value": 0.0,
+              "tokens": [
+                "server",
+                "info"
+              ]
+            },
+            "method_order": {
+              "value": 0.0,
+              "preferred": "GET"
+            },
+            "path_coverage": {
+              "value": 0.0,
+              "matched": []
+            }
+          }
+        },
+        {
+          "key": "jira-platform:GET:/rest/api/3/user/bulk/migration",
+          "score": 8.0,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "GET"
+              ]
+            },
+            "path_unmatched": {
+              "value": -3.0,
+              "tokens": [
+                "bulk",
+                "migration",
+                "user"
+              ]
+            },
+            "product_hint": {
+              "value": 3.0,
+              "sources": [
+                "jira-platform",
+                "jira-software"
+              ]
+            },
+            "resource_match": {
+              "value": 0.0,
+              "tokens": [
+                "migration"
+              ]
+            },
+            "method_order": {
+              "value": 0.0,
+              "preferred": "GET"
+            },
+            "path_coverage": {
+              "value": 0.0,
+              "matched": []
+            }
+          }
+        },
+        {
+          "key": "jira-platform:GET:/rest/api/3/application-properties",
+          "score": 7.0,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "GET"
+              ]
+            },
+            "path_unmatched": {
+              "value": -2.0,
+              "tokens": [
+                "application",
+                "properties"
+              ]
+            },
+            "product_hint": {
+              "value": 3.0,
+              "sources": [
+                "jira-platform",
+                "jira-software"
+              ]
+            },
+            "resource_match": {
+              "value": 0.0,
+              "tokens": [
+                "application",
+                "properties"
+              ]
+            },
+            "method_order": {
+              "value": 0.0,
+              "preferred": "GET"
+            },
+            "path_coverage": {
+              "value": 0.0,
+              "matched": []
+            }
+          }
+        },
+        {
+          "key": "jira-platform:GET:/rest/api/3/attachment/meta",
+          "score": 7.0,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "GET"
+              ]
+            },
+            "path_unmatched": {
+              "value": -2.0,
+              "tokens": [
+                "attachment",
+                "meta"
+              ]
+            },
+            "product_hint": {
+              "value": 3.0,
+              "sources": [
+                "jira-platform",
+                "jira-software"
+              ]
+            },
+            "resource_match": {
+              "value": 0.0,
+              "tokens": [
+                "meta"
+              ]
+            },
+            "method_order": {
+              "value": 0.0,
+              "preferred": "GET"
+            },
+            "path_coverage": {
+              "value": 0.0,
+              "matched": []
+            }
+          }
+        }
+      ],
+      "query_sha256": "6ecee46cd55f3347a1ff284f0019a619185a4945aa3132e83cc645cb1cf594e4"
+    },
+    {
+      "set": "negative",
+      "id": "n-002",
+      "top1": "jira-software:DELETE:/rest/agile/1.0/board/{boardId}",
+      "expected_top1_any": [],
+      "forbidden_top1": [
+        "jira-software:DELETE:/rest/agile/1.0/board/{boardId}"
+      ],
+      "actionable": true,
+      "raw_ok": false,
+      "top5": [
+        {
+          "key": "jira-software:DELETE:/rest/agile/1.0/board/{boardId}",
+          "score": 42.0,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "DELETE"
+              ]
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 3.0,
+              "sources": [
+                "jira-platform",
+                "jira-software"
+              ]
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "board"
+              ]
+            },
+            "method_order": {
+              "value": 0.0,
+              "preferred": "DELETE"
+            },
+            "path_coverage": {
+              "value": 0.0,
+              "matched": [
+                "board"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-software:DELETE:/rest/agile/1.0/board/{boardId}/properties/{propertyKey}",
+          "score": 30.0,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "DELETE"
+              ]
+            },
+            "path_unmatched": {
+              "value": -1.0,
+              "tokens": [
+                "properties"
+              ]
+            },
+            "product_hint": {
+              "value": 3.0,
+              "sources": [
+                "jira-platform",
+                "jira-software"
+              ]
+            },
+            "resource_match": {
+              "value": 0.0,
+              "tokens": [
+                "properties"
+              ]
+            },
+            "method_order": {
+              "value": 0.0,
+              "preferred": "DELETE"
+            },
+            "path_coverage": {
+              "value": 0.0,
+              "matched": [
+                "board"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-platform:DELETE:/rest/api/3/filter/{id}/columns",
+          "score": 29.0,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "DELETE"
+              ]
+            },
+            "path_unmatched": {
+              "value": -1.0,
+              "tokens": [
+                "filter"
+              ]
+            },
+            "product_hint": {
+              "value": 3.0,
+              "sources": [
+                "jira-platform",
+                "jira-software"
+              ]
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "columns"
+              ]
+            },
+            "method_order": {
+              "value": 0.0,
+              "preferred": "DELETE"
+            },
+            "path_coverage": {
+              "value": 0.0,
+              "matched": [
+                "columns"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-platform:DELETE:/rest/api/3/user/columns",
+          "score": 29.0,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "DELETE"
+              ]
+            },
+            "path_unmatched": {
+              "value": -1.0,
+              "tokens": [
+                "user"
+              ]
+            },
+            "product_hint": {
+              "value": 3.0,
+              "sources": [
+                "jira-platform",
+                "jira-software"
+              ]
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "columns"
+              ]
+            },
+            "method_order": {
+              "value": 0.0,
+              "preferred": "DELETE"
+            },
+            "path_coverage": {
+              "value": 0.0,
+              "matched": [
+                "columns"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-platform:DELETE:/rest/api/3/config/fieldschemes/{id}",
+          "score": 17.0,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "DELETE"
+              ]
+            },
+            "path_unmatched": {
+              "value": -2.0,
+              "tokens": [
+                "config",
+                "fieldschemes"
+              ]
+            },
+            "product_hint": {
+              "value": 3.0,
+              "sources": [
+                "jira-platform",
+                "jira-software"
+              ]
+            },
+            "resource_match": {
+              "value": 0.0,
+              "tokens": [
+                "fieldschemes"
+              ]
+            },
+            "method_order": {
+              "value": 0.0,
+              "preferred": "DELETE"
+            },
+            "path_coverage": {
+              "value": 0.0,
+              "matched": []
+            }
+          }
+        }
+      ],
+      "query_sha256": "79ca8c341fdbd158a61c488bc737f837acb91019798b796ea4caceab0ac3cf33"
+    },
+    {
+      "set": "negative",
+      "id": "n-004",
+      "top1": "confluence:DELETE:/pages/{id}",
+      "expected_top1_any": [],
+      "forbidden_top1": [
+        "confluence:DELETE:/pages/{id}"
+      ],
+      "actionable": true,
+      "raw_ok": false,
+      "top5": [
+        {
+          "key": "confluence:DELETE:/pages/{id}",
+          "score": 37.5,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "DELETE"
+              ]
+            },
+            "path_unmatched": {
+              "value": 0.0,
+              "tokens": []
+            },
+            "product_hint": {
+              "value": 3.0,
+              "sources": [
+                "confluence"
+              ]
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "pages"
+              ]
+            },
+            "method_order": {
+              "value": 0.0,
+              "preferred": "DELETE"
+            },
+            "path_coverage": {
+              "value": 0.0,
+              "matched": [
+                "pages"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-platform:DELETE:/rest/api/3/issue/{issueIdOrKey}/watchers",
+          "score": 37.0,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "DELETE"
+              ]
+            },
+            "path_unmatched": {
+              "value": -1.0,
+              "tokens": [
+                "issue"
+              ]
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": [
+                "confluence"
+              ]
+            },
+            "resource_match": {
+              "value": 10.0,
+              "tokens": [
+                "watchers"
+              ]
+            },
+            "method_order": {
+              "value": 0.0,
+              "preferred": "DELETE"
+            },
+            "path_coverage": {
+              "value": 0.0,
+              "matched": [
+                "watchers"
+              ]
+            }
+          }
+        },
+        {
+          "key": "confluence:DELETE:/pages/{page-id}/properties/{property-id}",
+          "score": 23.5,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "DELETE"
+              ]
+            },
+            "path_unmatched": {
+              "value": -1.0,
+              "tokens": [
+                "properties"
+              ]
+            },
+            "product_hint": {
+              "value": 3.0,
+              "sources": [
+                "confluence"
+              ]
+            },
+            "resource_match": {
+              "value": 0.0,
+              "tokens": [
+                "properties"
+              ]
+            },
+            "method_order": {
+              "value": 0.0,
+              "preferred": "DELETE"
+            },
+            "path_coverage": {
+              "value": 0.0,
+              "matched": [
+                "pages"
+              ]
+            }
+          }
+        },
+        {
+          "key": "jira-platform:DELETE:/rest/api/3/config/fieldschemes/fields",
+          "score": 12.5,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "DELETE"
+              ]
+            },
+            "path_unmatched": {
+              "value": -3.0,
+              "tokens": [
+                "config",
+                "fields",
+                "fieldschemes"
+              ]
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": [
+                "confluence"
+              ]
+            },
+            "resource_match": {
+              "value": 0.0,
+              "tokens": [
+                "fields"
+              ]
+            },
+            "method_order": {
+              "value": 0.0,
+              "preferred": "DELETE"
+            },
+            "path_coverage": {
+              "value": 0.0,
+              "matched": []
+            }
+          }
+        },
+        {
+          "key": "jira-platform:DELETE:/rest/api/3/config/fieldschemes/fields/parameters",
+          "score": 12.5,
+          "signals": {
+            "method_intent": {
+              "value": 2.0,
+              "allowed": [
+                "DELETE"
+              ]
+            },
+            "path_unmatched": {
+              "value": -3.0,
+              "tokens": [
+                "config",
+                "fields",
+                "fieldschemes",
+                "parameters"
+              ]
+            },
+            "product_hint": {
+              "value": 0.0,
+              "sources": [
+                "confluence"
+              ]
+            },
+            "resource_match": {
+              "value": 0.0,
+              "tokens": [
+                "parameters"
+              ]
+            },
+            "method_order": {
+              "value": 0.0,
+              "preferred": "DELETE"
+            },
+            "path_coverage": {
+              "value": 0.0,
+              "matched": []
+            }
+          }
+        }
+      ],
+      "query_sha256": "3278f61c8f55c35c4c360a87e58e32f254ec742047b416b8dd3ed02dbd2dd844"
+    }
+  ],
+  "sealed_sha256": {
+    "held_out": "c11872473b41be12133a951d9cc65ef04483c2530628e8dcb2192592f6a2304c",
+    "negative": "723087b013f8057ada39814b6cf1d1ff982816c3c73e8287fc1f44702a8cab6f"
+  },
+  "reference_round2": {
+    "held_out": {
+      "passed": 4,
+      "failed": [
+        {
+          "id": "h-001",
+          "top1": "jira-platform:GET:/rest/api/3/issue/limit/adf/report",
+          "expected_top1_any": [
+            "jira-platform:GET:/rest/api/3/attachment/meta"
+          ],
+          "forbidden_top1": [],
+          "actionable": false,
+          "raw_ok": false,
+          "query_sha256": "b16a3cfafada120c52049851c9276272b0f75ac6e59bd9ee7541928db2b897f8"
+        },
+        {
+          "id": "h-002",
+          "top1": "jira-platform:GET:/rest/api/3/project/{projectId}/email",
+          "expected_top1_any": [
+            "jira-platform:GET:/rest/api/3/user/email"
+          ],
+          "forbidden_top1": [],
+          "actionable": true,
+          "raw_ok": false,
+          "query_sha256": "d484fa474f71fa095fe304df6d6a7f50c9c4fdb338cb617907b7e79ccc4f9832"
+        },
+        {
+          "id": "h-003",
+          "top1": "jira-platform:GET:/rest/api/3/issuesecurityschemes/{issueSecuritySchemeId}/members",
+          "expected_top1_any": [
+            "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/watchers"
+          ],
+          "forbidden_top1": [],
+          "actionable": false,
+          "raw_ok": false,
+          "query_sha256": "038a633514d573794193697867a19a017f8afa6be6bdc123a4055f04a0b9be55"
+        },
+        {
+          "id": "h-004",
+          "top1": "jira-platform:GET:/rest/api/3/project/{projectId}/hierarchy",
+          "expected_top1_any": [
+            "jira-platform:POST:/rest/api/3/jql/parse"
+          ],
+          "forbidden_top1": [],
+          "actionable": true,
+          "raw_ok": false,
+          "query_sha256": "cf9fc4581a8ad2e93742ded14025509cbf96d9af28e12f3f57210c939bee0636"
+        },
+        {
+          "id": "h-005",
+          "top1": "jira-platform:PUT:/rest/api/3/filter/{id}/owner",
+          "expected_top1_any": [
+            "jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}/assignee"
+          ],
+          "forbidden_top1": [],
+          "actionable": true,
+          "raw_ok": false,
+          "query_sha256": "8169f5f8185d8c73c01f9672b931fa9b84482f27d410eaf1507462d74ca5f1b1"
+        },
+        {
+          "id": "h-006",
+          "top1": "jira-platform:DELETE:/rest/api/3/project/{projectIdOrKey}",
+          "expected_top1_any": [
+            "jira-platform:DELETE:/rest/api/3/project/{projectIdOrKey}/avatar/{id}"
+          ],
+          "forbidden_top1": [],
+          "actionable": true,
+          "raw_ok": false,
+          "query_sha256": "6f92047adceb5f0465bc72d1190f840ee88555a46fe9fee2e5b3daa3f7206149"
+        },
+        {
+          "id": "h-007",
+          "top1": "jira-platform:POST:/rest/api/3/group",
+          "expected_top1_any": [
+            "jira-platform:DELETE:/rest/api/3/group/user"
+          ],
+          "forbidden_top1": [],
+          "actionable": false,
+          "raw_ok": false,
+          "query_sha256": "30311d813eda910b09dd1490a894ec450a90b967d5d0214d91041f115180fae3"
+        },
+        {
+          "id": "h-008",
+          "top1": "jira-software:GET:/rest/agile/1.0/board",
+          "expected_top1_any": [
+            "jira-software:GET:/rest/agile/1.0/board/{boardId}/reports"
+          ],
+          "forbidden_top1": [],
+          "actionable": true,
+          "raw_ok": false,
+          "query_sha256": "b510666ec2ba887eb7b8356b47485f53debfcc7c404ba3ac6893ef21de6aee67"
+        },
+        {
+          "id": "h-009",
+          "top1": "jira-software:GET:/rest/agile/1.0/sprint/{sprintId}",
+          "expected_top1_any": [
+            "jira-software:POST:/rest/agile/1.0/sprint"
+          ],
+          "forbidden_top1": [],
+          "actionable": true,
+          "raw_ok": false,
+          "query_sha256": "67cdf27b3a043dac1c1c5b80cac3a3876660118240b11e80c8267c1d52bd870a"
+        },
+        {
+          "id": "h-010",
+          "top1": "jira-platform:PUT:/rest/api/3/priority/{id}",
+          "expected_top1_any": [
+            "jira-software:PUT:/rest/agile/1.0/issue/rank"
+          ],
+          "forbidden_top1": [],
+          "actionable": true,
+          "raw_ok": false,
+          "query_sha256": "bd376ecd8ead739421bd8f69fd496cb1d397360ec17c457b9adba05b7efc3f2b"
+        },
+        {
+          "id": "h-012",
+          "top1": "confluence:GET:/whiteboards/{id}",
+          "expected_top1_any": [
+            "confluence:GET:/whiteboards/{id}/descendants"
+          ],
+          "forbidden_top1": [],
+          "actionable": true,
+          "raw_ok": false,
+          "query_sha256": "8449f05e132b72939f3d9df44ba0cad421287848d9a2720324e3d59fbc56b2f4"
+        },
+        {
+          "id": "h-016",
+          "top1": "confluence:GET:/pages",
+          "expected_top1_any": [
+            "confluence:POST:/pages/{id}/redact"
+          ],
+          "forbidden_top1": [],
+          "actionable": false,
+          "raw_ok": false,
+          "query_sha256": "df524692b4271ac91c0e30860660151d54d20263f3bbfa2b01bc7dd847bf30ff"
+        }
+      ],
+      "total": 16,
+      "raw_passed": 4,
+      "effective_passed": 4,
+      "actionable": {
+        "total": 12,
+        "raw_passed": 4
+      },
+      "abstained": {
+        "total": 4,
+        "effective_passed": 0
+      }
+    },
+    "negative": {
+      "passed": 5,
+      "failed": [
+        {
+          "id": "n-001",
+          "top1": "confluence:GET:/pages",
+          "expected_top1_any": [],
+          "forbidden_top1": [
+            "confluence:GET:/pages"
+          ],
+          "actionable": true,
+          "raw_ok": false,
+          "query_sha256": "1af90cc202293104346e4c46a938d0c3743027a1e4f8c684a2da6a3e34978aa3"
+        },
+        {
+          "id": "n-003",
+          "top1": "confluence:POST:/pages",
+          "expected_top1_any": [],
+          "forbidden_top1": [
+            "confluence:POST:/pages"
+          ],
+          "actionable": true,
+          "raw_ok": false,
+          "query_sha256": "be39700e5f81558670d4765dcf85ea4603ca2b857ee420f122a9cfbf6da662c1"
+        },
+        {
+          "id": "n-006",
+          "top1": "confluence:POST:/whiteboards",
+          "expected_top1_any": [],
+          "forbidden_top1": [
+            "confluence:POST:/whiteboards"
+          ],
+          "actionable": true,
+          "raw_ok": false,
+          "query_sha256": "6c31570c550d0d4c53e1eb949ef4faafdc00054c87dfb7eaaae125284f6823bc"
+        }
+      ],
+      "total": 8,
+      "raw_passed": 5,
+      "effective_passed": 5,
+      "actionable": {
+        "total": 4,
+        "raw_passed": 1
+      },
+      "abstained": {
+        "total": 4,
+        "effective_passed": 4
+      }
+    },
+    "invalid_key": [],
+    "plaintext_sha256": {
+      "held_out": "0f990f2fc134cd41eca2061931c65cfdd4bc21819051f9ae8538c0258aaf3540",
+      "negative": "7750a2020923bcf8ddfa22e79f2c071001db9942194c3215cc03c60f363dde76"
+    },
+    "enc_sha256": "c1a3794b0ac7563bee0ccdcc61e0ecb43026d0f778ec4773ef2695459cca369b"
+  }
+}

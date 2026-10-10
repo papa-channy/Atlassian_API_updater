@@ -101,6 +101,104 @@ def union_docs(docs) -> dict:
     return out
 
 
+SOURCE_RANK = {"round2_archive": 0, "round4_generation": 1}        # Round 5 spec §6.1: source identity, never CLI order
+
+
+def canonical_key(syn: str) -> tuple:
+    """A word -> (word,); a phrase -> its sorted token tuple (phrases with the same token set are one key)."""
+    toks = tuple(syn.split(" "))
+    return tuple(sorted(toks)) if len(toks) > 1 else toks
+
+
+def review_pairs(review_input_text: str, review: dict) -> dict:
+    """Round 5 spec §6.3: the verdict of every (key, targets) pair the reviewer actually saw (the ENTRIES object of its input)."""
+    body = review_input_text.split("ENTRIES:", 1)[1].lstrip()
+    entries, _ = json.JSONDecoder().raw_decode(body)
+    out = {}
+    for syn, targets in entries.items():
+        if isinstance(review.get(syn), bool):
+            out[(canonical_key(" ".join(act.norm_tokens(syn)) or syn), tuple(sorted(targets)))] = review[syn]
+    return out
+
+
+def merge_verdicts(pair_maps) -> tuple:
+    """Agreeing past verdicts are reused; a pair judged both ways is a conflict (re-reviewed, never resolved by recency)."""
+    seen = {}
+    for m in pair_maps:
+        for pair, v in m.items():
+            seen.setdefault(pair, set()).add(v)
+    return {p: next(iter(v)) for p, v in seen.items() if len(v) == 1}, sorted(p for p, v in seen.items() if len(v) > 1)
+
+
+def resolve_verdicts(historical_maps, fresh_maps) -> tuple:
+    """Round 5 spec §6.3: agreed historical verdicts are reused; a fresh (Round 5) verdict is authoritative only for pairs without an
+    agreed historical verdict (unreviewed or conflicting) and is never merged into the conflicting set."""
+    agreed, conflicts = merge_verdicts(historical_maps)
+    fresh = {}
+    for m in fresh_maps:
+        for pair, v in m.items():
+            if pair in agreed:
+                continue                                            # fresh verdicts never override an agreed historical verdict
+            if fresh.get(pair, v) != v:
+                raise ValueError(f"two fresh reviews disagree on {pair}")
+            fresh[pair] = v
+    return {**agreed, **fresh}, [c for c in conflicts if c not in fresh]
+
+
+def resolve_sources(sources, ctx, verdicts) -> dict:
+    """Round 5 spec §6.1: keep every candidate, eligible = structural ∧ review (no benchmark input), highest source rank wins,
+    then the inherited per-concept cap. `pending` lists (canonical key, targets, display key) with no agreed verdict."""
+    concept_set, catalog_set, verbs, hints, alias_keys, rule_sets, token_sources = ctx
+    cands = {}
+    for src in sorted(sources, key=lambda s: SOURCE_RANK[s["id"]]):
+        lex = normalize_raw(src["raw"])
+        kept, rej = structural_check(lex, concept_set, catalog_set, verbs, hints, alias_keys, rule_sets, token_sources)
+        for syn, targets in lex.items():
+            cands.setdefault(canonical_key(syn), []).append({"source": src["id"], "rank": SOURCE_RANK[src["id"]], "key": syn,
+                                                             "targets": list(targets), "reasons": [] if syn in kept else [rej[syn]["reason"]]})
+    lexicon, rejected, selected, pending = {}, {}, {}, set()
+    for ck, cs in sorted(cands.items()):
+        eligible = []
+        for c in cs:
+            if c["reasons"]:
+                continue
+            v = verdicts.get((ck, tuple(sorted(c["targets"]))))
+            if v is None:
+                pending.add((ck, tuple(sorted(c["targets"])), c["key"])); c["reasons"] = ["unreviewed"]
+            elif v:
+                eligible.append(c)
+            else:
+                c["reasons"] = ["semantic-reject"]
+        if eligible:
+            best = max(eligible, key=lambda c: c["rank"])
+            lexicon[best["key"]] = best["targets"]; selected[best["key"]] = {"source": best["source"], "provenance_rank": best["rank"]}
+        else:
+            last = cs[-1]
+            rejected[last["key"]] = {**_rej("no-eligible-candidate", last["targets"]),
+                                     "candidates": [{"source": c["source"], "provenance_rank": c["rank"], "targets": c["targets"], "reasons": c["reasons"]} for c in cs]}
+    lexicon, capped = cap_per_concept(lexicon)
+    rejected.update(capped)                                         # `selected` stays the resolution provenance ledger (cap → gate_reason "concept-cap")
+    return {"lexicon": lexicon, "rejected": dict(sorted(rejected.items())), "selected": dict(sorted(selected.items())), "pending": sorted(pending)}
+
+
+REVIEW_PLACEHOLDER = '<the "lexicon" object of lexicon_structural.json>'
+
+
+def render_pending_review(template: str, pending) -> list:
+    """Unreviewed pairs as review inputs (the committed Round 4 review template, byte-identical); pairs sharing a display key go
+    to different batches so every ENTRIES object has unique keys."""
+    batches = []
+    for _ck, targets, key in sorted(pending, key=lambda p: (p[2], p[1])):
+        for b in batches:
+            if key not in b:
+                b[key] = list(targets); break
+        else:
+            batches.append({key: list(targets)})
+    if REVIEW_PLACEHOLDER not in template:
+        raise ValueError("review template placeholder not found")
+    return [template.replace(REVIEW_PLACEHOLDER, json.dumps(b, indent=1, ensure_ascii=False, sort_keys=True)) for b in batches]
+
+
 def validate_review(review, keys, structurally_rejected=()) -> list:
     """Exact keys and booleans. `structurally_rejected`: synonyms the current structural stage rejected; a review that
     also judged them (a prior round's review re-gated on a later catalog/alias state, Round 3 spec §5) is still valid."""
@@ -297,6 +395,68 @@ def cmd_merge(args):
     return 0
 
 
+def cmd_resolve(args):
+    internal, fp, shas, ranking, aliases, ctx = _context(args)
+    sources, pair_maps, fresh_maps, comp = [], [], [], []
+    for sid, raw_p, rev_p, rin_p in args.source:
+        raw = _read(raw_p); sources.append({"id": sid, "raw": raw})
+        pair_maps.append(review_pairs(pathlib.Path(rin_p).read_text(encoding="utf-8"), _read(rev_p)))
+        comp.append({"id": sid, "rank": SOURCE_RANK[sid], "raw_sha256": _sha(raw_p), "review_sha256": _sha(rev_p), "review_input_sha256": _sha(rin_p)})
+    for rev_p, rin_p in args.review_r5 or []:
+        fresh_maps.append(review_pairs(pathlib.Path(rin_p).read_text(encoding="utf-8"), _read(rev_p)))
+        comp.append({"id": "round5_review", "review_sha256": _sha(rev_p), "review_input_sha256": _sha(rin_p)})
+    verdicts, conflicts = resolve_verdicts(pair_maps, fresh_maps)
+    out = resolve_sources(sources, ctx, verdicts)
+    if out["pending"]:
+        d = pathlib.Path(args.pending_out); d.mkdir(parents=True, exist_ok=True)
+        texts = render_pending_review(pathlib.Path(args.template).read_text(encoding="utf-8"), out["pending"])
+        for i, t in enumerate(texts, 1):
+            (d / f"review-input-{i}.txt").write_text(t, encoding="utf-8")
+        print(json.dumps({"pending": len(out["pending"]), "conflicts": len(conflicts), "batches": len(texts)})); return 3
+    doc = {"round": args.round, "components": {"union_resolution": "source-precedence", "sources": comp, "template_sha256": _sha(args.template),
+                                               "review_conflicts": [list(map(list, c)) for c in conflicts]},
+           "generated_from": act.provenance(fp, shas, {"verb_inventory": canonical_sha256(ranking["verb_methods"]), "aliases": canonical_sha256(aliases)}),
+           "lexicon": out["lexicon"], "rejected": out["rejected"], "selected": out["selected"]}
+    act._write(args.out, doc)
+    print(f"lexicon: {len(out['lexicon'])} kept, {len(out['rejected'])} rejected"); return 0
+
+
+def cmd_round4_reference(args):
+    """Round 5 spec §8: the Round 4 first-wins resolution of the same inputs (archive first), for the counterexample baseline."""
+    internal, fp, shas, ranking, aliases, ctx = _context(args)
+    lexicon, rejected = build(union_docs([_read(p) for p in args.raw]), union_docs([_read(p) for p in args.review]), *ctx[:5],
+                              rule_sets=ctx[5], token_sources=ctx[6])
+    act._write(args.out, {"round": 4, "lexicon": lexicon, "rejected": rejected,
+                          "components": {"union_resolution": "first-wins", "raw": [_sha(p) for p in args.raw], "review": [_sha(p) for p in args.review]}})
+    print(f"round4 reference lexicon: {len(lexicon)} kept"); return 0
+
+
+def carry_forward(lexicon_doc, prior_lexicon_doc, cands_doc, prior_cands_doc, prior_shas) -> tuple:
+    """Round 5 spec v1.12 (thread 2 ruling A′): the frozen lexicon is a cumulative provenance snapshot — prior lexicon entries the
+    current resolution does not define are carried with entry-level provenance (current values/provenance win on collision); prior
+    candidates are kept only in the provenance-only `carried_candidates` field, never in the active `candidates` surface."""
+    lex, cands = copy.deepcopy(lexicon_doc), copy.deepcopy(cands_doc)
+    prior_lexicon_doc, prior_cands_doc = copy.deepcopy(prior_lexicon_doc), copy.deepcopy(prior_cands_doc)   # outputs never alias the prior files
+    prior, prior_carried = prior_lexicon_doc.get("lexicon") or {}, prior_lexicon_doc.get("carried_selected") or {}
+    carried = {w: t for w, t in sorted(prior.items()) if w not in lex["lexicon"]}
+    lex["lexicon"] = {**carried, **lex["lexicon"]}
+    lex["carried_selected"] = {w: prior_carried.get(w) or {"from_round": prior_lexicon_doc.get("round"), "targets": list(t),
+                                                             **({"selected": prior_lexicon_doc["selected"][w]} if w in (prior_lexicon_doc.get("selected") or {}) else {})}
+                               for w, t in carried.items()}
+    lex["components"] = {**(lex.get("components") or {}), "carried_from": {"round": prior_lexicon_doc.get("round"), **prior_shas}}
+    old = {**(prior_cands_doc.get("carried_candidates") or {}), **(prior_cands_doc.get("candidates") or {})}
+    cands["carried_candidates"] = {w: c for w, c in sorted(old.items()) if w not in cands["candidates"]}
+    return lex, cands
+
+
+def cmd_carry(args):
+    pl, pc = pathlib.Path(args.prior_lexicon), pathlib.Path(args.prior_candidates)
+    lex, cands = carry_forward(_read(args.lexicon), _read(pl), _read(args.candidates), _read(pc),
+                               {"concept_lexicon_sha256": _sha(pl), "alias_candidates_sha256": _sha(pc)})
+    act._write(args.lexicon, lex); act._write(args.candidates, cands)
+    print(f"carried {len(lex['carried_selected'])} lexicon entries, {len(cands['carried_candidates'])} provenance-only candidates"); return 0
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -311,8 +471,19 @@ def main(argv=None):
     p = sub.add_parser("render-generation-input"); p.add_argument("--cache-dir", required=True); p.add_argument("--round", type=int, default=3)
     p.add_argument("--template", required=True); p.add_argument("--out", required=True)
     p.add_argument("--doc-titles", default=None); p.add_argument("--attachment-out", default=None); p.set_defaults(fn=cmd_render_generation_input)
+    p = sub.add_parser("carry"); p.add_argument("--lexicon", required=True); p.add_argument("--candidates", required=True)
+    p.add_argument("--prior-lexicon", required=True); p.add_argument("--prior-candidates", required=True); p.set_defaults(fn=cmd_carry)
     p = sub.add_parser("merge"); p.add_argument("--lexicon", required=True); p.add_argument("--aliases", required=True)
     p.add_argument("--round", type=int, default=2); p.set_defaults(fn=cmd_merge)
+    p = sub.add_parser("resolve"); p.add_argument("--cache-dir", required=True); p.add_argument("--round", type=int, default=5)
+    p.add_argument("--source", nargs=4, action="append", required=True, metavar=("ID", "RAW", "REVIEW", "REVIEW_INPUT"))
+    p.add_argument("--review-r5", nargs=2, action="append", metavar=("REVIEW", "REVIEW_INPUT"))
+    p.add_argument("--template", required=True); p.add_argument("--pending-out", required=True); p.add_argument("--out", required=True)
+    p.set_defaults(fn=cmd_resolve)
+    p = sub.add_parser("round4-reference"); p.add_argument("--cache-dir", required=True); p.add_argument("--round", type=int, default=5)
+    p.add_argument("--raw", nargs="+", required=True); p.add_argument("--review", nargs="+", required=True); p.add_argument("--out", required=True)
+    p.set_defaults(fn=cmd_round4_reference)
+
     args = ap.parse_args(argv)
     return args.fn(args)
 

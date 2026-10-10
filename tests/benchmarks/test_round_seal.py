@@ -693,3 +693,32 @@ class TestRound4FreezeEntry(unittest.TestCase):
     def test_off_allowlist_change_refused(self):
         with tempfile.TemporaryDirectory() as td, self.assertRaises(SystemExit):
             self._entry(td, ["tools/atlassian_docs/intelligence/data/operation_quirks.json"])
+class TestRound5FreezeEntry(TestRound4FreezeEntry):
+    """Round 5 spec §4.1/§9: KU, registry, union-resolution and counterexample-reference keys; per-round allowlist."""
+    def _entry5(self, td, changed, union="source-precedence"):
+        out, snap = self._bundle(td)
+        hashes = {k: "0" * 64 for k in ev.freeze_key_set(4) - {"round", "structure_sha256", "verb_inventory_sha256", "source_registry_fingerprint", "source_spec_sha256",
+                                                                "reference_set", "hidden_generation_rules", "hidden_set_origin", "doc_titles_source_bundle_sha256", "doc_titles_snapshot_sha256", "t_policy_files"}}
+        ranking = {"verb_methods": {"get": ["GET"]}, "path_noise": [], "product_hints": [], "tuning_grid": {}, "baseline": {}, "ordering_rules": {},
+                   "round2_seal": {"held_out_sha256": "1" * 64, "negative_sha256": "2" * 64}}
+        real_sha = ev.file_sha256
+        with mock.patch.object(rs, "load_catalogs_from_cache", return_value=([], [], "f" * 64, {"jira-platform": "a" * 64})), \
+             mock.patch.object(ev, "round_freeze_hashes", return_value=hashes), mock.patch.object(ev, "changed_files_since", return_value=changed), \
+             mock.patch.object(ev, "file_sha256", side_effect=lambda p: real_sha(p) if pathlib.Path(p).exists() else "e" * 64), \
+             mock.patch.object(rs, "_read_json", side_effect=lambda p: {"components": {"union_resolution": union}} if str(p).endswith("concept_lexicon.json") else ranking):
+            enc = pathlib.Path(td, "r2.enc"); enc.write_bytes(b"x")
+            return rs.freeze_entry(5, pathlib.Path(td), reference_enc=enc, doc_sources=out, doc_titles_path=snap, base_commit="HEAD")
+
+    def test_round5_keys(self):
+        with tempfile.TemporaryDirectory() as td:
+            e = self._entry5(td, [ev.T_DATA_FILES[2], "tests/benchmarks/round5-counterexample-reference.json"])
+            self.assertEqual(set(e), ev.freeze_key_set(5)); self.assertEqual(e["known_unreachable_seeds"], ["s-004", "s-027", "s-039"])
+            self.assertEqual(e["lexicon_union_resolution"], "source-precedence"); self.assertEqual(e["hidden_generation_rules"], list(rs.HIDDEN_RULES_R5))
+
+    def test_registry_change_at_T_refused(self):
+        with tempfile.TemporaryDirectory() as td, self.assertRaises(SystemExit):
+            self._entry5(td, ["tests/benchmarks/round5-known-unreachable.json"])
+
+    def test_non_round5_lexicon_refused(self):
+        with tempfile.TemporaryDirectory() as td, self.assertRaises(SystemExit):
+            self._entry5(td, [], union="first-wins")

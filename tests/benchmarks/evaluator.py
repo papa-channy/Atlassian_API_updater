@@ -180,10 +180,89 @@ def closed_rounds(outcomes) -> set:
 
 
 T_DATA_FILES = tuple(f"{DATA_REL}/{n}" for n in ("alias_candidates.json", "concept_lexicon.json", "search_aliases.json", "search_ranking.json"))
-T_ALLOWLIST = T_DATA_FILES + ("tests/benchmarks/round_freeze.json", "tests/benchmarks/search_queries.json", "tests/benchmarks/round4-worker-brief.md",
-                              "tests/benchmarks/round4-hidden-generation-prompt.md", "tests/benchmarks/round4-hidden-reviewer-prompt.md",
-                              "tests/benchmarks/round4-lexicon-generation-prompt.md", "tests/benchmarks/round4-lexicon-review-prompt.md",
-                              "tests/benchmarks/round4-method-safety.json")                  # Round 4 spec §9.6 (exact)
+def t_allowlist(round: int) -> tuple:
+    """Round 4 spec §9.6 / Round 5 spec §9 (exact, per round)."""
+    common = T_DATA_FILES + ("tests/benchmarks/round_freeze.json", "tests/benchmarks/search_queries.json",
+                             f"tests/benchmarks/round{round}-worker-brief.md", f"tests/benchmarks/round{round}-hidden-generation-prompt.md",
+                             f"tests/benchmarks/round{round}-hidden-reviewer-prompt.md", f"tests/benchmarks/round{round}-method-safety.json")
+    if round == 4:
+        return common[:-1] + ("tests/benchmarks/round4-lexicon-generation-prompt.md", "tests/benchmarks/round4-lexicon-review-prompt.md",
+                              "tests/benchmarks/round4-method-safety.json")
+    return common + ((f"tests/benchmarks/round{round}-counterexample-reference.json",) if round >= 5 else ())
+
+
+T_ALLOWLIST = t_allowlist(4)                                       # byte-identical to the Round 4 tuple (order included)
+KNOWN_UNREACHABLE = {5: ("s-004", "s-027", "s-039")}              # Round 5 spec §4.1 (exact, frozen)
+ROUND5_EXTRA_KEYS = ("known_unreachable_seeds", "known_unreachable_registry_sha256", "lexicon_union_resolution", "counterexample_reference_sha256")
+
+
+def known_unreachable(round: int) -> frozenset:
+    return frozenset(KNOWN_UNREACHABLE.get(round, ()))
+
+
+def sha256_text(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+KU_RULING_FIELDS = ("thread", "date", "summary", "file", "review_output_sha256")
+KU_SEED_FIELDS = ("id", "query_sha256", "record_sha256", "cause", "mechanisms_tried", "official_source_check")
+
+
+def ku_registry_schema_problems(round, registry_doc) -> list:
+    """Round 5 spec §4.1 / AC-R5-03: required approval and seed fields, exactly the registry ids, five rulings."""
+    out = []
+    ap = registry_doc.get("approval")
+    if not isinstance(ap, dict):
+        return ["approval: must be an object"]
+    rulings = ap.get("rulings") or []
+    if not isinstance(rulings, list) or not all(isinstance(r, dict) for r in rulings):
+        return ["approval.rulings: must be a list of objects"]
+    if not isinstance(ap.get("user_decision") or {}, dict):
+        return ["approval.user_decision: must be an object"]
+    if len(rulings) != 5:
+        out.append(f"approval.rulings: expected 5, got {len(rulings)}")
+    out += [f"ruling {i}: missing {f}" for i, r in enumerate(rulings) for f in KU_RULING_FIELDS if not r.get(f)]
+    ud = ap.get("user_decision") or {}
+    out += [f"user_decision: missing {f}" for f in ("date", "words", "event_sha256") if not ud.get(f)]
+    if registry_doc.get("round") != round:
+        out.append(f"round: expected {round}, got {registry_doc.get('round')!r}")
+    seeds = registry_doc.get("seeds") or []
+    if not all(isinstance(s, dict) and isinstance(s.get("id"), str) and s.get("id") for s in seeds):
+        return out + ["seeds: every entry must be an object with a non-empty string id"]
+    ids = [s["id"] for s in seeds]
+    if len(ids) != len(set(ids)) or sorted(ids) != sorted(KNOWN_UNREACHABLE.get(round, ())):
+        out.append("seeds: ids differ from KNOWN_UNREACHABLE (exact, unique)")
+    files = [r.get("file") for r in rulings]
+    if len(files) != len(set(files)):
+        out.append("approval.rulings: duplicate ruling files")
+    out += [f"seed {s['id']}: missing {f}" for s in seeds for f in KU_SEED_FIELDS if not s.get(f)]
+    return out
+
+
+KU_DERIVED_FIELDS = ("failure_classes",)                                # Round 5 spec v1.11 §4.1: recomputed at T, not identity
+
+
+def ku_identity(record) -> dict:
+    """Round 5 spec v1.11 §4.1 (thread 2 ruling (a)): a KU seed's identity is its record minus the derived failure_classes."""
+    return {k: v for k, v in record.items() if k not in KU_DERIVED_FIELDS}
+
+
+def ku_record_problems(round, bench, base_bench, registry_doc, ids=None) -> list:
+    """Round 5 spec §4.1 (v1.11): every KU seed's identity equals the start-commit identity and the registry's query/record hashes."""
+    ids = tuple(ids) if ids is not None else KNOWN_UNREACHABLE.get(round, ())
+    cur = {r["id"]: r for r in bench["seed"]}; base = {r["id"]: r for r in base_bench["seed"]}
+    reg = {s["id"]: s for s in registry_doc.get("seeds", [])}
+    out = []
+    for sid in ids:
+        r, b, g = cur.get(sid), base.get(sid), reg.get(sid)
+        if r is None or b is None or g is None:
+            out.append(f"{sid}: missing in bench/base/registry"); continue
+        if canonical_sha256(ku_identity(r)) != canonical_sha256(ku_identity(b)):
+            out.append(f"{sid}: seed record differs from the start commit")
+        if g.get("query_sha256") != sha256_text(r["query"]) or g.get("record_sha256") != canonical_sha256(ku_identity(r)):
+            out.append(f"{sid}: registry query/record sha mismatch")
+    return out
+
 
 
 def changed_files_since(root, base_commit) -> list:
@@ -210,7 +289,7 @@ def freeze_key_set(round: int) -> set:
     ROUND3_EXTRA_KEYS. No entry after round 1 carries commit_T (self-reference)."""
     if round == 1:
         return {"round", "commit_T", "structure_sha256"}
-    return set(_ROUND2_KEYS) | (set(ROUND3_EXTRA_KEYS) if round >= 3 else set()) | (set(ROUND4_EXTRA_KEYS) if round >= 4 else set())
+    return set(_ROUND2_KEYS) | (set(ROUND3_EXTRA_KEYS) if round >= 3 else set()) | (set(ROUND4_EXTRA_KEYS) if round >= 4 else set()) | (set(ROUND5_EXTRA_KEYS) if round >= 5 else set())
 
 
 def files_sha256(root, files) -> str:
@@ -231,7 +310,9 @@ TOOLING_FILES = tuple(sorted(EVALUATION_CODE_FILES + ("tests/benchmarks/concept_
                                                       "tests/benchmarks/test_regression_reference.py",
                                                       "tests/benchmarks/round3_simulation.py", "tests/benchmarks/test_round3_simulation.py",
                                                       "tests/benchmarks/doc_titles.py", "tests/benchmarks/test_doc_titles.py",            # Round 4 (H14)
-                                                      "tests/benchmarks/round4_simulation.py", "tests/benchmarks/test_round4_simulation.py")))   # Round 4 (H15)
+                                                      "tests/benchmarks/round4_simulation.py", "tests/benchmarks/test_round4_simulation.py",    # Round 4 (H15)
+                                                      "tests/benchmarks/counterexample.py", "tests/benchmarks/test_counterexample.py",
+                                                      "tests/benchmarks/round5_simulation.py", "tests/benchmarks/test_round5_simulation.py")))   # Round 5 (H17)
 
 
 def evaluation_code_sha256(root) -> str:

@@ -1412,6 +1412,90 @@
     ],
     "worktracker": [
       "jira"
+    ],
+    "alert": [
+      "notification"
+    ],
+    "bottom": [
+      "footer"
+    ],
+    "cleaner": [
+      "pdcleaner"
+    ],
+    "codebase": [
+      "repository"
+    ],
+    "customized": [
+      "custom"
+    ],
+    "document": [
+      "page"
+    ],
+    "estimated": [
+      "approximate"
+    ],
+    "feedback": [
+      "comment"
+    ],
+    "finder": [
+      "search"
+    ],
+    "framework": [
+      "forge"
+    ],
+    "holder": [
+      "owner"
+    ],
+    "iteration": [
+      "sprint"
+    ],
+    "keyword": [
+      "label"
+    ],
+    "listener": [
+      "webhook"
+    ],
+    "plus": [
+      "add"
+    ],
+    "precalculation": [
+      "computation"
+    ],
+    "queue": [
+      "backlog"
+    ],
+    "reactivation": [
+      "unarchive"
+    ],
+    "release": [
+      "version"
+    ],
+    "ruleset": [
+      "scheme"
+    ],
+    "sanitizer": [
+      "pdcleaner"
+    ],
+    "sidebar": [
+      "panel"
+    ],
+    "sitewide": [
+      "universal"
+    ],
+    "stop": [
+      "cancel"
+    ],
+    "subscribed": [
+      "watching"
+    ],
+    "toolkit": [
+      "forge"
+    ],
+    "unset": [
+      "none"
+    ],
+    "visibility": [
+      "sharing"
     ]
   },
   "rules": [
@@ -1450,6 +1534,2895 @@
       "add": [
         "searchandreconsileissuesusingjql",
         "search"
+      ]
+    },
+    {
+      "when_all": [
+        "access",
+        "control"
+      ],
+      "add": [
+        "security"
+      ]
+    },
+    {
+      "when_all": [
+        "access",
+        "level"
+      ],
+      "add": [
+        "securitylevel"
+      ]
+    },
+    {
+      "when_all": [
+        "access",
+        "mode"
+      ],
+      "add": [
+        "mode"
+      ]
+    },
+    {
+      "when_all": [
+        "access",
+        "removal"
+      ],
+      "add": [
+        "removal"
+      ]
+    },
+    {
+      "when_all": [
+        "access",
+        "right"
+      ],
+      "add": [
+        "permission"
+      ]
+    },
+    {
+      "when_all": [
+        "access",
+        "role"
+      ],
+      "add": [
+        "role"
+      ]
+    },
+    {
+      "when_all": [
+        "access",
+        "scheme"
+      ],
+      "add": [
+        "permissionscheme"
+      ]
+    },
+    {
+      "when_all": [
+        "access",
+        "test"
+      ],
+      "add": [
+        "check"
+      ]
+    },
+    {
+      "when_all": [
+        "activity",
+        "history"
+      ],
+      "add": [
+        "audit"
+      ]
+    },
+    {
+      "when_all": [
+        "activity",
+        "review"
+      ],
+      "add": [
+        "auditing"
+      ]
+    },
+    {
+      "when_all": [
+        "advanced",
+        "criteria"
+      ],
+      "add": [
+        "jql"
+      ]
+    },
+    {
+      "when_all": [
+        "advanced",
+        "finder"
+      ],
+      "add": [
+        "search"
+      ]
+    },
+    {
+      "when_all": [
+        "alert",
+        "scheme"
+      ],
+      "add": [
+        "notificationscheme"
+      ]
+    },
+    {
+      "when_all": [
+        "action",
+        "allowed"
+      ],
+      "add": [
+        "operation"
+      ]
+    },
+    {
+      "when_all": [
+        "announcement",
+        "bar"
+      ],
+      "add": [
+        "banner"
+      ]
+    },
+    {
+      "when_all": [
+        "app",
+        "menu"
+      ],
+      "add": [
+        "navigator"
+      ]
+    },
+    {
+      "when_all": [
+        "app",
+        "platform"
+      ],
+      "add": [
+        "forge"
+      ]
+    },
+    {
+      "when_all": [
+        "app",
+        "role"
+      ],
+      "add": [
+        "applicationrole"
+      ]
+    },
+    {
+      "when_all": [
+        "application",
+        "role"
+      ],
+      "add": [
+        "applicationrole"
+      ]
+    },
+    {
+      "when_all": [
+        "archived",
+        "item"
+      ],
+      "add": [
+        "archive"
+      ]
+    },
+    {
+      "when_all": [
+        "assigned",
+        "person"
+      ],
+      "add": [
+        "assignee"
+      ]
+    },
+    {
+      "when_all": [
+        "associated",
+        "work"
+      ],
+      "add": [
+        "relatedwork"
+      ]
+    },
+    {
+      "when_all": [
+        "attached",
+        "file"
+      ],
+      "add": [
+        "attachment"
+      ]
+    },
+    {
+      "when_all": [
+        "audit",
+        "entry"
+      ],
+      "add": [
+        "record"
+      ]
+    },
+    {
+      "when_all": [
+        "audit",
+        "item"
+      ],
+      "add": [
+        "record"
+      ]
+    },
+    {
+      "when_all": [
+        "audit",
+        "process"
+      ],
+      "add": [
+        "auditing"
+      ]
+    },
+    {
+      "when_all": [
+        "audit",
+        "trail"
+      ],
+      "add": [
+        "audit"
+      ]
+    },
+    {
+      "when_all": [
+        "autocomplete",
+        "hint"
+      ],
+      "add": [
+        "suggestion"
+      ]
+    },
+    {
+      "when_all": [
+        "autocomplete",
+        "value"
+      ],
+      "add": [
+        "autocompletedata"
+      ]
+    },
+    {
+      "when_all": [
+        "action",
+        "available"
+      ],
+      "add": [
+        "operation"
+      ]
+    },
+    {
+      "when_all": [
+        "avatar",
+        "owner"
+      ],
+      "add": [
+        "owner"
+      ]
+    },
+    {
+      "when_all": [
+        "background",
+        "task"
+      ],
+      "add": [
+        "async"
+      ]
+    },
+    {
+      "when_all": [
+        "binned",
+        "field"
+      ],
+      "add": [
+        "trashed"
+      ]
+    },
+    {
+      "when_all": [
+        "article",
+        "blog"
+      ],
+      "add": [
+        "post"
+      ]
+    },
+    {
+      "when_all": [
+        "blog",
+        "entry"
+      ],
+      "add": [
+        "blogpost"
+      ]
+    },
+    {
+      "when_all": [
+        "build",
+        "job"
+      ],
+      "add": [
+        "build"
+      ]
+    },
+    {
+      "when_all": [
+        "build",
+        "pipeline"
+      ],
+      "add": [
+        "pipeline"
+      ]
+    },
+    {
+      "when_all": [
+        "action",
+        "bulk"
+      ],
+      "add": [
+        "bulk"
+      ]
+    },
+    {
+      "when_all": [
+        "bulk",
+        "deletion"
+      ],
+      "add": [
+        "delete"
+      ]
+    },
+    {
+      "when_all": [
+        "changed",
+        "worklog"
+      ],
+      "add": [
+        "updated"
+      ]
+    },
+    {
+      "when_all": [
+        "child",
+        "item"
+      ],
+      "add": [
+        "children"
+      ]
+    },
+    {
+      "when_all": [
+        "ci",
+        "pipeline"
+      ],
+      "add": [
+        "pipeline"
+      ]
+    },
+    {
+      "when_all": [
+        "classification",
+        "reset"
+      ],
+      "add": [
+        "reset"
+      ]
+    },
+    {
+      "when_all": [
+        "classification",
+        "setting"
+      ],
+      "add": [
+        "config"
+      ]
+    },
+    {
+      "when_all": [
+        "classification",
+        "tier"
+      ],
+      "add": [
+        "level"
+      ]
+    },
+    {
+      "when_all": [
+        "cloud",
+        "extension"
+      ],
+      "add": [
+        "forge"
+      ]
+    },
+    {
+      "when_all": [
+        "cloud",
+        "site"
+      ],
+      "add": [
+        "instance"
+      ]
+    },
+    {
+      "when_all": [
+        "code",
+        "repository"
+      ],
+      "add": [
+        "repository"
+      ]
+    },
+    {
+      "when_all": [
+        "code",
+        "review"
+      ],
+      "add": [
+        "review"
+      ]
+    },
+    {
+      "when_all": [
+        "configuration",
+        "plan"
+      ],
+      "add": [
+        "scheme"
+      ]
+    },
+    {
+      "when_all": [
+        "content",
+        "folder"
+      ],
+      "add": [
+        "folder"
+      ]
+    },
+    {
+      "when_all": [
+        "content",
+        "item"
+      ],
+      "add": [
+        "content"
+      ]
+    },
+    {
+      "when_all": [
+        "content",
+        "property"
+      ],
+      "add": [
+        "property"
+      ]
+    },
+    {
+      "when_all": [
+        "content",
+        "space"
+      ],
+      "add": [
+        "space"
+      ]
+    },
+    {
+      "when_all": [
+        "content",
+        "type"
+      ],
+      "add": [
+        "type"
+      ]
+    },
+    {
+      "when_all": [
+        "content",
+        "unit"
+      ],
+      "add": [
+        "item"
+      ]
+    },
+    {
+      "when_all": [
+        "copied",
+        "dashboard"
+      ],
+      "add": [
+        "copy"
+      ]
+    },
+    {
+      "when_all": [
+        "copied",
+        "plan"
+      ],
+      "add": [
+        "duplicate"
+      ]
+    },
+    {
+      "when_all": [
+        "copied",
+        "scheme"
+      ],
+      "add": [
+        "clone"
+      ]
+    },
+    {
+      "when_all": [
+        "customer",
+        "service"
+      ],
+      "add": [
+        "service"
+      ]
+    },
+    {
+      "when_all": [
+        "dashboard",
+        "replica"
+      ],
+      "add": [
+        "copy"
+      ]
+    },
+    {
+      "when_all": [
+        "dashboard",
+        "widget"
+      ],
+      "add": [
+        "gadget"
+      ]
+    },
+    {
+      "when_all": [
+        "data",
+        "policy"
+      ],
+      "add": [
+        "policy"
+      ]
+    },
+    {
+      "when_all": [
+        "database",
+        "layout"
+      ],
+      "add": [
+        "view"
+      ]
+    },
+    {
+      "when_all": [
+        "default",
+        "icon"
+      ],
+      "add": [
+        "system"
+      ]
+    },
+    {
+      "when_all": [
+        "default",
+        "member"
+      ],
+      "add": [
+        "actor"
+      ]
+    },
+    {
+      "when_all": [
+        "default",
+        "value"
+      ],
+      "add": [
+        "value"
+      ]
+    },
+    {
+      "when_all": [
+        "deleted",
+        "field"
+      ],
+      "add": [
+        "trashed"
+      ]
+    },
+    {
+      "when_all": [
+        "deleted",
+        "item"
+      ],
+      "add": [
+        "deleted"
+      ]
+    },
+    {
+      "when_all": [
+        "delivery",
+        "failure"
+      ],
+      "add": [
+        "failed"
+      ]
+    },
+    {
+      "when_all": [
+        "deployment",
+        "gate"
+      ],
+      "add": [
+        "gating"
+      ]
+    },
+    {
+      "when_all": [
+        "deployment",
+        "stage"
+      ],
+      "add": [
+        "environment"
+      ]
+    },
+    {
+      "when_all": [
+        "dev",
+        "tool"
+      ],
+      "add": [
+        "dev"
+      ]
+    },
+    {
+      "when_all": [
+        "developer",
+        "info"
+      ],
+      "add": [
+        "devinfo"
+      ]
+    },
+    {
+      "when_all": [
+        "component",
+        "development"
+      ],
+      "add": [
+        "devopscomponent"
+      ]
+    },
+    {
+      "when_all": [
+        "data",
+        "development"
+      ],
+      "add": [
+        "devinfo"
+      ]
+    },
+    {
+      "when_all": [
+        "detail",
+        "development"
+      ],
+      "add": [
+        "information"
+      ]
+    },
+    {
+      "when_all": [
+        "development",
+        "info"
+      ],
+      "add": [
+        "development"
+      ]
+    },
+    {
+      "when_all": [
+        "access",
+        "direct"
+      ],
+      "add": [
+        "direct"
+      ]
+    },
+    {
+      "when_all": [
+        "direct",
+        "permission"
+      ],
+      "add": [
+        "direct"
+      ]
+    },
+    {
+      "when_all": [
+        "directory",
+        "team"
+      ],
+      "add": [
+        "atlassian"
+      ]
+    },
+    {
+      "when_all": [
+        "discussion",
+        "note"
+      ],
+      "add": [
+        "comment"
+      ]
+    },
+    {
+      "when_all": [
+        "document",
+        "format"
+      ],
+      "add": [
+        "adf"
+      ]
+    },
+    {
+      "when_all": [
+        "draft",
+        "scheme"
+      ],
+      "add": [
+        "draft"
+      ]
+    },
+    {
+      "when_all": [
+        "editable",
+        "field"
+      ],
+      "add": [
+        "editmeta"
+      ]
+    },
+    {
+      "when_all": [
+        "eligible",
+        "user"
+      ],
+      "add": [
+        "assignable"
+      ]
+    },
+    {
+      "when_all": [
+        "address",
+        "email"
+      ],
+      "add": [
+        "email"
+      ]
+    },
+    {
+      "when_all": [
+        "alert",
+        "email"
+      ],
+      "add": [
+        "notification"
+      ]
+    },
+    {
+      "when_all": [
+        "content",
+        "embedded"
+      ],
+      "add": [
+        "inline"
+      ]
+    },
+    {
+      "when_all": [
+        "embedded",
+        "reference"
+      ],
+      "add": [
+        "embed"
+      ]
+    },
+    {
+      "when_all": [
+        "analysis",
+        "expression"
+      ],
+      "add": [
+        "analyse"
+      ]
+    },
+    {
+      "when_all": [
+        "external",
+        "reference"
+      ],
+      "add": [
+        "remotelink"
+      ]
+    },
+    {
+      "when_all": [
+        "feature",
+        "flag"
+      ],
+      "add": [
+        "featureflag"
+      ]
+    },
+    {
+      "when_all": [
+        "feature",
+        "module"
+      ],
+      "add": [
+        "module"
+      ]
+    },
+    {
+      "when_all": [
+        "feature",
+        "support"
+      ],
+      "add": [
+        "capability"
+      ]
+    },
+    {
+      "when_all": [
+        "bin",
+        "field"
+      ],
+      "add": [
+        "trash"
+      ]
+    },
+    {
+      "when_all": [
+        "configuration",
+        "field"
+      ],
+      "add": [
+        "fieldconfiguration"
+      ]
+    },
+    {
+      "when_all": [
+        "context",
+        "field"
+      ],
+      "add": [
+        "context"
+      ]
+    },
+    {
+      "when_all": [
+        "field",
+        "mapping"
+      ],
+      "add": [
+        "mapping"
+      ]
+    },
+    {
+      "when_all": [
+        "field",
+        "recovery"
+      ],
+      "add": [
+        "restore"
+      ]
+    },
+    {
+      "when_all": [
+        "field",
+        "relationship"
+      ],
+      "add": [
+        "association"
+      ]
+    },
+    {
+      "when_all": [
+        "field",
+        "scheme"
+      ],
+      "add": [
+        "fieldscheme"
+      ]
+    },
+    {
+      "when_all": [
+        "field",
+        "scope"
+      ],
+      "add": [
+        "context"
+      ]
+    },
+    {
+      "when_all": [
+        "field",
+        "setting"
+      ],
+      "add": [
+        "fieldconfiguration"
+      ]
+    },
+    {
+      "when_all": [
+        "field",
+        "value"
+      ],
+      "add": [
+        "value"
+      ]
+    },
+    {
+      "when_all": [
+        "file",
+        "preview"
+      ],
+      "add": [
+        "thumbnail"
+      ]
+    },
+    {
+      "when_all": [
+        "filter",
+        "rule"
+      ],
+      "add": [
+        "filter"
+      ]
+    },
+    {
+      "when_all": [
+        "filter",
+        "syntax"
+      ],
+      "add": [
+        "jql"
+      ]
+    },
+    {
+      "when_all": [
+        "area",
+        "footer"
+      ],
+      "add": [
+        "footer"
+      ]
+    },
+    {
+      "when_all": [
+        "field",
+        "form"
+      ],
+      "add": [
+        "field"
+      ]
+    },
+    {
+      "when_all": [
+        "formula",
+        "function"
+      ],
+      "add": [
+        "function"
+      ]
+    },
+    {
+      "when_all": [
+        "full",
+        "hierarchy"
+      ],
+      "add": [
+        "full"
+      ]
+    },
+    {
+      "when_all": [
+        "chooser",
+        "group"
+      ],
+      "add": [
+        "picker"
+      ]
+    },
+    {
+      "when_all": [
+        "group",
+        "picker"
+      ],
+      "add": [
+        "groupuserpicker"
+      ]
+    },
+    {
+      "when_all": [
+        "guest",
+        "invitation"
+      ],
+      "add": [
+        "invite"
+      ]
+    },
+    {
+      "when_all": [
+        "header",
+        "notice"
+      ],
+      "add": [
+        "banner"
+      ]
+    },
+    {
+      "when_all": [
+        "hidden",
+        "text"
+      ],
+      "add": [
+        "redaction"
+      ]
+    },
+    {
+      "when_all": [
+        "higher",
+        "item"
+      ],
+      "add": [
+        "ancestor"
+      ]
+    },
+    {
+      "when_all": [
+        "home",
+        "page"
+      ],
+      "add": [
+        "dashboard"
+      ]
+    },
+    {
+      "when_all": [
+        "hour",
+        "tracking"
+      ],
+      "add": [
+        "tracking"
+      ]
+    },
+    {
+      "when_all": [
+        "content",
+        "inline"
+      ],
+      "add": [
+        "inline"
+      ]
+    },
+    {
+      "when_all": [
+        "input",
+        "validation"
+      ],
+      "add": [
+        "validation"
+      ]
+    },
+    {
+      "when_all": [
+        "app",
+        "installed"
+      ],
+      "add": [
+        "app"
+      ]
+    },
+    {
+      "when_all": [
+        "detail",
+        "instance"
+      ],
+      "add": [
+        "info"
+      ]
+    },
+    {
+      "when_all": [
+        "customization",
+        "interface"
+      ],
+      "add": [
+        "modification"
+      ]
+    },
+    {
+      "when_all": [
+        "interface",
+        "tweak"
+      ],
+      "add": [
+        "modification"
+      ]
+    },
+    {
+      "when_all": [
+        "issue",
+        "page"
+      ],
+      "add": [
+        "viewissue"
+      ]
+    },
+    {
+      "when_all": [
+        "following",
+        "item"
+      ],
+      "add": [
+        "watch"
+      ]
+    },
+    {
+      "when_all": [
+        "item",
+        "listing"
+      ],
+      "add": [
+        "list"
+      ]
+    },
+    {
+      "when_all": [
+        "item",
+        "position"
+      ],
+      "add": [
+        "rank"
+      ]
+    },
+    {
+      "when_all": [
+        "item",
+        "preview"
+      ],
+      "add": [
+        "preview"
+      ]
+    },
+    {
+      "when_all": [
+        "item",
+        "total"
+      ],
+      "add": [
+        "count"
+      ]
+    },
+    {
+      "when_all": [
+        "item",
+        "transfer"
+      ],
+      "add": [
+        "move"
+      ]
+    },
+    {
+      "when_all": [
+        "entry",
+        "journal"
+      ],
+      "add": [
+        "post"
+      ]
+    },
+    {
+      "when_all": [
+        "function",
+        "jql"
+      ],
+      "add": [
+        "function"
+      ]
+    },
+    {
+      "when_all": [
+        "layout",
+        "scheme"
+      ],
+      "add": [
+        "screenscheme"
+      ]
+    },
+    {
+      "when_all": [
+        "evaluator",
+        "legacy"
+      ],
+      "add": [
+        "eval"
+      ]
+    },
+    {
+      "when_all": [
+        "level",
+        "member"
+      ],
+      "add": [
+        "member"
+      ]
+    },
+    {
+      "when_all": [
+        "level",
+        "scheme"
+      ],
+      "add": [
+        "issuesecuritylevelscheme"
+      ]
+    },
+    {
+      "when_all": [
+        "live",
+        "template"
+      ],
+      "add": [
+        "live"
+      ]
+    },
+    {
+      "when_all": [
+        "logged",
+        "time"
+      ],
+      "add": [
+        "timetracking"
+      ]
+    },
+    {
+      "when_all": [
+        "logged",
+        "work"
+      ],
+      "add": [
+        "worklog"
+      ]
+    },
+    {
+      "when_all": [
+        "managed",
+        "team"
+      ],
+      "add": [
+        "atlassian"
+      ]
+    },
+    {
+      "when_all": [
+        "app",
+        "marketplace"
+      ],
+      "add": [
+        "app"
+      ]
+    },
+    {
+      "when_all": [
+        "deletion",
+        "mass"
+      ],
+      "add": [
+        "delete"
+      ]
+    },
+    {
+      "when_all": [
+        "item",
+        "matching"
+      ],
+      "add": [
+        "match"
+      ]
+    },
+    {
+      "when_all": [
+        "multiple",
+        "value"
+      ],
+      "add": [
+        "multi"
+      ]
+    },
+    {
+      "when_all": [
+        "menu",
+        "navigation"
+      ],
+      "add": [
+        "navigator"
+      ]
+    },
+    {
+      "when_all": [
+        "item",
+        "nested"
+      ],
+      "add": [
+        "descendant"
+      ]
+    },
+    {
+      "when_all": [
+        "item",
+        "new"
+      ],
+      "add": [
+        "add"
+      ]
+    },
+    {
+      "when_all": [
+        "new",
+        "workflow"
+      ],
+      "add": [
+        "create"
+      ]
+    },
+    {
+      "when_all": [
+        "no",
+        "resolution"
+      ],
+      "add": [
+        "unresolved"
+      ]
+    },
+    {
+      "when_all": [
+        "no",
+        "value"
+      ],
+      "add": [
+        "none"
+      ]
+    },
+    {
+      "when_all": [
+        "notification",
+        "scheme"
+      ],
+      "add": [
+        "notificationscheme"
+      ]
+    },
+    {
+      "when_all": [
+        "ops",
+        "workspace"
+      ],
+      "add": [
+        "workspace"
+      ]
+    },
+    {
+      "when_all": [
+        "file",
+        "output"
+      ],
+      "add": [
+        "export"
+      ]
+    },
+    {
+      "when_all": [
+        "filter",
+        "owned"
+      ],
+      "add": [
+        "my"
+      ]
+    },
+    {
+      "when_all": [
+        "bottom",
+        "page"
+      ],
+      "add": [
+        "footer"
+      ]
+    },
+    {
+      "when_all": [
+        "heading",
+        "page"
+      ],
+      "add": [
+        "title"
+      ]
+    },
+    {
+      "when_all": [
+        "page",
+        "tab"
+      ],
+      "add": [
+        "tab"
+      ]
+    },
+    {
+      "when_all": [
+        "parent",
+        "work"
+      ],
+      "add": [
+        "epic"
+      ]
+    },
+    {
+      "when_all": [
+        "chooser",
+        "people"
+      ],
+      "add": [
+        "picker"
+      ]
+    },
+    {
+      "when_all": [
+        "group",
+        "people"
+      ],
+      "add": [
+        "group"
+      ]
+    },
+    {
+      "when_all": [
+        "bundle",
+        "permission"
+      ],
+      "add": [
+        "combination"
+      ]
+    },
+    {
+      "when_all": [
+        "cleanup",
+        "permission"
+      ],
+      "add": [
+        "removal"
+      ]
+    },
+    {
+      "when_all": [
+        "permission",
+        "scheme"
+      ],
+      "add": [
+        "permissionscheme"
+      ]
+    },
+    {
+      "when_all": [
+        "permission",
+        "test"
+      ],
+      "add": [
+        "check"
+      ]
+    },
+    {
+      "when_all": [
+        "personal",
+        "setting"
+      ],
+      "add": [
+        "mypreference"
+      ]
+    },
+    {
+      "when_all": [
+        "plan",
+        "replica"
+      ],
+      "add": [
+        "duplicate"
+      ]
+    },
+    {
+      "when_all": [
+        "plan",
+        "team"
+      ],
+      "add": [
+        "planonly"
+      ]
+    },
+    {
+      "when_all": [
+        "planning",
+        "team"
+      ],
+      "add": [
+        "planonly"
+      ]
+    },
+    {
+      "when_all": [
+        "metadata",
+        "policy"
+      ],
+      "add": [
+        "metadata"
+      ]
+    },
+    {
+      "when_all": [
+        "assignee",
+        "possible"
+      ],
+      "add": [
+        "assignable"
+      ]
+    },
+    {
+      "when_all": [
+        "power",
+        "user"
+      ],
+      "add": [
+        "advanced"
+      ]
+    },
+    {
+      "when_all": [
+        "image",
+        "preview"
+      ],
+      "add": [
+        "thumbnail"
+      ]
+    },
+    {
+      "when_all": [
+        "choice",
+        "priority"
+      ],
+      "add": [
+        "available"
+      ]
+    },
+    {
+      "when_all": [
+        "level",
+        "priority"
+      ],
+      "add": [
+        "priority"
+      ]
+    },
+    {
+      "when_all": [
+        "priority",
+        "scheme"
+      ],
+      "add": [
+        "priorityscheme"
+      ]
+    },
+    {
+      "when_all": [
+        "priority",
+        "setup"
+      ],
+      "add": [
+        "priorityscheme"
+      ]
+    },
+    {
+      "when_all": [
+        "data",
+        "private"
+      ],
+      "add": [
+        "internal"
+      ]
+    },
+    {
+      "when_all": [
+        "process",
+        "scheme"
+      ],
+      "add": [
+        "workflowscheme"
+      ]
+    },
+    {
+      "when_all": [
+        "picture",
+        "profile"
+      ],
+      "add": [
+        "avatar"
+      ]
+    },
+    {
+      "when_all": [
+        "category",
+        "project"
+      ],
+      "add": [
+        "category"
+      ]
+    },
+    {
+      "when_all": [
+        "component",
+        "project"
+      ],
+      "add": [
+        "component"
+      ]
+    },
+    {
+      "when_all": [
+        "feature",
+        "project"
+      ],
+      "add": [
+        "feature"
+      ]
+    },
+    {
+      "when_all": [
+        "mapping",
+        "project"
+      ],
+      "add": [
+        "projectmapping"
+      ]
+    },
+    {
+      "when_all": [
+        "name",
+        "project"
+      ],
+      "add": [
+        "name"
+      ]
+    },
+    {
+      "when_all": [
+        "project",
+        "role"
+      ],
+      "add": [
+        "roledetail"
+      ]
+    },
+    {
+      "when_all": [
+        "project",
+        "setup"
+      ],
+      "add": [
+        "configuration"
+      ]
+    },
+    {
+      "when_all": [
+        "project",
+        "template"
+      ],
+      "add": [
+        "template"
+      ]
+    },
+    {
+      "when_all": [
+        "action",
+        "quick"
+      ],
+      "add": [
+        "action"
+      ]
+    },
+    {
+      "when_all": [
+        "filter",
+        "quick"
+      ],
+      "add": [
+        "quickfilter"
+      ]
+    },
+    {
+      "when_all": [
+        "project",
+        "recent"
+      ],
+      "add": [
+        "recent"
+      ]
+    },
+    {
+      "when_all": [
+        "recently",
+        "updated"
+      ],
+      "add": [
+        "updated"
+      ]
+    },
+    {
+      "when_all": [
+        "recently",
+        "viewed"
+      ],
+      "add": [
+        "recent"
+      ]
+    },
+    {
+      "when_all": [
+        "bin",
+        "recycle"
+      ],
+      "add": [
+        "trash"
+      ]
+    },
+    {
+      "when_all": [
+        "content",
+        "related"
+      ],
+      "add": [
+        "related"
+      ]
+    },
+    {
+      "when_all": [
+        "item",
+        "related"
+      ],
+      "add": [
+        "linked"
+      ]
+    },
+    {
+      "when_all": [
+        "related",
+        "work"
+      ],
+      "add": [
+        "relatedwork"
+      ]
+    },
+    {
+      "when_all": [
+        "event",
+        "release"
+      ],
+      "add": [
+        "deployment"
+      ]
+    },
+    {
+      "when_all": [
+        "flag",
+        "release"
+      ],
+      "add": [
+        "featureflag"
+      ]
+    },
+    {
+      "when_all": [
+        "gate",
+        "release"
+      ],
+      "add": [
+        "gating"
+      ]
+    },
+    {
+      "when_all": [
+        "marker",
+        "release"
+      ],
+      "add": [
+        "flag"
+      ]
+    },
+    {
+      "when_all": [
+        "access",
+        "remote"
+      ],
+      "add": [
+        "remote"
+      ]
+    },
+    {
+      "when_all": [
+        "reference",
+        "remote"
+      ],
+      "add": [
+        "remotelink"
+      ]
+    },
+    {
+      "when_all": [
+        "removed",
+        "worklog"
+      ],
+      "add": [
+        "deleted"
+      ]
+    },
+    {
+      "when_all": [
+        "history",
+        "revision"
+      ],
+      "add": [
+        "changelog"
+      ]
+    },
+    {
+      "when_all": [
+        "revision",
+        "trail"
+      ],
+      "add": [
+        "changelog"
+      ]
+    },
+    {
+      "when_all": [
+        "rich",
+        "text"
+      ],
+      "add": [
+        "adf"
+      ]
+    },
+    {
+      "when_all": [
+        "assignment",
+        "role"
+      ],
+      "add": [
+        "assignment"
+      ]
+    },
+    {
+      "when_all": [
+        "detail",
+        "role"
+      ],
+      "add": [
+        "roledetail"
+      ]
+    },
+    {
+      "when_all": [
+        "member",
+        "role"
+      ],
+      "add": [
+        "actor"
+      ]
+    },
+    {
+      "when_all": [
+        "membership",
+        "role"
+      ],
+      "add": [
+        "assignment"
+      ]
+    },
+    {
+      "when_all": [
+        "mode",
+        "role"
+      ],
+      "add": [
+        "mode"
+      ]
+    },
+    {
+      "when_all": [
+        "environment",
+        "runtime"
+      ],
+      "add": [
+        "environment"
+      ]
+    },
+    {
+      "when_all": [
+        "replica",
+        "scheme"
+      ],
+      "add": [
+        "clone"
+      ]
+    },
+    {
+      "when_all": [
+        "scheme",
+        "switch"
+      ],
+      "add": [
+        "switch"
+      ]
+    },
+    {
+      "when_all": [
+        "scheme",
+        "screen"
+      ],
+      "add": [
+        "screenscheme"
+      ]
+    },
+    {
+      "when_all": [
+        "screen",
+        "tab"
+      ],
+      "add": [
+        "tab"
+      ]
+    },
+    {
+      "when_all": [
+        "flaw",
+        "security"
+      ],
+      "add": [
+        "vulnerability"
+      ]
+    },
+    {
+      "when_all": [
+        "label",
+        "security"
+      ],
+      "add": [
+        "classification"
+      ]
+    },
+    {
+      "when_all": [
+        "member",
+        "security"
+      ],
+      "add": [
+        "member"
+      ]
+    },
+    {
+      "when_all": [
+        "scheme",
+        "security"
+      ],
+      "add": [
+        "issuesecurityscheme"
+      ]
+    },
+    {
+      "when_all": [
+        "hosted",
+        "self"
+      ],
+      "add": [
+        "server"
+      ]
+    },
+    {
+      "when_all": [
+        "masking",
+        "sensitive"
+      ],
+      "add": [
+        "redact"
+      ]
+    },
+    {
+      "when_all": [
+        "level",
+        "sensitivity"
+      ],
+      "add": [
+        "level"
+      ]
+    },
+    {
+      "when_all": [
+        "component",
+        "service"
+      ],
+      "add": [
+        "devopscomponent"
+      ]
+    },
+    {
+      "when_all": [
+        "directory",
+        "service"
+      ],
+      "add": [
+        "registry"
+      ]
+    },
+    {
+      "when_all": [
+        "incident",
+        "service"
+      ],
+      "add": [
+        "incident"
+      ]
+    },
+    {
+      "when_all": [
+        "management",
+        "service"
+      ],
+      "add": [
+        "service"
+      ]
+    },
+    {
+      "when_all": [
+        "operation",
+        "service"
+      ],
+      "add": [
+        "ops"
+      ]
+    },
+    {
+      "when_all": [
+        "registry",
+        "service"
+      ],
+      "add": [
+        "registry"
+      ]
+    },
+    {
+      "when_all": [
+        "access",
+        "shared"
+      ],
+      "add": [
+        "share"
+      ]
+    },
+    {
+      "when_all": [
+        "scope",
+        "sharing"
+      ],
+      "add": [
+        "scope"
+      ]
+    },
+    {
+      "when_all": [
+        "setting",
+        "sharing"
+      ],
+      "add": [
+        "sharing"
+      ]
+    },
+    {
+      "when_all": [
+        "panel",
+        "side"
+      ],
+      "add": [
+        "panel"
+      ]
+    },
+    {
+      "when_all": [
+        "admin",
+        "site"
+      ],
+      "add": [
+        "admin"
+      ]
+    },
+    {
+      "when_all": [
+        "app",
+        "site"
+      ],
+      "add": [
+        "application"
+      ]
+    },
+    {
+      "when_all": [
+        "information",
+        "site"
+      ],
+      "add": [
+        "info"
+      ]
+    },
+    {
+      "when_all": [
+        "report",
+        "size"
+      ],
+      "add": [
+        "report"
+      ]
+    },
+    {
+      "when_all": [
+        "software",
+        "vulnerability"
+      ],
+      "add": [
+        "vulnerability"
+      ]
+    },
+    {
+      "when_all": [
+        "access",
+        "space"
+      ],
+      "add": [
+        "access"
+      ]
+    },
+    {
+      "when_all": [
+        "category",
+        "space"
+      ],
+      "add": [
+        "category"
+      ]
+    },
+    {
+      "when_all": [
+        "component",
+        "space"
+      ],
+      "add": [
+        "component"
+      ]
+    },
+    {
+      "when_all": [
+        "mapping",
+        "space"
+      ],
+      "add": [
+        "projectmapping"
+      ]
+    },
+    {
+      "when_all": [
+        "name",
+        "space"
+      ],
+      "add": [
+        "name"
+      ]
+    },
+    {
+      "when_all": [
+        "policy",
+        "space"
+      ],
+      "add": [
+        "policy"
+      ]
+    },
+    {
+      "when_all": [
+        "role",
+        "space"
+      ],
+      "add": [
+        "role"
+      ]
+    },
+    {
+      "when_all": [
+        "space",
+        "validation"
+      ],
+      "add": [
+        "projectvalidate"
+      ]
+    },
+    {
+      "when_all": [
+        "choice",
+        "standard"
+      ],
+      "add": [
+        "default"
+      ]
+    },
+    {
+      "when_all": [
+        "filter",
+        "starred"
+      ],
+      "add": [
+        "favourite"
+      ]
+    },
+    {
+      "when_all": [
+        "category",
+        "status"
+      ],
+      "add": [
+        "statuscategory"
+      ]
+    },
+    {
+      "when_all": [
+        "column",
+        "status"
+      ],
+      "add": [
+        "column"
+      ]
+    },
+    {
+      "when_all": [
+        "flow",
+        "status"
+      ],
+      "add": [
+        "workflow"
+      ]
+    },
+    {
+      "when_all": [
+        "group",
+        "status"
+      ],
+      "add": [
+        "statuscategory"
+      ]
+    },
+    {
+      "when_all": [
+        "shift",
+        "status"
+      ],
+      "add": [
+        "transition"
+      ]
+    },
+    {
+      "when_all": [
+        "status",
+        "usage"
+      ],
+      "add": [
+        "usage"
+      ]
+    },
+    {
+      "when_all": [
+        "stop",
+        "watching"
+      ],
+      "add": [
+        "unwatch"
+      ]
+    },
+    {
+      "when_all": [
+        "data",
+        "stored"
+      ],
+      "add": [
+        "data"
+      ]
+    },
+    {
+      "when_all": [
+        "point",
+        "story"
+      ],
+      "add": [
+        "estimation"
+      ]
+    },
+    {
+      "when_all": [
+        "syntax",
+        "validation"
+      ],
+      "add": [
+        "parse"
+      ]
+    },
+    {
+      "when_all": [
+        "icon",
+        "system"
+      ],
+      "add": [
+        "system"
+      ]
+    },
+    {
+      "when_all": [
+        "setting",
+        "system"
+      ],
+      "add": [
+        "setting"
+      ]
+    },
+    {
+      "when_all": [
+        "target",
+        "version"
+      ],
+      "add": [
+        "mergeto"
+      ]
+    },
+    {
+      "when_all": [
+        "area",
+        "team"
+      ],
+      "add": [
+        "space"
+      ]
+    },
+    {
+      "when_all": [
+        "detail",
+        "team"
+      ],
+      "add": [
+        "information"
+      ]
+    },
+    {
+      "when_all": [
+        "space",
+        "team"
+      ],
+      "add": [
+        "project"
+      ]
+    },
+    {
+      "when_all": [
+        "removal",
+        "template"
+      ],
+      "add": [
+        "remove"
+      ]
+    },
+    {
+      "when_all": [
+        "storage",
+        "template"
+      ],
+      "add": [
+        "save"
+      ]
+    },
+    {
+      "when_all": [
+        "concealment",
+        "text"
+      ],
+      "add": [
+        "redact"
+      ]
+    },
+    {
+      "when_all": [
+        "ticket",
+        "type"
+      ],
+      "add": [
+        "issuetype"
+      ]
+    },
+    {
+      "when_all": [
+        "entry",
+        "time"
+      ],
+      "add": [
+        "worklog"
+      ]
+    },
+    {
+      "when_all": [
+        "spent",
+        "time"
+      ],
+      "add": [
+        "time"
+      ]
+    },
+    {
+      "when_all": [
+        "time",
+        "tracking"
+      ],
+      "add": [
+        "timetracking"
+      ]
+    },
+    {
+      "when_all": [
+        "icon",
+        "type"
+      ],
+      "add": [
+        "avatar2"
+      ]
+    },
+    {
+      "when_all": [
+        "mapping",
+        "type"
+      ],
+      "add": [
+        "issuetypemapping"
+      ]
+    },
+    {
+      "when_all": [
+        "scheme",
+        "type"
+      ],
+      "add": [
+        "issuetypescheme"
+      ]
+    },
+    {
+      "when_all": [
+        "type",
+        "usage"
+      ],
+      "add": [
+        "usage"
+      ]
+    },
+    {
+      "when_all": [
+        "limit",
+        "usage"
+      ],
+      "add": [
+        "limit"
+      ]
+    },
+    {
+      "when_all": [
+        "defined",
+        "user"
+      ],
+      "add": [
+        "custom"
+      ]
+    },
+    {
+      "when_all": [
+        "group",
+        "user"
+      ],
+      "add": [
+        "group"
+      ]
+    },
+    {
+      "when_all": [
+        "interface",
+        "user"
+      ],
+      "add": [
+        "ui"
+      ]
+    },
+    {
+      "when_all": [
+        "picker",
+        "user"
+      ],
+      "add": [
+        "groupuserpicker"
+      ]
+    },
+    {
+      "when_all": [
+        "preference",
+        "user"
+      ],
+      "add": [
+        "mypreference"
+      ]
+    },
+    {
+      "when_all": [
+        "right",
+        "user"
+      ],
+      "add": [
+        "permission"
+      ]
+    },
+    {
+      "when_all": [
+        "user",
+        "vote"
+      ],
+      "add": [
+        "vote"
+      ]
+    },
+    {
+      "when_all": [
+        "item",
+        "valid"
+      ],
+      "add": [
+        "valid"
+      ]
+    },
+    {
+      "when_all": [
+        "map",
+        "value"
+      ],
+      "add": [
+        "mapping"
+      ]
+    },
+    {
+      "when_all": [
+        "history",
+        "version"
+      ],
+      "add": [
+        "history"
+      ]
+    },
+    {
+      "when_all": [
+        "swap",
+        "version"
+      ],
+      "add": [
+        "swap"
+      ]
+    },
+    {
+      "when_all": [
+        "scope",
+        "visibility"
+      ],
+      "add": [
+        "scope"
+      ]
+    },
+    {
+      "when_all": [
+        "removal",
+        "watch"
+      ],
+      "add": [
+        "unwatch"
+      ]
+    },
+    {
+      "when_all": [
+        "status",
+        "watch"
+      ],
+      "add": [
+        "watching"
+      ]
+    },
+    {
+      "when_all": [
+        "hook",
+        "web"
+      ],
+      "add": [
+        "webhook"
+      ]
+    },
+    {
+      "when_all": [
+        "renewal",
+        "webhook"
+      ],
+      "add": [
+        "refresh"
+      ]
+    },
+    {
+      "when_all": [
+        "cycle",
+        "work"
+      ],
+      "add": [
+        "sprint"
+      ]
+    },
+    {
+      "when_all": [
+        "estimate",
+        "work"
+      ],
+      "add": [
+        "estimation"
+      ]
+    },
+    {
+      "when_all": [
+        "event",
+        "work"
+      ],
+      "add": [
+        "event"
+      ]
+    },
+    {
+      "when_all": [
+        "hierarchy",
+        "work"
+      ],
+      "add": [
+        "hierarchy"
+      ]
+    },
+    {
+      "when_all": [
+        "item",
+        "work"
+      ],
+      "add": [
+        "issue"
+      ]
+    },
+    {
+      "when_all": [
+        "management",
+        "work"
+      ],
+      "add": [
+        "jira"
+      ]
+    },
+    {
+      "when_all": [
+        "page",
+        "work"
+      ],
+      "add": [
+        "viewissue"
+      ]
+    },
+    {
+      "when_all": [
+        "queue",
+        "work"
+      ],
+      "add": [
+        "backlog"
+      ]
+    },
+    {
+      "when_all": [
+        "resolution",
+        "work"
+      ],
+      "add": [
+        "resolution"
+      ]
+    },
+    {
+      "when_all": [
+        "team",
+        "work"
+      ],
+      "add": [
+        "team"
+      ]
+    },
+    {
+      "when_all": [
+        "tracker",
+        "work"
+      ],
+      "add": [
+        "jira"
+      ]
+    },
+    {
+      "when_all": [
+        "tracking",
+        "work"
+      ],
+      "add": [
+        "tracking"
+      ]
+    },
+    {
+      "when_all": [
+        "type",
+        "work"
+      ],
+      "add": [
+        "issuetype"
+      ]
+    },
+    {
+      "when_all": [
+        "changeover",
+        "workflow"
+      ],
+      "add": [
+        "switch"
+      ]
+    },
+    {
+      "when_all": [
+        "designer",
+        "workflow"
+      ],
+      "add": [
+        "editor"
+      ]
+    },
+    {
+      "when_all": [
+        "editor",
+        "workflow"
+      ],
+      "add": [
+        "editor"
+      ]
+    },
+    {
+      "when_all": [
+        "formula",
+        "workflow"
+      ],
+      "add": [
+        "expression"
+      ]
+    },
+    {
+      "when_all": [
+        "history",
+        "workflow"
+      ],
+      "add": [
+        "history"
+      ]
+    },
+    {
+      "when_all": [
+        "preview",
+        "workflow"
+      ],
+      "add": [
+        "preview"
+      ]
+    },
+    {
+      "when_all": [
+        "property",
+        "workflow"
+      ],
+      "add": [
+        "property"
+      ]
+    },
+    {
+      "when_all": [
+        "release",
+        "workflow"
+      ],
+      "add": [
+        "publish"
+      ]
+    },
+    {
+      "when_all": [
+        "rule",
+        "workflow"
+      ],
+      "add": [
+        "rule"
+      ]
+    },
+    {
+      "when_all": [
+        "status",
+        "workflow"
+      ],
+      "add": [
+        "status"
+      ]
+    },
+    {
+      "when_all": [
+        "step",
+        "workflow"
+      ],
+      "add": [
+        "transition"
+      ]
+    },
+    {
+      "when_all": [
+        "validation",
+        "workflow"
+      ],
+      "add": [
+        "validation"
+      ]
+    },
+    {
+      "when_all": [
+        "content",
+        "written"
+      ],
+      "add": [
+        "content"
       ]
     }
   ],
@@ -4299,6 +7272,2100 @@
       "seed_query_id": null,
       "failure_classes": [],
       "evidence": "concept lexicon r2"
+    },
+    "rule:4": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:5": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:6": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:7": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:8": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:9": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:10": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:11": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:12": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:13": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:14": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:15": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "alert": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5"
+    },
+    "rule:16": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:17": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:18": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:19": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:20": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:21": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:22": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:23": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:24": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:25": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:26": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:27": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:28": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:29": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:30": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:31": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:32": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:33": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:34": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:35": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:36": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:37": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:38": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "bottom": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5"
+    },
+    "rule:39": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:40": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:41": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:42": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:43": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:44": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:45": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:46": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:47": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:48": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "cleaner": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5"
+    },
+    "rule:49": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:50": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:51": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:52": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "codebase": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5"
+    },
+    "rule:53": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:54": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:55": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:56": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:57": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:58": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:59": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:60": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:61": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:62": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:63": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "customized": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5"
+    },
+    "rule:64": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:65": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:66": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:67": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:68": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:69": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:70": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:71": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:72": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:73": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:74": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:75": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:76": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:77": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:78": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:79": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:80": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:81": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:82": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:83": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:84": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:85": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "document": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5"
+    },
+    "rule:86": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:87": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:88": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:89": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:90": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:91": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:92": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:93": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "estimated": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5"
+    },
+    "rule:94": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:95": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:96": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:97": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:98": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "feedback": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5"
+    },
+    "rule:99": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:100": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:101": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:102": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:103": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:104": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:105": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:106": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:107": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:108": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:109": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:110": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:111": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "finder": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5"
+    },
+    "rule:112": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:113": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:114": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "framework": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5"
+    },
+    "rule:115": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:116": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:117": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:118": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:119": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:120": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:121": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "holder": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5"
+    },
+    "rule:122": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:123": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:124": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:125": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:126": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:127": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:128": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:129": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:130": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:131": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:132": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:133": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:134": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:135": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:136": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "iteration": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5"
+    },
+    "rule:137": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:138": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "keyword": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5"
+    },
+    "rule:139": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:140": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:141": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:142": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "listener": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5"
+    },
+    "rule:143": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:144": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:145": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:146": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:147": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:148": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:149": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:150": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:151": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:152": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:153": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:154": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:155": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:156": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:157": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:158": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:159": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:160": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:161": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:162": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:163": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:164": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:165": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:166": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:167": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:168": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:169": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:170": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:171": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:172": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:173": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:174": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "plus": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5"
+    },
+    "rule:175": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:176": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:177": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "precalculation": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5"
+    },
+    "rule:178": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:179": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:180": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:181": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:182": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:183": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:184": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:185": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:186": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:187": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:188": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:189": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:190": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:191": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:192": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:193": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "queue": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5"
+    },
+    "rule:194": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:195": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "reactivation": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5"
+    },
+    "rule:196": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:197": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:198": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:199": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:200": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:201": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:202": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "release": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5"
+    },
+    "rule:203": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:204": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:205": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:206": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:207": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:208": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:209": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:210": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:211": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:212": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:213": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:214": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:215": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:216": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:217": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "ruleset": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5"
+    },
+    "rule:218": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "sanitizer": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5"
+    },
+    "rule:219": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:220": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:221": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:222": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:223": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:224": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:225": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:226": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:227": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:228": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:229": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:230": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:231": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:232": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:233": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:234": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:235": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:236": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:237": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:238": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:239": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "sidebar": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5"
+    },
+    "rule:240": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:241": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:242": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "sitewide": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5"
+    },
+    "rule:243": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:244": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:245": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:246": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:247": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:248": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:249": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:250": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:251": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:252": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:253": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:254": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:255": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:256": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:257": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:258": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:259": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:260": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "stop": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5"
+    },
+    "rule:261": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:262": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:263": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "subscribed": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5"
+    },
+    "rule:264": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:265": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:266": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:267": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:268": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:269": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:270": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:271": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:272": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:273": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:274": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:275": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:276": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:277": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "toolkit": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5"
+    },
+    "rule:278": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:279": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:280": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:281": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "unset": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5"
+    },
+    "rule:282": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:283": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:284": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:285": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:286": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:287": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:288": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:289": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:290": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:291": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:292": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:293": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "visibility": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5"
+    },
+    "rule:294": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:295": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:296": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:297": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:298": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:299": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:300": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:301": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:302": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:303": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:304": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:305": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:306": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:307": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:308": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:309": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:310": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:311": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:312": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:313": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:314": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:315": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:316": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:317": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:318": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:319": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:320": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:321": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:322": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:323": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
+    },
+    "rule:324": {
+      "origin": "lexicon-r5",
+      "seed_query_id": null,
+      "failure_classes": [],
+      "evidence": "concept lexicon r5 phrase"
     }
   }
 }

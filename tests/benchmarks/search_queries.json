@@ -1,65 +1,684 @@
 {
   "version": 2,
-  "record_schema": {"id": "str (s-|rn-|h-|n- + 3 digits)", "query": "str", "expected_top1_any": "[key]", "forbidden_top1": "[key]", "origin": "<set>-r<n>", "failure_classes": "[R1..R4]", "ambiguous": "bool", "note": "str?"},
+  "record_schema": {
+    "id": "str (s-|rn-|h-|n- + 3 digits)",
+    "query": "str",
+    "expected_top1_any": "[key]",
+    "forbidden_top1": "[key]",
+    "origin": "<set>-r<n>",
+    "failure_classes": "[R1..R4]",
+    "ambiguous": "bool",
+    "note": "str?"
+  },
   "seed": [
-    {"id": "s-001", "query": "upload attachment to issue", "expected_top1_any": ["jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/attachments"], "forbidden_top1": [], "origin": "seed-r0", "failure_classes": [], "ambiguous": false},
-    {"id": "s-002", "query": "create confluence page", "expected_top1_any": ["confluence:POST:/pages"], "forbidden_top1": [], "origin": "seed-r0", "failure_classes": [], "ambiguous": false},
-    {"id": "s-003", "query": "MultipartFile", "expected_top1_any": ["jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/attachments"], "forbidden_top1": [], "origin": "seed-r0", "failure_classes": ["R5", "R6"], "ambiguous": false},
-    {"id": "s-004", "query": "transition issue status", "expected_top1_any": ["jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/transitions", "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/transitions"], "forbidden_top1": [], "origin": "seed-r0", "failure_classes": ["R6"], "ambiguous": false},
-    {"id": "s-005", "query": "update page content", "expected_top1_any": ["confluence:PUT:/pages/{id}"], "forbidden_top1": [], "origin": "seed-r0", "failure_classes": ["R1", "R6"], "ambiguous": false},
-    {"id": "s-006", "query": "get issue by key", "expected_top1_any": ["jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}"], "forbidden_top1": [], "origin": "seed-r0", "failure_classes": ["R1"], "ambiguous": false},
-    {"id": "s-007", "query": "createIssue", "expected_top1_any": ["jira-platform:POST:/rest/api/3/issue"], "forbidden_top1": [], "origin": "seed-r0", "failure_classes": [], "ambiguous": false},
-    {"id": "s-008", "query": "sprint board backlog", "expected_top1_any": ["jira-software:GET:/rest/agile/1.0/board/{boardId}/backlog", "jira-software:GET:/rest/agile/1.0/board/{boardId}/sprint", "jira-software:POST:/rest/agile/1.0/backlog/issue", "jira-software:POST:/rest/agile/1.0/sprint", "jira-software:GET:/rest/agile/1.0/sprint/{sprintId}/issue", "jira-software:POST:/rest/agile/1.0/backlog/{boardId}/issue", "jira-software:GET:/rest/software/1.0/board/{boardId}/backlog"], "forbidden_top1": [], "origin": "seed-r0", "failure_classes": ["R5"], "ambiguous": true},
-    {"id": "s-009", "query": "issue attachment", "expected_top1_any": ["jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/attachments"], "forbidden_top1": [], "origin": "seed-r0", "failure_classes": ["R5"], "ambiguous": false},
-    {"id": "s-010", "query": "attach a file to a jira ticket", "expected_top1_any": ["jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/attachments"], "forbidden_top1": [], "origin": "held_out-r0", "failure_classes": [], "ambiguous": false},
-    {"id": "s-011", "query": "change issue assignee", "expected_top1_any": ["jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}/assignee"], "forbidden_top1": [], "origin": "held_out-r0", "failure_classes": ["R1", "R4"], "ambiguous": false},
-    {"id": "s-012", "query": "post a comment on an issue", "expected_top1_any": ["jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/comment"], "forbidden_top1": [], "origin": "held_out-r0", "failure_classes": [], "ambiguous": false},
-    {"id": "s-013", "query": "create a new confluence page in a space", "expected_top1_any": ["confluence:POST:/pages"], "forbidden_top1": [], "origin": "held_out-r0", "failure_classes": ["R2", "R3", "R6"], "ambiguous": false},
-    {"id": "s-014", "query": "fetch page by id", "expected_top1_any": ["confluence:GET:/pages/{id}"], "forbidden_top1": [], "origin": "held_out-r0", "failure_classes": [], "ambiguous": false},
-    {"id": "s-015", "query": "run jql query", "expected_top1_any": ["jira-platform:GET:/rest/api/3/search/jql", "jira-platform:POST:/rest/api/3/search/jql"], "forbidden_top1": [], "origin": "held_out-r0", "failure_classes": ["R4"], "ambiguous": false},
-    {"id": "s-016", "query": "add issue to sprint", "expected_top1_any": ["jira-software:POST:/rest/agile/1.0/sprint/{sprintId}/issue"], "forbidden_top1": [], "origin": "held_out-r0", "failure_classes": ["R2"], "ambiguous": false},
-    {"id": "s-017", "query": "list boards", "expected_top1_any": ["jira-software:GET:/rest/agile/1.0/board"], "forbidden_top1": [], "origin": "held_out-r0", "failure_classes": [], "ambiguous": false},
-    {"id": "s-018", "query": "delete an attachment", "expected_top1_any": ["jira-platform:DELETE:/rest/api/3/attachment/{id}", "confluence:DELETE:/attachments/{id}"], "forbidden_top1": [], "origin": "held_out-r0", "failure_classes": ["R2", "R3"], "ambiguous": true},
-    {"id": "s-019", "query": "get project by key", "expected_top1_any": ["jira-platform:GET:/rest/api/3/project/{projectIdOrKey}"], "forbidden_top1": [], "origin": "held_out-r0", "failure_classes": ["R1"], "ambiguous": false},
-    {"id": "s-020", "query": "update page title", "expected_top1_any": ["confluence:PUT:/pages/{id}", "confluence:PUT:/pages/{id}/title"], "forbidden_top1": [], "origin": "held_out-r0", "failure_classes": [], "ambiguous": false},
-    {"id": "s-021", "query": "move issue to backlog", "expected_top1_any": ["jira-software:POST:/rest/agile/1.0/backlog/issue", "jira-software:POST:/rest/agile/1.0/backlog/{boardId}/issue"], "forbidden_top1": [], "origin": "held_out-r0", "failure_classes": [], "ambiguous": false},
-    {"id": "s-022", "query": "update issue summary", "expected_top1_any": ["jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}"], "forbidden_top1": [], "origin": "negative-r0", "failure_classes": ["R1", "R6"], "ambiguous": false},
-    {"id": "s-023", "query": "get transitions", "expected_top1_any": ["jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/transitions"], "forbidden_top1": [], "origin": "negative-r0", "failure_classes": [], "ambiguous": false},
-    {"id": "s-024", "query": "leave feedback on this jira ticket", "expected_top1_any": ["jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/comment"], "forbidden_top1": [], "origin": "held_out-r1", "failure_classes": ["R6"], "ambiguous": false},
-    {"id": "s-025", "query": "remove a watcher from this ticket", "expected_top1_any": ["jira-platform:DELETE:/rest/api/3/issue/{issueIdOrKey}/watchers"], "forbidden_top1": [], "origin": "held_out-r1", "failure_classes": [], "ambiguous": false},
-    {"id": "s-026", "query": "revise project configuration details", "expected_top1_any": ["jira-platform:PUT:/rest/api/3/project/{projectIdOrKey}"], "forbidden_top1": [], "origin": "held_out-r1", "failure_classes": ["R6"], "ambiguous": false},
-    {"id": "s-027", "query": "show my starred searches", "expected_top1_any": ["jira-platform:GET:/rest/api/3/filter/favourite"], "forbidden_top1": [], "origin": "held_out-r1", "failure_classes": ["R6"], "ambiguous": false},
-    {"id": "s-028", "query": "publish a new project release", "expected_top1_any": ["jira-platform:POST:/rest/api/3/version"], "forbidden_top1": [], "origin": "held_out-r1", "failure_classes": ["R6"], "ambiguous": false},
-    {"id": "s-029", "query": "discard this uploaded ticket file", "expected_top1_any": ["jira-platform:DELETE:/rest/api/3/attachment/{id}"], "forbidden_top1": [], "origin": "held_out-r1", "failure_classes": ["R6"], "ambiguous": false},
-    {"id": "s-030", "query": "show time entries for ticket", "expected_top1_any": ["jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/worklog"], "forbidden_top1": [], "origin": "held_out-r1", "failure_classes": ["R6"], "ambiguous": false},
-    {"id": "s-031", "query": "set up a jira planning board", "expected_top1_any": ["jira-software:POST:/rest/agile/1.0/board"], "forbidden_top1": [], "origin": "held_out-r1", "failure_classes": ["R6"], "ambiguous": false},
-    {"id": "s-032", "query": "revise dates for this iteration", "expected_top1_any": ["jira-software:PUT:/rest/agile/1.0/sprint/{sprintId}"], "forbidden_top1": [], "origin": "held_out-r1", "failure_classes": ["R6"], "ambiguous": false},
-    {"id": "s-033", "query": "which agile boards exist", "expected_top1_any": ["jira-software:GET:/rest/agile/1.0/board"], "forbidden_top1": [], "origin": "held_out-r1", "failure_classes": ["R5", "R6"], "ambiguous": false},
-    {"id": "s-034", "query": "remove this agile board", "expected_top1_any": ["jira-software:DELETE:/rest/agile/1.0/board/{boardId}"], "forbidden_top1": [], "origin": "held_out-r1", "failure_classes": [], "ambiguous": false},
-    {"id": "s-035", "query": "draft a fresh confluence page", "expected_top1_any": ["confluence:POST:/pages"], "forbidden_top1": [], "origin": "held_out-r1", "failure_classes": ["R5", "R6"], "ambiguous": false},
-    {"id": "s-036", "query": "rewrite this wiki blog entry", "expected_top1_any": ["confluence:PUT:/blogposts/{id}"], "forbidden_top1": [], "origin": "held_out-r1", "failure_classes": ["R6"], "ambiguous": false},
-    {"id": "s-037", "query": "trash this confluence wiki page", "expected_top1_any": ["confluence:DELETE:/pages/{id}"], "forbidden_top1": [], "origin": "held_out-r1", "failure_classes": [], "ambiguous": false},
-    {"id": "s-038", "query": "show files attached to this page", "expected_top1_any": ["confluence:GET:/pages/{id}/attachments"], "forbidden_top1": [], "origin": "held_out-r1", "failure_classes": ["R6"], "ambiguous": false},
-    {"id": "s-039", "query": "browse pages inside this workspace", "expected_top1_any": ["confluence:GET:/spaces/{id}/pages"], "forbidden_top1": [], "origin": "held_out-r1", "failure_classes": ["R6"], "ambiguous": false}
+    {
+      "id": "s-001",
+      "query": "upload attachment to issue",
+      "expected_top1_any": [
+        "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/attachments"
+      ],
+      "forbidden_top1": [],
+      "origin": "seed-r0",
+      "failure_classes": [],
+      "ambiguous": false
+    },
+    {
+      "id": "s-002",
+      "query": "create confluence page",
+      "expected_top1_any": [
+        "confluence:POST:/pages"
+      ],
+      "forbidden_top1": [],
+      "origin": "seed-r0",
+      "failure_classes": [],
+      "ambiguous": false
+    },
+    {
+      "id": "s-003",
+      "query": "MultipartFile",
+      "expected_top1_any": [
+        "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/attachments"
+      ],
+      "forbidden_top1": [],
+      "origin": "seed-r0",
+      "failure_classes": [
+        "R5",
+        "R6"
+      ],
+      "ambiguous": false
+    },
+    {
+      "id": "s-004",
+      "query": "transition issue status",
+      "expected_top1_any": [
+        "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/transitions",
+        "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/transitions"
+      ],
+      "forbidden_top1": [],
+      "origin": "seed-r0",
+      "failure_classes": [],
+      "ambiguous": false
+    },
+    {
+      "id": "s-005",
+      "query": "update page content",
+      "expected_top1_any": [
+        "confluence:PUT:/pages/{id}"
+      ],
+      "forbidden_top1": [],
+      "origin": "seed-r0",
+      "failure_classes": [
+        "R1"
+      ],
+      "ambiguous": false
+    },
+    {
+      "id": "s-006",
+      "query": "get issue by key",
+      "expected_top1_any": [
+        "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}"
+      ],
+      "forbidden_top1": [],
+      "origin": "seed-r0",
+      "failure_classes": [
+        "R1"
+      ],
+      "ambiguous": false
+    },
+    {
+      "id": "s-007",
+      "query": "createIssue",
+      "expected_top1_any": [
+        "jira-platform:POST:/rest/api/3/issue"
+      ],
+      "forbidden_top1": [],
+      "origin": "seed-r0",
+      "failure_classes": [],
+      "ambiguous": false
+    },
+    {
+      "id": "s-008",
+      "query": "sprint board backlog",
+      "expected_top1_any": [
+        "jira-software:GET:/rest/agile/1.0/board/{boardId}/backlog",
+        "jira-software:GET:/rest/agile/1.0/board/{boardId}/sprint",
+        "jira-software:POST:/rest/agile/1.0/backlog/issue",
+        "jira-software:POST:/rest/agile/1.0/sprint",
+        "jira-software:GET:/rest/agile/1.0/sprint/{sprintId}/issue",
+        "jira-software:POST:/rest/agile/1.0/backlog/{boardId}/issue",
+        "jira-software:GET:/rest/software/1.0/board/{boardId}/backlog"
+      ],
+      "forbidden_top1": [],
+      "origin": "seed-r0",
+      "failure_classes": [
+        "R5"
+      ],
+      "ambiguous": true
+    },
+    {
+      "id": "s-009",
+      "query": "issue attachment",
+      "expected_top1_any": [
+        "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/attachments"
+      ],
+      "forbidden_top1": [],
+      "origin": "seed-r0",
+      "failure_classes": [
+        "R5"
+      ],
+      "ambiguous": false
+    },
+    {
+      "id": "s-010",
+      "query": "attach a file to a jira ticket",
+      "expected_top1_any": [
+        "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/attachments"
+      ],
+      "forbidden_top1": [],
+      "origin": "held_out-r0",
+      "failure_classes": [],
+      "ambiguous": false
+    },
+    {
+      "id": "s-011",
+      "query": "change issue assignee",
+      "expected_top1_any": [
+        "jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}/assignee"
+      ],
+      "forbidden_top1": [],
+      "origin": "held_out-r0",
+      "failure_classes": [
+        "R1",
+        "R4"
+      ],
+      "ambiguous": false
+    },
+    {
+      "id": "s-012",
+      "query": "post a comment on an issue",
+      "expected_top1_any": [
+        "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/comment"
+      ],
+      "forbidden_top1": [],
+      "origin": "held_out-r0",
+      "failure_classes": [],
+      "ambiguous": false
+    },
+    {
+      "id": "s-013",
+      "query": "create a new confluence page in a space",
+      "expected_top1_any": [
+        "confluence:POST:/pages"
+      ],
+      "forbidden_top1": [],
+      "origin": "held_out-r0",
+      "failure_classes": [
+        "R2",
+        "R3"
+      ],
+      "ambiguous": false
+    },
+    {
+      "id": "s-014",
+      "query": "fetch page by id",
+      "expected_top1_any": [
+        "confluence:GET:/pages/{id}"
+      ],
+      "forbidden_top1": [],
+      "origin": "held_out-r0",
+      "failure_classes": [],
+      "ambiguous": false
+    },
+    {
+      "id": "s-015",
+      "query": "run jql query",
+      "expected_top1_any": [
+        "jira-platform:GET:/rest/api/3/search/jql",
+        "jira-platform:POST:/rest/api/3/search/jql"
+      ],
+      "forbidden_top1": [],
+      "origin": "held_out-r0",
+      "failure_classes": [
+        "R4"
+      ],
+      "ambiguous": false
+    },
+    {
+      "id": "s-016",
+      "query": "add issue to sprint",
+      "expected_top1_any": [
+        "jira-software:POST:/rest/agile/1.0/sprint/{sprintId}/issue"
+      ],
+      "forbidden_top1": [],
+      "origin": "held_out-r0",
+      "failure_classes": [
+        "R2"
+      ],
+      "ambiguous": false
+    },
+    {
+      "id": "s-017",
+      "query": "list boards",
+      "expected_top1_any": [
+        "jira-software:GET:/rest/agile/1.0/board"
+      ],
+      "forbidden_top1": [],
+      "origin": "held_out-r0",
+      "failure_classes": [],
+      "ambiguous": false
+    },
+    {
+      "id": "s-018",
+      "query": "delete an attachment",
+      "expected_top1_any": [
+        "jira-platform:DELETE:/rest/api/3/attachment/{id}",
+        "confluence:DELETE:/attachments/{id}"
+      ],
+      "forbidden_top1": [],
+      "origin": "held_out-r0",
+      "failure_classes": [
+        "R2",
+        "R3"
+      ],
+      "ambiguous": true
+    },
+    {
+      "id": "s-019",
+      "query": "get project by key",
+      "expected_top1_any": [
+        "jira-platform:GET:/rest/api/3/project/{projectIdOrKey}"
+      ],
+      "forbidden_top1": [],
+      "origin": "held_out-r0",
+      "failure_classes": [
+        "R1"
+      ],
+      "ambiguous": false
+    },
+    {
+      "id": "s-020",
+      "query": "update page title",
+      "expected_top1_any": [
+        "confluence:PUT:/pages/{id}",
+        "confluence:PUT:/pages/{id}/title"
+      ],
+      "forbidden_top1": [],
+      "origin": "held_out-r0",
+      "failure_classes": [],
+      "ambiguous": false
+    },
+    {
+      "id": "s-021",
+      "query": "move issue to backlog",
+      "expected_top1_any": [
+        "jira-software:POST:/rest/agile/1.0/backlog/issue",
+        "jira-software:POST:/rest/agile/1.0/backlog/{boardId}/issue"
+      ],
+      "forbidden_top1": [],
+      "origin": "held_out-r0",
+      "failure_classes": [],
+      "ambiguous": false
+    },
+    {
+      "id": "s-022",
+      "query": "update issue summary",
+      "expected_top1_any": [
+        "jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}"
+      ],
+      "forbidden_top1": [],
+      "origin": "negative-r0",
+      "failure_classes": [
+        "R1",
+        "R6"
+      ],
+      "ambiguous": false
+    },
+    {
+      "id": "s-023",
+      "query": "get transitions",
+      "expected_top1_any": [
+        "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/transitions"
+      ],
+      "forbidden_top1": [],
+      "origin": "negative-r0",
+      "failure_classes": [],
+      "ambiguous": false
+    },
+    {
+      "id": "s-024",
+      "query": "leave feedback on this jira ticket",
+      "expected_top1_any": [
+        "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/comment"
+      ],
+      "forbidden_top1": [],
+      "origin": "held_out-r1",
+      "failure_classes": [],
+      "ambiguous": false
+    },
+    {
+      "id": "s-025",
+      "query": "remove a watcher from this ticket",
+      "expected_top1_any": [
+        "jira-platform:DELETE:/rest/api/3/issue/{issueIdOrKey}/watchers"
+      ],
+      "forbidden_top1": [],
+      "origin": "held_out-r1",
+      "failure_classes": [],
+      "ambiguous": false
+    },
+    {
+      "id": "s-026",
+      "query": "revise project configuration details",
+      "expected_top1_any": [
+        "jira-platform:PUT:/rest/api/3/project/{projectIdOrKey}"
+      ],
+      "forbidden_top1": [],
+      "origin": "held_out-r1",
+      "failure_classes": [],
+      "ambiguous": false
+    },
+    {
+      "id": "s-027",
+      "query": "show my starred searches",
+      "expected_top1_any": [
+        "jira-platform:GET:/rest/api/3/filter/favourite"
+      ],
+      "forbidden_top1": [],
+      "origin": "held_out-r1",
+      "failure_classes": [],
+      "ambiguous": false
+    },
+    {
+      "id": "s-028",
+      "query": "publish a new project release",
+      "expected_top1_any": [
+        "jira-platform:POST:/rest/api/3/version"
+      ],
+      "forbidden_top1": [],
+      "origin": "held_out-r1",
+      "failure_classes": [],
+      "ambiguous": false
+    },
+    {
+      "id": "s-029",
+      "query": "discard this uploaded ticket file",
+      "expected_top1_any": [
+        "jira-platform:DELETE:/rest/api/3/attachment/{id}"
+      ],
+      "forbidden_top1": [],
+      "origin": "held_out-r1",
+      "failure_classes": [
+        "R6"
+      ],
+      "ambiguous": false
+    },
+    {
+      "id": "s-030",
+      "query": "show time entries for ticket",
+      "expected_top1_any": [
+        "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/worklog"
+      ],
+      "forbidden_top1": [],
+      "origin": "held_out-r1",
+      "failure_classes": [],
+      "ambiguous": false
+    },
+    {
+      "id": "s-031",
+      "query": "set up a jira planning board",
+      "expected_top1_any": [
+        "jira-software:POST:/rest/agile/1.0/board"
+      ],
+      "forbidden_top1": [],
+      "origin": "held_out-r1",
+      "failure_classes": [],
+      "ambiguous": false
+    },
+    {
+      "id": "s-032",
+      "query": "revise dates for this iteration",
+      "expected_top1_any": [
+        "jira-software:PUT:/rest/agile/1.0/sprint/{sprintId}"
+      ],
+      "forbidden_top1": [],
+      "origin": "held_out-r1",
+      "failure_classes": [
+        "R6"
+      ],
+      "ambiguous": false
+    },
+    {
+      "id": "s-033",
+      "query": "which agile boards exist",
+      "expected_top1_any": [
+        "jira-software:GET:/rest/agile/1.0/board"
+      ],
+      "forbidden_top1": [],
+      "origin": "held_out-r1",
+      "failure_classes": [
+        "R5",
+        "R6"
+      ],
+      "ambiguous": false
+    },
+    {
+      "id": "s-034",
+      "query": "remove this agile board",
+      "expected_top1_any": [
+        "jira-software:DELETE:/rest/agile/1.0/board/{boardId}"
+      ],
+      "forbidden_top1": [],
+      "origin": "held_out-r1",
+      "failure_classes": [],
+      "ambiguous": false
+    },
+    {
+      "id": "s-035",
+      "query": "draft a fresh confluence page",
+      "expected_top1_any": [
+        "confluence:POST:/pages"
+      ],
+      "forbidden_top1": [],
+      "origin": "held_out-r1",
+      "failure_classes": [
+        "R5",
+        "R6"
+      ],
+      "ambiguous": false
+    },
+    {
+      "id": "s-036",
+      "query": "rewrite this wiki blog entry",
+      "expected_top1_any": [
+        "confluence:PUT:/blogposts/{id}"
+      ],
+      "forbidden_top1": [],
+      "origin": "held_out-r1",
+      "failure_classes": [],
+      "ambiguous": false
+    },
+    {
+      "id": "s-037",
+      "query": "trash this confluence wiki page",
+      "expected_top1_any": [
+        "confluence:DELETE:/pages/{id}"
+      ],
+      "forbidden_top1": [],
+      "origin": "held_out-r1",
+      "failure_classes": [],
+      "ambiguous": false
+    },
+    {
+      "id": "s-038",
+      "query": "show files attached to this page",
+      "expected_top1_any": [
+        "confluence:GET:/pages/{id}/attachments"
+      ],
+      "forbidden_top1": [],
+      "origin": "held_out-r1",
+      "failure_classes": [],
+      "ambiguous": false
+    },
+    {
+      "id": "s-039",
+      "query": "browse pages inside this workspace",
+      "expected_top1_any": [
+        "confluence:GET:/spaces/{id}/pages"
+      ],
+      "forbidden_top1": [],
+      "origin": "held_out-r1",
+      "failure_classes": [],
+      "ambiguous": false
+    }
   ],
   "regression_negative": [
-    {"id": "rn-001", "query": "get issue status", "expected_top1_any": [], "forbidden_top1": ["jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/transitions", "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/transitions"], "origin": "negative-r0", "failure_classes": [], "ambiguous": false, "note": "status query must not surface transition APIs"},
-    {"id": "rn-002", "query": "get user", "expected_top1_any": [], "forbidden_top1": ["jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}/assignee"], "origin": "negative-r0", "failure_classes": [], "ambiguous": false},
-    {"id": "rn-003", "query": "list users", "expected_top1_any": [], "forbidden_top1": ["jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}/assignee"], "origin": "negative-r0", "failure_classes": [], "ambiguous": false},
-    {"id": "rn-004", "query": "get page property", "expected_top1_any": [], "forbidden_top1": ["confluence:PUT:/pages/{id}"], "origin": "negative-r0", "failure_classes": [], "ambiguous": false},
-    {"id": "rn-005", "query": "read issue comments", "expected_top1_any": [], "forbidden_top1": ["jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/comment"], "origin": "negative-r0", "failure_classes": [], "ambiguous": false},
-    {"id": "rn-006", "query": "remove page", "expected_top1_any": [], "forbidden_top1": ["confluence:PUT:/pages/{id}"], "origin": "negative-r0", "failure_classes": [], "ambiguous": false},
-    {"id": "rn-007", "query": "issue type scheme", "expected_top1_any": [], "forbidden_top1": ["jira-platform:GET:/rest/api/3/issuetypescheme"], "origin": "negative-r1", "failure_classes": [], "ambiguous": false},
-    {"id": "rn-008", "query": "project role actors", "expected_top1_any": [], "forbidden_top1": ["jira-platform:GET:/rest/api/3/role/{id}/actors"], "origin": "negative-r1", "failure_classes": [], "ambiguous": false},
-    {"id": "rn-009", "query": "board sprint issue", "expected_top1_any": [], "forbidden_top1": ["jira-software:GET:/rest/agile/1.0/board/{boardId}/sprint/{sprintId}/issue"], "origin": "negative-r1", "failure_classes": [], "ambiguous": false},
-    {"id": "rn-010", "query": "confluence label printer", "expected_top1_any": [], "forbidden_top1": ["confluence:GET:/labels"], "origin": "negative-r1", "failure_classes": [], "ambiguous": false},
-    {"id": "rn-011", "query": "dashboard widget property", "expected_top1_any": [], "forbidden_top1": ["jira-platform:GET:/rest/api/3/dashboard/{dashboardId}/items/{itemId}/properties/{propertyKey}"], "origin": "negative-r1", "failure_classes": [], "ambiguous": false},
-    {"id": "rn-012", "query": "site access emails", "expected_top1_any": [], "forbidden_top1": ["confluence:POST:/user/access/check-access-by-email"], "origin": "negative-r1", "failure_classes": [], "ambiguous": false},
-    {"id": "rn-013", "query": "attachment metadata content", "expected_top1_any": [], "forbidden_top1": ["jira-platform:GET:/rest/api/3/attachment/{id}", "jira-platform:GET:/rest/api/3/attachment/content/{id}"], "origin": "negative-r1", "failure_classes": [], "ambiguous": false},
-    {"id": "rn-014", "query": "filter owner jira", "expected_top1_any": [], "forbidden_top1": ["jira-platform:PUT:/rest/api/3/filter/{id}/owner"], "origin": "negative-r1", "failure_classes": [], "ambiguous": false}
+    {
+      "id": "rn-001",
+      "query": "get issue status",
+      "expected_top1_any": [],
+      "forbidden_top1": [
+        "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/transitions",
+        "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/transitions"
+      ],
+      "origin": "negative-r0",
+      "failure_classes": [],
+      "ambiguous": false,
+      "note": "status query must not surface transition APIs"
+    },
+    {
+      "id": "rn-002",
+      "query": "get user",
+      "expected_top1_any": [],
+      "forbidden_top1": [
+        "jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}/assignee"
+      ],
+      "origin": "negative-r0",
+      "failure_classes": [],
+      "ambiguous": false
+    },
+    {
+      "id": "rn-003",
+      "query": "list users",
+      "expected_top1_any": [],
+      "forbidden_top1": [
+        "jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}/assignee"
+      ],
+      "origin": "negative-r0",
+      "failure_classes": [],
+      "ambiguous": false
+    },
+    {
+      "id": "rn-004",
+      "query": "get page property",
+      "expected_top1_any": [],
+      "forbidden_top1": [
+        "confluence:PUT:/pages/{id}"
+      ],
+      "origin": "negative-r0",
+      "failure_classes": [],
+      "ambiguous": false
+    },
+    {
+      "id": "rn-005",
+      "query": "read issue comments",
+      "expected_top1_any": [],
+      "forbidden_top1": [
+        "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/comment"
+      ],
+      "origin": "negative-r0",
+      "failure_classes": [],
+      "ambiguous": false
+    },
+    {
+      "id": "rn-006",
+      "query": "remove page",
+      "expected_top1_any": [],
+      "forbidden_top1": [
+        "confluence:PUT:/pages/{id}"
+      ],
+      "origin": "negative-r0",
+      "failure_classes": [],
+      "ambiguous": false
+    },
+    {
+      "id": "rn-007",
+      "query": "issue type scheme",
+      "expected_top1_any": [],
+      "forbidden_top1": [
+        "jira-platform:GET:/rest/api/3/issuetypescheme"
+      ],
+      "origin": "negative-r1",
+      "failure_classes": [],
+      "ambiguous": false
+    },
+    {
+      "id": "rn-008",
+      "query": "project role actors",
+      "expected_top1_any": [],
+      "forbidden_top1": [
+        "jira-platform:GET:/rest/api/3/role/{id}/actors"
+      ],
+      "origin": "negative-r1",
+      "failure_classes": [],
+      "ambiguous": false
+    },
+    {
+      "id": "rn-009",
+      "query": "board sprint issue",
+      "expected_top1_any": [],
+      "forbidden_top1": [
+        "jira-software:GET:/rest/agile/1.0/board/{boardId}/sprint/{sprintId}/issue"
+      ],
+      "origin": "negative-r1",
+      "failure_classes": [],
+      "ambiguous": false
+    },
+    {
+      "id": "rn-010",
+      "query": "confluence label printer",
+      "expected_top1_any": [],
+      "forbidden_top1": [
+        "confluence:GET:/labels"
+      ],
+      "origin": "negative-r1",
+      "failure_classes": [],
+      "ambiguous": false
+    },
+    {
+      "id": "rn-011",
+      "query": "dashboard widget property",
+      "expected_top1_any": [],
+      "forbidden_top1": [
+        "jira-platform:GET:/rest/api/3/dashboard/{dashboardId}/items/{itemId}/properties/{propertyKey}"
+      ],
+      "origin": "negative-r1",
+      "failure_classes": [],
+      "ambiguous": false
+    },
+    {
+      "id": "rn-012",
+      "query": "site access emails",
+      "expected_top1_any": [],
+      "forbidden_top1": [
+        "confluence:POST:/user/access/check-access-by-email"
+      ],
+      "origin": "negative-r1",
+      "failure_classes": [],
+      "ambiguous": false
+    },
+    {
+      "id": "rn-013",
+      "query": "attachment metadata content",
+      "expected_top1_any": [],
+      "forbidden_top1": [
+        "jira-platform:GET:/rest/api/3/attachment/{id}",
+        "jira-platform:GET:/rest/api/3/attachment/content/{id}"
+      ],
+      "origin": "negative-r1",
+      "failure_classes": [],
+      "ambiguous": false
+    },
+    {
+      "id": "rn-014",
+      "query": "filter owner jira",
+      "expected_top1_any": [],
+      "forbidden_top1": [
+        "jira-platform:PUT:/rest/api/3/filter/{id}/owner"
+      ],
+      "origin": "negative-r1",
+      "failure_classes": [],
+      "ambiguous": false
+    }
   ],
-  "held_out": {"sealed": true, "round": 2, "count": 16, "sha256": "0f990f2fc134cd41eca2061931c65cfdd4bc21819051f9ae8538c0258aaf3540", "distribution": {"source": {"confluence": 5, "jira-platform": 7, "jira-software": 4}, "method": {"DELETE": 3, "GET": 4, "POST": 6, "PUT": 3}, "product_named": 6}},
-  "negative": {"sealed": true, "round": 2, "count": 8, "sha256": "7750a2020923bcf8ddfa22e79f2c071001db9942194c3215cc03c60f363dde76", "distribution": {"source": {"confluence": 4, "jira-platform": 2, "jira-software": 2}, "method": {"GET": 2, "POST": 3, "PUT": 3}, "product_named": 7}},
+  "held_out": [
+    {"id": "h-001", "query": "download tiny preview for confluence file", "expected_top1_any": ["confluence:GET:/attachments/{id}/thumbnail/download"], "forbidden_top1": [], "origin": "held_out-r5", "failure_classes": [], "ambiguous": false},
+    {"id": "h-002", "query": "make fresh confluence whiteboard", "expected_top1_any": ["confluence:POST:/whiteboards"], "forbidden_top1": [], "origin": "held_out-r5", "failure_classes": [], "ambiguous": false},
+    {"id": "h-003", "query": "rename page heading text", "expected_top1_any": ["confluence:PUT:/pages/{id}/title"], "forbidden_top1": [], "origin": "held_out-r5", "failure_classes": [], "ambiguous": false},
+    {"id": "h-004", "query": "erase inline remark permanently", "expected_top1_any": ["confluence:DELETE:/inline-comments/{comment-id}"], "forbidden_top1": [], "origin": "held_out-r5", "failure_classes": [], "ambiguous": false},
+    {"id": "h-005", "query": "invite users via email addresses", "expected_top1_any": ["confluence:POST:/user/access/invite-by-email"], "forbidden_top1": [], "origin": "held_out-r5", "failure_classes": [], "ambiguous": false},
+    {"id": "h-006", "query": "count current backlog items", "expected_top1_any": ["jira-software:GET:/rest/software/1.0/board/{boardId}/backlog/approximate-count"], "forbidden_top1": [], "origin": "held_out-r5", "failure_classes": [], "ambiguous": false},
+    {"id": "h-007", "query": "submit pipeline build telemetry", "expected_top1_any": ["jira-software:POST:/rest/builds/0.1/bulk"], "forbidden_top1": [], "origin": "held_out-r5", "failure_classes": [], "ambiguous": false},
+    {"id": "h-008", "query": "rank selected epics higher", "expected_top1_any": ["jira-software:PUT:/rest/agile/1.0/epic/{epicIdOrKey}/rank"], "forbidden_top1": [], "origin": "held_out-r5", "failure_classes": [], "ambiguous": false},
+    {"id": "h-009", "query": "remove one vulnerability entry", "expected_top1_any": ["jira-software:DELETE:/rest/security/1.0/vulnerability/{vulnerabilityId}"], "forbidden_top1": [], "origin": "held_out-r5", "failure_classes": [], "ambiguous": false},
+    {"id": "h-010", "query": "fetch security connected workspace details", "expected_top1_any": ["jira-software:GET:/rest/security/1.0/linkedWorkspaces/{workspaceId}"], "forbidden_top1": [], "origin": "held_out-r5", "failure_classes": [], "ambiguous": false},
+    {"id": "h-011", "query": "show jira account currently signed in", "expected_top1_any": ["jira-platform:GET:/rest/api/3/myself"], "forbidden_top1": [], "origin": "held_out-r5", "failure_classes": [], "ambiguous": false},
+    {"id": "h-012", "query": "register jira callbacks for events", "expected_top1_any": ["jira-platform:POST:/rest/api/3/webhook"], "forbidden_top1": [], "origin": "held_out-r5", "failure_classes": [], "ambiguous": false},
+    {"id": "h-013", "query": "set chosen project outbound email", "expected_top1_any": ["jira-platform:PUT:/rest/api/3/project/{projectId}/email"], "forbidden_top1": [], "origin": "held_out-r5", "failure_classes": [], "ambiguous": false},
+    {"id": "h-014", "query": "detach dashboard gadget permanently", "expected_top1_any": ["jira-platform:DELETE:/rest/api/3/dashboard/{dashboardId}/gadget/{gadgetId}"], "forbidden_top1": [], "origin": "held_out-r5", "failure_classes": [], "ambiguous": false},
+    {"id": "h-015", "query": "add my vote onto issue", "expected_top1_any": ["jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/votes"], "forbidden_top1": [], "origin": "held_out-r5", "failure_classes": [], "ambiguous": false},
+    {"id": "h-016", "query": "browse audit trail records", "expected_top1_any": ["jira-platform:GET:/rest/api/3/auditing/record"], "forbidden_top1": [], "origin": "held_out-r5", "failure_classes": [], "ambiguous": false}
+  ],
+  "negative": [
+    {"id": "n-001", "query": "create confluence calendar event", "expected_top1_any": [], "forbidden_top1": ["confluence:POST:/pages"], "origin": "negative-r5", "failure_classes": [], "ambiguous": false},
+    {"id": "n-002", "query": "delete jira board column", "expected_top1_any": [], "forbidden_top1": ["jira-software:DELETE:/rest/agile/1.0/board/{boardId}"], "origin": "negative-r5", "failure_classes": [], "ambiguous": false},
+    {"id": "n-003", "query": "update jira board title", "expected_top1_any": [], "forbidden_top1": ["jira-software:PUT:/rest/agile/1.0/board/{boardId}/properties/{propertyKey}"], "origin": "negative-r5", "failure_classes": [], "ambiguous": false},
+    {"id": "n-004", "query": "remove confluence page watcher", "expected_top1_any": [], "forbidden_top1": ["confluence:DELETE:/pages/{id}"], "origin": "negative-r5", "failure_classes": [], "ambiguous": false},
+    {"id": "n-005", "query": "jira issue reaction emojis", "expected_top1_any": [], "forbidden_top1": ["jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/votes"], "origin": "negative-r5", "failure_classes": [], "ambiguous": false},
+    {"id": "n-006", "query": "confluence page ownership history", "expected_top1_any": [], "forbidden_top1": ["confluence:GET:/pages/{id}/versions"], "origin": "negative-r5", "failure_classes": [], "ambiguous": false},
+    {"id": "n-007", "query": "jira project storage quota", "expected_top1_any": [], "forbidden_top1": ["jira-platform:GET:/rest/api/3/project/{projectIdOrKey}"], "origin": "negative-r5", "failure_classes": [], "ambiguous": false},
+    {"id": "n-008", "query": "confluence space storage quota", "expected_top1_any": [], "forbidden_top1": ["confluence:GET:/spaces/{id}"], "origin": "negative-r5", "failure_classes": [], "ambiguous": false}
+  ],
   "round1_seal": {"held_out_sha256": "606535e10663bc7ab7eb2a16a8044f9a5f9e4aa326eb082193c6a1233553e568", "negative_sha256": "17313ddaf16080c0b2a9e9729f80c0313fccc9b8020cf51888f48a272aa3a1d4", "held_out_distribution": {"source": {"confluence": 5, "jira-platform": 7, "jira-software": 4}, "method": {"DELETE": 4, "GET": 5, "POST": 4, "PUT": 3}, "product_named": 4}, "negative_distribution": {"source": {"confluence": 2, "jira-platform": 5, "jira-software": 1}, "method": {"GET": 6, "POST": 1, "PUT": 1}, "product_named": 2}, "registry_fingerprint": "a13ba026ab6b6a3f19845a3aaa694a1e98427220fdbdc74bb711c316730a793f", "spec_sha256": {"confluence": "e4de6c1134a19d8717a309dbb7285a525ae31a9e3c733d046e9e144741f6e313", "jira-platform": "2aa6ef12fca713d5b7fc10042e458439ccb3e20eab5d86fd82323f56783f7ab1", "jira-software": "cb7e24b331ad9b31944fa9a588f70d4ea60d74d1dfb52d39a59770230b79207a"}},
-  "round2_seal": {"held_out_sha256": "0f990f2fc134cd41eca2061931c65cfdd4bc21819051f9ae8538c0258aaf3540", "negative_sha256": "7750a2020923bcf8ddfa22e79f2c071001db9942194c3215cc03c60f363dde76", "held_out_distribution": {"source": {"confluence": 5, "jira-platform": 7, "jira-software": 4}, "method": {"DELETE": 3, "GET": 4, "POST": 6, "PUT": 3}, "product_named": 6}, "negative_distribution": {"source": {"confluence": 4, "jira-platform": 2, "jira-software": 2}, "method": {"GET": 2, "POST": 3, "PUT": 3}, "product_named": 7}, "registry_fingerprint": "f3c2e9d48aa85c96ca62cdd84ff700cc2714c888cf4148b3a91c604c45b47b62", "spec_sha256": {"confluence": "b3d010b6438677d864495ce15828f57080ff72afe190efdf7f86f0f5140b700d", "jira-platform": "3d0edfb02ff91873f99421de579182b6d66f07b804063e9ae458a30d6901a2db", "jira-software": "cb7e24b331ad9b31944fa9a588f70d4ea60d74d1dfb52d39a59770230b79207a"}, "machine_check": "passed", "origins": {"held_out": "held_out-r2", "negative": "negative-r2"}}
+  "round2_seal": {"held_out_sha256": "0f990f2fc134cd41eca2061931c65cfdd4bc21819051f9ae8538c0258aaf3540", "negative_sha256": "7750a2020923bcf8ddfa22e79f2c071001db9942194c3215cc03c60f363dde76", "held_out_distribution": {"source": {"confluence": 5, "jira-platform": 7, "jira-software": 4}, "method": {"DELETE": 3, "GET": 4, "POST": 6, "PUT": 3}, "product_named": 6}, "negative_distribution": {"source": {"confluence": 4, "jira-platform": 2, "jira-software": 2}, "method": {"GET": 2, "POST": 3, "PUT": 3}, "product_named": 7}, "registry_fingerprint": "f3c2e9d48aa85c96ca62cdd84ff700cc2714c888cf4148b3a91c604c45b47b62", "spec_sha256": {"confluence": "b3d010b6438677d864495ce15828f57080ff72afe190efdf7f86f0f5140b700d", "jira-platform": "3d0edfb02ff91873f99421de579182b6d66f07b804063e9ae458a30d6901a2db", "jira-software": "cb7e24b331ad9b31944fa9a588f70d4ea60d74d1dfb52d39a59770230b79207a"}, "machine_check": "passed", "origins": {"held_out": "held_out-r2", "negative": "negative-r2"}},
+  "round5_seal": {"held_out_sha256": "c11872473b41be12133a951d9cc65ef04483c2530628e8dcb2192592f6a2304c", "negative_sha256": "723087b013f8057ada39814b6cf1d1ff982816c3c73e8287fc1f44702a8cab6f", "held_out_distribution": {"source": {"confluence": 5, "jira-platform": 6, "jira-software": 5}, "method": {"DELETE": 3, "GET": 5, "POST": 5, "PUT": 3}, "product_named": 4}, "negative_distribution": {"source": {"confluence": 4, "jira-platform": 2, "jira-software": 2}, "method": {"DELETE": 2, "GET": 3, "POST": 2, "PUT": 1}, "product_named": 8}, "registry_fingerprint": "e308a232d6c9b19a7413e8a38c89b895e44e503581d529c2a31b31fbde179853", "spec_sha256": {"confluence": "b3d010b6438677d864495ce15828f57080ff72afe190efdf7f86f0f5140b700d", "jira-platform": "a7a330f1e293c58d57420fa58f1b95c22976dad5390ce466b55150051040fe9e", "jira-software": "cb7e24b331ad9b31944fa9a588f70d4ea60d74d1dfb52d39a59770230b79207a"}, "machine_check": "passed", "origins": {"held_out": "held_out-r5", "negative": "negative-r5"}, "needle_manifest_sha256": "e98817ef153f85af5b22353a018f022989f25c84e520ffb17aa053ff251a450b"}
 }

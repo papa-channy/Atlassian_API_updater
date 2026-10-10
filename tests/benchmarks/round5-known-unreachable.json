@@ -1,0 +1,121 @@
+{
+ "approval": {
+  "rulings": [
+   {
+    "date": "2026-10-09",
+    "file": "2026-10-09-1.md",
+    "review_output_sha256": "a0952adf0bb9ab5169c848595b95ff808797cbb3d65400303b69f83b6ee9b411",
+    "summary": "approach: A modified / B narrow / C rejected",
+    "thread": "review thread 2"
+   },
+   {
+    "date": "2026-10-09",
+    "file": "2026-10-09-2.md",
+    "review_output_sha256": "4e3930afdfc3a3a9169b7bc80d4afb3eab1936cd353721333d17cda8e276b010",
+    "summary": "S2 after counterexample measurement; KU {s-004, s-027, s-039}",
+    "thread": "review thread 2"
+   },
+   {
+    "date": "2026-10-09",
+    "file": "2026-10-09-3.md",
+    "review_output_sha256": "6d52e1f18876ac7394548796fc7bedd4055d42ff0289b8aa80d1814fb77cb792",
+    "summary": "zero-slice re-ruling: uncovered static non-blocking, uncovered proposer blocks",
+    "thread": "review thread 2"
+   },
+   {
+    "date": "2026-10-09",
+    "file": "2026-10-09-4.md",
+    "review_output_sha256": "0692134560abb356acef193ee068ad0c09654aa8c4136200e6e6d55be48f6297",
+    "summary": "verb conflict (b): doc_relation removed",
+    "thread": "review thread 2"
+   },
+   {
+    "date": "2026-10-09",
+    "file": "2026-10-09-5.md",
+    "review_output_sha256": "e1637c878fe2e72e8a5ed1280524deddf9180e048b5e818158c330a0e70432f9",
+    "summary": "spec review 8: P0 0 / P1 3, ready for the implementation plan",
+    "thread": "review thread 2"
+   }
+  ],
+  "user_decision": {
+   "date": "2026-10-09",
+   "event_sha256": "fd6bce623570b82e3160edc20743926b4f1724215ac36554b651107e1dc9cf88",
+   "words": "좋아 Round 5 진행해보자"
+  }
+ },
+ "round": 5,
+ "seeds": [
+  {
+   "cause": "constants/ordering: POST /bulk/issues/transition summary contains every query word (46 vs 42)",
+   "id": "s-004",
+   "mechanisms_tried": [
+    {
+     "counterexample": {
+      "hit_miss_after": [
+       33,
+       8
+      ],
+      "hit_miss_before": [
+       35,
+       6
+      ],
+      "losses": [
+       "Get issue panel pin status for projects",
+       "Get available transitions (ambiguous)"
+      ],
+      "slice": "my+bulk summary-as-query (41 ops)"
+     },
+     "mechanism": "bulk-variant tier v2"
+    }
+   ],
+   "official_source_check": "Round 4 doc-title snapshot 2d3caa6e…",
+   "query_sha256": "0a3dfd5ed1f86c3f70440b6e5243d51dfcb0638597d0fb0620ebfc353c352a73",
+   "record_sha256": "32b0488a37da3a055afaf6eca7cc29b477cfda8af05ad391bf00413d56d605f2"
+  },
+  {
+   "cause": "needs search→filter (verb-inventory key, same-product token) and 'my' literal-terminal handling",
+   "id": "s-027",
+   "mechanisms_tried": [
+    {
+     "counterexample": {
+      "hit_miss_after": [
+       13,
+       28
+      ],
+      "hit_miss_before": [
+       35,
+       6
+      ],
+      "losses": [
+       "Get my filters"
+      ],
+      "slice": "my+bulk summary-as-query (41 ops)"
+     },
+     "mechanism": "query 'my' neutralization"
+    }
+   ],
+   "official_source_check": "Round 4 doc-title snapshot 2d3caa6e…",
+   "query_sha256": "589325dcf2ccc9d8b42991614393f88398153a4e99074159a5e7f8505be6e6d4",
+   "record_sha256": "99ed3119688c889a9a45d9bfbc7c3ce03965381c390969d9653ab81910e0839b"
+  },
+  {
+   "cause": "workspace→space has no official-source support (0 doc titles; Confluence API 'workspace' = site)",
+   "id": "s-039",
+   "mechanisms_tried": [
+    {
+     "counterexample": {
+      "hit_miss_after": null,
+      "hit_miss_before": null,
+      "losses": [],
+      "note": "workspace is itself a catalog token; rule never applies",
+      "slice": "seed+regression queries"
+     },
+     "mechanism": "compound-suffix split"
+    }
+   ],
+   "official_source_check": "Round 4 doc-title snapshot 2d3caa6e…",
+   "query_sha256": "da3a19226de260749bb8053bb124d31ba84342b21f5a464c4b6cdb687a974cfd",
+   "record_sha256": "a3d993710125c753dd464fc3f66b6af1ba8278c5fcc57efdfbcc83885d67a03b"
+  }
+ ]
+}

@@ -176,3 +176,155 @@ class TestRound4DocTitles(unittest.TestCase):
             return real_read(self_, *a, **k)
         with mock.patch("builtins.open", guard_open), mock.patch.object(pathlib.Path, "read_text", guard_read):
             clc.render_lexicon_generation_input(self.TPL, self.INTERNAL, self.RANKING, doc_snapshot={"titles": []})
+CTX5 = (CONCEPTS | {"build", "favourite", "filter"}, CATALOG | {"build"}, VERBS, HINTS, ALIAS_KEYS, frozenset(), None)
+
+
+class TestRound5Union(unittest.TestCase):
+    """Round 5 spec §6.1/§6.3: source precedence, seed-free eligibility, no fallback, pair-level review reuse."""
+    def _src(self, r2=None, r4=None):
+        return [{"id": "round2_archive", "raw": r2 or {}}, {"id": "round4_generation", "raw": r4 or {}}]
+
+    def test_lower_rank_ineligible_higher_rank_eligible(self):                       # (a)
+        v = {(("release",), ("version",)): True, (("release",), ("build",)): False}
+        out = clc.resolve_sources(self._src({"release": ["build"]}, {"release": ["version"]}), CTX5, v)
+        self.assertEqual(out["lexicon"], {"release": ["version"]}); self.assertEqual(out["selected"]["release"]["source"], "round4_generation")
+
+    def test_both_eligible_highest_rank_wins(self):                                   # (b)
+        v = {(("release",), ("version",)): True, (("release",), ("build",)): True}
+        out = clc.resolve_sources(self._src({"release": ["build"]}, {"release": ["version"]}), CTX5, v)
+        self.assertEqual(out["lexicon"]["release"], ["version"]); self.assertEqual(out["selected"]["release"]["provenance_rank"], 1)
+
+    def test_higher_rank_rejected_lower_rank_used(self):                              # (c)
+        v = {(("release",), ("version",)): False, (("release",), ("build",)): True}
+        out = clc.resolve_sources(self._src({"release": ["build"]}, {"release": ["version"]}), CTX5, v)
+        self.assertEqual(out["lexicon"]["release"], ["build"])
+
+    def test_all_ineligible_records_every_candidate(self):                             # (d)
+        v = {(("release",), ("version",)): False, (("release",), ("build",)): False}
+        out = clc.resolve_sources(self._src({"release": ["build"]}, {"release": ["version"]}), CTX5, v)
+        self.assertNotIn("release", out["lexicon"])
+        self.assertEqual([c["source"] for c in out["rejected"]["release"]["candidates"]], ["round2_archive", "round4_generation"])
+
+    def test_input_order_does_not_matter(self):                                        # (e)
+        v = {(("release",), ("version",)): True, (("release",), ("build",)): True}
+        a = clc.resolve_sources(self._src({"release": ["build"]}, {"release": ["version"]}), CTX5, v)
+        b = clc.resolve_sources(list(reversed(self._src({"release": ["build"]}, {"release": ["version"]}))), CTX5, v)
+        self.assertEqual(a, b)
+
+    def test_resolution_reads_no_benchmark(self):                                       # (f) seed-independence
+        src = self._src({"release": ["build"]}, {"release": ["version"]}); v = {(("release",), ("version",)): True}
+        with mock.patch("builtins.open", side_effect=AssertionError("resolution must not read files")), \
+             mock.patch("pathlib.Path.read_text", side_effect=AssertionError("resolution must not read files")):
+            out = clc.resolve_sources(src, CTX5, v)
+        self.assertEqual(out["lexicon"], {"release": ["version"]})
+
+    def test_gate_removal_never_falls_back(self):                                       # (g)
+        from tests.benchmarks import alias_candidates_tool as act
+        v = {(("release",), ("version",)): True, (("release",), ("build",)): True}
+        out = clc.resolve_sources(self._src({"release": ["build"]}, {"release": ["version"]}), CTX5, v)
+        doc = {"lexicon": dict(out["lexicon"]), "rejected": dict(out["rejected"])}
+        bench = {"seed": [{"id": "s-1", "query": "publish a release", "expected_top1_any": ["p:POST:/build"]}]}
+        by_key = {"p:POST:/build": {"key": "p:POST:/build", "operation_id": "build", "summary": "build", "tags": []}}
+        ranking = {"verb_methods": {"publish": ["POST"]}, "path_noise": [], "product_hints": {}}
+        doc, rejected = act.lexicon_gate(doc, bench, by_key, ranking)
+        self.assertEqual(rejected, ["release"]); self.assertNotIn("release", doc["lexicon"])      # removed, not replaced by release→build
+
+    def test_review_pairs_and_conflicts(self):
+        text = 'header\nENTRIES:\n{\n "access combination": ["combination"],\n "release": ["build"]\n}\n'
+        pairs = clc.review_pairs(text, {"access combination": False, "release": True})
+        self.assertEqual(pairs, {(("access", "combination"), ("combination",)): False, (("release",), ("build",)): True})
+        agreed, conflicts = clc.merge_verdicts([pairs, {(("release",), ("build",)): False}])
+        self.assertEqual(conflicts, [(("release",), ("build",))]); self.assertNotIn((("release",), ("build",)), agreed)
+
+    def test_conflicting_past_verdicts_are_pending(self):
+        agreed, conflicts = clc.merge_verdicts([{(("release",), ("version",)): True}, {(("release",), ("version",)): False}])
+        out = clc.resolve_sources(self._src(None, {"release": ["version"]}), CTX5, agreed)
+        self.assertEqual(out["pending"], [(("release",), ("version",), "release")]); self.assertNotIn("release", out["lexicon"])
+
+    def test_cap_removed_entry_keeps_provenance(self):
+        raw4 = {w: ["issue"] for w in ("aaa", "bbb", "ccc", "ddd", "eee", "fff")}           # 6 words on one concept → cap keeps 5
+        v = {((w,), ("issue",)): True for w in raw4}
+        out = clc.resolve_sources(self._src(None, raw4), (CONCEPTS, CATALOG, VERBS, HINTS, set(), frozenset(), None), v)
+        self.assertEqual(out["rejected"]["fff"]["reason"], "concept-cap"); self.assertEqual(out["selected"]["fff"]["source"], "round4_generation")
+        self.assertNotIn("fff", out["lexicon"])
+
+    def test_fresh_verdict_resolves_conflict(self):
+        past = [{(("release",), ("version",)): True}, {(("release",), ("version",)): False}]
+        for fresh_v in (True, False):
+            eff, left = clc.resolve_verdicts(past, [{(("release",), ("version",)): fresh_v}])
+            self.assertEqual(eff[(("release",), ("version",))], fresh_v); self.assertEqual(left, [])
+        eff, left = clc.resolve_verdicts(past, [])
+        self.assertNotIn((("release",), ("version",)), eff); self.assertEqual(left, [(("release",), ("version",))])
+        eff, _ = clc.resolve_verdicts([{(("ticket",), ("issue",)): True}], [{(("ticket",), ("issue",)): False}])
+        self.assertTrue(eff[(("ticket",), ("issue",))])                                   # fresh never overrides an agreed past verdict
+
+    def test_render_pending_review_batches_unique_keys(self):
+        tpl = 'Reply ONLY with JSON.\n\nENTRIES:\n<the "lexicon" object of lexicon_structural.json>\n'
+        texts = clc.render_pending_review(tpl, [(("release",), ("version",), "release"), (("release",), ("build",), "release")])
+        self.assertEqual(len(texts), 2)
+        self.assertEqual([json.loads(t.split("ENTRIES:\n", 1)[1]) for t in texts], [{"release": ["build"]}, {"release": ["version"]}])
+    def test_cli_resolve_writes_pending_then_lexicon(self):
+        import tempfile, pathlib
+        with tempfile.TemporaryDirectory() as td:
+            d = pathlib.Path(td); tpl = d / "tpl.md"; tpl.write_text('ENTRIES:\n<the "lexicon" object of lexicon_structural.json>\n')
+            (d / "r2.json").write_text(json.dumps({"release": ["build"]})); (d / "r4.json").write_text(json.dumps({"release": ["version"]}))
+            (d / "rv2.json").write_text(json.dumps({"release": False})); (d / "ri2.txt").write_text('ENTRIES:\n{"release": ["build"]}\n')
+            (d / "rv4.json").write_text(json.dumps({})); (d / "ri4.txt").write_text('ENTRIES:\n{}\n')
+            args = ["resolve", "--cache-dir", "unused", "--round", "5", "--template", str(tpl),
+                    "--source", "round2_archive", str(d / "r2.json"), str(d / "rv2.json"), str(d / "ri2.txt"),
+                    "--source", "round4_generation", str(d / "r4.json"), str(d / "rv4.json"), str(d / "ri4.txt"),
+                    "--pending-out", str(d / "pending"), "--out", str(d / "lex.json")]
+            with mock.patch.object(clc, "_context", return_value=(None, "fp", {}, {"verb_methods": {}}, {}, CTX5)):
+                self.assertEqual(clc.main(args), 3)                                    # release→version unreviewed
+                (d / "rv5.json").write_text(json.dumps({"release": True}))
+                self.assertEqual(clc.main(args + ["--review-r5", str(d / "rv5.json"), str(d / "pending" / "review-input-1.txt")]), 0)
+            doc = json.loads((d / "lex.json").read_text())
+            self.assertEqual(doc["lexicon"], {"release": ["version"]}); self.assertEqual(doc["components"]["union_resolution"], "source-precedence")
+
+
+class TestRound5CarryForward(unittest.TestCase):
+    """Round 5 spec v1.12 (thread 2 ruling A′): cumulative lexicon provenance; prior candidates are provenance-only."""
+    PRIOR_LEX = {"round": 2, "lexicon": {"crew": ["team"], "release": ["build"], "old": ["x"]}}
+    NEW_LEX = {"round": 5, "lexicon": {"release": ["version"], "hour": ["time"]}, "selected": {"release": {"source": "round4_generation", "provenance_rank": 1},
+               "hour": {"source": "round2_archive", "provenance_rank": 0}}, "rejected": {"old": {"reason": "no-eligible-candidate"}},
+               "components": {"union_resolution": "source-precedence"}}
+    PRIOR_C = {"candidates": {"feedback": {"targets": ["comment"]}, "hour": {"targets": ["worklog"]}}}
+    NEW_C = {"candidates": {"hour": {"targets": ["time"]}}}
+
+    def _carry(self):
+        return clc.carry_forward(self.NEW_LEX, self.PRIOR_LEX, self.NEW_C, self.PRIOR_C, prior_shas={"concept_lexicon_sha256": "L", "alias_candidates_sha256": "C"})
+
+    def test_prior_key_absent_from_round5_is_kept_with_carried_provenance(self):
+        lex, _ = self._carry()
+        self.assertEqual(lex["lexicon"]["crew"], ["team"]); self.assertEqual(lex["lexicon"]["old"], ["x"])
+        self.assertEqual(lex["carried_selected"]["crew"]["from_round"], 2); self.assertNotIn("release", lex["carried_selected"])
+        self.assertEqual(lex["components"]["carried_from"], {"round": 2, "concept_lexicon_sha256": "L", "alias_candidates_sha256": "C"})
+        self.assertEqual(lex["components"]["union_resolution"], "source-precedence")
+
+    def test_round5_value_and_provenance_win_on_collision(self):
+        lex, _ = self._carry()
+        self.assertEqual(lex["lexicon"]["release"], ["version"]); self.assertEqual(lex["selected"], self.NEW_LEX["selected"])
+
+    def test_prior_candidates_are_provenance_only(self):
+        _, cands = self._carry()
+        self.assertEqual(cands["candidates"], self.NEW_C["candidates"])                  # active surface unchanged
+        self.assertEqual(set(cands["carried_candidates"]), {"feedback"})               # Round 5 key not duplicated
+
+    def test_carry_is_idempotent_over_a_prior_carry(self):
+        lex, cands = self._carry()
+        lex2, cands2 = clc.carry_forward({**self.NEW_LEX, "round": 6}, lex, {"candidates": {}}, cands, prior_shas={"concept_lexicon_sha256": "L5", "alias_candidates_sha256": "C5"})
+        self.assertEqual(lex2["carried_selected"]["crew"]["from_round"], 2)              # original round preserved through chains
+        self.assertIn("feedback", cands2["carried_candidates"]); self.assertIn("hour", cands2["carried_candidates"])
+
+
+class TestRound5CarryIsolation(unittest.TestCase):
+    def test_inputs_unchanged_and_outputs_independent(self):
+        import copy as _copy
+        prior_lex = {"round": 2, "lexicon": {"crew": ["team"]}, "carried_selected": {}, "selected": {"crew": {"source": "round2", "notes": ["a"]}}}
+        prior_c = {"candidates": {"feedback": {"targets": ["comment"]}}}
+        new_lex, new_c = {"round": 5, "lexicon": {}, "selected": {}}, {"candidates": {}}
+        before = _copy.deepcopy((new_lex, prior_lex, new_c, prior_c))
+        lex, cands = clc.carry_forward(new_lex, prior_lex, new_c, prior_c, prior_shas={})
+        self.assertEqual((new_lex, prior_lex, new_c, prior_c), before)
+        lex["carried_selected"]["crew"]["selected"]["notes"].append("mutated"); cands["carried_candidates"]["feedback"]["targets"].append("x")
+        self.assertEqual((prior_lex, prior_c), before[1::2])                       # outputs share no objects with the prior documents

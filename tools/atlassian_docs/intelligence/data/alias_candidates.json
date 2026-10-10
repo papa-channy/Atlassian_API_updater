@@ -1,5 +1,95 @@
 {
   "candidates": {
+    "date": {
+      "allowed_targets": [
+        "sprint"
+      ],
+      "catalog_df": 0,
+      "seed_ids": [
+        "s-032"
+      ],
+      "targets_by_seed": {
+        "s-032": [
+          "sprint"
+        ]
+      }
+    },
+    "exist": {
+      "allowed_targets": [
+        "board"
+      ],
+      "catalog_df": 1,
+      "seed_ids": [
+        "s-033"
+      ],
+      "targets_by_seed": {
+        "s-033": [
+          "board"
+        ]
+      }
+    },
+    "fresh": {
+      "allowed_targets": [
+        "page"
+      ],
+      "catalog_df": 0,
+      "seed_ids": [
+        "s-035"
+      ],
+      "targets_by_seed": {
+        "s-035": [
+          "page"
+        ]
+      }
+    },
+    "multipart": {
+      "allowed_targets": [
+        "attachment",
+        "issue"
+      ],
+      "catalog_df": 0,
+      "seed_ids": [
+        "s-003"
+      ],
+      "targets_by_seed": {
+        "s-003": [
+          "attachment",
+          "issue"
+        ]
+      }
+    },
+    "summary": {
+      "allowed_targets": [
+        "issue"
+      ],
+      "catalog_df": 0,
+      "seed_ids": [
+        "s-022"
+      ],
+      "targets_by_seed": {
+        "s-022": [
+          "issue"
+        ]
+      }
+    },
+    "uploaded": {
+      "allowed_targets": [
+        "attachment",
+        "issue"
+      ],
+      "catalog_df": 0,
+      "seed_ids": [
+        "s-029"
+      ],
+      "targets_by_seed": {
+        "s-029": [
+          "attachment",
+          "issue"
+        ]
+      }
+    }
+  },
+  "carried_candidates": {
     "attached": {
       "allowed_targets": [
         "attachment",
@@ -42,16 +132,6 @@
         "s-005": [
           "page"
         ]
-      }
-    },
-    "date": {
-      "allowed_targets": [],
-      "catalog_df": 0,
-      "seed_ids": [
-        "s-032"
-      ],
-      "targets_by_seed": {
-        "s-032": []
       }
     },
     "detail": {
@@ -105,16 +185,6 @@
         ]
       }
     },
-    "exist": {
-      "allowed_targets": [],
-      "catalog_df": 1,
-      "seed_ids": [
-        "s-033"
-      ],
-      "targets_by_seed": {
-        "s-033": []
-      }
-    },
     "feedback": {
       "allowed_targets": [
         "issue"
@@ -129,20 +199,6 @@
         ]
       }
     },
-    "fresh": {
-      "allowed_targets": [
-        "page"
-      ],
-      "catalog_df": 0,
-      "seed_ids": [
-        "s-035"
-      ],
-      "targets_by_seed": {
-        "s-035": [
-          "page"
-        ]
-      }
-    },
     "iteration": {
       "allowed_targets": [],
       "catalog_df": 0,
@@ -151,22 +207,6 @@
       ],
       "targets_by_seed": {
         "s-032": []
-      }
-    },
-    "multipart": {
-      "allowed_targets": [
-        "attachment",
-        "issue"
-      ],
-      "catalog_df": 0,
-      "seed_ids": [
-        "s-003"
-      ],
-      "targets_by_seed": {
-        "s-003": [
-          "attachment",
-          "issue"
-        ]
       }
     },
     "new": {
@@ -264,20 +304,6 @@
         ]
       }
     },
-    "summary": {
-      "allowed_targets": [
-        "issue"
-      ],
-      "catalog_df": 0,
-      "seed_ids": [
-        "s-022"
-      ],
-      "targets_by_seed": {
-        "s-022": [
-          "issue"
-        ]
-      }
-    },
     "time": {
       "allowed_targets": [
         "issue",
@@ -291,22 +317,6 @@
         "s-030": [
           "issue",
           "worklog"
-        ]
-      }
-    },
-    "uploaded": {
-      "allowed_targets": [
-        "attachment",
-        "issue"
-      ],
-      "catalog_df": 0,
-      "seed_ids": [
-        "s-029"
-      ],
-      "targets_by_seed": {
-        "s-029": [
-          "attachment",
-          "issue"
         ]
       }
     },
@@ -330,25 +340,33 @@
   "excluded": {
     "add": "verb",
     "agile": "product_hint",
-    "assignee": "expected_vocab",
+    "assignee": "existing_alias",
     "attach": "verb",
+    "attached": "existing_alias",
     "attachment": "expected_vocab",
     "backlog": "product_hint",
-    "blog": "expected_vocab",
+    "blog": "existing_alias",
     "board": "product_hint",
     "browse": "verb",
     "change": "verb",
     "comment": "verb",
+    "configuration": "existing_alias",
     "confluence": "product_hint",
+    "content": "existing_alias",
     "create": "verb",
     "delete": "verb",
+    "detail": "existing_alias",
     "discard": "verb",
+    "draft": "existing_alias",
+    "entry": "existing_alias",
+    "feedback": "existing_alias",
     "fetch": "verb",
     "file": "existing_alias",
     "get": "verb",
     "id": "id_like",
     "inside": "function_word",
     "issue": "existing_alias",
+    "iteration": "existing_alias",
     "jira": "product_hint",
     "jql": "existing_alias",
     "key": "existing_alias",
@@ -356,11 +374,14 @@
     "list": "verb",
     "move": "verb",
     "my": "function_word",
+    "new": "existing_alias",
     "page": "existing_alias",
+    "planning": "existing_alias",
     "post": "verb",
-    "project": "expected_vocab",
+    "project": "existing_alias",
     "publish": "verb",
     "query": "verb",
+    "release": "existing_alias",
     "remove": "verb",
     "revise": "verb",
     "rewrite": "verb",
@@ -368,8 +389,12 @@
     "search": "verb",
     "set": "verb",
     "show": "verb",
+    "space": "existing_alias",
     "sprint": "product_hint",
+    "starred": "existing_alias",
+    "status": "existing_alias",
     "ticket": "existing_alias",
+    "time": "existing_alias",
     "title": "expected_vocab",
     "transition": "verb",
     "trash": "verb",
@@ -378,22 +403,23 @@
     "upload": "verb",
     "watcher": "expected_vocab",
     "which": "function_word",
-    "wiki": "product_hint"
+    "wiki": "product_hint",
+    "workspace": "existing_alias"
   },
   "generated_from": {
     "inputs": {
-      "aliases": "20d94582413d6587ab2c68fa1c67552ea10fbbe931c1a77eb34a71e4dff55918",
-      "bench": "c6660b57fcf445f3a941fbad359c888b1119ea765b7b8015fe929e21aec8862c",
-      "ranking": "3648e860a0ef8739d92bd1d88e305f46f7cbefb0dbc01230d95eaf6fbae8d555",
+      "aliases": "a17b484ca37a06ec651b3141271c49c8ebfe538dfcf86663ab4438338dd47954",
+      "bench": "4e8afe00ac3cc86ece8cbc41d6d6d803f74c19c6bd9e380b2404af0f57d554d4",
+      "ranking": "8345e9e624f0942b7aff540532fdc554d2e371d6faf01e4c89faa2d4bbc1d986",
       "verb_inventory": "d66317db7a6a3d047f30197791eefdb93448747b913544da7545136f91dbffc0"
     },
-    "registry_fingerprint": "f3c2e9d48aa85c96ca62cdd84ff700cc2714c888cf4148b3a91c604c45b47b62",
+    "registry_fingerprint": "e308a232d6c9b19a7413e8a38c89b895e44e503581d529c2a31b31fbde179853",
     "spec_sha256": {
       "confluence": "b3d010b6438677d864495ce15828f57080ff72afe190efdf7f86f0f5140b700d",
-      "jira-platform": "3d0edfb02ff91873f99421de579182b6d66f07b804063e9ae458a30d6901a2db",
+      "jira-platform": "a7a330f1e293c58d57420fa58f1b95c22976dad5390ce466b55150051040fe9e",
       "jira-software": "cb7e24b331ad9b31944fa9a588f70d4ea60d74d1dfb52d39a59770230b79207a"
     },
-    "tool_version": "round2.1"
+    "tool_version": "round3.1"
   },
-  "round": 2
+  "round": 5
 }
