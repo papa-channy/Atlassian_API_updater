@@ -27,7 +27,8 @@ class TestRound6CounterexampleReference(unittest.TestCase):
 
 
 class TestRound6PreT(unittest.TestCase):
-    M_OK = {"wv": 0, "fr": 0, "sr3": 55, "src": 55, "srk": 55, "rp3": 3, "rpk": 3, "nab": 19, "n_seed": 55, "n_rp": 3, "n_rn": 19}
+    M_OK = {"wv": 0, "fr": 0, "ir": 0, "sr3": 55, "src": 50, "srk": 50, "rp3": 3, "rpk": 2, "nab": 19, "n_seed": 55, "n_rp": 3, "n_rn": 19,
+            "n_seed_elig": 50, "n_rp_elig": 2}                                       # spec v1.7 eligible denominators
 
     def _result(self, m, scorer_ok=True, errors=(), fixture_final=(), cx=None):
         r = types.SimpleNamespace(metrics=m, scorer_rule={"ok": scorer_ok, "losses": 0, "eligible": 600}, validation_errors=list(errors),
@@ -36,8 +37,8 @@ class TestRound6PreT(unittest.TestCase):
         return r
 
     def test_metric_violations_name_item_value_bound(self):
-        v = sim.metric_violations({**self.M_OK, "wv": 1, "srk": 40})
-        self.assertEqual([x["item"] for x in v], ["wv", "srk"])
+        v = sim.metric_violations({**self.M_OK, "wv": 1, "srk": 40, "ir": 1})
+        self.assertEqual([x["item"] for x in v], ["wv", "ir", "srk"])
         self.assertEqual(v[0], {"item": "wv", "value": 1, "bound": "== 0"})
 
     def test_blockers(self):

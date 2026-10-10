@@ -118,7 +118,7 @@ class TestDiagScript(unittest.TestCase):
         with mock.patch("builtins.print"):
             code, rep = diag.run(["--cache-dir", str(self.cache), "--round", "6", "--bench-file", str(bp), "--bench", str(pp)])
         self.assertEqual(code, 0)
-        self.assertEqual(set(rep["gate"]["checks"]), {"reach", "coverage", "precision", "write_safety", "abstention"})
+        self.assertEqual(set(rep["gate"]["checks"]), {"reach", "coverage", "precision", "write_safety", "abstention", "eligibility"})   # + spec v1.7
         self.assertEqual(rep["gate"]["counts"]["held_out"], 2); self.assertEqual(rep["gate"]["counts"]["negative"], 1)
         assert_no_query_key(self, rep["usage"])
 

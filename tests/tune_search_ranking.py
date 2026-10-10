@@ -221,7 +221,8 @@ class GridEvaluator:
         head = self.S.head_info(run, rp.verb_methods, concepts)
         cands = self.S.order_candidates(cands, rules, allowed, preferred, head["number"] if head else None)
         top = cands[0][1] if cands else None
-        reason = self.S.abstain_reason(allowed=allowed, top_op=top, pinned=False, unigrams=run, rp=rp, pol=self.ap, concepts=concepts)
+        reason = self.S.abstain_reason(allowed=allowed, top_op=top, pinned=False, unigrams=run, rp=rp, pol=self.ap, concepts=concepts,
+                                       query=query)
         return cands, allowed, top, reason
 
     def _fallback(self, query):
@@ -263,8 +264,14 @@ def usage_fn(state):
     return fn
 
 
-def evaluate_usage(bench, fn) -> dict:
-    out = {s: ev.usage_rows(bench.get(s) or [], fn) for s in ev.TRAINING_SECTIONS}
+def eligible_fn(rp):
+    """spec v1.7 §4.1: recommendation eligibility = production method intent (tokenize_unigrams, frozen verb inventory) non-empty."""
+    from tools.atlassian_docs.intelligence import search as S
+    return lambda q: bool(S.method_intent(S.tokenize_unigrams(q), rp.verb_methods)[1])
+
+
+def evaluate_usage(bench, fn, eligible=None) -> dict:
+    out = {s: ev.usage_rows(bench.get(s) or [], fn, eligible) for s in ev.TRAINING_SECTIONS}
     out["m"] = ev.training_vector(out["seed"], out["regression_positive"], out["regression_negative"])
     return out
 
@@ -272,12 +279,12 @@ def evaluate_usage(bench, fn) -> dict:
 def evaluate_usage_point(state, rp, point, bench, alias_policy) -> dict:
     with mock.patch.object(policy, "ranking", return_value=ranking_with(rp, point)), \
             mock.patch.object(policy, "aliases", return_value=alias_policy):
-        return evaluate_usage(bench, usage_fn(state))
+        return evaluate_usage(bench, usage_fn(state), eligible_fn(rp))
 
 
 def evaluate_usage_fast(ge, rp, point, bench) -> dict:
     rpp = ranking_with(rp, point)
-    return evaluate_usage(bench, lambda q: ge.usage(q, rpp))
+    return evaluate_usage(bench, lambda q: ge.usage(q, rpp), eligible_fn(rp))
 
 
 def write_constants(point, path=RANKING_PATH) -> None:
@@ -531,13 +538,17 @@ def improved(before, after, section) -> bool:
     """spec §4.2 target improvement by record type."""
     if (before["wrong_write"] or before["forbidden_recommended"]) and not (after["wrong_write"] or after["forbidden_recommended"]):
         return True
-    if section == "regression_negative":
-        return not before["abstained"] and after["abstained"]
+    if section == "regression_negative" or not before.get("eligible", True):      # spec v1.7: an ineligible record must abstain
+        if not before["abstained"] and after["abstained"]:
+            return True
+        if section == "regression_negative":
+            return False
     return (not before["top3"] and after["top3"]) or (not before["rec_correct"] and after["rec_correct"])
 
 
 def no_worse(m0, m1) -> bool:
-    return m1["wv"] <= m0["wv"] and m1["fr"] <= m0["fr"] and all(m1[k] >= m0[k] for k in ("sr3", "src", "srk", "rp3", "rpk", "nab"))
+    return (m1["wv"] <= m0["wv"] and m1["fr"] <= m0["fr"] and m1.get("ir", 0) <= m0.get("ir", 0)
+            and all(m1[k] >= m0[k] for k in ("sr3", "src", "srk", "rp3", "rpk", "nab")))
 
 
 def round_note_r6(word, sid, target) -> dict:

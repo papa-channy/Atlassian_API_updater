@@ -30,6 +30,7 @@ sys.path.insert(0, str(ROOT))
 from tests.benchmarks import evaluator as ev  # noqa: E402
 from tools.atlassian_docs import storage, sync  # noqa: E402
 from tools.atlassian_docs.intelligence import RegistryManager, policy, search_operations  # noqa: E402
+from tools.atlassian_docs.intelligence.search import method_intent, tokenize_unigrams  # noqa: E402
 
 BENCH = ROOT / "tests" / "benchmarks" / "search_queries.json"
 SOURCES = ("jira-platform", "jira-software", "confluence")
@@ -248,7 +249,9 @@ def _evaluate(state, bench, sections, sets, plain, rnd):
         usage = {}
         for name in sets:
             if isinstance(sections.get(name), list):
-                rows = ev.usage_rows(sections[name], lambda q: (ranked[q], recommended[q]))
+                vm = rp.verb_methods                                       # spec v1.7 §4.1 recommendation eligibility
+                rows = ev.usage_rows(sections[name], lambda q: (ranked[q], recommended[q]),
+                                     lambda q: bool(method_intent(tokenize_unigrams(q), vm)[1]))
                 usage[name] = [{**r, "id": r["id"]} for r in rows] if name not in HIDDEN_SETS else \
                               [{k: v for k, v in r.items() if k != "top1"} for r in rows]
         report["usage"] = usage

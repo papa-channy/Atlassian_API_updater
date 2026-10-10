@@ -131,8 +131,9 @@ def r0_regression_records(bench) -> list:
 
 
 # ---- Round 6 spec §4.1/§4.2: usage-grounded metrics -------------------------------------------------------------------
-def usage_row(rec, ranked, recommended) -> dict:
-    """One record judged as the agent sees it: top-3 reach, the recommendation, and its safety."""
+def usage_row(rec, ranked, recommended, eligible=True) -> dict:
+    """One record judged as the agent sees it: top-3 reach, the recommendation, and its safety. eligible = recommendation
+    eligibility (spec v1.7: production method intent is non-empty)."""
     exp, forb = set(rec.get("expected_top1_any") or []), set(rec.get("forbidden_top1") or [])
     method = recommended.split(":")[1] if recommended else None
     wrong = recommended is not None and recommended not in exp
@@ -141,64 +142,91 @@ def usage_row(rec, ranked, recommended) -> dict:
             "recommended": recommended, "abstained": recommended is None,
             "rec_correct": recommended is not None and recommended in exp,
             "wrong_write": wrong and method in WRITE_METHODS,
-            "forbidden_recommended": recommended is not None and recommended in forb}
+            "forbidden_recommended": recommended is not None and recommended in forb, "eligible": bool(eligible)}
 
 
-def usage_rows(records, usage_fn) -> list:
-    """usage_fn(query) -> (ranked_keys, recommended_key_or_None)."""
+def usage_rows(records, usage_fn, eligible_fn=None) -> list:
+    """usage_fn(query) -> (ranked_keys, recommended_key_or_None); eligible_fn(query) -> bool (default: every record eligible)."""
     out = []
     for rec in records:
         ranked, recommended = usage_fn(rec["query"])
-        out.append(usage_row(rec, list(ranked), recommended))
+        out.append(usage_row(rec, list(ranked), recommended, eligible_fn(rec["query"]) if eligible_fn is not None else True))
     return out
 
 
+def _eligible(r) -> bool:
+    return r.get("eligible", True)
+
+
 def gate_metrics(held_rows, neg_rows) -> dict:
-    """Round 6 spec §4.1: five exact-fraction checks on the hidden set (n = 16 / 8 in the spec; the fractions generalize)."""
+    """Round 6 spec §4.1 (v1.7): exact-fraction checks on the hidden set; coverage over recommendation-eligible held_out."""
     n_h, n_n = len(held_rows), len(neg_rows)
+    n_elig = sum(_eligible(r) for r in held_rows)
     reach = sum(r["top3"] for r in held_rows)
     cov = sum(not r["abstained"] for r in held_rows)
     correct = sum(r["rec_correct"] for r in held_rows)
     writes = sum(r["wrong_write"] for r in held_rows + neg_rows)
     abst = sum(r["abstained"] for r in neg_rows)
-    checks = {"reach": 16 * reach >= 15 * n_h, "coverage": 16 * cov >= 14 * n_h,
-              "precision": cov > 0 and 10 * correct >= 9 * cov, "write_safety": writes == 0, "abstention": 8 * abst >= 7 * n_n}
-    counts = {"held_out": n_h, "negative": n_n, "reach3": reach, "recommended": cov, "correct": correct,
-              "wrong_writes": writes, "abstained": abst, "top1_correct": sum(r["top1_correct"] for r in held_rows)}   # recorded only
+    inel = sum(1 for r in held_rows if not _eligible(r) and not r["abstained"])
+    checks = {"reach": 16 * reach >= 15 * n_h, "coverage": 16 * cov >= 14 * n_elig,
+              "precision": cov > 0 and 10 * correct >= 9 * cov, "write_safety": writes == 0, "abstention": 8 * abst >= 7 * n_n,
+              "eligibility": inel == 0}
+    counts = {"held_out": n_h, "held_out_eligible": n_elig, "negative": n_n, "reach3": reach, "recommended": cov, "correct": correct,
+              "wrong_writes": writes, "abstained": abst, "ineligible_recommended": inel,
+              "top1_correct": sum(r["top1_correct"] for r in held_rows)}   # top1 recorded only
     return {"counts": counts, "checks": checks, "pass": all(checks.values())}
 
 
-ACCEPT_COMPONENTS = ("wv", "fr", "sr3", "src", "srk", "rp3", "rpk", "nab")
-FALLBACK_ORDER = (("wv", -1), ("fr", -1), ("sr3", 1), ("srk", 1), ("src", 1), ("rp3", 1), ("rpk", 1), ("nab", 1))
+ACCEPT_COMPONENTS = ("wv", "fr", "ir", "sr3", "src", "srk", "rp3", "rpk", "nab")
+FALLBACK_ORDER = (("wv", -1), ("fr", -1), ("ir", -1), ("sr3", 1), ("srk", 1), ("src", 1), ("rp3", 1), ("rpk", 1), ("nab", 1))
 
 
 def training_vector(seed_rows, rp_rows, rn_rows) -> dict:
-    """Round 6 spec §4.2 metric vector m(point) over the three training sections."""
+    """Round 6 spec §4.2 metric vector m(point) over the three training sections (v1.7: ir and eligible denominators)."""
     every = list(seed_rows) + list(rp_rows) + list(rn_rows)
     return {"wv": sum(r["wrong_write"] for r in every), "fr": sum(r["forbidden_recommended"] for r in every),
+            "ir": sum(1 for r in list(seed_rows) + list(rp_rows) if not _eligible(r) and not r["abstained"]),
             "sr3": sum(r["top3"] for r in seed_rows), "src": sum(not r["abstained"] for r in seed_rows),
             "srk": sum(r["rec_correct"] for r in seed_rows), "rp3": sum(r["top3"] for r in rp_rows),
             "rpk": sum(r["rec_correct"] for r in rp_rows), "nab": sum(r["abstained"] for r in rn_rows),
-            "n_seed": len(seed_rows), "n_rp": len(rp_rows), "n_rn": len(rn_rows)}
+            "n_seed": len(seed_rows), "n_rp": len(rp_rows), "n_rn": len(rn_rows),
+            "n_seed_elig": sum(_eligible(r) for r in seed_rows), "n_rp_elig": sum(_eligible(r) for r in rp_rows)}
+
+
+def _denoms(m) -> tuple:
+    """(ir, |seed eligible|, |regression_positive eligible|); vectors built before spec v1.7 count every record as eligible."""
+    return m.get("ir", 0), m.get("n_seed_elig", m["n_seed"]), m.get("n_rp_elig", m["n_rp"])
 
 
 def accept_vector(m) -> bool:
-    """spec §4.2 accept(m), exact integer comparisons."""
-    return (m["wv"] == 0 and m["fr"] == 0 and 10 * m["sr3"] >= 9 * m["n_seed"] and 10 * m["src"] >= 9 * m["n_seed"]
-            and 10 * m["srk"] >= 9 * m["src"] and m["rp3"] == m["n_rp"] and m["rpk"] == m["n_rp"] and 8 * m["nab"] >= 7 * m["n_rn"])
+    """spec §4.2 accept(m) (v1.7), exact integer comparisons."""
+    ir, n_se, n_re = _denoms(m)
+    return (m["wv"] == 0 and m["fr"] == 0 and ir == 0 and 10 * m["sr3"] >= 9 * m["n_seed"] and 10 * m["src"] >= 9 * n_se
+            and 10 * m["srk"] >= 9 * m["src"] and m["rp3"] == m["n_rp"] and m["rpk"] == n_re and 8 * m["nab"] >= 7 * m["n_rn"])
+
+
+def h_adoption_ok(m_on, m_off, scorer) -> bool:
+    """spec v1.7 §3.5: rule non-regression / safety gate at the Round 5 constants (final accept stays with tuning)."""
+    ir, n_se, _ = _denoms(m_on)
+    return (bool(scorer and scorer.get("ok")) and m_on["wv"] <= m_off["wv"] and m_on["fr"] <= m_off["fr"] and ir == 0
+            and m_on["sr3"] >= m_off["sr3"] and m_on["rp3"] >= m_off["rp3"] and 10 * m_on["src"] >= 9 * n_se
+            and 10 * m_on["srk"] >= 9 * m_on["src"] and m_on["rpk"] >= m_off["rpk"] and m_on["nab"] >= m_off["nab"])
 
 
 def fallback_key(m) -> tuple:
-    """spec §4.2 lexicographic fallback: wv, fr minimal; sr3, srk, src, rp3, rpk, nab maximal (smaller tuple = better)."""
-    return tuple(m[k] if sign < 0 else -m[k] for k, sign in FALLBACK_ORDER)
+    """spec §4.2 lexicographic fallback: wv, fr, ir minimal; sr3, srk, src, rp3, rpk, nab maximal (smaller tuple = better)."""
+    return tuple(m.get(k, 0) if sign < 0 else -m[k] for k, sign in FALLBACK_ORDER)
 
 
 def violation(row, section) -> bool:
-    """spec §4.2 proposer input: an acceptance-violation record of its section."""
+    """spec §4.2 proposer input: an acceptance-violation record of its section (v1.7: an ineligible positive record violates iff
+    it is recommended or misses the top 3)."""
     if row["wrong_write"] or row["forbidden_recommended"]:
         return True
     if section == "regression_negative":
         return not row["abstained"]
+    if not _eligible(row):
+        return not row["abstained"] or not row["top3"]
     return not row["top3"] or row["abstained"] or not row["rec_correct"]
 
 

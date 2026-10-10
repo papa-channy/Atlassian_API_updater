@@ -147,14 +147,16 @@ def drive(keep: bool) -> int:
 # ------------------------------------------------------------------ pre-T checkpoint (AC-R3-01, spec §5 v1.22)
 from tests import tune_search_ranking as tune  # noqa: E402  (module-level: tests use sim.tune)
 
-BOUNDS = (("wv", "== 0"), ("fr", "== 0"), ("sr3", "10·sr3 ≥ 9·|seed|"), ("src", "10·src ≥ 9·|seed|"), ("srk", "10·srk ≥ 9·src"),
-          ("rp3", "== |regression_positive|"), ("rpk", "== |regression_positive|"), ("nab", "8·nab ≥ 7·|regression_negative|"))
+BOUNDS = (("wv", "== 0"), ("fr", "== 0"), ("ir", "== 0"), ("sr3", "10·sr3 ≥ 9·|seed|"), ("src", "10·src ≥ 9·|seed eligible|"),
+          ("srk", "10·srk ≥ 9·src"), ("rp3", "== |regression_positive|"), ("rpk", "== |regression_positive eligible|"),
+          ("nab", "8·nab ≥ 7·|regression_negative|"))                         # spec v1.7 §4.2
 
 
 def metric_violations(m) -> list:
-    ok = {"wv": m["wv"] == 0, "fr": m["fr"] == 0, "sr3": 10 * m["sr3"] >= 9 * m["n_seed"], "src": 10 * m["src"] >= 9 * m["n_seed"],
-          "srk": 10 * m["srk"] >= 9 * m["src"], "rp3": m["rp3"] == m["n_rp"], "rpk": m["rpk"] == m["n_rp"], "nab": 8 * m["nab"] >= 7 * m["n_rn"]}
-    return [{"item": k, "value": m[k], "bound": b} for k, b in BOUNDS if not ok[k]]
+    ir, n_se, n_re = ev._denoms(m)
+    ok = {"wv": m["wv"] == 0, "fr": m["fr"] == 0, "ir": ir == 0, "sr3": 10 * m["sr3"] >= 9 * m["n_seed"], "src": 10 * m["src"] >= 9 * n_se,
+          "srk": 10 * m["srk"] >= 9 * m["src"], "rp3": m["rp3"] == m["n_rp"], "rpk": m["rpk"] == n_re, "nab": 8 * m["nab"] >= 7 * m["n_rn"]}
+    return [{"item": k, "value": m.get(k, 0), "bound": b} for k, b in BOUNDS if not ok[k]]
 
 
 def equivalence_mismatches(state, rp, bench, ap, n=20, seed=20261011) -> list:
@@ -596,8 +598,8 @@ def apply_B():
 def _synthetic_metrics(bench) -> dict:
     """A perfect Round 6 metric vector over the live training sections (synthetic: no snapshot answers the real bench)."""
     n_seed, n_rp, n_rn = (len(bench.get(s) or []) for s in ev.TRAINING_SECTIONS)
-    return {"wv": 0, "fr": 0, "sr3": n_seed, "src": n_seed, "srk": n_seed, "rp3": n_rp, "rpk": n_rp, "nab": n_rn,
-            "n_seed": n_seed, "n_rp": n_rp, "n_rn": n_rn}
+    return {"wv": 0, "fr": 0, "ir": 0, "sr3": n_seed, "src": n_seed, "srk": n_seed, "rp3": n_rp, "rpk": n_rp, "nab": n_rn,
+            "n_seed": n_seed, "n_rp": n_rp, "n_rn": n_rn, "n_seed_elig": n_seed, "n_rp_elig": n_rp}
 
 
 def _round6_line(point, patch, accept, b_aliases, b_ranking, cands_doc, bench, rp, note) -> dict:

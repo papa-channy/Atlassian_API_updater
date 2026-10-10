@@ -345,6 +345,32 @@ def head_info(unigrams, verb_methods, concepts):
     return head
 
 
+R1_BOUNDARY = frozenset({"in", "for", "of", "on", "with", "by", "at"})     # spec v1.7 §3.2 (to/from are not boundaries)
+
+
+def r1_tokens(query) -> tuple:
+    """Placeholder-free, camel-split, lower-case tokens (length >= 2) KEEPING stopwords and duplicates: the R1 span needs the
+    prepositions tokenize_unigrams drops."""
+    text = _PLACEHOLDER.sub(" ", query or "")
+    text = _CAMEL_2.sub(r"\1 \2", _CAMEL_1.sub(r"\1 \2", text)).lower()
+    return tuple(t for t in _SPLIT.split(text) if len(t) >= 2)
+
+
+def r1_head(query, verb_methods, concepts):
+    """spec v1.7 §3.2: head_info over the direct-object span - after the first verb, up to the first boundary preposition."""
+    toks = r1_tokens(query)
+    first = next((i for i, t in enumerate(toks) if t in verb_methods), None)
+    if first is None:
+        return None
+    span = []
+    for t in toks[first + 1:]:
+        if t in R1_BOUNDARY:
+            break
+        if t not in STOPWORDS:
+            span.append(t)
+    return head_info(tuple(span), verb_methods, concepts)
+
+
 def covered(token, vocab, aliases) -> bool:
     """spec §3.2a: token_forms(t) ∪ token_forms(direct alias targets of t's forms) meets the operation vocabulary."""
     forms = set(token_forms(token))
@@ -354,9 +380,10 @@ def covered(token, vocab, aliases) -> bool:
     return bool(forms & vocab)
 
 
-def abstain_reason(*, allowed, top_op, pinned, unigrams, rp, pol, concepts):
+def abstain_reason(*, allowed, top_op, pinned, unigrams, rp, pol, concepts, query=None):
     """spec §3.1 precedence: no_method_intent > no_resource_evidence (R0) > product_conflict (R2) > uncovered_head_resource (R1).
-    pinned: the top result is an exact key/operationId pin (counts as R0 evidence, spec §3.2a review 4 P1-1)."""
+    pinned: the top result is an exact key/operationId pin (counts as R0 evidence, spec §3.2a review 4 P1-1). query: the raw query for
+    the R1 direct-object span (spec v1.7); without it the span is read from the rule unigrams."""
     if not allowed:
         return "no_method_intent"
     if top_op is None:
@@ -371,7 +398,7 @@ def abstain_reason(*, allowed, top_op, pinned, unigrams, rp, pol, concepts):
         if hinted and top_op.source not in hinted:
             return "product_conflict"
     if "R1" in _enabled and top_op.method.upper() in WRITE_METHODS:
-        h = head_info(unigrams, rp.verb_methods, concepts)
+        h = r1_head(query if query is not None else " ".join(unigrams), rp.verb_methods, concepts)
         if h is not None and not covered(h["concept"], vocab, pol.aliases):
             return "uncovered_head_resource"
     return None
@@ -555,7 +582,7 @@ def search_operations(state, query: str, *, source=None, method=None, tag=None,
     if shown:
         top_op = state.registry.sources[shown[0]["source"]].operations_by_key[shown[0]["key"]]
     reason = abstain_reason(allowed=allowed, top_op=top_op, pinned=bool(shown) and shown[0]["key"] in pinned_keys,
-                            unigrams=run, rp=rp, pol=pol, concepts=concepts)
+                            unigrams=run, rp=rp, pol=pol, concepts=concepts, query=query)
     payload["abstain_reason"] = reason
     payload["actionable"] = payload["method_intent_consistent"] and reason is None          # Round 6 spec §3.1
     payload["recommended_operation"] = shown[0]["key"] if payload["actionable"] and shown else None

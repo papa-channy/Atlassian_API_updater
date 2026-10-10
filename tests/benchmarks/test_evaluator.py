@@ -917,7 +917,7 @@ class TestRound6UsageMetrics(unittest.TestCase):
         self.assertFalse(ev.accept_vector({**m, "nab": 6}))                # 8·6 < 7·8
 
     def test_fallback_order_covers_accept_components_once(self):
-        self.assertEqual([k for k, _ in ev.FALLBACK_ORDER], ["wv", "fr", "sr3", "srk", "src", "rp3", "rpk", "nab"])
+        self.assertEqual([k for k, _ in ev.FALLBACK_ORDER], ["wv", "fr", "ir", "sr3", "srk", "src", "rp3", "rpk", "nab"])   # spec v1.7
         self.assertEqual(sorted(k for k, _ in ev.FALLBACK_ORDER), sorted(ev.ACCEPT_COMPONENTS))
         better = {"wv": 0, "fr": 0, "sr3": 5, "srk": 5, "src": 5, "rp3": 1, "rpk": 1, "nab": 3}
         self.assertLess(ev.fallback_key(better), ev.fallback_key({**better, "wv": 1}))
@@ -957,3 +957,61 @@ class TestRound6Schema(unittest.TestCase):
         self.assertNotIn("known_unreachable_registry_sha256", keys)
         self.assertIn("known_unreachable_seeds", keys)
         self.assertIn("known_unreachable_registry_sha256", ev.freeze_key_set(5))                 # Round 5 unchanged
+
+
+class TestRound6Eligibility(unittest.TestCase):
+    """spec v1.7 §4.1/§4.2: recommendation eligibility (production method intent) separates answerable from recommendable."""
+    def _row(self, i, eligible=True, **kw):
+        base = {"id": i, "top1": None, "top1_correct": False, "top3": True, "recommended": "k", "abstained": False, "rec_correct": True,
+                "wrong_write": False, "forbidden_recommended": False, "eligible": eligible}
+        base.update(kw); return base
+
+    def test_usage_rows_take_an_eligibility_function(self):
+        k = "a:GET:/k"
+        recs = [{"id": "s-001", "query": "get page", "expected_top1_any": [k], "forbidden_top1": []},
+                {"id": "s-002", "query": "page", "expected_top1_any": [k], "forbidden_top1": []}]
+        rows = ev.usage_rows(recs, lambda q: ([k], k if q.startswith("get") else None), eligible_fn=lambda q: q.startswith("get"))
+        self.assertEqual([r["eligible"] for r in rows], [True, False])
+        self.assertTrue(all(r["eligible"] for r in ev.usage_rows(recs, lambda q: ([k], None))))
+
+    def test_eligibility_denominators_and_ir(self):
+        seed = [self._row(f"s-{i:03d}") for i in range(8)] + [self._row(f"s-{i:03d}", eligible=False, abstained=True, recommended=None, rec_correct=False)
+                                                              for i in range(8, 10)]
+        rp = [self._row("rn-001"), self._row("rn-002", eligible=False, abstained=True, recommended=None, rec_correct=False)]
+        m = ev.training_vector(seed, rp, [])
+        self.assertEqual({k: m[k] for k in ("src", "n_seed", "n_seed_elig", "rpk", "n_rp", "n_rp_elig", "ir")},
+                         {"src": 8, "n_seed": 10, "n_seed_elig": 8, "rpk": 1, "n_rp": 2, "n_rp_elig": 1, "ir": 0})
+        self.assertTrue(ev.accept_vector(m))                               # 10·8 ≥ 9·8, rpk == 1 eligible, rp3 == 2
+        bad = ev.training_vector(seed[:-1] + [self._row("s-009", eligible=False)], rp, [])
+        self.assertEqual(bad["ir"], 1); self.assertFalse(ev.accept_vector(bad))
+
+    def test_violation_for_ineligible_rows(self):
+        quiet = self._row("s-1", eligible=False, abstained=True, recommended=None, rec_correct=False)
+        self.assertFalse(ev.violation(quiet, "seed"))                       # top-3 reach, correctly abstained
+        self.assertTrue(ev.violation({**quiet, "top3": False}, "seed"))
+        self.assertTrue(ev.violation(self._row("s-2", eligible=False), "regression_positive"))   # recommended although ineligible
+
+    def test_gate_coverage_uses_eligible_heldout(self):
+        held = [self._row(f"h-{i:03d}") for i in range(13)] + [self._row(f"h-{i:03d}", eligible=False, abstained=True, recommended=None,
+                                                                         rec_correct=False) for i in range(13, 16)]
+        neg = [self._row(f"n-{i:03d}", abstained=True, recommended=None, rec_correct=False, top3=False) for i in range(8)]
+        g = ev.gate_metrics(held, neg)
+        self.assertEqual(g["counts"]["held_out_eligible"], 13); self.assertTrue(g["checks"]["coverage"])   # 16·13 ≥ 14·13
+        self.assertTrue(g["checks"]["eligibility"])
+        g2 = ev.gate_metrics(held[:-1] + [self._row("h-015", eligible=False)], neg)
+        self.assertFalse(g2["checks"]["eligibility"]); self.assertFalse(g2["pass"])
+
+    def test_h_adoption_gate(self):
+        """The Task 11 measurement (S, Round 5 constants): v1.7 judges rule regressions, not untuned ranking failures."""
+        off = {"wv": 5, "fr": 2, "ir": 0, "sr3": 53, "src": 50, "srk": 45, "rp3": 11, "rpk": 4, "nab": 5,
+               "n_seed": 55, "n_seed_elig": 50, "n_rp": 13, "n_rp_elig": 6, "n_rn": 9}
+        on = {**off, "wv": 1, "fr": 0, "src": 45, "srk": 42, "rpk": 5, "nab": 9}
+        ok = {"ok": True}
+        self.assertTrue(ev.h_adoption_ok(on, off, ok))                      # 10·45 ≥ 9·50 exactly; wv 1 / rp3 11/13 are tuning's job
+        self.assertFalse(ev.h_adoption_ok({**on, "src": 44, "srk": 42}, off, ok))   # one more R1 false abstention fails
+        fixed = {**on, "src": 47, "srk": 44}
+        self.assertTrue(ev.h_adoption_ok(fixed, off, ok))                  # wv 1 / rp3 11/13 are tuning's job
+        self.assertFalse(ev.h_adoption_ok(fixed, off, {"ok": False}))
+        self.assertFalse(ev.h_adoption_ok({**fixed, "nab": 4}, off, ok))
+        self.assertFalse(ev.h_adoption_ok({**fixed, "ir": 1}, off, ok))
+        self.assertFalse(ev.h_adoption_ok({**fixed, "sr3": 52}, off, ok))

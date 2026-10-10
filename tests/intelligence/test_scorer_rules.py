@@ -153,6 +153,30 @@ class TestScorerRules(unittest.TestCase):
                 for q, g in GOLDEN.items():
                     self.assertEqual([r["key"] for r in self.s(q)["results"]], g["keys"], q)
 
+    def test_r1_head_direct_object_span(self):
+        """spec v1.7 §3.2: R1 head = last concept token between the first verb and the first in/for/of/on/with/by/at."""
+        vm = policy.ranking().verb_methods
+        concepts = frozenset({"page", "space", "board", "column", "issue", "sprint", "event", "watcher"})
+        h = lambda q: (search.r1_head(q, vm, concepts) or {}).get("concept")
+        self.assertEqual(h("create a new confluence page in a space"), "page")
+        self.assertEqual(h("delete jira board column"), "column")
+        self.assertEqual(h("remove confluence page watcher"), "watcher")
+        self.assertEqual(h("move issue to sprint"), "sprint")                        # to/from are not boundaries
+        self.assertNotEqual(h("register jira callbacks for events"), "event")
+        self.assertIsNone(h("page in space"))                                        # no verb: R1 not applied
+        self.assertEqual(search.R1_BOUNDARY, frozenset({"in", "for", "of", "on", "with", "by", "at"}))
+
+    def test_r1_uses_span_in_payload(self):
+        """A trailing adjunct no longer blocks a correct write; the precedence call without a query keeps the v1.6 inputs."""
+        rp, ap = policy.ranking(), policy.aliases()
+        op = self.st.registry.sources["confluence"].operations_by_key["confluence:POST:/pages"]
+        concepts = frozenset(search.concept_vocabulary(self.st, rp.path_noise)) | {"zzspace"}
+        q = "create page in zzspace"
+        self.assertIsNone(search.abstain_reason(allowed=frozenset({"POST"}), top_op=op, pinned=False, unigrams=search.rule_unigrams(q),
+                                                rp=rp, pol=ap, concepts=concepts, query=q))
+        self.assertEqual(search.abstain_reason(allowed=frozenset({"POST"}), top_op=op, pinned=False, unigrams=search.rule_unigrams("create page zzspace"),
+                                               rp=rp, pol=ap, concepts=concepts, query="create page zzspace"), "uncovered_head_resource")
+
     def test_r0_generic_token_diagnostics_recorded(self):
         """spec §8 (review 4 P1-2): weak-floor limits, recorded not gated. Values are the fixture registry's."""
         got = {q: self.s(q)["abstain_reason"] for q in ("delete id", "get data", "get user")}

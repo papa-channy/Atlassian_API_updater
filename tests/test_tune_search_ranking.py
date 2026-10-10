@@ -812,3 +812,27 @@ class TestComputeTuningRound(unittest.TestCase):
         for pending, current, want in ((6, 5, 6), (None, 6, 6), (None, 5, 5)):
             with mock.patch.object(ev, "pending_round", return_value=pending), mock.patch.object(ev, "current_round", return_value={"round": current}):
                 self.assertEqual(tune.compute_tuning_round(), want)
+
+
+class TestRound6Eligibility(unittest.TestCase):
+    """spec v1.7: recommendation eligibility = production method intent over the frozen verb inventory."""
+    def test_eligible_fn_matches_method_intent(self):
+        from tools.atlassian_docs.intelligence import search
+        rp = policy.ranking(); fn = tune.eligible_fn(rp)
+        for q in ("create issue", "issue type scheme", "MultipartFile", "get page", "create and delete issue"):
+            self.assertEqual(fn(q), bool(search.method_intent(search.tokenize_unigrams(q), rp.verb_methods)[1]), q)
+        self.assertTrue(fn("create issue")); self.assertFalse(fn("issue type scheme"))
+
+    def test_usage_evaluation_carries_eligibility(self):
+        st = tune.fixture_state(); rp = policy.ranking(); ap = policy.aliases()
+        bench = {"seed": [{"id": "s-001", "query": "create issue", "expected_top1_any": ["jira-platform:POST:/rest/api/3/issue"], "forbidden_top1": []},
+                          {"id": "s-002", "query": "issue attachments", "expected_top1_any": ["jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/attachments"],
+                           "forbidden_top1": []}], "regression_positive": [], "regression_negative": []}
+        res = tune.evaluate_usage_point(st, rp, dict(rp.constants), bench, ap)
+        self.assertEqual([r["eligible"] for r in res["seed"]], [True, False]); self.assertEqual(res["m"]["n_seed_elig"], 1)
+
+    def test_improved_counts_abstention_of_an_ineligible_row(self):
+        before = _row("s", recommended="k", abstained=False, rec_correct=False); before["eligible"] = False
+        after = {**before, "recommended": None, "abstained": True}
+        self.assertTrue(tune.improved(before, after, "seed"))
+        self.assertFalse(tune.no_worse({**_usage([_row("s-001")])["m"], "ir": 0}, {**_usage([_row("s-001")])["m"], "ir": 1}))
