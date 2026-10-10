@@ -722,3 +722,12 @@ class TestRound5FreezeEntry(TestRound4FreezeEntry):
     def test_non_round5_lexicon_refused(self):
         with tempfile.TemporaryDirectory() as td, self.assertRaises(SystemExit):
             self._entry5(td, [], union="first-wins")
+
+
+class TestRound6Seal(unittest.TestCase):
+    def test_hidden_negatives_need_no_answer_true(self):
+        self.assertEqual(rs.HIDDEN_RULES_R6[:len(rs.HIDDEN_RULES_R5)], rs.HIDDEN_RULES_R5)
+        self.assertEqual(rs.HIDDEN_RULES_R6[-1], "no-answer")
+        rec = {"id": "n-001", "query": "q", "expected_top1_any": [], "forbidden_top1": ["k"]}
+        self.assertEqual(rs._no_answer_checks(rec), ["n-001: no-answer: hidden negative records must carry no_answer: true"])
+        self.assertEqual(rs._no_answer_checks({**rec, "no_answer": True}), [])

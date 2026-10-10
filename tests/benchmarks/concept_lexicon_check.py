@@ -440,9 +440,11 @@ def carry_forward(lexicon_doc, prior_lexicon_doc, cands_doc, prior_cands_doc, pr
     prior, prior_carried = prior_lexicon_doc.get("lexicon") or {}, prior_lexicon_doc.get("carried_selected") or {}
     carried = {w: t for w, t in sorted(prior.items()) if w not in lex["lexicon"]}
     lex["lexicon"] = {**carried, **lex["lexicon"]}
-    lex["carried_selected"] = {w: prior_carried.get(w) or {"from_round": prior_lexicon_doc.get("round"), "targets": list(t),
+    kept = {w: v for w, v in {**prior_carried, **(lex.get("carried_selected") or {})}.items()        # Round 6 self-carry: provenance
+            if w in lex["lexicon"] and w not in (lex.get("selected") or {})}                         # of already-carried words survives
+    lex["carried_selected"] = {**copy.deepcopy(kept), **{w: prior_carried.get(w) or {"from_round": prior_lexicon_doc.get("round"), "targets": list(t),
                                                              **({"selected": prior_lexicon_doc["selected"][w]} if w in (prior_lexicon_doc.get("selected") or {}) else {})}
-                               for w, t in carried.items()}
+                               for w, t in carried.items()}}
     lex["components"] = {**(lex.get("components") or {}), "carried_from": {"round": prior_lexicon_doc.get("round"), **prior_shas}}
     old = {**(prior_cands_doc.get("carried_candidates") or {}), **(prior_cands_doc.get("candidates") or {})}
     cands["carried_candidates"] = {w: c for w, c in sorted(old.items()) if w not in cands["candidates"]}

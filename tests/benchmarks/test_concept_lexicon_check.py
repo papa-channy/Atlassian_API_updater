@@ -317,6 +317,13 @@ class TestRound5CarryForward(unittest.TestCase):
         self.assertIn("feedback", cands2["carried_candidates"]); self.assertIn("hour", cands2["carried_candidates"])
 
 
+    def test_self_carry_keeps_carried_provenance(self):
+        """Round 6 T carries the frozen Round 5 lexicon over itself (no new resolution): carried_selected must survive."""
+        lex, cands = self._carry()
+        lex2, _ = clc.carry_forward(lex, lex, cands, cands, prior_shas={"concept_lexicon_sha256": "L5", "alias_candidates_sha256": "C5"})
+        self.assertEqual(lex2["lexicon"], lex["lexicon"]); self.assertEqual(lex2["carried_selected"], lex["carried_selected"])
+        self.assertEqual(lex2["selected"], lex["selected"])
+
 class TestRound5CarryIsolation(unittest.TestCase):
     def test_inputs_unchanged_and_outputs_independent(self):
         import copy as _copy

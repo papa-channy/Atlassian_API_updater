@@ -42,6 +42,13 @@ RECORD_RULES, SECTION_RULES = HIDDEN_RULES_R3[:10], HIDDEN_RULES_R3[10:]
 _ASCII_QUERY = re.compile(r"^[A-Za-z0-9 '\-]+$")
 HIDDEN_RULES_R4 = tuple(HIDDEN_RULES_R3)                                   # Round 4 spec §4: same ids, same order
 HIDDEN_RULES_R5 = tuple(HIDDEN_RULES_R4)                                   # Round 5: same ids, same order
+HIDDEN_RULES_R6 = tuple(HIDDEN_RULES_R5) + ("no-answer",)          # Round 6 spec §4.1: every hidden negative is no_answer: true
+
+
+def _no_answer_checks(rec) -> list:
+    return [] if rec.get("no_answer") is True else [f"{rec.get('id', '?')}: no-answer: hidden negative records must carry no_answer: true"]
+
+
 RECOVERY_DIFF_ONLY = ("tests/benchmarks/round_recoveries.json",)
 CANONICAL_SUITE = "python -m unittest discover -s tests -t ."
 
@@ -583,7 +590,7 @@ def freeze_entry(round: int, cache_dir, reference_enc=None, doc_sources=None, do
         r2 = _read_json(BENCH_PATH)["round2_seal"]
         entry["reference_set"] = {"origin": "round2", "enc_sha256": ev.file_sha256(reference_enc),
                                   "held_out_sha256": r2["held_out_sha256"], "negative_sha256": r2["negative_sha256"]}
-        entry["hidden_generation_rules"] = list(HIDDEN_RULES_R5 if round >= 5 else HIDDEN_RULES_R4 if round >= 4 else HIDDEN_RULES_R3)
+        entry["hidden_generation_rules"] = list(HIDDEN_RULES_R6 if round >= 6 else HIDDEN_RULES_R5 if round >= 5 else HIDDEN_RULES_R4 if round >= 4 else HIDDEN_RULES_R3)
         entry["hidden_set_origin"] = f"round{round}"
     if round >= 4:
         from tests.benchmarks import doc_titles as dt                  # Round 4 spec §5 / §9.6 (Task 2)
@@ -599,14 +606,21 @@ def freeze_entry(round: int, cache_dir, reference_enc=None, doc_sources=None, do
         if outside:
             raise SystemExit(f"REFUSED: files outside the T allowlist changed since {base_commit}: {outside}")
         entry["t_policy_files"] = ev.t_policy_files(ROOT, base_commit)
-    if round >= 5:                                                     # Round 5 spec §4.1, §6.1, §9
+    if round >= 5:                                                     # Round 5 spec §4.1, §6.1, §9; Round 6 plan PR-4
         lex = _read_json(RANKING_PATH.parent / "concept_lexicon.json")
         entry["known_unreachable_seeds"] = sorted(ev.KNOWN_UNREACHABLE[round])
-        entry["known_unreachable_registry_sha256"] = ev.file_sha256(ROOT / f"tests/benchmarks/round{round}-known-unreachable.json")
+        if round == 5:
+            entry["known_unreachable_registry_sha256"] = ev.file_sha256(ROOT / f"tests/benchmarks/round{round}-known-unreachable.json")
         entry["lexicon_union_resolution"] = (lex.get("components") or {}).get("union_resolution")
         entry["counterexample_reference_sha256"] = ev.file_sha256(ROOT / f"tests/benchmarks/round{round}-counterexample-reference.json")
         if entry["lexicon_union_resolution"] != "source-precedence":
             raise SystemExit("REFUSED: concept_lexicon.json was not built by the Round 5 source-precedence resolution")
+    if round >= 6:                                                     # Round 6 spec §3.5 binding, §4.3 split
+        from tests import tune_search_ranking as tune
+        from tests.benchmarks import scorer_rule_cx as cx6, round6_labels as labels
+        corpus, sfp = tune._with_state(pathlib.Path(cache_dir), lambda st: (cx6.corpus(st), st.registry.fingerprint))
+        entry["scorer_rule_corpus_sha256"], entry["scorer_rule_registry_fingerprint"] = ev.canonical_sha256(corpus), sfp
+        entry["training_split_sha256"] = labels.training_split_sha256(_read_json(BENCH_PATH))
     return entry
 
 
@@ -683,6 +697,8 @@ def machine_check(plain, bench, internal_catalog, round=1, verb_methods=None) ->
                 out += _actionable_checks(rec, verb_methods)
             if round >= 3 and sect == "negative":
                 out += _negative_method_checks(rec, verb_methods)
+            if round >= 6 and sect == "negative":
+                out += _no_answer_checks(rec)
             hidden.append(rec)
         if sect == "held_out":
             out += _distribution_checks([r for r in recs if isinstance(r, dict)])
@@ -696,7 +712,8 @@ def machine_check(plain, bench, internal_catalog, round=1, verb_methods=None) ->
 _RULE_PATTERNS = ((": ascii:", "ascii"), (": actionable:", "actionable"), (": negative-method:", "negative-method"), ("negative-distribution:", "negative-distribution"),
                   ("held_out: source ", "distribution"), ("held_out: method ", "distribution"), ("held_out: product", "distribution"),
                   ("not in catalog", "catalog"), ("query has ", "words"), ("equals operationId", "operationId"),
-                  ("copies consecutive tokens", "summary/tags"), ("negative query equals", "negative-phrase"), ("reuse of", "reuse"))
+                  ("copies consecutive tokens", "summary/tags"), ("negative query equals", "negative-phrase"), ("reuse of", "reuse"),
+                  (": no-answer:", "no-answer"))
 
 
 def rule_id(message: str) -> str:
