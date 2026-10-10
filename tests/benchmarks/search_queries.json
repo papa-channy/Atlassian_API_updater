@@ -489,110 +489,281 @@
       "origin": "held_out-r1",
       "failure_classes": [],
       "ambiguous": false
+    },
+    {
+      "id": "s-040",
+      "query": "download tiny preview for confluence file",
+      "expected_top1_any": [
+        "confluence:GET:/attachments/{id}/thumbnail/download"
+      ],
+      "forbidden_top1": [],
+      "origin": "promoted-r5",
+      "failure_classes": [],
+      "ambiguous": false,
+      "promoted_from": {
+        "round": 5,
+        "split": "held_out",
+        "source_id": "h-001",
+        "source_record_sha256": "05aa240134eed51d1feceaa60654671dd512765e97e4b8d49b746fdf166827cc"
+      }
+    },
+    {
+      "id": "s-041",
+      "query": "make fresh confluence whiteboard",
+      "expected_top1_any": [
+        "confluence:POST:/whiteboards"
+      ],
+      "forbidden_top1": [],
+      "origin": "promoted-r5",
+      "failure_classes": [],
+      "ambiguous": false,
+      "promoted_from": {
+        "round": 5,
+        "split": "held_out",
+        "source_id": "h-002",
+        "source_record_sha256": "54510d3a4cbef690956a5656e942943b5e4ab6ebd7f672e1ed50577cc3487881"
+      }
+    },
+    {
+      "id": "s-042",
+      "query": "rename page heading text",
+      "expected_top1_any": [
+        "confluence:PUT:/pages/{id}/title"
+      ],
+      "forbidden_top1": [],
+      "origin": "promoted-r5",
+      "failure_classes": [],
+      "ambiguous": false,
+      "promoted_from": {
+        "round": 5,
+        "split": "held_out",
+        "source_id": "h-003",
+        "source_record_sha256": "200b1f9076549937dd66d2c025df6b85a64b1dbdd136d2b584d4bdc5c3fce118"
+      }
+    },
+    {
+      "id": "s-043",
+      "query": "erase inline remark permanently",
+      "expected_top1_any": [
+        "confluence:DELETE:/inline-comments/{comment-id}"
+      ],
+      "forbidden_top1": [],
+      "origin": "promoted-r5",
+      "failure_classes": [],
+      "ambiguous": false,
+      "promoted_from": {
+        "round": 5,
+        "split": "held_out",
+        "source_id": "h-004",
+        "source_record_sha256": "4bd54ab3457292281433ed1ed2691420f8a8473f5198e1b2751c05caa074bd37"
+      }
+    },
+    {
+      "id": "s-044",
+      "query": "invite users via email addresses",
+      "expected_top1_any": [
+        "confluence:POST:/user/access/invite-by-email"
+      ],
+      "forbidden_top1": [],
+      "origin": "promoted-r5",
+      "failure_classes": [],
+      "ambiguous": false,
+      "promoted_from": {
+        "round": 5,
+        "split": "held_out",
+        "source_id": "h-005",
+        "source_record_sha256": "c13d540921e5a91b6a9430b1401ab8a1703bde362a7073f0a0e892463139bd5b"
+      }
+    },
+    {
+      "id": "s-045",
+      "query": "count current backlog items",
+      "expected_top1_any": [
+        "jira-software:GET:/rest/software/1.0/board/{boardId}/backlog/approximate-count"
+      ],
+      "forbidden_top1": [],
+      "origin": "promoted-r5",
+      "failure_classes": [],
+      "ambiguous": false,
+      "promoted_from": {
+        "round": 5,
+        "split": "held_out",
+        "source_id": "h-006",
+        "source_record_sha256": "19d448fdffc38a71db3b32b6d0b3f8bacaaef03e9b22792e2cea229592172ca9"
+      }
+    },
+    {
+      "id": "s-046",
+      "query": "submit pipeline build telemetry",
+      "expected_top1_any": [
+        "jira-software:POST:/rest/builds/0.1/bulk"
+      ],
+      "forbidden_top1": [],
+      "origin": "promoted-r5",
+      "failure_classes": [],
+      "ambiguous": false,
+      "promoted_from": {
+        "round": 5,
+        "split": "held_out",
+        "source_id": "h-007",
+        "source_record_sha256": "7721d1b64c1d01258e47f44b6b95bd6dda14f713b968a2481c6f2b4efcd5f774"
+      }
+    },
+    {
+      "id": "s-047",
+      "query": "rank selected epics higher",
+      "expected_top1_any": [
+        "jira-software:PUT:/rest/agile/1.0/epic/{epicIdOrKey}/rank"
+      ],
+      "forbidden_top1": [],
+      "origin": "promoted-r5",
+      "failure_classes": [],
+      "ambiguous": false,
+      "promoted_from": {
+        "round": 5,
+        "split": "held_out",
+        "source_id": "h-008",
+        "source_record_sha256": "79ce9b95d4aa358ab963c5f64a70ab06dd1bf16ab375567c2e11354f83d8a746"
+      }
+    },
+    {
+      "id": "s-048",
+      "query": "remove one vulnerability entry",
+      "expected_top1_any": [
+        "jira-software:DELETE:/rest/security/1.0/vulnerability/{vulnerabilityId}"
+      ],
+      "forbidden_top1": [],
+      "origin": "promoted-r5",
+      "failure_classes": [],
+      "ambiguous": false,
+      "promoted_from": {
+        "round": 5,
+        "split": "held_out",
+        "source_id": "h-009",
+        "source_record_sha256": "a75994040b1ef76840cc60eae0e4e4398e6ea022b2f9b85e6b3ba44d6bbdc8aa"
+      }
+    },
+    {
+      "id": "s-049",
+      "query": "fetch security connected workspace details",
+      "expected_top1_any": [
+        "jira-software:GET:/rest/security/1.0/linkedWorkspaces/{workspaceId}"
+      ],
+      "forbidden_top1": [],
+      "origin": "promoted-r5",
+      "failure_classes": [],
+      "ambiguous": false,
+      "promoted_from": {
+        "round": 5,
+        "split": "held_out",
+        "source_id": "h-010",
+        "source_record_sha256": "b2da36f892c31f1d36c51596026e270b89c8e00f5a39194edf54f5daec9d6e69"
+      }
+    },
+    {
+      "id": "s-050",
+      "query": "show jira account currently signed in",
+      "expected_top1_any": [
+        "jira-platform:GET:/rest/api/3/myself"
+      ],
+      "forbidden_top1": [],
+      "origin": "promoted-r5",
+      "failure_classes": [],
+      "ambiguous": false,
+      "promoted_from": {
+        "round": 5,
+        "split": "held_out",
+        "source_id": "h-011",
+        "source_record_sha256": "6d28a1b56f2eb074f1191dc462959a8895fe665844a42e8f32180c59feb91d27"
+      }
+    },
+    {
+      "id": "s-051",
+      "query": "register jira callbacks for events",
+      "expected_top1_any": [
+        "jira-platform:POST:/rest/api/3/webhook"
+      ],
+      "forbidden_top1": [],
+      "origin": "promoted-r5",
+      "failure_classes": [],
+      "ambiguous": false,
+      "promoted_from": {
+        "round": 5,
+        "split": "held_out",
+        "source_id": "h-012",
+        "source_record_sha256": "53aab465af136026b08c27da58e69f022eaa1cf4950fb63f8c9ecf31c92139b4"
+      }
+    },
+    {
+      "id": "s-052",
+      "query": "set chosen project outbound email",
+      "expected_top1_any": [
+        "jira-platform:PUT:/rest/api/3/project/{projectId}/email"
+      ],
+      "forbidden_top1": [],
+      "origin": "promoted-r5",
+      "failure_classes": [],
+      "ambiguous": false,
+      "promoted_from": {
+        "round": 5,
+        "split": "held_out",
+        "source_id": "h-013",
+        "source_record_sha256": "096e00b4c6f89bdc9ccd4e1799c916f2a65681f5106d173ea64c09c928e6b2be"
+      }
+    },
+    {
+      "id": "s-053",
+      "query": "detach dashboard gadget permanently",
+      "expected_top1_any": [
+        "jira-platform:DELETE:/rest/api/3/dashboard/{dashboardId}/gadget/{gadgetId}"
+      ],
+      "forbidden_top1": [],
+      "origin": "promoted-r5",
+      "failure_classes": [],
+      "ambiguous": false,
+      "promoted_from": {
+        "round": 5,
+        "split": "held_out",
+        "source_id": "h-014",
+        "source_record_sha256": "53097a80cdb2b3c90786222ec709b9cda639d86f50323e3f86aa358406594e4d"
+      }
+    },
+    {
+      "id": "s-054",
+      "query": "add my vote onto issue",
+      "expected_top1_any": [
+        "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/votes"
+      ],
+      "forbidden_top1": [],
+      "origin": "promoted-r5",
+      "failure_classes": [],
+      "ambiguous": false,
+      "promoted_from": {
+        "round": 5,
+        "split": "held_out",
+        "source_id": "h-015",
+        "source_record_sha256": "cd4ca7fd84d1218e7a2d32eb6f55c2f8b65dc6ff657cc46e033f95bf179d6635"
+      }
+    },
+    {
+      "id": "s-055",
+      "query": "browse audit trail records",
+      "expected_top1_any": [
+        "jira-platform:GET:/rest/api/3/auditing/record"
+      ],
+      "forbidden_top1": [],
+      "origin": "promoted-r5",
+      "failure_classes": [],
+      "ambiguous": false,
+      "promoted_from": {
+        "round": 5,
+        "split": "held_out",
+        "source_id": "h-016",
+        "source_record_sha256": "434ae71a00d457f82ae1044986719590421223b47211e2c335a70e2b5243501c"
+      }
     }
   ],
   "regression_negative": [
-    {
-      "id": "rn-001",
-      "query": "get issue status",
-      "expected_top1_any": [],
-      "forbidden_top1": [
-        "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/transitions",
-        "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/transitions"
-      ],
-      "origin": "negative-r0",
-      "failure_classes": [],
-      "ambiguous": false,
-      "note": "status query must not surface transition APIs"
-    },
-    {
-      "id": "rn-002",
-      "query": "get user",
-      "expected_top1_any": [],
-      "forbidden_top1": [
-        "jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}/assignee"
-      ],
-      "origin": "negative-r0",
-      "failure_classes": [],
-      "ambiguous": false
-    },
-    {
-      "id": "rn-003",
-      "query": "list users",
-      "expected_top1_any": [],
-      "forbidden_top1": [
-        "jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}/assignee"
-      ],
-      "origin": "negative-r0",
-      "failure_classes": [],
-      "ambiguous": false
-    },
-    {
-      "id": "rn-004",
-      "query": "get page property",
-      "expected_top1_any": [],
-      "forbidden_top1": [
-        "confluence:PUT:/pages/{id}"
-      ],
-      "origin": "negative-r0",
-      "failure_classes": [],
-      "ambiguous": false
-    },
-    {
-      "id": "rn-005",
-      "query": "read issue comments",
-      "expected_top1_any": [],
-      "forbidden_top1": [
-        "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/comment"
-      ],
-      "origin": "negative-r0",
-      "failure_classes": [],
-      "ambiguous": false
-    },
-    {
-      "id": "rn-006",
-      "query": "remove page",
-      "expected_top1_any": [],
-      "forbidden_top1": [
-        "confluence:PUT:/pages/{id}"
-      ],
-      "origin": "negative-r0",
-      "failure_classes": [],
-      "ambiguous": false
-    },
-    {
-      "id": "rn-007",
-      "query": "issue type scheme",
-      "expected_top1_any": [],
-      "forbidden_top1": [
-        "jira-platform:GET:/rest/api/3/issuetypescheme"
-      ],
-      "origin": "negative-r1",
-      "failure_classes": [],
-      "ambiguous": false
-    },
-    {
-      "id": "rn-008",
-      "query": "project role actors",
-      "expected_top1_any": [],
-      "forbidden_top1": [
-        "jira-platform:GET:/rest/api/3/role/{id}/actors"
-      ],
-      "origin": "negative-r1",
-      "failure_classes": [],
-      "ambiguous": false
-    },
-    {
-      "id": "rn-009",
-      "query": "board sprint issue",
-      "expected_top1_any": [],
-      "forbidden_top1": [
-        "jira-software:GET:/rest/agile/1.0/board/{boardId}/sprint/{sprintId}/issue"
-      ],
-      "origin": "negative-r1",
-      "failure_classes": [],
-      "ambiguous": false
-    },
     {
       "id": "rn-010",
       "query": "confluence label printer",
@@ -602,83 +773,271 @@
       ],
       "origin": "negative-r1",
       "failure_classes": [],
-      "ambiguous": false
+      "ambiguous": false,
+      "label_migration": {
+        "reviewers": [
+          "chatgpt-temp-6acaa785",
+          "chatgpt-temp-6acaa7b7"
+        ],
+        "review_output_sha256s": [
+          "2972e08ff710dbfa1dec830ce1594dfb7d98159a81811854c4ddca4c6a6f5da2",
+          "a6a28676757cddafffa3134c18d5bc1d5b79f35c1db358753b208b61a1c26999"
+        ],
+        "adjudicated": false
+      },
+      "no_answer": true
     },
     {
-      "id": "rn-011",
-      "query": "dashboard widget property",
+      "id": "rn-015",
+      "query": "create confluence calendar event",
       "expected_top1_any": [],
       "forbidden_top1": [
-        "jira-platform:GET:/rest/api/3/dashboard/{dashboardId}/items/{itemId}/properties/{propertyKey}"
+        "confluence:POST:/pages"
       ],
-      "origin": "negative-r1",
+      "origin": "promoted-r5",
       "failure_classes": [],
-      "ambiguous": false
+      "ambiguous": false,
+      "promoted_from": {
+        "round": 5,
+        "split": "negative",
+        "source_id": "n-001",
+        "source_record_sha256": "175bc383ed60b79401b17f7cb36c807e726c265b73ee4158112248d2d44d3781"
+      },
+      "label_migration": {
+        "reviewers": [
+          "chatgpt-temp-6acaa785",
+          "chatgpt-temp-6acaa7b7"
+        ],
+        "review_output_sha256s": [
+          "2972e08ff710dbfa1dec830ce1594dfb7d98159a81811854c4ddca4c6a6f5da2",
+          "a6a28676757cddafffa3134c18d5bc1d5b79f35c1db358753b208b61a1c26999"
+        ],
+        "adjudicated": false
+      },
+      "no_answer": true
     },
     {
-      "id": "rn-012",
-      "query": "site access emails",
+      "id": "rn-016",
+      "query": "delete jira board column",
       "expected_top1_any": [],
       "forbidden_top1": [
-        "confluence:POST:/user/access/check-access-by-email"
+        "jira-software:DELETE:/rest/agile/1.0/board/{boardId}"
       ],
-      "origin": "negative-r1",
+      "origin": "promoted-r5",
       "failure_classes": [],
-      "ambiguous": false
+      "ambiguous": false,
+      "promoted_from": {
+        "round": 5,
+        "split": "negative",
+        "source_id": "n-002",
+        "source_record_sha256": "a5e9cef8f1534968834ac4a69735b145cacfaa309b0f94256721db309de3adf4"
+      },
+      "label_migration": {
+        "reviewers": [
+          "chatgpt-temp-6acaa785",
+          "chatgpt-temp-6acaa7b7"
+        ],
+        "review_output_sha256s": [
+          "2972e08ff710dbfa1dec830ce1594dfb7d98159a81811854c4ddca4c6a6f5da2",
+          "a6a28676757cddafffa3134c18d5bc1d5b79f35c1db358753b208b61a1c26999"
+        ],
+        "adjudicated": false
+      },
+      "no_answer": true
     },
     {
-      "id": "rn-013",
-      "query": "attachment metadata content",
+      "id": "rn-017",
+      "query": "update jira board title",
       "expected_top1_any": [],
       "forbidden_top1": [
-        "jira-platform:GET:/rest/api/3/attachment/{id}",
-        "jira-platform:GET:/rest/api/3/attachment/content/{id}"
+        "jira-software:PUT:/rest/agile/1.0/board/{boardId}/properties/{propertyKey}"
       ],
-      "origin": "negative-r1",
+      "origin": "promoted-r5",
       "failure_classes": [],
-      "ambiguous": false
+      "ambiguous": false,
+      "promoted_from": {
+        "round": 5,
+        "split": "negative",
+        "source_id": "n-003",
+        "source_record_sha256": "d2396c6865726743d79f6900db49e7c4b1b0e2b0c61d9e106580d38bedac2e06"
+      },
+      "label_migration": {
+        "reviewers": [
+          "chatgpt-temp-6acaa785",
+          "chatgpt-temp-6acaa7b7"
+        ],
+        "review_output_sha256s": [
+          "2972e08ff710dbfa1dec830ce1594dfb7d98159a81811854c4ddca4c6a6f5da2",
+          "a6a28676757cddafffa3134c18d5bc1d5b79f35c1db358753b208b61a1c26999"
+        ],
+        "adjudicated": false
+      },
+      "no_answer": true
     },
     {
-      "id": "rn-014",
-      "query": "filter owner jira",
+      "id": "rn-018",
+      "query": "remove confluence page watcher",
       "expected_top1_any": [],
       "forbidden_top1": [
-        "jira-platform:PUT:/rest/api/3/filter/{id}/owner"
+        "confluence:DELETE:/pages/{id}"
       ],
-      "origin": "negative-r1",
+      "origin": "promoted-r5",
       "failure_classes": [],
-      "ambiguous": false
+      "ambiguous": false,
+      "promoted_from": {
+        "round": 5,
+        "split": "negative",
+        "source_id": "n-004",
+        "source_record_sha256": "b374d1dbc54d59e90cc6897cf7b5ec9f4c916d0188ff4ece122594638a468828"
+      },
+      "label_migration": {
+        "reviewers": [
+          "chatgpt-temp-6acaa785",
+          "chatgpt-temp-6acaa7b7"
+        ],
+        "review_output_sha256s": [
+          "2972e08ff710dbfa1dec830ce1594dfb7d98159a81811854c4ddca4c6a6f5da2",
+          "a6a28676757cddafffa3134c18d5bc1d5b79f35c1db358753b208b61a1c26999"
+        ],
+        "adjudicated": false
+      },
+      "no_answer": true
+    },
+    {
+      "id": "rn-019",
+      "query": "jira issue reaction emojis",
+      "expected_top1_any": [],
+      "forbidden_top1": [
+        "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/votes"
+      ],
+      "origin": "promoted-r5",
+      "failure_classes": [],
+      "ambiguous": false,
+      "promoted_from": {
+        "round": 5,
+        "split": "negative",
+        "source_id": "n-005",
+        "source_record_sha256": "4b66943af1f809e0502d2b8eece1271198ecbda0aad7f5226e473f661be08b0a"
+      },
+      "label_migration": {
+        "reviewers": [
+          "chatgpt-temp-6acaa785",
+          "chatgpt-temp-6acaa7b7"
+        ],
+        "review_output_sha256s": [
+          "2972e08ff710dbfa1dec830ce1594dfb7d98159a81811854c4ddca4c6a6f5da2",
+          "a6a28676757cddafffa3134c18d5bc1d5b79f35c1db358753b208b61a1c26999"
+        ],
+        "adjudicated": false
+      },
+      "no_answer": true
+    },
+    {
+      "id": "rn-020",
+      "query": "confluence page ownership history",
+      "expected_top1_any": [],
+      "forbidden_top1": [
+        "confluence:GET:/pages/{id}/versions"
+      ],
+      "origin": "promoted-r5",
+      "failure_classes": [],
+      "ambiguous": false,
+      "promoted_from": {
+        "round": 5,
+        "split": "negative",
+        "source_id": "n-006",
+        "source_record_sha256": "4e658b76baf7f6ad69da3f883d06a7a6ebbdacdbb6c4ae36ba05588f51b5fab5"
+      },
+      "label_migration": {
+        "reviewers": [
+          "chatgpt-temp-6acaa785",
+          "chatgpt-temp-6acaa7b7"
+        ],
+        "review_output_sha256s": [
+          "2972e08ff710dbfa1dec830ce1594dfb7d98159a81811854c4ddca4c6a6f5da2",
+          "a6a28676757cddafffa3134c18d5bc1d5b79f35c1db358753b208b61a1c26999"
+        ],
+        "adjudicated": false
+      },
+      "no_answer": true
+    },
+    {
+      "id": "rn-021",
+      "query": "jira project storage quota",
+      "expected_top1_any": [],
+      "forbidden_top1": [
+        "jira-platform:GET:/rest/api/3/project/{projectIdOrKey}"
+      ],
+      "origin": "promoted-r5",
+      "failure_classes": [],
+      "ambiguous": false,
+      "promoted_from": {
+        "round": 5,
+        "split": "negative",
+        "source_id": "n-007",
+        "source_record_sha256": "51d950ff3032e49edba3f2225ae62d993db32d1f8e6e62bdee214b1352ca3ace"
+      },
+      "label_migration": {
+        "reviewers": [
+          "chatgpt-temp-6acaa785",
+          "chatgpt-temp-6acaa7b7"
+        ],
+        "review_output_sha256s": [
+          "2972e08ff710dbfa1dec830ce1594dfb7d98159a81811854c4ddca4c6a6f5da2",
+          "a6a28676757cddafffa3134c18d5bc1d5b79f35c1db358753b208b61a1c26999"
+        ],
+        "adjudicated": false
+      },
+      "no_answer": true
+    },
+    {
+      "id": "rn-022",
+      "query": "confluence space storage quota",
+      "expected_top1_any": [],
+      "forbidden_top1": [
+        "confluence:GET:/spaces/{id}"
+      ],
+      "origin": "promoted-r5",
+      "failure_classes": [],
+      "ambiguous": false,
+      "promoted_from": {
+        "round": 5,
+        "split": "negative",
+        "source_id": "n-008",
+        "source_record_sha256": "ae13fdd5769018a5f5d1815b33126de1f3aded678b41a13427494351432c6f63"
+      },
+      "label_migration": {
+        "reviewers": [
+          "chatgpt-temp-6acaa785",
+          "chatgpt-temp-6acaa7b7"
+        ],
+        "review_output_sha256s": [
+          "2972e08ff710dbfa1dec830ce1594dfb7d98159a81811854c4ddca4c6a6f5da2",
+          "a6a28676757cddafffa3134c18d5bc1d5b79f35c1db358753b208b61a1c26999"
+        ],
+        "adjudicated": false
+      },
+      "no_answer": true
     }
   ],
-  "held_out": [
-    {"id": "h-001", "query": "download tiny preview for confluence file", "expected_top1_any": ["confluence:GET:/attachments/{id}/thumbnail/download"], "forbidden_top1": [], "origin": "held_out-r5", "failure_classes": [], "ambiguous": false},
-    {"id": "h-002", "query": "make fresh confluence whiteboard", "expected_top1_any": ["confluence:POST:/whiteboards"], "forbidden_top1": [], "origin": "held_out-r5", "failure_classes": [], "ambiguous": false},
-    {"id": "h-003", "query": "rename page heading text", "expected_top1_any": ["confluence:PUT:/pages/{id}/title"], "forbidden_top1": [], "origin": "held_out-r5", "failure_classes": [], "ambiguous": false},
-    {"id": "h-004", "query": "erase inline remark permanently", "expected_top1_any": ["confluence:DELETE:/inline-comments/{comment-id}"], "forbidden_top1": [], "origin": "held_out-r5", "failure_classes": [], "ambiguous": false},
-    {"id": "h-005", "query": "invite users via email addresses", "expected_top1_any": ["confluence:POST:/user/access/invite-by-email"], "forbidden_top1": [], "origin": "held_out-r5", "failure_classes": [], "ambiguous": false},
-    {"id": "h-006", "query": "count current backlog items", "expected_top1_any": ["jira-software:GET:/rest/software/1.0/board/{boardId}/backlog/approximate-count"], "forbidden_top1": [], "origin": "held_out-r5", "failure_classes": [], "ambiguous": false},
-    {"id": "h-007", "query": "submit pipeline build telemetry", "expected_top1_any": ["jira-software:POST:/rest/builds/0.1/bulk"], "forbidden_top1": [], "origin": "held_out-r5", "failure_classes": [], "ambiguous": false},
-    {"id": "h-008", "query": "rank selected epics higher", "expected_top1_any": ["jira-software:PUT:/rest/agile/1.0/epic/{epicIdOrKey}/rank"], "forbidden_top1": [], "origin": "held_out-r5", "failure_classes": [], "ambiguous": false},
-    {"id": "h-009", "query": "remove one vulnerability entry", "expected_top1_any": ["jira-software:DELETE:/rest/security/1.0/vulnerability/{vulnerabilityId}"], "forbidden_top1": [], "origin": "held_out-r5", "failure_classes": [], "ambiguous": false},
-    {"id": "h-010", "query": "fetch security connected workspace details", "expected_top1_any": ["jira-software:GET:/rest/security/1.0/linkedWorkspaces/{workspaceId}"], "forbidden_top1": [], "origin": "held_out-r5", "failure_classes": [], "ambiguous": false},
-    {"id": "h-011", "query": "show jira account currently signed in", "expected_top1_any": ["jira-platform:GET:/rest/api/3/myself"], "forbidden_top1": [], "origin": "held_out-r5", "failure_classes": [], "ambiguous": false},
-    {"id": "h-012", "query": "register jira callbacks for events", "expected_top1_any": ["jira-platform:POST:/rest/api/3/webhook"], "forbidden_top1": [], "origin": "held_out-r5", "failure_classes": [], "ambiguous": false},
-    {"id": "h-013", "query": "set chosen project outbound email", "expected_top1_any": ["jira-platform:PUT:/rest/api/3/project/{projectId}/email"], "forbidden_top1": [], "origin": "held_out-r5", "failure_classes": [], "ambiguous": false},
-    {"id": "h-014", "query": "detach dashboard gadget permanently", "expected_top1_any": ["jira-platform:DELETE:/rest/api/3/dashboard/{dashboardId}/gadget/{gadgetId}"], "forbidden_top1": [], "origin": "held_out-r5", "failure_classes": [], "ambiguous": false},
-    {"id": "h-015", "query": "add my vote onto issue", "expected_top1_any": ["jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/votes"], "forbidden_top1": [], "origin": "held_out-r5", "failure_classes": [], "ambiguous": false},
-    {"id": "h-016", "query": "browse audit trail records", "expected_top1_any": ["jira-platform:GET:/rest/api/3/auditing/record"], "forbidden_top1": [], "origin": "held_out-r5", "failure_classes": [], "ambiguous": false}
-  ],
-  "negative": [
-    {"id": "n-001", "query": "create confluence calendar event", "expected_top1_any": [], "forbidden_top1": ["confluence:POST:/pages"], "origin": "negative-r5", "failure_classes": [], "ambiguous": false},
-    {"id": "n-002", "query": "delete jira board column", "expected_top1_any": [], "forbidden_top1": ["jira-software:DELETE:/rest/agile/1.0/board/{boardId}"], "origin": "negative-r5", "failure_classes": [], "ambiguous": false},
-    {"id": "n-003", "query": "update jira board title", "expected_top1_any": [], "forbidden_top1": ["jira-software:PUT:/rest/agile/1.0/board/{boardId}/properties/{propertyKey}"], "origin": "negative-r5", "failure_classes": [], "ambiguous": false},
-    {"id": "n-004", "query": "remove confluence page watcher", "expected_top1_any": [], "forbidden_top1": ["confluence:DELETE:/pages/{id}"], "origin": "negative-r5", "failure_classes": [], "ambiguous": false},
-    {"id": "n-005", "query": "jira issue reaction emojis", "expected_top1_any": [], "forbidden_top1": ["jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/votes"], "origin": "negative-r5", "failure_classes": [], "ambiguous": false},
-    {"id": "n-006", "query": "confluence page ownership history", "expected_top1_any": [], "forbidden_top1": ["confluence:GET:/pages/{id}/versions"], "origin": "negative-r5", "failure_classes": [], "ambiguous": false},
-    {"id": "n-007", "query": "jira project storage quota", "expected_top1_any": [], "forbidden_top1": ["jira-platform:GET:/rest/api/3/project/{projectIdOrKey}"], "origin": "negative-r5", "failure_classes": [], "ambiguous": false},
-    {"id": "n-008", "query": "confluence space storage quota", "expected_top1_any": [], "forbidden_top1": ["confluence:GET:/spaces/{id}"], "origin": "negative-r5", "failure_classes": [], "ambiguous": false}
-  ],
+  "held_out": [],
+  "negative": [],
   "round1_seal": {"held_out_sha256": "606535e10663bc7ab7eb2a16a8044f9a5f9e4aa326eb082193c6a1233553e568", "negative_sha256": "17313ddaf16080c0b2a9e9729f80c0313fccc9b8020cf51888f48a272aa3a1d4", "held_out_distribution": {"source": {"confluence": 5, "jira-platform": 7, "jira-software": 4}, "method": {"DELETE": 4, "GET": 5, "POST": 4, "PUT": 3}, "product_named": 4}, "negative_distribution": {"source": {"confluence": 2, "jira-platform": 5, "jira-software": 1}, "method": {"GET": 6, "POST": 1, "PUT": 1}, "product_named": 2}, "registry_fingerprint": "a13ba026ab6b6a3f19845a3aaa694a1e98427220fdbdc74bb711c316730a793f", "spec_sha256": {"confluence": "e4de6c1134a19d8717a309dbb7285a525ae31a9e3c733d046e9e144741f6e313", "jira-platform": "2aa6ef12fca713d5b7fc10042e458439ccb3e20eab5d86fd82323f56783f7ab1", "jira-software": "cb7e24b331ad9b31944fa9a588f70d4ea60d74d1dfb52d39a59770230b79207a"}},
   "round2_seal": {"held_out_sha256": "0f990f2fc134cd41eca2061931c65cfdd4bc21819051f9ae8538c0258aaf3540", "negative_sha256": "7750a2020923bcf8ddfa22e79f2c071001db9942194c3215cc03c60f363dde76", "held_out_distribution": {"source": {"confluence": 5, "jira-platform": 7, "jira-software": 4}, "method": {"DELETE": 3, "GET": 4, "POST": 6, "PUT": 3}, "product_named": 6}, "negative_distribution": {"source": {"confluence": 4, "jira-platform": 2, "jira-software": 2}, "method": {"GET": 2, "POST": 3, "PUT": 3}, "product_named": 7}, "registry_fingerprint": "f3c2e9d48aa85c96ca62cdd84ff700cc2714c888cf4148b3a91c604c45b47b62", "spec_sha256": {"confluence": "b3d010b6438677d864495ce15828f57080ff72afe190efdf7f86f0f5140b700d", "jira-platform": "3d0edfb02ff91873f99421de579182b6d66f07b804063e9ae458a30d6901a2db", "jira-software": "cb7e24b331ad9b31944fa9a588f70d4ea60d74d1dfb52d39a59770230b79207a"}, "machine_check": "passed", "origins": {"held_out": "held_out-r2", "negative": "negative-r2"}},
-  "round5_seal": {"held_out_sha256": "c11872473b41be12133a951d9cc65ef04483c2530628e8dcb2192592f6a2304c", "negative_sha256": "723087b013f8057ada39814b6cf1d1ff982816c3c73e8287fc1f44702a8cab6f", "held_out_distribution": {"source": {"confluence": 5, "jira-platform": 6, "jira-software": 5}, "method": {"DELETE": 3, "GET": 5, "POST": 5, "PUT": 3}, "product_named": 4}, "negative_distribution": {"source": {"confluence": 4, "jira-platform": 2, "jira-software": 2}, "method": {"DELETE": 2, "GET": 3, "POST": 2, "PUT": 1}, "product_named": 8}, "registry_fingerprint": "e308a232d6c9b19a7413e8a38c89b895e44e503581d529c2a31b31fbde179853", "spec_sha256": {"confluence": "b3d010b6438677d864495ce15828f57080ff72afe190efdf7f86f0f5140b700d", "jira-platform": "a7a330f1e293c58d57420fa58f1b95c22976dad5390ce466b55150051040fe9e", "jira-software": "cb7e24b331ad9b31944fa9a588f70d4ea60d74d1dfb52d39a59770230b79207a"}, "machine_check": "passed", "origins": {"held_out": "held_out-r5", "negative": "negative-r5"}, "needle_manifest_sha256": "e98817ef153f85af5b22353a018f022989f25c84e520ffb17aa053ff251a450b"}
+  "round5_seal": {"held_out_sha256": "c11872473b41be12133a951d9cc65ef04483c2530628e8dcb2192592f6a2304c", "negative_sha256": "723087b013f8057ada39814b6cf1d1ff982816c3c73e8287fc1f44702a8cab6f", "held_out_distribution": {"source": {"confluence": 5, "jira-platform": 6, "jira-software": 5}, "method": {"DELETE": 3, "GET": 5, "POST": 5, "PUT": 3}, "product_named": 4}, "negative_distribution": {"source": {"confluence": 4, "jira-platform": 2, "jira-software": 2}, "method": {"DELETE": 2, "GET": 3, "POST": 2, "PUT": 1}, "product_named": 8}, "registry_fingerprint": "e308a232d6c9b19a7413e8a38c89b895e44e503581d529c2a31b31fbde179853", "spec_sha256": {"confluence": "b3d010b6438677d864495ce15828f57080ff72afe190efdf7f86f0f5140b700d", "jira-platform": "a7a330f1e293c58d57420fa58f1b95c22976dad5390ce466b55150051040fe9e", "jira-software": "cb7e24b331ad9b31944fa9a588f70d4ea60d74d1dfb52d39a59770230b79207a"}, "machine_check": "passed", "origins": {"held_out": "held_out-r5", "negative": "negative-r5"}, "needle_manifest_sha256": "e98817ef153f85af5b22353a018f022989f25c84e520ffb17aa053ff251a450b"},
+  "regression_positive": [
+    {"id": "rn-001", "query": "get issue status", "expected_top1_any": ["jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}", "jira-software:GET:/rest/agile/1.0/issue/{issueIdOrKey}"], "forbidden_top1": ["jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/transitions", "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/transitions"], "origin": "negative-r0", "failure_classes": [], "ambiguous": false, "note": "status query must not surface transition APIs", "label_migration": {"reviewers": ["chatgpt-temp-6acaa785", "chatgpt-temp-6acaa7b7", "chatgpt-temp-6acaa852"], "review_output_sha256s": ["2972e08ff710dbfa1dec830ce1594dfb7d98159a81811854c4ddca4c6a6f5da2", "a6a28676757cddafffa3134c18d5bc1d5b79f35c1db358753b208b61a1c26999", "44569015679fea8905e9da9c2d3e0e0f57ba35a8ec0a39e7ae656b3f52c8abbd"], "adjudicated": true}, "no_answer": false},
+    {"id": "rn-002", "query": "get user", "expected_top1_any": ["jira-platform:GET:/rest/api/3/user"], "forbidden_top1": ["jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}/assignee"], "origin": "negative-r0", "failure_classes": [], "ambiguous": false, "label_migration": {"reviewers": ["chatgpt-temp-6acaa785", "chatgpt-temp-6acaa7b7"], "review_output_sha256s": ["2972e08ff710dbfa1dec830ce1594dfb7d98159a81811854c4ddca4c6a6f5da2", "a6a28676757cddafffa3134c18d5bc1d5b79f35c1db358753b208b61a1c26999"], "adjudicated": false}, "no_answer": false},
+    {"id": "rn-003", "query": "list users", "expected_top1_any": ["jira-platform:GET:/rest/api/3/users", "jira-platform:GET:/rest/api/3/users/search"], "forbidden_top1": ["jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}/assignee"], "origin": "negative-r0", "failure_classes": [], "ambiguous": false, "label_migration": {"reviewers": ["chatgpt-temp-6acaa785", "chatgpt-temp-6acaa7b7"], "review_output_sha256s": ["2972e08ff710dbfa1dec830ce1594dfb7d98159a81811854c4ddca4c6a6f5da2", "a6a28676757cddafffa3134c18d5bc1d5b79f35c1db358753b208b61a1c26999"], "adjudicated": false}, "no_answer": false},
+    {"id": "rn-004", "query": "get page property", "expected_top1_any": ["confluence:GET:/pages/{page-id}/properties/{property-id}"], "forbidden_top1": ["confluence:PUT:/pages/{id}"], "origin": "negative-r0", "failure_classes": [], "ambiguous": false, "label_migration": {"reviewers": ["chatgpt-temp-6acaa785", "chatgpt-temp-6acaa7b7"], "review_output_sha256s": ["2972e08ff710dbfa1dec830ce1594dfb7d98159a81811854c4ddca4c6a6f5da2", "a6a28676757cddafffa3134c18d5bc1d5b79f35c1db358753b208b61a1c26999"], "adjudicated": false}, "no_answer": false},
+    {"id": "rn-005", "query": "read issue comments", "expected_top1_any": ["jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/comment"], "forbidden_top1": ["jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/comment"], "origin": "negative-r0", "failure_classes": [], "ambiguous": false, "label_migration": {"reviewers": ["chatgpt-temp-6acaa785", "chatgpt-temp-6acaa7b7"], "review_output_sha256s": ["2972e08ff710dbfa1dec830ce1594dfb7d98159a81811854c4ddca4c6a6f5da2", "a6a28676757cddafffa3134c18d5bc1d5b79f35c1db358753b208b61a1c26999"], "adjudicated": false}, "no_answer": false},
+    {"id": "rn-006", "query": "remove page", "expected_top1_any": ["confluence:DELETE:/pages/{id}"], "forbidden_top1": ["confluence:PUT:/pages/{id}"], "origin": "negative-r0", "failure_classes": [], "ambiguous": false, "label_migration": {"reviewers": ["chatgpt-temp-6acaa785", "chatgpt-temp-6acaa7b7"], "review_output_sha256s": ["2972e08ff710dbfa1dec830ce1594dfb7d98159a81811854c4ddca4c6a6f5da2", "a6a28676757cddafffa3134c18d5bc1d5b79f35c1db358753b208b61a1c26999"], "adjudicated": false}, "no_answer": false},
+    {"id": "rn-007", "query": "issue type scheme", "expected_top1_any": ["jira-platform:GET:/rest/api/3/issuetypescheme"], "forbidden_top1": [], "origin": "negative-r1", "failure_classes": [], "ambiguous": false, "label_migration": {"reviewers": ["chatgpt-temp-6acaa785", "chatgpt-temp-6acaa7b7"], "review_output_sha256s": ["2972e08ff710dbfa1dec830ce1594dfb7d98159a81811854c4ddca4c6a6f5da2", "a6a28676757cddafffa3134c18d5bc1d5b79f35c1db358753b208b61a1c26999"], "adjudicated": false}, "legacy_forbidden_top1": ["jira-platform:GET:/rest/api/3/issuetypescheme"], "no_answer": false},
+    {"id": "rn-008", "query": "project role actors", "expected_top1_any": ["jira-platform:GET:/rest/api/3/role/{id}/actors"], "forbidden_top1": [], "origin": "negative-r1", "failure_classes": [], "ambiguous": false, "label_migration": {"reviewers": ["chatgpt-temp-6acaa785", "chatgpt-temp-6acaa7b7"], "review_output_sha256s": ["2972e08ff710dbfa1dec830ce1594dfb7d98159a81811854c4ddca4c6a6f5da2", "a6a28676757cddafffa3134c18d5bc1d5b79f35c1db358753b208b61a1c26999"], "adjudicated": false}, "legacy_forbidden_top1": ["jira-platform:GET:/rest/api/3/role/{id}/actors"], "no_answer": false},
+    {"id": "rn-009", "query": "board sprint issue", "expected_top1_any": ["jira-software:GET:/rest/agile/1.0/board/{boardId}/sprint/{sprintId}/issue", "jira-software:GET:/rest/software/1.0/board/{boardId}/sprint/{sprintId}/issue"], "forbidden_top1": [], "origin": "negative-r1", "failure_classes": [], "ambiguous": false, "label_migration": {"reviewers": ["chatgpt-temp-6acaa785", "chatgpt-temp-6acaa7b7"], "review_output_sha256s": ["2972e08ff710dbfa1dec830ce1594dfb7d98159a81811854c4ddca4c6a6f5da2", "a6a28676757cddafffa3134c18d5bc1d5b79f35c1db358753b208b61a1c26999"], "adjudicated": false}, "legacy_forbidden_top1": ["jira-software:GET:/rest/agile/1.0/board/{boardId}/sprint/{sprintId}/issue"], "no_answer": false},
+    {"id": "rn-011", "query": "dashboard widget property", "expected_top1_any": ["jira-platform:GET:/rest/api/3/dashboard/{dashboardId}/items/{itemId}/properties/{propertyKey}"], "forbidden_top1": [], "origin": "negative-r1", "failure_classes": [], "ambiguous": false, "label_migration": {"reviewers": ["chatgpt-temp-6acaa785", "chatgpt-temp-6acaa7b7"], "review_output_sha256s": ["2972e08ff710dbfa1dec830ce1594dfb7d98159a81811854c4ddca4c6a6f5da2", "a6a28676757cddafffa3134c18d5bc1d5b79f35c1db358753b208b61a1c26999"], "adjudicated": false}, "legacy_forbidden_top1": ["jira-platform:GET:/rest/api/3/dashboard/{dashboardId}/items/{itemId}/properties/{propertyKey}"], "no_answer": false},
+    {"id": "rn-012", "query": "site access emails", "expected_top1_any": ["confluence:POST:/user/access/check-access-by-email"], "forbidden_top1": [], "origin": "negative-r1", "failure_classes": [], "ambiguous": false, "label_migration": {"reviewers": ["chatgpt-temp-6acaa785", "chatgpt-temp-6acaa7b7"], "review_output_sha256s": ["2972e08ff710dbfa1dec830ce1594dfb7d98159a81811854c4ddca4c6a6f5da2", "a6a28676757cddafffa3134c18d5bc1d5b79f35c1db358753b208b61a1c26999"], "adjudicated": false}, "legacy_forbidden_top1": ["confluence:POST:/user/access/check-access-by-email"], "no_answer": false},
+    {"id": "rn-013", "query": "attachment metadata content", "expected_top1_any": ["jira-platform:GET:/rest/api/3/attachment/{id}/expand/raw"], "forbidden_top1": ["jira-platform:GET:/rest/api/3/attachment/content/{id}", "jira-platform:GET:/rest/api/3/attachment/{id}"], "origin": "negative-r1", "failure_classes": [], "ambiguous": false, "label_migration": {"reviewers": ["chatgpt-temp-6acaa785", "chatgpt-temp-6acaa7b7"], "review_output_sha256s": ["2972e08ff710dbfa1dec830ce1594dfb7d98159a81811854c4ddca4c6a6f5da2", "a6a28676757cddafffa3134c18d5bc1d5b79f35c1db358753b208b61a1c26999"], "adjudicated": false}, "no_answer": false},
+    {"id": "rn-014", "query": "filter owner jira", "expected_top1_any": ["jira-platform:PUT:/rest/api/3/filter/{id}/owner"], "forbidden_top1": [], "origin": "negative-r1", "failure_classes": [], "ambiguous": false, "label_migration": {"reviewers": ["chatgpt-temp-6acaa785", "chatgpt-temp-6acaa7b7"], "review_output_sha256s": ["2972e08ff710dbfa1dec830ce1594dfb7d98159a81811854c4ddca4c6a6f5da2", "a6a28676757cddafffa3134c18d5bc1d5b79f35c1db358753b208b61a1c26999"], "adjudicated": false}, "legacy_forbidden_top1": ["jira-platform:PUT:/rest/api/3/filter/{id}/owner"], "no_answer": false}
+  ]
 }
