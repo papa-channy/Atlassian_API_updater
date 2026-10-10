@@ -600,11 +600,43 @@ class TestRound5Wiring(unittest.TestCase):
             ref = {"policy": {"aliases": {"ticket": ["issue"]}, "rules": [], "notes": {}}, "titles": [{"product": "jira", "url": "u", "title": "t"}]}
             (root / "tests/benchmarks/round5-counterexample-reference.json").write_text(json.dumps(ref), encoding="utf-8")
             calls = []
+            from tests.benchmarks import evaluator as ev
             with mock.patch.object(cx, "catalog_index", return_value=([], {})), mock.patch.object(cx, "production_top1", return_value="TOP1"), \
-                    mock.patch.object(cx, "suite", side_effect=lambda *a, **k: calls.append((a, k)) or {"ok": True}):
+                    mock.patch.object(cx, "suite", side_effect=lambda *a, **k: calls.append((a, k)) or {"ok": True}), \
+                    mock.patch.object(ev, "load_round_freeze", return_value=[{"round": 2}]):          # wiring only; the freeze binding has its own test
                 fn = tune.final_counterexample_fn(object(), policy.load_ranking(), {"aliases": {}}, round=5, root=root)
                 fn({"c": 1}, {"aliases": {"x": ["y"]}})
                 self.assertIsNone(tune.final_counterexample_fn(object(), policy.load_ranking(), {}, round=4, root=root))
         (a, k), = calls
         self.assertEqual((k["scope"], k["selected_constants"], k["titles"]), ("final_policy", {"c": 1}, ref["titles"]))
         self.assertEqual((a[1], a[2], a[3], a[4]), ("TOP1", ref["policy"], {"aliases": {}}, {"aliases": {"x": ["y"]}}))
+
+
+class TestRound5ReviewFixes(unittest.TestCase):
+    """Round 5 whole-branch review fixes (Important 1, Important 2)."""
+    def test_replay_proposer_never_sees_ku(self):
+        seen = []
+        def eval_fn(raw):
+            return frozenset({"s-004", "s-028"}), frozenset()
+        def fake_propose(eval_fn, bench, base, cands, fixture_fn=None):
+            seen.append(eval_fn(base)[0]); return base, {"aliases": {}, "rules": [], "notes": {}}
+        with mock.patch.object(tune, "propose_aliases", fake_propose), mock.patch.object(tune, "KU", frozenset({"s-004"})):
+            tune.verify_replay(eval_fn, {"seed": []}, {"aliases": {}, "rules": [], "notes": {}}, {}, {}, "x")
+        self.assertEqual(seen, [frozenset({"s-028"})])
+
+    def test_counterexample_reference_bound_to_freeze(self):
+        import tempfile
+        from tests.benchmarks import counterexample as cx, evaluator as ev
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td); (root / "tests/benchmarks").mkdir(parents=True)
+            f = root / "tests/benchmarks/round5-counterexample-reference.json"
+            f.write_text(json.dumps({"policy": {"aliases": {}, "rules": [], "notes": {}}, "titles": []}), encoding="utf-8")
+            good = ev.file_sha256(f)
+            with mock.patch.object(cx, "catalog_index", return_value=([], {})):
+                with mock.patch.object(ev, "load_round_freeze", return_value=[{"round": 5, "counterexample_reference_sha256": "0" * 64}]):
+                    with self.assertRaises(SystemExit):
+                        tune.final_counterexample_fn(object(), policy.load_ranking(), {}, round=5, root=root)
+                with mock.patch.object(ev, "load_round_freeze", return_value=[{"round": 5, "counterexample_reference_sha256": good}]):
+                    self.assertIsNotNone(tune.final_counterexample_fn(object(), policy.load_ranking(), {}, round=5, root=root))
+                with mock.patch.object(ev, "load_round_freeze", return_value=[{"round": 2}]):           # before T: nothing frozen yet
+                    self.assertIsNotNone(tune.final_counterexample_fn(object(), policy.load_ranking(), {}, round=5, root=root))

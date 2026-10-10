@@ -439,7 +439,10 @@ def result_sha256(final_constants, patch) -> str:
 def verify_replay(eval_fn, bench, base_raw, cands, constants, expected_result_sha256, fixture_fn=None) -> list:
     """AC-19: the committed alias additions must equal a fresh proposer run from the B state at the adopted constants
     (with the same fixture constraint as the pipeline)."""
-    _, patch = propose_aliases(eval_fn, bench, base_raw, cands, fixture_fn=fixture_fn)
+    def actionable(raw):                                             # Round 5 spec §4.2: the replay proposer, like the pipeline's, never sees KU seeds
+        s, r = eval_fn(raw)
+        return frozenset(s) - KU, r
+    _, patch = propose_aliases(actionable, bench, base_raw, cands, fixture_fn=fixture_fn)
     got = result_sha256(constants, patch)
     return [] if got == expected_result_sha256 else [f"replay result_sha256 {got} != adopted {expected_result_sha256}"]
 
@@ -499,7 +502,11 @@ def final_counterexample_fn(state, rp, aliases_raw, round=None, root=None):
     if round < 5:
         return None
     from tests.benchmarks import counterexample as cx
-    ref = json.loads((root / f"tests/benchmarks/round{round}-counterexample-reference.json").read_text(encoding="utf-8"))
+    ref_path = root / f"tests/benchmarks/round{round}-counterexample-reference.json"
+    frozen = next((e for e in ev.load_round_freeze() if e.get("round") == round), None)
+    if frozen is not None and ev.file_sha256(ref_path) != frozen.get("counterexample_reference_sha256"):      # from T on the reference is immutable
+        raise SystemExit(f"error: {ref_path.name} differs from round_freeze counterexample_reference_sha256 (changed after T)")
+    ref = json.loads(ref_path.read_text(encoding="utf-8"))
     prov = cx.provenance_from_lexicon(json.loads((RANKING_PATH.parent / "concept_lexicon.json").read_text(encoding="utf-8")))
     index, summaries = cx.catalog_index(state)
     return lambda point, working: cx.suite(index, cx.production_top1(state, rp, point), ref["policy"], aliases_raw, working, summaries,
