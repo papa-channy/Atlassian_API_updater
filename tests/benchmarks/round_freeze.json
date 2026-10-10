@@ -22,5 +22,64 @@
     "hidden_reviewer_prompt_sha256": "a4c26427b233085e9576e6b4703ff9a777ffcef341016d8cdb5d7b5881ff539a",
     "tooling_code_sha256": "5accdeaa15699d1e884e903172627efdb3e324a1393381e6cbf571ae3aebbdd6",
     "evaluation_code_sha256_at_T": "974c0e54d2d7b7d9c097cc38abcdb9b21285cb8ec8b14f307940d689555d77a6"
+  },
+  {
+    "round": 5,
+    "structure_sha256": "6d782083cf4d030c5ead778ac9ccacb98cfe81895b5d8d9cf34e6493836d31f5",
+    "verb_inventory_sha256": "d66317db7a6a3d047f30197791eefdb93448747b913544da7545136f91dbffc0",
+    "source_registry_fingerprint": "e308a232d6c9b19a7413e8a38c89b895e44e503581d529c2a31b31fbde179853",
+    "source_spec_sha256": {
+      "confluence": "b3d010b6438677d864495ce15828f57080ff72afe190efdf7f86f0f5140b700d",
+      "jira-platform": "a7a330f1e293c58d57420fa58f1b95c22976dad5390ce466b55150051040fe9e",
+      "jira-software": "cb7e24b331ad9b31944fa9a588f70d4ea60d74d1dfb52d39a59770230b79207a"
+    },
+    "concept_lexicon_sha256": "f4441be53183759a381634e8772dbc3294987f30092f912390ddeca19bceaad9",
+    "lexicon_aliases_sha256": "2919e385fc1e04a6220cfea8fa6e0dbec125cd4dc1501702ee8f1f36845e5eda",
+    "alias_candidates_sha256": "2e9ede5e9c1b393e337b95c9806ee5a2b05deca6b56aaab7781de4a82d75d54c",
+    "worker_brief_sha256": "610d9768756cd8c1278f33844b7a943004c428824f5d4b2ac7e633c379d9edfd",
+    "hidden_generation_prompt_sha256": "429867800ff7c51f93cbed23c29406725eb86cf9977df53f982251a4ac7c4993",
+    "hidden_reviewer_prompt_sha256": "f8059c390b7ae65eab90904a345e6c3d383682e266d0746271504077fbafb76d",
+    "tooling_code_sha256": "ea1685fb9062de71cf4da81d68be20249cd7882dbca2c9113155baf13404639c",
+    "evaluation_code_sha256_at_T": "83eaee4e79d0bee9e9fe699ddeb0ba42fdfa2afd903a4bb4fd5fefe7bd56054d",
+    "regression_reference_sha256": "69fbfcfe60060488d466cee6b4cf0ed1f349fd4f5ba8abb3ebee08ae518a9e38",
+    "tuning_grid_sha256": "cff9c9c9b89ae78eeaea7d59ddc66c9721bc254e0370d9f3437498feefc84f6e",
+    "round_outcomes_sha256": "e0913e3d38f60299507ceb90f27e91be3d648e3fed16c8cfe9b6386cec9b7fdc",
+    "round_recoveries_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "reference_set": {
+      "origin": "round2",
+      "enc_sha256": "c1a3794b0ac7563bee0ccdcc61e0ecb43026d0f778ec4773ef2695459cca369b",
+      "held_out_sha256": "0f990f2fc134cd41eca2061931c65cfdd4bc21819051f9ae8538c0258aaf3540",
+      "negative_sha256": "7750a2020923bcf8ddfa22e79f2c071001db9942194c3215cc03c60f363dde76"
+    },
+    "hidden_generation_rules": [
+      "schema",
+      "catalog",
+      "words",
+      "ascii",
+      "actionable",
+      "negative-method",
+      "operationId",
+      "summary/tags",
+      "negative-phrase",
+      "reuse",
+      "distribution",
+      "negative-distribution"
+    ],
+    "hidden_set_origin": "round5",
+    "doc_titles_source_bundle_sha256": "44f3378684201473d6267dd6f0296bb8babf904dc120320d594ed569d9de14fe",
+    "doc_titles_snapshot_sha256": "2d3caa6e02e0a67c523940add30e083cac415564302deb7e51a832ead50e6453",
+    "t_policy_files": [
+      "tools/atlassian_docs/intelligence/data/alias_candidates.json",
+      "tools/atlassian_docs/intelligence/data/concept_lexicon.json",
+      "tools/atlassian_docs/intelligence/data/search_aliases.json"
+    ],
+    "known_unreachable_seeds": [
+      "s-004",
+      "s-027",
+      "s-039"
+    ],
+    "known_unreachable_registry_sha256": "12744de700b991dc5da06159a2a16e0425278486a784a8d3eaf5eb33f111d04b",
+    "lexicon_union_resolution": "source-precedence",
+    "counterexample_reference_sha256": "4d1fba45042d486e5c9ec36c0c03491f5e214da375856095979f78554c2ca1b2"
   }
 ]
