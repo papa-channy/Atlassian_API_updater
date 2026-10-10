@@ -1,6 +1,6 @@
 # Search Quality Round 6 — Technical Specification
 
-**문서 버전:** v1.0 (2026-10-11; 사용자 승인 섹션 1–4 기반 초안)
+**문서 버전:** v1.1 (2026-10-11; v1.1 = 검수 1(P0 5/P1 5) 반영: 추천 커버리지 지표 추가, §4.2가 Round 5 §4.1–4.2의 KU·reachable·selector·제안기 trial·regression 수용 의미를 전부 대체, R1–R3 전용 scorer-rule counterexample, 승격 provenance와 promotion_identity, 답이 있는 regression 레코드의 positive 평가(`regression_positive`), Runtime stability 자격 구간, 세션 상관키, R3 단·복수 판정 단일화, 기권 사유 우선순위, 이중 독립 라벨 검토; 정수 분수 비교; v1.0 = 사용자 승인 섹션 1–4 기반 초안)
 **기준일:** 2026-10-11
 **선행:** Round 5 (spec v1.12, plan v8; 종료 2026-10-10, terminal branch **D**: pre-T reachable seed 36/36 통과, 튜닝 채택, 최종 단일 평가 held_out 14/16·negative 6/8로 Discovery 게이트 미충족; `docs/phase3-readiness.md` Round 5 decision record; PR #2 병합 `29f298f`).
 **상속:** 이 문서에 적지 않은 것은 **Round 5 스펙 v1.12를 그대로 상속**한다(그 상속 체인으로 Round 4 v1.13·Round 3 v1.25.1 포함: 수명주기 H→T→B→C/D/F/X/X_preB, 역할·봉인·needle·AC-18b, 상태 모델, T allowlist 방식, source-precedence 사전 해소, 누적 provenance, counterexample 스위트, 워커 식별 판정). 이름 치환: `round5`→`round6`, `-r5`→`-r6`, `lexicon-r5`→`lexicon-r6`, `round5_seal`→`round6_seal`, `round5-*.md`→`round6-*.md`, `round5_simulation`→`round6_simulation`, `ROUND5_EXTRA_KEYS`→`ROUND6_EXTRA_KEYS`. 이 문서는 **델타**만 규정하며 충돌 시 이 문서가 우선한다.
@@ -63,12 +63,12 @@ Round 6은 **H에서만** `search.py`·`policy.py`·`search_ranking.json` 구조
 
 ### 3.1 추천 판정 (payload 계약)
 
-`actionable := method_intent_consistent ∧ abstain_reason is None`, `recommended_operation := shown[0].key if actionable else None`. payload에 `abstain_reason ∈ {None, "no_method_intent", "uncovered_head_resource", "product_conflict"}`를 추가한다(`no_method_intent`는 기존 `method_intent_consistent == false`에 해당). 결과 목록(`results`)과 순위는 기권과 무관하게 그대로 반환한다 — 에이전트는 목록을 계속 볼 수 있다.
+`actionable := method_intent_consistent ∧ abstain_reason is None`, `recommended_operation := shown[0].key if actionable else None`. payload에 `abstain_reason ∈ {None, "no_method_intent", "product_conflict", "uncovered_head_resource"}`를 추가한다(`no_method_intent`는 기존 `method_intent_consistent == false`에 해당). 여러 사유가 동시에 성립하면 우선순위 `no_method_intent > product_conflict > uncovered_head_resource`로 하나만 기록한다(검수 1 P1-4). 결과 목록(`results`)과 순위는 기권과 무관하게 그대로 반환한다 — 에이전트는 목록을 계속 볼 수 있다.
 
 ### 3.2 R1 머리 명사 기권 (쓰기 추천만)
 
-- 머리 명사 `head(q)`: 질의 정규화 토큰(`norm_tokens`, 단수화)에서 동사(`verb_methods` 키)·제품 힌트(`product_hints`)를 뺀 뒤, **카탈로그 개념어 집합**(path literal 토큰 ∪ tag 토큰, `path_noise` 제외 — Round 3부터의 `concept_tokens`와 같은 정의, 캐시 registry에서 계산)에 속하는 토큰 중 **마지막** 것. 없으면 R1은 적용되지 않는다.
-- 1위 작업 `top`의 메서드가 POST·PUT·PATCH·DELETE이고, `head(q)`가 `top`의 어휘(operationId·path literal·summary·tag 토큰)에도, `head(q)`의 alias 타깃(직접 alias, 정책 파일)에도 없으면 `abstain_reason = "uncovered_head_resource"`.
+- 머리 명사 정보 `head_info(q) -> {concept, original_token, number}`를 **한 번에** 계산한다(검수 1 P1-3): 질의 원문 토큰을 순서대로 보며 각 토큰의 단수형(`singular`)을 만들고, 동사(`verb_methods` 키)·제품 힌트(`product_hints`)를 뺀 뒤, 단수형이 **카탈로그 개념어 집합**(path literal 토큰 ∪ tag 토큰, `path_noise` 제외 — Round 3부터의 `concept_tokens`와 같은 정의, 캐시 registry에서 계산)에 속하는 토큰 중 **마지막** 것을 고른다. `concept`=단수형, `original_token`=원문 토큰, `number`= 원문이 단수형과 같으면 `singular`, 원문이 단수형+`s`/`es`이면 `plural`, 그 밖(불규칙·불변)은 `unknown`. 해당 토큰이 없으면 `head_info = None`이고 R1·R3은 적용되지 않는다.
+- 1위 작업 `top`의 메서드가 POST·PUT·PATCH·DELETE이고, `head_info(q).concept`가 `top`의 어휘(operationId·path literal·summary·tag 토큰)에도, 그 concept의 alias 타깃(직접 alias, 정책 파일)에도 없으면 `abstain_reason = "uncovered_head_resource"`.
 - GET 추천에는 적용하지 않는다(설계 측정상 GET까지 적용하면 맞는 추천 손실이 커짐; 읽기 오추천은 §4.1 정확도 지표가 별도로 잡는다).
 
 ### 3.3 R2 제품 불일치 기권
@@ -77,11 +77,17 @@ Round 6은 **H에서만** `search.py`·`policy.py`·`search_ranking.json` 구조
 
 ### 3.4 R3 단건/목록 동점
 
-정렬 키에서 최종 점수가 **정확히 같은** 두 후보가 같은 소스·같은 메서드이고 한쪽 path가 다른 쪽 path + `/{param}` 한 단계일 때: 질의의 머리 명사가 단수형으로 쓰였으면(원문 토큰이 단수화 전과 같음) 단건(`{param}`로 끝나는) 쪽을, 복수형이면 목록 쪽을 앞에 둔다. 점수가 다르면 작동하지 않는다(정렬 규칙 `ordering_rules`의 새 플래그 `singular_collection_tiebreak`, H 기본값 true).
+정렬 키에서 최종 점수가 **정확히 같은** 두 후보가 같은 소스·같은 메서드이고 한쪽 path가 다른 쪽 path + `/{param}` 한 단계일 때: `head_info(q).number == singular`이면 단건(`{param}`로 끝나는) 쪽을, `plural`이면 목록 쪽을 앞에 둔다. `unknown`이거나 `head_info`가 없으면 적용하지 않는다. 점수가 다르면 작동하지 않는다(정렬 규칙 `ordering_rules`의 새 플래그 `singular_collection_tiebreak`, H 기본값 true).
 
-### 3.5 채택 기준 (H, seed·regression만)
+### 3.5 채택 기준과 scorer-rule counterexample (H, seed·regression·카탈로그만)
 
-R1–R3은 H에서 **seed·regression·fixture에서만** 측정해 채택한다(hidden 미관찰). 채택 조건: (a) seed·regression 전체에서 쓰기 오추천 수가 늘지 않고, (b) 상속 counterexample 스위트에 R1–R3을 끈 정책 대비 켠 정책의 손실(이전에 맞던 추천이 기권 또는 오답으로 바뀜)을 기록, (c) 손실이 생기면 그 목록과 사유를 readiness와 검수 스레드에 보고하고 판정을 받는다. 규칙 정의는 이 스펙에 고정되며, H 이후 규칙 형태를 바꾸는 것은 스펙 개정이다.
+상속 counterexample 스위트는 alias/phrase 정책 diff만 관찰하므로 R1–R3(추천 판정·동점 정렬 변화)을 볼 수 없다(검수 1 P0-3). R1–R3은 별도의 **scorer-rule counterexample**로 채택한다.
+
+- **코퍼스(H에서 고정):** 캐시 registry의 모든 작업에 대해 `summary`를 질의로 쓰는 summary-as-query 코퍼스(상속된 summary 규칙, 빈 summary 제외)를 결정적으로 생성한다. 코퍼스는 benchmark·seed·hidden id를 읽지 않으며, 생성 코드와 코퍼스 sha를 H 측정 **전에** 원장에 고정한다.
+- **비교:** R1–R3을 모두 끈 정책(OFF)과 켠 정책(ON)으로 코퍼스를 평가한다. 각 질의의 자기 작업(summary의 원 작업)을 정답으로 본다.
+- **손실:** OFF에서 "추천 = 자기 작업"이던 질의가 ON에서 기권 또는 다른 추천으로 바뀐 경우. **이득:** 그 반대. 쓰기 손실(자기 작업이 POST·PUT·PATCH·DELETE)과 읽기 손실을 나눠 센다.
+- **채택 조건:** (a) seed·`regression_negative`·`regression_positive`에서 §4.2 지표가 OFF 대비 하나도 나빠지지 않고, (b) 코퍼스 손실이 코퍼스 크기의 1/100 이하(정수 비교 `100 × losses ≤ corpus_size`)이며, (c) 모든 손실 목록(작업 key·사유)을 readiness와 검수 스레드에 보고한다. (b)를 넘으면 규칙별(R1/R2/R3 개별 OFF) 손실을 측정해 검수 스레드 판정을 받는다.
+- 규칙 정의는 이 스펙에 고정되며, H 이후 규칙 형태를 바꾸는 것은 스펙 개정이다.
 
 ## 4. 평가와 게이트
 
@@ -92,34 +98,42 @@ R1–R3은 H에서 **seed·regression·fixture에서만** 측정해 채택한다
 | 지표 | 정의 | 기준 |
 |---|---|---|
 | 도달 | held_out 중 기대 작업이 결과 상위 3위 안에 있는 수 | ≥ 15/16 |
-| 추천 정확도 | held_out에서 추천을 낸 경우 중 추천이 기대 작업인 비율 | ≥ 90% (추천 0건이면 0%) |
+| 추천 커버리지 | held_out 중 추천을 낸 수 | ≥ 14/16 |
+| 추천 정확도 | held_out에서 추천을 낸 경우 중 추천이 기대 작업인 비율 | `10 × correct ≥ 9 × recommended` (추천 0건이면 실패) |
 | 쓰기 안전 | held_out·negative에서 틀린 추천 중 메서드가 POST·PUT·PATCH·DELETE인 수 | = 0 |
 | 기권 | negative 중 추천을 내지 않은 수 | ≥ 7/8 |
 
-top-1 정답률·actionable 분할은 기록만 한다(게이트 아님). hidden negative 생성 규칙은 "카탈로그에 정답이 없는 질의"(상속)이고, 모든 hidden negative는 `no_answer: true`다.
+모든 비율은 반올림 없이 정수 분수로 비교한다(검수 1 a). 커버리지 하한 때문에 "한두 건만 추천하고 나머지 기권"으로는 통과할 수 없다(검수 1 P0-1). top-1 정답률·actionable 분할은 기록만 한다(게이트 아님). hidden negative 생성 규칙은 "카탈로그에 정답이 없는 질의"(상속)이고, 모든 hidden negative는 `no_answer: true`다.
 
-### 4.2 튜닝 수용과 pre-T 게이트
+### 4.2 학습 지표, selector, 제안기, 수용 (Round 5 §4.1–4.2 대체)
 
-KU registry는 Round 6에 이월하지 않는다(`KNOWN_UNREACHABLE[6] = ()`): 새 지표는 비율 기준이라 개별 seed 면제가 필요 없다.
+**대체 범위(검수 1 P0-2):** 이 절은 Round 5 §4.1–4.2의 KU registry·reachable 계산·`select_candidate` 목적함수·제안기 trial 수용·regression effective/raw 수용 의미를 **전부 대체**한다. fixture 계약(`fixture_positive == 23/23`, `fixture_negative_raw == 6/6`, fixture 실패 격자점 사전 제외), alias counterexample 스위트(§8 상속), 수명주기·dry-run 계약만 상속한다. `KNOWN_UNREACHABLE[6] = ()`.
 
-학습 집합 `seed`(Round 5 39 + 승격 16)와 `regression_negative`(Round 5 14 + 승격 8, §4.3)에서:
+**학습 집합(§4.3 이후):** `seed`(Round 5 39 + 승격 16 = 55), `regression_positive`(기존 regression_negative 중 `no_answer: false`로 판정된 레코드), `regression_negative`(`no_answer: true`인 기존 레코드 + 승격 8).
 
-- `seed_reach3 ≥ 90%` (기대 작업이 상위 3위 안),
-- `seed_rec_precision ≥ 90%`,
-- `write_safety_violations == 0` (seed·regression_negative 전체에서 틀린 쓰기 추천 0),
-- `no_answer_abstention ≥ 87.5%` (`no_answer: true`인 regression 레코드 중 기권 비율),
-- `forbidden_recommended == 0` (`forbidden_top1`이 추천되면 위반; `no_answer: false` 레코드 포함),
-- regression raw·fixture 계약은 상속(`fixture_positive == 23/23`, `fixture_negative_raw == 6/6`),
-- counterexample 스위트 상속(`counterexample_loss_at_selected == []`, `uncovered_proposer_keys == []`).
+**격자점 지표 벡터** `m(point)` (모두 정수):
+- `wv` = seed·regression_positive·regression_negative 전체에서 틀린 쓰기 추천 수,
+- `fr` = `forbidden_top1`이 추천된 레코드 수(전 집합),
+- `sr3` = seed 중 기대 작업이 상위 3위 안인 수,
+- `src` = seed 중 추천을 낸 수, `srk` = seed 중 추천이 기대 작업인 수,
+- `rpk` = regression_positive 중 추천이 기대 작업인 수, `rp3` = regression_positive 중 상위 3위 안인 수,
+- `nab` = regression_negative 중 기권 수.
 
-`tuning_accept`는 위 항목의 논리곱이다. pre-T 게이트는 같은 항목을 dry-run 결과에 적용하며, 위반은 blocker kind `metric_threshold`(지표 이름·값·기준)로 보고한다. 제안기 입력은 "도달하지 못한 seed"(상위 3위 밖)와 "틀린 추천을 낸 seed"다.
+**수용 조건** `accept(m)` := `wv == 0 ∧ fr == 0 ∧ 10·sr3 ≥ 9·|seed| ∧ 10·src ≥ 9·|seed| ∧ 10·srk ≥ 9·src ∧ rp3 == |regression_positive| ∧ rpk == |regression_positive| ∧ 8·nab ≥ 7·|regression_negative|`. `tuning_accept := accept(m(selected)) ∧ fixture 계약 ∧ alias counterexample(counterexample_loss_at_selected == [] ∧ uncovered_proposer_keys == []) ∧ validation_errors == []`.
+
+**selector:** fixture 통과 격자점 중 `accept(m)`인 점이 있으면 그중 Round 3 보수적 tie-break(상속)로 고른다. 없으면 다음 사전식 순서로 최선의 점을 고른 뒤 같은 tie-break: `(wv ↑최소, fr ↑최소, sr3 ↓최대, srk ↓최대, src ↓최대, rpk ↓최대, nab ↓최대)`.
+
+**제안기:** 입력 = seed 중 상위 3위 밖이거나 틀린 추천을 낸 레코드 id. trial alias는 다음을 모두 만족할 때만 채택한다: 대상 seed가 개선(상위 3위 진입 또는 추천이 기대 작업으로 바뀜), `wv`·`fr`이 늘지 않음, 나머지 지표(`sr3, src, srk, rpk, rp3, nab`)가 하나도 줄지 않음. 원자 액션 예산은 상속.
+
+**pre-T 게이트:** dry-run 결과에 `tuning_accept`를 적용하며, 실패는 blocker kind `metric_threshold`(항목 이름·값·기준)로 보고한다. regression raw/effective(Round 5의 14/14)는 기록만 한다.
 
 ### 4.3 Round 5 hidden 승격과 라벨 이관 (§7.3)
 
-- held_out-r5 16개 → `seed`로 승격, id `s-040`…`s-055`(원래 id 순서), `origin: "promoted-r5"`, 레코드 내용 불변.
+- held_out-r5 16개 → `seed`로 승격, id `s-040`…`s-055`(원래 id 순서), `origin: "promoted-r5"`.
 - negative-r5 8개 → `regression_negative`로 승격, id `rn-015`…`rn-022`, `origin: "promoted-r5"`, `no_answer: true`.
-- 기존 regression_negative 14개에 `no_answer` 라벨을 붙인다. 라벨은 **카탈로그 사실**(정답 작업이 존재하는가)로 정하며 엔진 결과를 보지 않는다: 각 레코드에 대해 stateless 검토(상속 Temporary chat, 카탈로그 첨부, 질의·`forbidden_top1`만 제시)로 "정답 작업이 있는가, 있으면 무엇인가"를 받는다. 정답이 있으면 `no_answer: false`와 `expected_top1_any`(검토 결과)를 기록하고, 정답이 없으면 `no_answer: true`. 라벨 이관은 H 산출물(T 이전 커밋)이며 원장에 검토 출력 sha를 남긴다.
-- 승격·이관은 benchmark 파일의 **seed·regression 섹션만** 바꾼다. 이 변경은 Round 6 H 커밋에 속하며(T allowlist 밖), `search_queries.json` 구조 sha와 `regression_reference_sha256`은 새 값으로 기록된다.
+- 승격 레코드는 `promoted_from = {round: 5, split, source_id, source_record_sha256}`를 갖는다. `promotion_identity(r)` := `r`에서 `{id, origin, no_answer, promoted_from}`을 뺀 레코드이며, 이것이 원본(Round 5 unseal 레코드, `56b4b0e..29f298f` 병합 후 benchmark의 해당 레코드)에서 `{id, origin}`을 뺀 것과 같아야 한다(검수 1 P0-4).
+- 기존 regression_negative 14개의 라벨은 **카탈로그 사실**(정답 작업이 존재하는가)로 정하며 엔진 결과도 기존 `forbidden_top1`도 보지 않는다(검수 1 P1-5): stateless 검토자 **두 명**(서로 다른 Temporary chat, 카탈로그 첨부, **질의만** 제시)이 각각 `{answerable: bool, acceptable_keys: [...]}`를 낸다. 두 검토가 같으면 그대로, 다르면 세 번째 stateless 검토자(같은 입력)가 판정한다. answerable이면 레코드를 `regression_positive`로 옮기고 `expected_top1_any = acceptable_keys`, `no_answer: false`; 아니면 `regression_negative`에 남기고 `no_answer: true`. 기존 `forbidden_top1`은 보존된다. 검토 입력·출력 sha와 actor id를 원장에 남기며, 라벨 이관은 H 산출물(T 이전 커밋)이다(검수 1 P0-5).
+- 승격·이관은 benchmark 파일의 **seed·regression 섹션**만 바꾸고 새 섹션 `regression_positive`를 추가한다. 이 변경은 Round 6 H 커밋에 속하며(T allowlist 밖), `search_queries.json` 구조 sha와 `regression_reference_sha256`은 새 값으로 기록된다.
 
 ## 5. 절차 델타
 
@@ -131,8 +145,9 @@ KU registry는 Round 6에 이월하지 않는다(`KNOWN_UNREACHABLE[6] = ()`): �
 
 ## 6. Runtime stability와 검색 로그 (Phase 2.5 스펙 §8 개정)
 
-- **등록(사용자 실행, Round 6 시작 시):** 사용자 범위 MCP 등록, 실행 위치는 저장소로 고정, `ATLASSIAN_DOCS_SEARCH_LOG=1`. 등록 시각을 원장 `runtime_stability_started`로 기록한다.
-- **로그 확장(H):** `search_operations` 레코드에 `actionable`, `recommended_operation`, `abstain_reason`, `method_intent_consistent`를 추가한다. `get_operation`·`build_request_template` 호출은 별도 레코드 `{"ts", "kind": "selection", "tool", "key", "intelligence_fingerprint"}`로 같은 파일에 남긴다(인자 값·헤더는 기록하지 않음). 파일 권한·회전·OSError 무시는 상속.
+- **등록(사용자 실행, Round 6 시작 시):** 사용자 범위 MCP 등록, 실행 위치는 저장소로 고정, `ATLASSIAN_DOCS_SEARCH_LOG=1`. 등록 시각을 원장 `runtime_observation_started`로 기록한다(관찰 시작).
+- **자격 구간(검수 1 P1-1):** `runtime_stability_qualifying_start` = Round 6 최종 H 정책(`intelligence_fingerprint`)이 실사용 서버에 반영된 시각. 7일·100회는 **같은 최종 `intelligence_fingerprint`** 레코드로만 센다; 이전 지문의 레코드는 관찰 기록으로만 남는다.
+- **로그 확장(H):** `search_operations` 레코드에 `actionable`, `recommended_operation`, `abstain_reason`, `method_intent_consistent`를 추가한다. `get_operation`·`build_request_template` 호출은 별도 레코드 `{"ts", "kind": "selection", "tool", "key", "intelligence_fingerprint", "server_session_id", "call_seq"}`로 같은 파일에 남긴다(인자 값·헤더는 기록하지 않음). 모든 레코드는 `server_session_id`(MCP 서버 프로세스 시작 시 만든 무작위 uuid)와 `call_seq`(프로세스 내 증가 정수)를 가진다. 선택-추천 매칭은 같은 `server_session_id` 안에서 selection 직전의 가장 가까운 `search_operations` 레코드로 결정적으로 정한다(검수 1 P1-2). 파일 권한·회전·OSError 무시는 상속.
 - **판정:** 로그 기간이 7일 이상이고 `search_operations` 레코드가 100개 이상이면 Runtime stability 충족으로 readiness에 기록한다. 같은 기록에 로그 기반 참고 지표(추천 후 같은 세션에서 선택된 key와 추천의 일치율, 쓰기 추천 수)를 남긴다(게이트 아님).
 - **실사용 질의:** 로그의 실패 질의는 §7.3대로 다음 라운드 seed 후보다. Round 6 봉인 평가에는 쓰지 않는다. 로그는 저장소 밖(캐시 디렉터리)에만 있으며 커밋하지 않는다.
 
@@ -154,8 +169,11 @@ KU registry는 Round 6에 이월하지 않는다(`KNOWN_UNREACHABLE[6] = ()`): �
 - R3: 정확한 동점 + 단수 머리 명사 → 단건 앞; 복수 → 목록 앞; 점수 차 → 순서 불변; 플래그 false → 상속 정렬과 바이트 동일.
 - 결과 목록 불변: 기권해도 `results`의 순서·점수는 R1·R2 이전과 같다.
 - 지표 함수: 손으로 만든 작은 결과 집합으로 각 지표 경계값(15/16, 90%, 0, 7/8) 검증.
-- 라벨 이관: `no_answer` 필드 스키마 검사, 승격 id·origin 검사, 승격 레코드 내용이 Round 5 unseal 레코드와 바이트 동일(`ku_identity` 방식 projection 불필요 — 전체 동일).
-- 로그: 새 필드와 selection 레코드, 인자 값 미기록, 권한 0600.
+- 라벨 이관: `no_answer` 필드 스키마, `regression_positive` 섹션 스키마, 승격 id·origin·`promoted_from` 검사, `promotion_identity` 동일성(§4.3).
+- 지표·selector·제안기(§4.2): 손으로 만든 격자 결과에서 수용 풀·사전식 fallback·제안기 trial 거부(쓰기 위반 증가, 다른 지표 감소) 각각의 단위 테스트; 정수 분수 경계(14/16, 9/10, 7/8).
+- scorer-rule counterexample(§3.5): 코퍼스 생성이 benchmark를 읽지 않음, 결정성(sha 고정), OFF/ON 손실·이득 계산.
+- `head_info`: 단수·복수·불규칙(unknown)·개념어 없음; 기권 사유 우선순위.
+- 로그: 새 필드·selection 레코드·`server_session_id`·`call_seq`, 인자 값 미기록, 권한 0600; 자격 구간 계산(지문 필터).
 - 리허설: `round6_simulation --phase rehearsal`이 임시 복사본에서만 쓰기(작업 트리 불변) 테스트.
 
 ## 9. 상태 모델·readiness 델타
@@ -169,17 +187,17 @@ KU registry는 Round 6에 이월하지 않는다(`KNOWN_UNREACHABLE[6] = ()`): �
 |---|---|---|
 | AC-R6-01 | payload `actionable`·`recommended_operation`·`abstain_reason`이 §3.1 계약대로; 기권해도 `results` 불변 | unit |
 | AC-R6-02 | R1·R2·R3이 §3.2–3.4 정의대로 동작하고 R3 플래그 false에서 상속 정렬과 동일 | unit |
-| AC-R6-03 | §3.5 채택 측정이 원장·readiness에 기록됨; 쓰기 오추천 수가 R1–R3 적용 전보다 늘지 않음 | ledger |
-| AC-R6-04 | §4.1 지표 함수가 정의대로 계산되고 최종 산출물·readiness에 기준과 함께 기록됨 | unit + 산출물 |
-| AC-R6-05 | §4.2 `tuning_accept`·pre-T blocker(`metric_threshold`)·제안기 입력이 정의대로; `KNOWN_UNREACHABLE[6] == ()` | unit |
-| AC-R6-06 | §4.3 승격 id·origin·내용 동일, `no_answer` 라벨이 stateless 검토 출력 sha와 함께 원장에 있음 | unit + ledger |
+| AC-R6-03 | §3.5 scorer-rule counterexample(코퍼스 sha 고정, OFF/ON 손실 ≤ 1/100, 손실 목록 보고)와 학습 지표 비악화가 원장·readiness에 기록됨 | ledger |
+| AC-R6-04 | §4.1 지표(도달·커버리지·정확도·쓰기 안전·기권) 함수가 정수 분수 비교로 계산되고 최종 산출물·readiness에 기준과 함께 기록됨 | unit + 산출물 |
+| AC-R6-05 | §4.2가 Round 5 §4.1–4.2를 대체: 지표 벡터, `accept`, selector(수용 풀·사전식 fallback), 제안기 입력과 trial 수용, pre-T blocker(`metric_threshold`)가 정의대로; `KNOWN_UNREACHABLE[6] == ()` | unit |
+| AC-R6-06 | §4.3 승격 id·origin·`promoted_from`·`promotion_identity` 동일; 라벨이 이중 독립 검토(불일치 시 3자 판정) 출력 sha·actor와 함께 원장에 있음; answerable 레코드가 `regression_positive`로 이동 | unit + ledger |
 | AC-R6-07 | §5.2 리허설이 H 최종 커밋에서 수행되고 실패 0으로 `rehearsal_report` 기록 | ledger |
-| AC-R6-08 | §6 로그 필드·selection 레코드·권한; `runtime_stability_started` 기록 | unit + ledger |
+| AC-R6-08 | §6 로그 필드·selection 레코드·세션 상관키·권한; `runtime_observation_started`·`runtime_stability_qualifying_start` 기록, 자격 집계는 최종 지문만 | unit + ledger |
 | AC-R6-09 | T 이후 `search.py`·`policy.py`·`search_ranking.json` 구조가 `housekeeping_commit`과 동일(값 채택 경로 상속) | git diff |
 
 ## 11. 위험과 완화
 
-- **규칙이 hidden에서 맞는 추천을 기권으로 바꿈(추천 정확도는 오르지만 도달·정확도 분모 감소):** 정확도 기준은 추천을 낸 경우만 세므로 기권은 정확도를 낮추지 않는다. 대신 추천 0건은 0%로 정의해 "전부 기권"으로 통과하는 길을 막는다.
+- **규칙이 hidden에서 맞는 추천을 기권으로 바꿈:** 추천 커버리지 하한(≥ 14/16, 학습 ≥ 90%)이 과잉 기권을 직접 막고, scorer-rule counterexample이 카탈로그 전체에서 손실을 잰다.
 - **머리 명사 정의가 영어 어순에 의존:** 짧은 명령형 질의(현 benchmark·실사용 형태)에서 마지막 개념어가 대상인 경우가 다수다. 예외는 §3.5 측정과 counterexample 스위트에 드러나고 판정 대상이 된다.
 - **라벨 이관이 평가 맞추기로 변질:** 라벨은 엔진 결과를 보지 않는 stateless 검토가 카탈로그 사실로 정한다; 검토 입력에 엔진 출력이 없음을 원장에 기록한다.
 - **실사용 로그 민감정보:** 저장소 밖 보관·커밋 금지·소유자 전용 권한.
