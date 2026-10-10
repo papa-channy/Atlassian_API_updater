@@ -4,10 +4,13 @@ import hashlib, json, pathlib, re
 
 STOPWORDS = frozenset("a an the to of for in on at and or with by from is are be this that".split())
 _CAMEL_1 = re.compile(r"([a-z0-9])([A-Z])"); _CAMEL_2 = re.compile(r"([A-Z]{2,})([A-Z][a-z])"); _SPLIT = re.compile(r"[^a-z0-9]+")
-_ID = re.compile(r"^(s|rn|h|n)-\d{3}$"); _ORIGIN = re.compile(r"^(seed|held_out|negative)-r\d+$")
+_ID = re.compile(r"^(s|rn|h|n)-\d{3}$"); _ORIGIN = re.compile(r"^(seed|held_out|negative|promoted)-r\d+$")
 _CLASSES = {"R1", "R2", "R3", "R4", "R5", "R6"}
 NEGATIVE_SECTIONS = ("regression_negative", "negative")
 ACTIONABLE_SECTIONS = ("held_out",)          # Round 3 spec §4 v1.20: only held_out requires actionable; seed/fixture positive are raw top-1
+REGRESSION_POSITIVE = "regression_positive"                     # Round 6 spec §4.3: answerable relabeled regression records
+TRAINING_SECTIONS = ("seed", REGRESSION_POSITIVE, "regression_negative")
+WRITE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
 
 def canonical_sha256(obj) -> str:
@@ -51,6 +54,18 @@ def check_schema(section_name: str, records) -> None:
             raise ValueError(f"{section_name}/{rid}: bad failure_classes {fc!r}")
         if not isinstance(rec.get("ambiguous"), bool):
             raise ValueError(f"{section_name}/{rid}: ambiguous must be a bool")
+        if "no_answer" in rec:
+            if not isinstance(rec["no_answer"], bool):
+                raise ValueError(f"{section_name}/{rid}: no_answer must be a bool")
+            if section_name == REGRESSION_POSITIVE and rec["no_answer"]:
+                raise ValueError(f"{section_name}/{rid}: regression_positive records must have no_answer false")
+            if section_name == "regression_negative" and not rec["no_answer"]:
+                raise ValueError(f"{section_name}/{rid}: regression_negative records must have no_answer true")
+        if section_name == REGRESSION_POSITIVE and set(exp) & set(forb):
+            raise ValueError(f"{section_name}/{rid}: expected_top1_any ∩ forbidden_top1 must be empty (spec §4.3)")
+        for lf in ("legacy_forbidden_top1", "catalog_missing_keys"):
+            if lf in rec and (not isinstance(rec[lf], list) or not all(isinstance(k, str) for k in rec[lf])):
+                raise ValueError(f"{section_name}/{rid}: {lf} must be a list of keys")
 
 
 def ranked_and_actionable(search_fn, query):
@@ -96,6 +111,79 @@ def evaluate(records, search_fn, section=None):
         out.update(raw_passed=raw_passed, effective_passed=out["passed"], actionable={"total": act_total, "raw_passed": act_raw},
                    abstained={"total": abstained, "effective_passed": abstained if section in NEGATIVE_SECTIONS else 0})
     return out
+
+
+
+# ---- Round 6 spec §4.1/§4.2: usage-grounded metrics -------------------------------------------------------------------
+def usage_row(rec, ranked, recommended) -> dict:
+    """One record judged as the agent sees it: top-3 reach, the recommendation, and its safety."""
+    exp, forb = set(rec.get("expected_top1_any") or []), set(rec.get("forbidden_top1") or [])
+    method = recommended.split(":")[1] if recommended else None
+    wrong = recommended is not None and recommended not in exp
+    return {"id": rec["id"], "top1": ranked[0] if ranked else None, "top1_correct": bool(ranked) and ranked[0] in exp,
+            "top3": bool(exp & set(ranked[:3])),
+            "recommended": recommended, "abstained": recommended is None,
+            "rec_correct": recommended is not None and recommended in exp,
+            "wrong_write": wrong and method in WRITE_METHODS,
+            "forbidden_recommended": recommended is not None and recommended in forb}
+
+
+def usage_rows(records, usage_fn) -> list:
+    """usage_fn(query) -> (ranked_keys, recommended_key_or_None)."""
+    out = []
+    for rec in records:
+        ranked, recommended = usage_fn(rec["query"])
+        out.append(usage_row(rec, list(ranked), recommended))
+    return out
+
+
+def gate_metrics(held_rows, neg_rows) -> dict:
+    """Round 6 spec §4.1: five exact-fraction checks on the hidden set (n = 16 / 8 in the spec; the fractions generalize)."""
+    n_h, n_n = len(held_rows), len(neg_rows)
+    reach = sum(r["top3"] for r in held_rows)
+    cov = sum(not r["abstained"] for r in held_rows)
+    correct = sum(r["rec_correct"] for r in held_rows)
+    writes = sum(r["wrong_write"] for r in held_rows + neg_rows)
+    abst = sum(r["abstained"] for r in neg_rows)
+    checks = {"reach": 16 * reach >= 15 * n_h, "coverage": 16 * cov >= 14 * n_h,
+              "precision": cov > 0 and 10 * correct >= 9 * cov, "write_safety": writes == 0, "abstention": 8 * abst >= 7 * n_n}
+    counts = {"held_out": n_h, "negative": n_n, "reach3": reach, "recommended": cov, "correct": correct,
+              "wrong_writes": writes, "abstained": abst, "top1_correct": sum(r["top1_correct"] for r in held_rows)}   # recorded only
+    return {"counts": counts, "checks": checks, "pass": all(checks.values())}
+
+
+ACCEPT_COMPONENTS = ("wv", "fr", "sr3", "src", "srk", "rp3", "rpk", "nab")
+FALLBACK_ORDER = (("wv", -1), ("fr", -1), ("sr3", 1), ("srk", 1), ("src", 1), ("rp3", 1), ("rpk", 1), ("nab", 1))
+
+
+def training_vector(seed_rows, rp_rows, rn_rows) -> dict:
+    """Round 6 spec §4.2 metric vector m(point) over the three training sections."""
+    every = list(seed_rows) + list(rp_rows) + list(rn_rows)
+    return {"wv": sum(r["wrong_write"] for r in every), "fr": sum(r["forbidden_recommended"] for r in every),
+            "sr3": sum(r["top3"] for r in seed_rows), "src": sum(not r["abstained"] for r in seed_rows),
+            "srk": sum(r["rec_correct"] for r in seed_rows), "rp3": sum(r["top3"] for r in rp_rows),
+            "rpk": sum(r["rec_correct"] for r in rp_rows), "nab": sum(r["abstained"] for r in rn_rows),
+            "n_seed": len(seed_rows), "n_rp": len(rp_rows), "n_rn": len(rn_rows)}
+
+
+def accept_vector(m) -> bool:
+    """spec §4.2 accept(m), exact integer comparisons."""
+    return (m["wv"] == 0 and m["fr"] == 0 and 10 * m["sr3"] >= 9 * m["n_seed"] and 10 * m["src"] >= 9 * m["n_seed"]
+            and 10 * m["srk"] >= 9 * m["src"] and m["rp3"] == m["n_rp"] and m["rpk"] == m["n_rp"] and 8 * m["nab"] >= 7 * m["n_rn"])
+
+
+def fallback_key(m) -> tuple:
+    """spec §4.2 lexicographic fallback: wv, fr minimal; sr3, srk, src, rp3, rpk, nab maximal (smaller tuple = better)."""
+    return tuple(m[k] if sign < 0 else -m[k] for k, sign in FALLBACK_ORDER)
+
+
+def violation(row, section) -> bool:
+    """spec §4.2 proposer input: an acceptance-violation record of its section."""
+    if row["wrong_write"] or row["forbidden_recommended"]:
+        return True
+    if section == "regression_negative":
+        return not row["abstained"]
+    return not row["top3"] or row["abstained"] or not row["rec_correct"]
 
 
 IRREGULAR_SINGULAR = {"statuses": "status"}; UNCHANGED_PLURAL = frozenset({"series", "species", "news"})
@@ -192,8 +280,9 @@ def t_allowlist(round: int) -> tuple:
 
 
 T_ALLOWLIST = t_allowlist(4)                                       # byte-identical to the Round 4 tuple (order included)
-KNOWN_UNREACHABLE = {5: ("s-004", "s-027", "s-039")}              # Round 5 spec §4.1 (exact, frozen)
+KNOWN_UNREACHABLE = {5: ("s-004", "s-027", "s-039"), 6: ()}              # Round 5 spec §4.1 (exact, frozen)
 ROUND5_EXTRA_KEYS = ("known_unreachable_seeds", "known_unreachable_registry_sha256", "lexicon_union_resolution", "counterexample_reference_sha256")
+ROUND6_EXTRA_KEYS = ("scorer_rule_corpus_sha256", "scorer_rule_registry_fingerprint", "training_split_sha256")   # Round 6 plan PR-4
 
 
 def known_unreachable(round: int) -> frozenset:
@@ -289,7 +378,11 @@ def freeze_key_set(round: int) -> set:
     ROUND3_EXTRA_KEYS. No entry after round 1 carries commit_T (self-reference)."""
     if round == 1:
         return {"round", "commit_T", "structure_sha256"}
-    return set(_ROUND2_KEYS) | (set(ROUND3_EXTRA_KEYS) if round >= 3 else set()) | (set(ROUND4_EXTRA_KEYS) if round >= 4 else set()) | (set(ROUND5_EXTRA_KEYS) if round >= 5 else set())
+    keys = set(_ROUND2_KEYS) | (set(ROUND3_EXTRA_KEYS) if round >= 3 else set()) | (set(ROUND4_EXTRA_KEYS) if round >= 4 else set()) \
+        | (set(ROUND5_EXTRA_KEYS) if round >= 5 else set())
+    if round >= 6:                                                   # Round 6 plan PR-4: no KU registry file; corpus/split keys
+        keys = (keys - {"known_unreachable_registry_sha256"}) | set(ROUND6_EXTRA_KEYS)
+    return keys
 
 
 def files_sha256(root, files) -> str:
