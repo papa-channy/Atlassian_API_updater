@@ -108,6 +108,19 @@ class TestDiagScript(unittest.TestCase):
         with mock.patch("builtins.print"):
             return diag.run(["--cache-dir", str(self.cache), "--round", "1", *args])
 
+    def test_round6_gate_block_and_hidden_rows(self):
+        b = json.loads(self.good_bench.read_text(encoding="utf-8")); b["round6_seal"] = dict(b["round1_seal"])
+        bp = self.tmp / "r6.json"; bp.write_text(json.dumps(b), encoding="utf-8")
+        plain = {"held_out": [{**r, "origin": "held_out-r6"} for r in self.plain["held_out"]],
+                 "negative": [{**r, "origin": "negative-r6"} for r in self.plain["negative"]]}
+        pp = self.tmp / "plain6.json"; pp.write_text(json.dumps(plain), encoding="utf-8")
+        with mock.patch("builtins.print"):
+            code, rep = diag.run(["--cache-dir", str(self.cache), "--round", "6", "--bench-file", str(bp), "--bench", str(pp)])
+        self.assertEqual(code, 0)
+        self.assertEqual(set(rep["gate"]["checks"]), {"reach", "coverage", "precision", "write_safety", "abstention"})
+        self.assertEqual(rep["gate"]["counts"]["held_out"], 2); self.assertEqual(rep["gate"]["counts"]["negative"], 1)
+        assert_no_query_key(self, rep["usage"])
+
     def test_cache_dir_is_used_and_restored(self):
         before = storage.CACHE_DIR
         code, rep = self.run_diag("--bench-file", str(self.good_bench), "--sets", "seed")

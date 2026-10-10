@@ -55,7 +55,7 @@ class AliasPolicy:
 
 
 _NOTE_ORIGIN = re.compile(r"^(phase2\.5|round([1-9]\d*)|lexicon-r([1-9]\d*))$")
-_SEED_ID = re.compile(r"s-\d{3}")               # always fullmatch
+_SEED_ID = re.compile(r"(s|rn)-\d{3}")               # always fullmatch; Round 6: regression_positive ids (rn-) may own a proposer alias
 
 
 def _check_alias_notes(notes, expected_keys: set) -> None:

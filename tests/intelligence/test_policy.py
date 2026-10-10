@@ -212,7 +212,8 @@ class TestRankingPolicy(unittest.TestCase):
         diff = proc.stdout
         changed = [l[1:] for l in diff.splitlines() if l[:1] in "+-" and not l.startswith(("+++", "---"))]
         allowed = ("POLICY_VERSIONS", "CONSTANT_KEYS", "verb_method_order", "resource_match_bonus", "order = {}", "order[k]", "MappingProxyType(order)",
-                   "method_order_bonus", "path_coverage_bonus", "ordering_rules", "ORDERING_RULE_KEYS", "_bool_map", "STRUCTURE_KEYS", "ranking policy must have exactly")   # v1.24: six kinds
+                   "method_order_bonus", "path_coverage_bonus", "ordering_rules", "ORDERING_RULE_KEYS", "_bool_map", "STRUCTURE_KEYS", "ranking policy must have exactly",   # v1.24: six kinds
+                   "_SEED_ID")                                                     # Round 6 plan Task 5 (PR-1): rn- owners of proposer aliases
         for l in changed:
             self.assertTrue(any(tok in l for tok in allowed) or not l.strip(), f"undeclared policy.py change: {l!r}")
 

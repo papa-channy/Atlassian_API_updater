@@ -34,6 +34,16 @@ ROUND = ev.current_round()["round"]
 BENCH_PATH = ROOT / "tests" / "benchmarks" / "search_queries.json"
 LOG_REL = f"tests/benchmarks/search-tuning-round{ROUND}.jsonl"
 LOG_PATH = ROOT / LOG_REL
+
+
+def compute_tuning_round() -> int:
+    """Round 6 plan PR-5: the pending round before T (H/pre-T), the frozen round after T."""
+    return ev.pending_round() or ev.current_round()["round"]
+
+
+TUNING_ROUND = compute_tuning_round()
+
+
 RANKING_PATH = policy.DATA_DIR / "search_ranking.json"
 ALIASES_PATH = policy.DATA_DIR / "search_aliases.json"
 CANDIDATES_PATH = policy.DATA_DIR / "alias_candidates.json"
@@ -143,9 +153,15 @@ def top5(state, rp, point, query, alias_policy):
 
 
 def fixture_bench(bench) -> dict:
-    """The r0 fixture suite (spec v1.14 AC-06a): seed / regression_negative records with an -r0 origin."""
+    """The r0 fixture suite (spec v1.14 AC-06a). Round 6 plan PR-8: r0 regression records are found wherever the relabel put them
+    and keep their original label (no expected key; forbidden = active ∪ legacy)."""
+    from tests.benchmarks.round6_labels import fixture_label_conflicts
+    if fixture_label_conflicts(bench):                                  # plan review 1 P0-4: PR-8 only holds conflict-free
+        raise SystemExit(f"error: relabel conflicts with the historical r0 fixture labels {fixture_label_conflicts(bench)} (STOP_FOR_AMENDMENT)")
+    reg = [r for s in ("regression_negative", "regression_positive") for r in bench.get(s) or [] if r["origin"].endswith("-r0")]
     out = {"seed": [r for r in bench["seed"] if r["origin"].endswith("-r0")],
-           "regression_negative": [r for r in bench["regression_negative"] if r["origin"].endswith("-r0")]}
+           "regression_negative": sorted(({**r, "expected_top1_any": [], "forbidden_top1": sorted(set(r["forbidden_top1"]) | set(r.get("legacy_forbidden_top1") or []))}
+                                          for r in reg), key=lambda r: r["id"])}
     if (len(out["seed"]), len(out["regression_negative"])) != FIXTURE_COUNTS:
         raise SystemExit(f"error: r0 fixture suite must have {FIXTURE_COUNTS} records, got "
                          f"{(len(out['seed']), len(out['regression_negative']))}")
@@ -187,15 +203,12 @@ class GridEvaluator:
                         rows.append((entry, sr.operations_by_key[entry.key], lexical))
             self.rows[q], self.meta[q] = rows, (unigrams, exp.all, S.joined_query_forms(q))
 
-    def ranked(self, query, rp, limit=5):
-        if query not in self.rows or not any(ch.isspace() for ch in query.strip()):
-            with mock.patch.object(policy, "ranking", return_value=rp), mock.patch.object(policy, "aliases", return_value=self.ap):
-                return _search_fn(self.state)(query)
-        unigrams, exp_all, joined = self.meta[query]
+    def _ordered(self, query, rp):
+        """Production ordering (search.order_candidates, R3 included) and the rule inputs, for a whitespace query."""
+        unigrams, exp_all, _joined = self.meta[query]
         assert rp.ordering_rules["terminal_alias_full_weight"] == self.terminal_full, "GridEvaluator built for a different terminal_alias_full_weight"
-        intent = self.S.method_intent(unigrams, rp.verb_methods)
+        intent = self.S.method_intent(unigrams, rp.verb_methods); verbs, allowed = intent
         rules = self.S.ordering_rules_for(rp.ordering_rules, False)                                  # whitespace query: never an identifier query
-        verbs, allowed = intent
         preferred = rp.verb_method_order[verbs[0]][0] if verbs else None
         cands = []
         for entry, op, lexical in self.rows[query]:
@@ -203,9 +216,32 @@ class GridEvaluator:
             final = max(lexical + structural, 0.0) * (self.S.DEPRECATED_FACTOR if op.deprecated else 1.0)
             if final == 0.0:
                 continue
-            cands.append((final, op.deprecated, op.key, entry.method))
-        cands.sort(key=lambda c: self.S._order_key(rules, allowed, preferred, c[0], c[3], c[1], c[2]))
-        return [c[2] for c in cands[:limit]], bool(intent[1])
+            cands.append((final, op, None, entry.method))
+        run = self.S.rule_unigrams(query); concepts = self.S.concept_vocabulary(self.state, rp.path_noise)
+        head = self.S.head_info(run, rp.verb_methods, concepts)
+        cands = self.S.order_candidates(cands, rules, allowed, preferred, head["number"] if head else None)
+        top = cands[0][1] if cands else None
+        reason = self.S.abstain_reason(allowed=allowed, top_op=top, pinned=False, unigrams=run, rp=rp, pol=self.ap, concepts=concepts)
+        return cands, allowed, top, reason
+
+    def _fallback(self, query):
+        return query not in self.rows or not any(ch.isspace() for ch in query.strip())
+
+    def ranked(self, query, rp, limit=5):
+        """(top keys, actionable) exactly as search_operations returns them (actionable includes the Round 6 abstain_reason)."""
+        if self._fallback(query):
+            with mock.patch.object(policy, "ranking", return_value=rp), mock.patch.object(policy, "aliases", return_value=self.ap):
+                return _search_fn(self.state)(query)
+        cands, allowed, _top, reason = self._ordered(query, rp)
+        return [c[1].key for c in cands[:limit]], bool(allowed) and reason is None
+
+    def usage(self, query, rp, limit=5):
+        """(top keys, recommended_operation) exactly as search_operations returns them (Round 6 spec §3)."""
+        if self._fallback(query):
+            with mock.patch.object(policy, "ranking", return_value=rp), mock.patch.object(policy, "aliases", return_value=self.ap):
+                return usage_fn(self.state)(query)
+        cands, _allowed, top, reason = self._ordered(query, rp)
+        return [c[1].key for c in cands[:limit]], (top.key if top is not None and reason is None else None)
 
 
 def evaluate_point_fast(ge, rp, point, bench):
@@ -217,6 +253,31 @@ def fixture_failures_fast(ge, rp, point, bench_r0) -> list:
     rpp = ranking_with(rp, point); fn = lambda q: ge.ranked(q, rpp)
     s, r = evaluate(bench_r0["seed"], fn), evaluate(bench_r0["regression_negative"], fn)
     return sorted(f["id"] for f in s["failed"] + r["failed"])
+
+
+# ---- Round 6 spec §4.2: usage evaluation -----------------------------------------------------------------------------------
+def usage_fn(state):
+    def fn(q):
+        out = search_operations(state, q, limit=5)
+        return [r["key"] for r in out.get("results", [])], out.get("recommended_operation")
+    return fn
+
+
+def evaluate_usage(bench, fn) -> dict:
+    out = {s: ev.usage_rows(bench.get(s) or [], fn) for s in ev.TRAINING_SECTIONS}
+    out["m"] = ev.training_vector(out["seed"], out["regression_positive"], out["regression_negative"])
+    return out
+
+
+def evaluate_usage_point(state, rp, point, bench, alias_policy) -> dict:
+    with mock.patch.object(policy, "ranking", return_value=ranking_with(rp, point)), \
+            mock.patch.object(policy, "aliases", return_value=alias_policy):
+        return evaluate_usage(bench, usage_fn(state))
+
+
+def evaluate_usage_fast(ge, rp, point, bench) -> dict:
+    rpp = ranking_with(rp, point)
+    return evaluate_usage(bench, lambda q: ge.usage(q, rpp))
 
 
 def write_constants(point, path=RANKING_PATH) -> None:
@@ -447,6 +508,142 @@ def verify_replay(eval_fn, bench, base_raw, cands, constants, expected_result_sh
     return [] if got == expected_result_sha256 else [f"replay result_sha256 {got} != adopted {expected_result_sha256}"]
 
 
+# ---- Round 6 spec §4.2: selector, proposer, acceptance ---------------------------------------------------------------------
+def _tiebreak(p, baseline, grid):
+    return (tuple(p[k] for k in BONUS_KEYS), l1_index_distance(p, baseline, grid), sum(p[k] for k in MAGNITUDE_KEYS), tuple(p[k] for k in CONSTANT_KEYS))
+
+
+def select_candidate_r6(results, baseline, grid, scorer_ok_fn):
+    """results = [(point, m)]. Pool = accept(m) ∧ scorer_rule_ok(point, working aliases), conservative tie-break (walked in
+    tie-break order, plan PR-2); empty pool -> spec §4.2 lexicographic fallback over all points, then the same tie-break."""
+    if not results:
+        raise ValueError("no results to select from")
+    pool = sorted((p for p, m in results if ev.accept_vector(m)), key=lambda p: _tiebreak(p, baseline, grid))
+    for p in pool:
+        if scorer_ok_fn(p):
+            return dict(p), {"mode": "accept_pool", "accept_points": len(pool)}
+    best = min(ev.fallback_key(m) for _, m in results)
+    fb = sorted((p for p, m in results if ev.fallback_key(m) == best), key=lambda p: _tiebreak(p, baseline, grid))
+    return dict(fb[0]), {"mode": "fallback", "accept_points": len(pool), "fallback_key": list(best)}
+
+
+def improved(before, after, section) -> bool:
+    """spec §4.2 target improvement by record type."""
+    if (before["wrong_write"] or before["forbidden_recommended"]) and not (after["wrong_write"] or after["forbidden_recommended"]):
+        return True
+    if section == "regression_negative":
+        return not before["abstained"] and after["abstained"]
+    return (not before["top3"] and after["top3"]) or (not before["rec_correct"] and after["rec_correct"])
+
+
+def no_worse(m0, m1) -> bool:
+    return m1["wv"] <= m0["wv"] and m1["fr"] <= m0["fr"] and all(m1[k] >= m0[k] for k in ("sr3", "src", "srk", "rp3", "rpk", "nab"))
+
+
+def round_note_r6(word, sid, target) -> dict:
+    """plan review 2 P0-1: the Round 6 note origin is TUNING_ROUND, never the module ROUND (which is 5 before T and 6 after)."""
+    return {"origin": f"round{TUNING_ROUND}", "seed_query_id": sid, "candidate_word": word, "failure_classes": ["R6"],
+            "evidence": f"alias {word} -> {target} for {sid} (frozen candidate, deterministic atomic-action proposer)"}
+
+
+def apply_actions_r6(working, actions, sid):
+    trial = copy.deepcopy(working)
+    for word, target in actions:
+        trial["aliases"][word] = [target]; trial["notes"][word] = round_note_r6(word, sid, target)
+    return trial
+
+
+def _find(res, section, rid):
+    return next(r for r in res[section] if r["id"] == rid)
+
+
+def propose_aliases_r6(eval_fn, bench, base_raw, cands, budget=BUDGET, per_seed=PER_SEED, fixture_fn=None):
+    """spec §4.2: input = every acceptance-violation record of the three training sections (id order); actions = the frozen
+    candidates of that record (plan PR-1); a trial is committed iff it improves its record, wv/fr do not rise, no other metric
+    falls and the fixture suite stays green. Budgets inherited."""
+    working = copy.deepcopy(base_raw)
+    first = eval_fn(working)
+    patch = {"resolved_by_prior_change": [], "no_actions": [], "unresolved": [], "fixture_fail": [], "trials": 0, "actions_by_seed": {}}
+    targets = sorted(((s, r["id"]) for s in ev.TRAINING_SECTIONS for r in first[s] if ev.violation(r, s)), key=lambda t: t[1])
+    accepted_n = 0
+    for section, rid in targets:
+        cur = eval_fn(working); row = _find(cur, section, rid)
+        if not ev.violation(row, section):
+            patch["resolved_by_prior_change"].append(rid); continue
+        actions = atomic_actions(cands, rid, working)
+        if not actions:
+            patch["no_actions"].append(rid); continue
+        found = None
+        for combo in trial_order(actions):
+            if len(combo) > per_seed or accepted_n + len(combo) > budget:
+                continue
+            trial = apply_actions_r6(working, combo, rid)
+            patch["trials"] += 1
+            new = eval_fn(trial)
+            if not (improved(row, _find(new, section, rid), section) and no_worse(cur["m"], new["m"])):
+                continue
+            bad = list(fixture_fn(trial)) if fixture_fn is not None else []
+            if bad:
+                patch["fixture_fail"].append({"kind": "alias", "actions": [list(a) for a in combo], "seed_query_id": rid, "failing": bad}); continue
+            found = (trial, combo); break
+        if found is None:
+            patch["unresolved"].append(rid); continue
+        working, accepted_n = found[0], accepted_n + len(found[1])
+        patch["actions_by_seed"][rid] = [list(a) for a in found[1]]
+    if patch["no_actions"]:                                          # PR-1 diagnostic: later aliases may have fixed a no-action record
+        final = eval_fn(working)
+        still = {r["id"] for s in ev.TRAINING_SECTIONS for r in final[s] if ev.violation(r, s)}
+        patch["resolved_after_no_actions"] = [i for i in patch["no_actions"] if i not in still]
+    patch.update(alias_patch(base_raw, working))
+    return working, patch
+
+
+def tuning_accept_r6(m, fixture_final, cx, scorer, errors) -> bool:
+    """spec §4.2 tuning_accept := accept(m) ∧ fixture ∧ alias counterexample ok ∧ scorer_rule_ok ∧ no validation errors."""
+    return ev.accept_vector(m) and not fixture_final and (cx is None or cx["ok"]) and bool(scorer and scorer["ok"]) and not errors
+
+
+def classes_r6(bench, cands) -> dict:
+    """validate_alias_change input: seeds keep their bench classes; a regression_positive record owning a frozen candidate word
+    is R6 by the generator's construction (alias_candidates_tool.candidates)."""
+    out = {r["id"]: r["failure_classes"] for r in bench["seed"]}
+    owners = {sid for c in cands.values() for sid in c["seed_ids"]}
+    out.update({r["id"]: ["R6"] for r in bench.get("regression_positive") or [] if r["id"] in owners})
+    return out
+
+
+def run_pipeline_r6(evaluate_fn, bench, aliases_raw, cands_doc, grid, baseline, fixture_fn, scorer_fn):
+    """evaluate_fn(point, raw) -> usage dict; fixture_fn(point, raw) -> failing r0 ids; scorer_fn(point, raw) -> scorer-rule
+    result. Constants once with the B aliases over the fixture-admissible grid, proposer once at the selected constants."""
+    raw_results, excluded = [], []
+    for i, point in enumerate(grid_points(grid)):
+        if fixture_fn(point, aliases_raw):
+            excluded.append(i); continue
+        raw_results.append((point, evaluate_fn(point, aliases_raw)["m"]))
+    if not raw_results:
+        raise SystemExit("error: every constants grid point fails the r0 fixture suite (fixture_fail)")
+    selected, info = select_candidate_r6(raw_results, baseline, grid, lambda p: scorer_fn(p, aliases_raw)["ok"])
+    working, patch = propose_aliases_r6(lambda raw: evaluate_fn(selected, raw), bench, aliases_raw, cands_doc["candidates"],
+                                        fixture_fn=lambda raw: fixture_fn(selected, raw))
+    usage = evaluate_fn(selected, working)
+    return raw_results, selected, info, working, patch, usage, {"constants": excluded, "final": list(fixture_fn(selected, working))}
+
+
+def run_pipeline_result_r6(evaluate_fn, bench, aliases_raw, cands_doc, grid, baseline, fixture_fn, scorer_fn, queries,
+                           counterexample_fn=None) -> "PipelineResult":
+    results, selected, info, working, patch, usage, fixture_fail = run_pipeline_r6(evaluate_fn, bench, aliases_raw, cands_doc, grid,
+                                                                                    baseline, fixture_fn, scorer_fn)
+    errors = validate_alias_change(aliases_raw, working, cands_doc["candidates"], queries, classes_r6(bench, cands_doc["candidates"]))
+    cxr = counterexample_fn(selected, working) if counterexample_fn is not None else None
+    if cxr is not None:
+        errors = errors + list(cxr["validation_errors"])
+    scorer = scorer_fn(selected, working)
+    accept = tuning_accept_r6(usage["m"], fixture_fail["final"], cxr, scorer, errors)
+    res = PipelineResult(selected, patch, errors, usage, {}, fixture_fail, accept, cxr, metrics=usage["m"], scorer_rule=scorer, selection=info)
+    res.grid_results, res.working_aliases = results, working
+    return res
+
+
 # ---- pipeline, adoption, verification CLI ----
 
 def _alias_policy(raw):
@@ -493,6 +690,9 @@ class PipelineResult:
     fixture_result: dict
     tuning_accept: bool
     counterexample_result: dict = None
+    metrics: dict = None                                             # Round 6 spec §4.2 metric vector
+    scorer_rule: dict = None
+    selection: dict = None
 
 
 def final_counterexample_fn(state, rp, aliases_raw, round=None, root=None):
@@ -647,6 +847,43 @@ def main(argv=None) -> int:
             for key, score, sig in top5(state, rp, selected, f["query"], _alias_policy(working)):
                 print(f"      {score:8.3f}  {key}  {json.dumps(sig, sort_keys=True)}")
         return fp, results, selected, working, patch, seed_res, reg_res, fixture_fail, grid_runtime, fixture_diag, res
+    def body6(state):
+        from tests.benchmarks import scorer_rule_cx as cx6
+        fp = state.registry.fingerprint
+        if fp != seal.get("registry_fingerprint") or fp != cands_doc["generated_from"]["registry_fingerprint"]:
+            raise SystemExit(f"error: registry fingerprint {fp} != round{ROUND}_seal / alias_candidates provenance; wrong snapshot?")
+        frozen = ev.freeze_for(ROUND)
+        corpus = cx6.corpus(state)
+        if ev.canonical_sha256(corpus) != frozen.get("scorer_rule_corpus_sha256") or fp != frozen.get("scorer_rule_registry_fingerprint"):
+            raise SystemExit("error: scorer-rule corpus / registry differs from round_freeze (spec §3.5 binding)")
+        b_sha = policy.canonical_sha256(aliases_raw)
+        queries = [r["query"] for s in ev.TRAINING_SECTIONS for r in bench.get(s) or []]
+        fx_state, fx_bench = fixture_state(), fixture_bench(bench)
+        tf = rp.ordering_rules["terminal_alias_full_weight"]
+        ge = GridEvaluator(state, queries, _alias_policy(aliases_raw), tf)
+        ge_fx = GridEvaluator(fx_state, [r["query"] for r in fx_bench["seed"] + fx_bench["regression_negative"]], _alias_policy(aliases_raw), tf)
+        shas = {}
+        raw_sha = lambda raw: shas.setdefault(id(raw), policy.canonical_sha256(raw))
+        evaluate_fn = lambda point, raw: evaluate_usage_fast(ge, rp, point, bench) if raw_sha(raw) == b_sha else evaluate_usage_point(state, rp, point, bench, _alias_policy(raw))
+        fixture_fn = lambda point, raw: fixture_failures_fast(ge_fx, rp, point, fx_bench) if raw_sha(raw) == b_sha else fixture_failures(fx_state, rp, point, fx_bench, _alias_policy(raw))
+        scorer_fn = lambda point, raw: cx6.compare(state, rp, point, _alias_policy(raw), corpus, bound_fingerprint=fp, aliases_sha256=raw_sha(raw))
+        t0 = time.perf_counter()
+        res = run_pipeline_result_r6(evaluate_fn, bench, aliases_raw, cands_doc, rp.tuning_grid, dict(rp.baseline), fixture_fn, scorer_fn,
+                                     {r["id"]: r["query"] for s in ("seed", "regression_positive") for r in bench.get(s) or []},
+                                     counterexample_fn=final_counterexample_fn(state, rp, aliases_raw))
+        slow, fast = evaluate_usage_point(state, rp, res.selected_point, bench, _alias_policy(aliases_raw)), evaluate_usage_fast(ge, rp, res.selected_point, bench)
+        if slow != fast:
+            raise SystemExit("error: memoized grid evaluator disagrees with search_operations at the selected point")
+        if res.validation_errors:
+            raise SystemExit("\n".join(f"VIOLATION {v}" for v in res.validation_errors))
+        return fp, res, time.perf_counter() - t0
+
+    if TUNING_ROUND >= 6:                                             # Round 6 plan PR-5
+        try:
+            fp, res, grid_runtime = _with_state(cache, body6)
+        except SystemExit as e:
+            print(e, file=sys.stderr); return 2
+        return _finish6(args, rp, fp, res, baseline_sha256(aliases_raw, ranking_raw, fp, cands_doc, bench), grid_runtime)
     try:
         fp, results, selected, working, patch, seed_res, reg_res, fixture_fail, grid_runtime, fixture_diag, res = _with_state(cache, body)
     except SystemExit as e:
@@ -694,6 +931,42 @@ def _finish(args, rp, fp, results, selected, patch, working, seed_res, reg_res, 
     print(json.dumps({"aliases": patch["aliases"], "rules": patch["rules"], "unresolved": patch["unresolved"],
                       "resolved_by_prior_change": patch["resolved_by_prior_change"]}, ensure_ascii=False))
     return 0 if accept else 1
+
+
+def _finish6(args, rp, fp, res, base_sha, grid_runtime) -> int:
+    effects = plan_effects(args.dry_run, res.tuning_accept)
+    m, fx = res.metrics, res.fixture_result
+    pos_fail = [i for i in fx["final"] if i.startswith("s-")]; neg_fail = [i for i in fx["final"] if i.startswith("rn-")]
+    line = {"run_id": str(uuid.uuid4()), "run_at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "git_commit": _git("rev-parse", "HEAD").strip(), "round": ROUND, "registry_fingerprint": fp, "baseline_sha256": base_sha,
+            "events": list(EVENTS), "constants_selected": res.selected_point, "selection": res.selection,
+            "grid_size": len(res.grid_results) + len(fx["constants"]), "grid_runtime_s": round(grid_runtime, 1), "fixture_fail": fx,
+            "passing_combos": sum(1 for _, mm in res.grid_results if ev.accept_vector(mm)),
+            "aliases_proposed": res.proposed_actions, "metrics": m, "scorer_rule": res.scorer_rule,
+            "fixture_positive": f"{FIXTURE_COUNTS[0] - len(pos_fail)}/{FIXTURE_COUNTS[0]}",
+            "fixture_negative_raw": f"{FIXTURE_COUNTS[1] - len(neg_fail)}/{FIXTURE_COUNTS[1]}",
+            "tuning_accept": res.tuning_accept, "tuning_failed": not res.tuning_accept, "counterexample": res.counterexample_result,
+            "result_sha256": result_sha256(res.selected_point, res.proposed_actions),
+            "dirty": dirty_paths(_git("status", "--porcelain", "--untracked-files=no")), "note": args.note,
+            "ranking_structure_sha256": rp.structure_sha256, "baseline": dict(rp.baseline)}
+    line["run_log_sha256"] = policy.canonical_sha256(log_core(line))
+    line["status"], line["adopted"] = ("pending" if res.tuning_accept else "failed"), False
+    if effects["write_constants"]:
+        write_constants(res.selected_point)
+        ALIASES_PATH.write_text(json.dumps(res.working_aliases, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        policy.load_aliases(ALIASES_PATH)
+    if effects["append_log"]:
+        _write_log(_read_log() + [line])
+    else:
+        print("dry run: nothing written; would-be log line:"); print(json.dumps(line, ensure_ascii=False, sort_keys=True))
+    print(json.dumps({k: line[k] for k in ("run_id", "constants_selected", "metrics", "passing_combos", "tuning_failed", "status", "result_sha256")}, ensure_ascii=False))
+    return 0 if res.tuning_accept else 1
+
+
+def verify_replay_r6(eval_fn, bench, base_raw, cands, constants, expected_result_sha256, fixture_fn=None) -> list:
+    _, patch = propose_aliases_r6(eval_fn, bench, base_raw, cands, fixture_fn=fixture_fn)
+    got = result_sha256(constants, patch)
+    return [] if got == expected_result_sha256 else [f"replay result_sha256 {got} != adopted {expected_result_sha256}"]
 
 
 def _current_result_sha256() -> str:
@@ -826,6 +1099,9 @@ def _verify(cache, bench, rp, aliases_raw, ranking_raw, cands_doc) -> int:
             return frozenset(f["id"] for f in s["failed"]), frozenset(f["id"] for f in r["failed"])
         fx_state, fx_bench = fixture_state(), fixture_bench(bench)
         fixture_fn = lambda raw: fixture_failures(fx_state, rp, consts, fx_bench, _alias_policy(raw))
+        if TUNING_ROUND >= 6:                                         # Round 6 plan PR-5: usage-vector proposer replay
+            return verify_replay_r6(lambda raw: evaluate_usage_point(state, rp, consts, bench, _alias_policy(raw)), bench, base,
+                                    cands_doc["candidates"], consts, target["result_sha256"], fixture_fn)
         return verify_replay(eval_fn, bench, base, cands_doc["candidates"], consts, target["result_sha256"], fixture_fn)
     problems = _with_state(cache, body)
     if policy.canonical_sha256(base) != cands_doc["generated_from"]["inputs"]["aliases"]:

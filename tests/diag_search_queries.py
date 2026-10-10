@@ -33,7 +33,7 @@ from tools.atlassian_docs.intelligence import RegistryManager, policy, search_op
 
 BENCH = ROOT / "tests" / "benchmarks" / "search_queries.json"
 SOURCES = ("jira-platform", "jira-software", "confluence")
-ALL_SETS = ("seed", "regression_negative", "held_out", "negative")
+ALL_SETS = ("seed", "regression_positive", "regression_negative", "held_out", "negative")   # regression_positive: Round 6 (public)
 HIDDEN_SETS = ("held_out", "negative")
 
 
@@ -83,7 +83,7 @@ def top5(state, query):
 
 
 def _sections(bench, plain, rnd):
-    sections = {name: bench[name] for name in ALL_SETS}
+    sections = {name: bench[name] if name != "regression_positive" else bench.get(name, []) for name in ALL_SETS}
     if plain is not None:
         for name in HIDDEN_SETS:
             ev.check_schema(name, plain[name])
@@ -106,7 +106,7 @@ def run(argv=None):
     except _WrongRoundOrigin as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2, {"error": "wrong_round_origin", "sets": {}}
-    sets = args.sets.split(",") if args.sets else [n for n in ALL_SETS if not ev.is_sealed(sections[n])]
+    sets = args.sets.split(",") if args.sets else [n for n in ALL_SETS if not ev.is_sealed(sections[n]) and (n != "regression_positive" or sections[n])]
     unknown = [n for n in sets if n not in ALL_SETS]
     if unknown:
         print(f"error: unknown set(s) {unknown}; choose from {list(ALL_SETS)}", file=sys.stderr)
@@ -203,11 +203,12 @@ def _evaluate(state, bench, sections, sets, plain, rnd):
         if report["sealed_sha256"] != want:
             print(f"WARNING: plaintext sha256 {report['sealed_sha256']} != round{rnd}_seal {want}", file=sys.stderr)
     ranked = {}
+    recommended = {}
 
     def fn(q):
         out = search_operations(state, q, limit=5)
         keys = [r["key"] for r in out.get("results", [])]
-        ranked[q] = keys
+        ranked[q], recommended[q] = keys, out.get("recommended_operation")
         return keys, out["actionable"]
 
     for name in sets:
@@ -243,6 +244,20 @@ def _evaluate(state, bench, sections, sets, plain, rnd):
             report["failures"].append(entry)
             for r in entry["top5"]:
                 print(f"        {r['score']:8.3f}  {r['key']}  {json.dumps(r['signals'], sort_keys=True)}")
+    if rnd >= 6:                                                      # Round 6 spec §4.1/§4.2 (recorded per set; gate on hidden only)
+        usage = {}
+        for name in sets:
+            if isinstance(sections.get(name), list):
+                rows = ev.usage_rows(sections[name], lambda q: (ranked[q], recommended[q]))
+                usage[name] = [{**r, "id": r["id"]} for r in rows] if name not in HIDDEN_SETS else \
+                              [{k: v for k, v in r.items() if k != "top1"} for r in rows]
+        report["usage"] = usage
+        if {"held_out", "negative"} <= set(usage):
+            report["gate"] = ev.gate_metrics(usage["held_out"], usage["negative"])
+            g = report["gate"]
+            print(f"[gate] reach {g['counts']['reach3']}/{g['counts']['held_out']} · coverage {g['counts']['recommended']}/{g['counts']['held_out']}"
+                  f" · precision {g['counts']['correct']}/{g['counts']['recommended']} · wrong writes {g['counts']['wrong_writes']}"
+                  f" · abstention {g['counts']['abstained']}/{g['counts']['negative']} -> {'PASS' if g['pass'] else 'FAIL'}")
     return 0, report
 
 

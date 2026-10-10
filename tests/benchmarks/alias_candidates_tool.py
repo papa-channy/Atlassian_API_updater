@@ -153,7 +153,8 @@ def candidates(bench, internal, ranking_raw, aliases_raw, round=2) -> dict:
     idents = _identifiers(internal)
     alias_words, df = alias_source_words(aliases_raw), catalog_df(internal)
     cands, reasons = {}, {}
-    for rec in sorted(bench["seed"], key=lambda r: r["id"]):
+    records = bench["seed"] + (bench.get("regression_positive") or [] if round >= 6 else [])     # Round 6 plan PR-1
+    for rec in sorted(records, key=lambda r: r["id"]):
         vocab = expected_vocab(rec, by_key, noise)
         for tok in norm_tokens(rec["query"]):
             reason = ("verb" if tok in verbs else "function_word" if tok in FUNCTION_WORDS or tok in STOPWORDS else "product_hint" if tok in hints
