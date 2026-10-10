@@ -361,15 +361,19 @@ def _run_in_tree(tree, argv):
     return r.returncode, r.stdout + r.stderr
 
 
-def t_commands(cache, work, tree) -> list:
-    """The T sequence (Task C5 runs the same list in the real checkout): candidates, classify, carry, freeze."""
-    py, d = sys.executable, DATA_REL
-    return [[py, "tests/benchmarks/alias_candidates_tool.py", "candidates", "--cache-dir", str(cache), "--round", str(ROUND)],
+def t_commands(cache, work, tree, base_commit) -> list:
+    """The T sequence (Task 14 runs the same list in the real checkout with base_commit = housekeeping_commit): candidates, classify,
+    carry, freeze. Inputs read from work: prior lexicon/candidates (git show <housekeeping_commit>) and the Round 4 doc-title bundle +
+    snapshot under work/inputs/round4/ (S reused: the Round 5 freeze binding)."""
+    py, d, r4 = sys.executable, DATA_REL, pathlib.Path(work) / "inputs/round4"
+    return [[py, "tests/benchmarks/alias_candidates_tool.py", "candidates", "--cache-dir", str(cache), "--round", str(ROUND),
+             "--out", f"{d}/alias_candidates.json"],
             [py, "tests/benchmarks/alias_candidates_tool.py", "classify", "--cache-dir", str(cache), "--round", str(ROUND)],
             [py, "tests/benchmarks/concept_lexicon_check.py", "carry", "--lexicon", f"{d}/concept_lexicon.json", "--candidates", f"{d}/alias_candidates.json",
-             "--prior-lexicon", str(work / "prior-concept_lexicon.json"), "--prior-candidates", str(work / "prior-alias_candidates.json")],
+             "--prior-lexicon", str(pathlib.Path(work) / "prior-concept_lexicon.json"), "--prior-candidates", str(pathlib.Path(work) / "prior-alias_candidates.json")],
             [py, "tests/benchmarks/round_seal.py", "freeze", "--round", str(ROUND), "--cache-dir", str(cache),
-             "--reference-enc", str(pathlib.Path.home() / ".atlassian_api_updater/archive/round2/sealed/round2-sealed.json.enc")]]
+             "--reference-enc", str(pathlib.Path.home() / ".atlassian_api_updater/archive/round2/sealed/round2-sealed.json.enc"),
+             "--doc-title-sources", str(r4 / "doc-title-sources"), "--doc-titles", str(r4 / "doc-titles-snapshot.json"), "--base-commit", base_commit]]
 
 
 def run_rehearsal(cache, work, dry=False) -> int:
@@ -384,11 +388,12 @@ def run_rehearsal(cache, work, dry=False) -> int:
             subprocess.run(["tar", "-x", "-C", str(tree)], input=archive, check=True)
             for f in sorted((pathlib.Path(work) / "frozen").glob("round6-*")):
                 shutil.copyfile(f, tree / "tests/benchmarks" / f.name)
+            _git(tree, "init", "-q"); _git(tree, "add", "-A"); _git(tree, "commit", "-q", "-m", "H (rehearsal archive + frozen texts)")   # freeze --base-commit HEAD
             try:
                 seeded = seed_rehearsal_work(work, temp_work); steps.append({"argv": ["seed_rehearsal_work"], "exit": 0, "output_sha256": ev.canonical_sha256(seeded)})
             except SystemExit as exc:                                 # plan review 2 P1-4: a seeding failure is a recorded rehearsal failure
                 steps.append({"argv": ["seed_rehearsal_work"], "exit": 1, "output_sha256": hashlib.sha256(str(exc).encode("utf-8")).hexdigest()})
-        for argv in ([] if steps and steps[-1]["exit"] else t_commands(cache, work, tree) + [[sys.executable, "-m", "unittest", "discover", "-s", "tests", "-t", "."],
+        for argv in ([] if steps and steps[-1]["exit"] else t_commands(cache, work, tree, "HEAD") + [[sys.executable, "-m", "unittest", "discover", "-s", "tests", "-t", "."],
                                                      [sys.executable, "tests/benchmarks/round6_simulation.py", "--phase", "pre-T",
                                                       "--cache-dir", str(cache), "--work", str(temp_work)]]):
             code, out = _run_in_tree(tree, argv)

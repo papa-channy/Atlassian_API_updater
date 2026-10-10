@@ -1,4 +1,4 @@
-import hashlib, json, pathlib, subprocess, tempfile, types, unittest
+import contextlib, hashlib, json, pathlib, subprocess, tempfile, types, unittest
 from unittest import mock
 from tests.benchmarks import round6_simulation as sim, evaluator as ev
 
@@ -113,3 +113,22 @@ class TestWorkerBriefAcceptance(unittest.TestCase):
         self.assertFalse(sim.handshake_format_ok(v16))
         plan = (pathlib.Path(sim.ROOT) / "docs/superpowers/plans/2026-10-11-search-quality-round6-implementation.md").read_text(encoding="utf-8")
         self.assertIn(sim.ACCEPTANCE_LINE, plan)
+
+
+class TestTCommandsParse(unittest.TestCase):
+    """Rehearsal defect (Task 13): every T command must be accepted by its real CLI (handlers patched to no-ops)."""
+    def test_every_t_command_parses(self):
+        from tests.benchmarks import alias_candidates_tool as act, concept_lexicon_check as clc, round_seal as rs
+        with tempfile.TemporaryDirectory() as td:
+            cmds = sim.t_commands(pathlib.Path(td) / "S", pathlib.Path(td) / "W", pathlib.Path(td) / "tree", base_commit="HEAD")
+        self.assertEqual(len(cmds), 4)
+        mods = {"tests/benchmarks/alias_candidates_tool.py": (act, ("cmd_candidates", "cmd_classify")),
+                "tests/benchmarks/concept_lexicon_check.py": (clc, ("cmd_carry",)), "tests/benchmarks/round_seal.py": (rs, ("cmd_freeze",))}
+        for argv in cmds:
+            mod, fns = mods[argv[1]]
+            with contextlib.ExitStack() as stack:
+                for f in fns:
+                    stack.enter_context(mock.patch.object(mod, f, return_value=0))
+                self.assertEqual(mod.main(argv[2:]), 0, argv)            # argparse errors raise SystemExit(2)
+        for opt in ("--doc-title-sources", "--doc-titles", "--base-commit", "--reference-enc"):
+            self.assertIn(opt, cmds[3])
