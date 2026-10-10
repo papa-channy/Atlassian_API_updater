@@ -39,6 +39,14 @@ class TestPromotion(unittest.TestCase):
             self.assertEqual(L.promotion_identity(r), L.source_identity(src[r["promoted_from"]["source_id"]]))
         self.assertEqual(payload["promotion_payload_sha256"], L.promotion_payload_sha256(b))
 
+    def test_promotion_empties_the_observed_hidden_sections(self):
+        """The Round 5 plaintext moves (not copies) into seed/regression: held_out/negative become the next round's empty slots."""
+        plain = _plain(); bench = {**_bench(), "held_out": copy.deepcopy(plain["held_out"]), "negative": copy.deepcopy(plain["negative"])}
+        b, _ = L.promote(bench, plain, _seal(plain))
+        self.assertEqual((b["held_out"], b["negative"]), ([], []))
+        other = {**_bench(), "held_out": [], "negative": []}
+        self.assertEqual(L.promote(other, plain, _seal(plain))[0]["held_out"], [])
+
     def test_seal_mismatch_refused(self):
         plain = _plain(); bad = _seal(plain); bad["negative_sha256"] = "0" * 64
         with self.assertRaises(ValueError):

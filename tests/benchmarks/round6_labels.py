@@ -57,6 +57,8 @@ def promote(bench, r5_plain, r5_seal):
             if promotion_identity(rec) != source_identity(r):
                 raise ValueError(f"{new_id}: promotion_identity differs from the Round 5 record")
             out[section].append(rec)
+        if ev.canonical_sha256(out.get(split)) == ev.canonical_sha256(r5_plain[split]):   # observed at D: moved, not copied
+            out[split] = []
     return out, {"promotion_payload_sha256": promotion_payload_sha256(out)}
 
 

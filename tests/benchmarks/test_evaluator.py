@@ -9,14 +9,25 @@ HIDDEN_COUNTS = (("held_out", 16), ("negative", 8))
 
 def demoted(b: dict, rnd: int) -> bool:
     """Round rnd's hidden sets were observed at its commit D and demoted into seed / regression_negative (Round 1 ->
-    Round 2 pre-work). Then held_out/negative are empty although round{rnd}_seal exists."""
-    return (sum(r["origin"] == f"held_out-r{rnd}" for r in b["seed"]) == 16
-            and sum(r["origin"] == f"negative-r{rnd}" for r in b["regression_negative"]) == 8)
+    Round 2 pre-work) or promoted with provenance (origin promoted-r{rnd}, Round 6 spec §4.3; regression records may sit in
+    regression_positive after the relabel). Then held_out/negative are empty although round{rnd}_seal exists."""
+    reg = b["regression_negative"] + (b.get("regression_positive") or [])
+    return (sum(r["origin"] in (f"held_out-r{rnd}", f"promoted-r{rnd}") for r in b["seed"]) == 16
+            and sum(r["origin"] in (f"negative-r{rnd}", f"promoted-r{rnd}") for r in reg) == 8)
 
 
 def demoted_rounds(b: dict) -> list:
     """Rounds >= 1 whose held_out records sit in seed (r0 origins are the original Phase 2.5 tuning records)."""
-    return sorted({n for n in (int(r["origin"].rsplit("-r", 1)[1]) for r in b["seed"] if r["origin"].startswith("held_out-r")) if n >= 1})
+    return sorted({n for n in (int(r["origin"].rsplit("-r", 1)[1]) for r in b["seed"] if r["origin"].startswith(("held_out-r", "promoted-r"))) if n >= 1})
+
+
+class TestRound6PromotionCounts(unittest.TestCase):
+    def test_promoted_round_counts_as_demoted(self):
+        """Round 6 spec §4.3: the Round 5 hidden set promoted into seed / regression (origin promoted-r5) is a demotion."""
+        seed = [{"origin": "held_out-r1"}] * 16 + [{"origin": "promoted-r5"}] * 16
+        reg = [{"origin": "negative-r1"}] * 8 + [{"origin": "promoted-r5"}] * 5
+        b = {"seed": seed, "regression_negative": reg, "regression_positive": [{"origin": "promoted-r5"}] * 3}
+        self.assertEqual(demoted_rounds(b), [1, 5]); self.assertTrue(demoted(b, 5)); self.assertFalse(demoted(b, 4))
 
 
 class TestEvaluator(unittest.TestCase):
@@ -68,8 +79,11 @@ class TestSchemaAndSemantics(unittest.TestCase):
         for sect in ("seed", "regression_negative", "held_out", "negative"):
             if not ev.is_sealed(b[sect]):
                 ev.check_schema(sect, b[sect])
+        if "regression_positive" in b:
+            ev.check_schema("regression_positive", b["regression_positive"])
         k = len(demoted_rounds(b))                    # every demoted round adds 16 seed + 8 regression records
-        self.assertEqual(len(b["seed"]), 23 + 16 * k); self.assertEqual(len(b["regression_negative"]), 6 + 8 * k)
+        self.assertEqual(len(b["seed"]), 23 + 16 * k)
+        self.assertEqual(len(b["regression_negative"]) + len(b.get("regression_positive") or []), 6 + 8 * k)   # Round 6: split by relabel
         # Round 1 hidden sets were observed at commit D and demoted before Round 2 (s-024..s-039, rn-007..rn-014)
         self.assertEqual([r["id"] for r in b["seed"][23:39]], [f"s-{i:03d}" for i in range(24, 40)])
         self.assertEqual({r["origin"] for r in b["seed"][23:39]}, {"held_out-r1"})
@@ -91,7 +105,9 @@ class TestSchemaAndSemantics(unittest.TestCase):
     def test_no_query_reuse_across_sets(self):
         b = json.loads(BENCH.read_text(encoding="utf-8"))
         seen_q, seen_t = set(), set()
-        for sect in ("seed", "regression_negative", "held_out", "negative"):
+        for sect in ("seed", "regression_negative", "regression_positive", "held_out", "negative"):
+            if sect not in b:
+                continue
             if ev.is_sealed(b[sect]):
                 continue
             for r in b[sect]:
