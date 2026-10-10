@@ -267,7 +267,7 @@ class TestSeedBenchmark(unittest.TestCase):
         out = search.search_operations(state, "fetch issue")
         self.assertIn("get", out["alias_tokens"]); self.assertIn("fetch", out["query_tokens"])
         self.assertEqual(set(out["expanded_tokens"]), set(out["query_tokens"]) | set(out["alias_tokens"]))
-        self.assertEqual(len(out["intelligence_fingerprint"]), 64); self.assertEqual(out["intelligence_policy"]["versions"]["search"], 4)
+        self.assertEqual(len(out["intelligence_fingerprint"]), 64); self.assertEqual(out["intelligence_policy"]["versions"]["search"], 5)
 
     def test_alias_damped_and_bonus_on_base_only(self):
         state = make_state("jira-platform")
@@ -531,7 +531,8 @@ class TestRound3Signals(unittest.TestCase):
     def test_identifier_queries_keep_legacy_order(self):                                                # spec §3.6/§3.7 scope (v1.24.1)
         on = self._rules(intent_tier=True, preferred_method_tiebreak=True, terminal_alias_full_weight=True)
         self.assertEqual(search.ordering_rules_for(on, False), on)
-        self.assertEqual(search.ordering_rules_for(on, True), {"intent_tier": False, "preferred_method_tiebreak": False, "terminal_alias_full_weight": True})
+        self.assertEqual(search.ordering_rules_for(on, True), {"intent_tier": False, "preferred_method_tiebreak": False, "terminal_alias_full_weight": True,
+                                                               "singular_collection_tiebreak": False})   # Round 6 spec §3.4: R3 off for identifiers
         for q in ("IssueCreateMetadata", "createIssue", " MultipartFile "):
             self.assertTrue(search.is_identifier_query(q), q)
         for q in ("update issue summary", "update issue-summary", "get project-versions", "list jira-software boards", "issue", ""):

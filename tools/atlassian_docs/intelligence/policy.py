@@ -11,7 +11,7 @@ from typing import Mapping, Optional
 from . import search
 from .headers import CREDENTIAL_HEADERS
 
-POLICY_VERSIONS = {"search": 4, "quirks": 1, "oas_transpiler": 1}
+POLICY_VERSIONS = {"search": 5, "quirks": 1, "oas_transpiler": 1}   # Round 6 spec §3
 DATA_DIR = pathlib.Path(__file__).resolve().parent / "data"
 _KEY = re.compile(r"^[a-z][a-z0-9-]*:[A-Z]+:/")
 _ACTIONS, _ENFORCEMENT, _VALUE_POLICY = ("set", "suppress"), ("advisory", "required"), ("observed", "literal")
@@ -142,7 +142,7 @@ class QuirkOverrides:
 
 _METHODS = frozenset({"GET", "POST", "PUT", "PATCH", "DELETE"})
 STRUCTURE_KEYS = ("verb_methods", "path_noise", "product_hints", "tuning_grid", "baseline", "ordering_rules")
-ORDERING_RULE_KEYS = ("intent_tier", "preferred_method_tiebreak", "terminal_alias_full_weight")   # Round 3 spec §3.6-3.8 (v1.24)
+ORDERING_RULE_KEYS = ("intent_tier", "preferred_method_tiebreak", "terminal_alias_full_weight", "singular_collection_tiebreak")   # Round 3 spec §3.6-3.8 (v1.24) + Round 6 spec §3.4
 CONSTANT_KEYS = ("method_match_bonus", "method_mismatch_penalty", "path_unmatched_penalty", "path_unmatched_cap", "product_hint_bonus",
                  "resource_match_bonus", "method_order_bonus", "path_coverage_bonus")
 _WORD = re.compile(r"[a-z]+"); _NOISE = re.compile(r"[a-z0-9]+")   # always fullmatch ("get\n" must not pass)

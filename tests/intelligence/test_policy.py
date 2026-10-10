@@ -308,7 +308,7 @@ class TestRankingPolicy(unittest.TestCase):
 
 class TestFingerprintIncludesRanking(unittest.TestCase):
     def test_versions_and_block(self):
-        self.assertEqual(policy.POLICY_VERSIONS["search"], 4)
+        self.assertEqual(policy.POLICY_VERSIONS["search"], 5)
         blk = policy.policy_block("A", "B")
         self.assertEqual(blk["ranking_sha256"], policy.ranking().sha256)
         self.assertEqual(blk["ranking_structure_sha256"], policy.ranking().structure_sha256)

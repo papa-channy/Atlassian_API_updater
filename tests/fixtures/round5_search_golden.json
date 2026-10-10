@@ -1,0 +1,2022 @@
+{
+ "MultipartFile": {
+  "actionable": false,
+  "keys": [
+   "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/attachments",
+   "confluence:GET:/attachments",
+   "confluence:GET:/attachments/{id}",
+   "jira-platform:GET:/rest/api/3/attachment/{id}",
+   "confluence:DELETE:/attachments/{id}",
+   "jira-platform:DELETE:/rest/api/3/attachment/{id}"
+  ],
+  "recommended": null,
+  "scores": [
+   37.0,
+   28.0,
+   28.0,
+   28.0,
+   26.0,
+   26.0
+  ]
+ },
+ "add comment": {
+  "actionable": true,
+  "keys": [
+   "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/comment",
+   "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/attachments",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/comment"
+  ],
+  "recommended": "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/comment",
+  "scores": [
+   41.0,
+   10.0,
+   25.0
+  ]
+ },
+ "add issue to sprint": {
+  "actionable": true,
+  "keys": [
+   "jira-software:POST:/rest/agile/1.0/sprint/{sprintId}/issue",
+   "jira-software:POST:/rest/agile/1.0/sprint",
+   "jira-platform:POST:/rest/api/3/issue",
+   "jira-software:POST:/rest/agile/1.0/backlog/issue",
+   "jira-software:POST:/rest/agile/1.0/backlog/{boardId}/issue",
+   "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/attachments",
+   "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/comment",
+   "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/transitions",
+   "jira-platform:POST:/rest/api/3/search/jql",
+   "jira-software:POST:/rest/builds/0.1/bulk"
+  ],
+  "recommended": "jira-software:POST:/rest/agile/1.0/sprint/{sprintId}/issue",
+  "scores": [
+   44.0,
+   31.0,
+   30.0,
+   28.0,
+   28.0,
+   18.0,
+   18.0,
+   14.0,
+   13.0,
+   5.0
+  ]
+ },
+ "addComment": {
+  "actionable": true,
+  "keys": [
+   "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/comment",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/comment",
+   "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/attachments"
+  ],
+  "recommended": "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/comment",
+  "scores": [
+   26.0,
+   25.0,
+   10.0
+  ]
+ },
+ "attach a file to a jira ticket": {
+  "actionable": true,
+  "keys": [
+   "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/attachments",
+   "jira-platform:POST:/rest/api/3/issue",
+   "jira-software:POST:/rest/agile/1.0/backlog/issue",
+   "jira-software:POST:/rest/agile/1.0/backlog/{boardId}/issue",
+   "jira-software:POST:/rest/agile/1.0/sprint/{sprintId}/issue",
+   "jira-platform:POST:/rest/api/3/expression/eval",
+   "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/transitions",
+   "jira-platform:POST:/rest/api/3/search/jql",
+   "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/comment",
+   "jira-platform:POST:/rest/api/3/user"
+  ],
+  "recommended": "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/attachments",
+  "scores": [
+   39.5,
+   34.0,
+   27.0,
+   27.0,
+   27.0,
+   12.6,
+   10.5,
+   10.5,
+   7.5,
+   5.0
+  ]
+ },
+ "attachment metadata content": {
+  "actionable": false,
+  "keys": [
+   "jira-platform:GET:/rest/api/3/attachment/{id}",
+   "confluence:GET:/attachments",
+   "confluence:GET:/attachments/{id}",
+   "confluence:DELETE:/attachments/{id}",
+   "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/attachments",
+   "jira-platform:DELETE:/rest/api/3/attachment/{id}",
+   "confluence:GET:/pages/{page-id}/properties",
+   "confluence:GET:/pages/{page-id}/properties/{property-id}",
+   "confluence:POST:/pages/{page-id}/properties",
+   "confluence:PUT:/pages/{page-id}/properties/{property-id}"
+  ],
+  "recommended": null,
+  "scores": [
+   35.0,
+   28.0,
+   28.0,
+   27.0,
+   27.0,
+   26.0,
+   13.0,
+   13.0,
+   8.0,
+   8.0
+  ]
+ },
+ "board sprint issue": {
+  "actionable": false,
+  "keys": [
+   "jira-software:GET:/rest/software/1.0/sprint/{sprintId}/issue",
+   "jira-software:POST:/rest/agile/1.0/sprint/{sprintId}/issue",
+   "jira-software:POST:/rest/agile/1.0/backlog/{boardId}/issue",
+   "jira-software:GET:/rest/agile/1.0/board/{boardId}/sprint",
+   "jira-software:GET:/rest/agile/1.0/issue/{issueIdOrKey}",
+   "jira-software:POST:/rest/agile/1.0/sprint",
+   "jira-software:GET:/rest/agile/1.0/sprint/{sprintId}/issue",
+   "jira-software:GET:/rest/agile/1.0/board",
+   "jira-software:POST:/rest/agile/1.0/board",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}"
+  ],
+  "recommended": null,
+  "scores": [
+   44.0,
+   42.0,
+   41.0,
+   33.0,
+   30.0,
+   30.0,
+   29.4,
+   29.0,
+   29.0,
+   28.0
+  ]
+ },
+ "browse pages inside this workspace": {
+  "actionable": true,
+  "keys": [
+   "confluence:GET:/pages",
+   "confluence:GET:/spaces/{id}/pages",
+   "confluence:GET:/pages/{id}",
+   "confluence:GET:/pages/{page-id}/properties",
+   "confluence:GET:/pages/{page-id}/properties/{property-id}",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/comment",
+   "jira-platform:GET:/rest/api/3/attachment/{id}",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-platform:GET:/rest/api/3/project/{projectIdOrKey}",
+   "jira-platform:GET:/rest/api/3/user"
+  ],
+  "recommended": "confluence:GET:/pages",
+  "scores": [
+   43.0,
+   42.0,
+   33.0,
+   17.0,
+   17.0,
+   3.0,
+   2.0,
+   2.0,
+   2.0,
+   2.0
+  ]
+ },
+ "change issue assignee": {
+  "actionable": true,
+  "keys": [
+   "jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}/assignee",
+   "jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-platform:POST:/rest/api/3/issue",
+   "jira-platform:PUT:/rest/api/3/issuetypescheme/{issueTypeSchemeId}",
+   "jira-software:POST:/rest/agile/1.0/backlog/issue",
+   "jira-software:POST:/rest/agile/1.0/backlog/{boardId}/issue",
+   "jira-software:POST:/rest/agile/1.0/sprint/{sprintId}/issue",
+   "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/transitions",
+   "jira-platform:POST:/rest/api/3/search/jql",
+   "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/attachments"
+  ],
+  "recommended": "jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}/assignee",
+  "scores": [
+   32.0,
+   31.5,
+   31.5,
+   25.0,
+   24.0,
+   24.0,
+   24.0,
+   15.5,
+   13.5,
+   8.0
+  ]
+ },
+ "confluence label printer": {
+  "actionable": false,
+  "keys": [
+   "confluence:DELETE:/attachments/{id}",
+   "confluence:DELETE:/pages/{id}",
+   "confluence:GET:/attachments",
+   "confluence:GET:/attachments/{id}",
+   "confluence:GET:/blogposts",
+   "confluence:GET:/pages",
+   "confluence:GET:/pages/{id}",
+   "confluence:POST:/pages",
+   "confluence:PUT:/pages/{id}",
+   "confluence:DELETE:/pages/{page-id}/properties/{property-id}"
+  ],
+  "recommended": null,
+  "scores": [
+   3.0,
+   3.0,
+   3.0,
+   3.0,
+   3.0,
+   3.0,
+   3.0,
+   3.0,
+   3.0,
+   2.0
+  ]
+ },
+ "create": {
+  "actionable": true,
+  "keys": [
+   "confluence:POST:/pages/{page-id}/properties",
+   "confluence:POST:/blogposts",
+   "confluence:POST:/pages",
+   "jira-platform:POST:/rest/api/3/issue",
+   "jira-platform:POST:/rest/api/3/user",
+   "jira-software:POST:/rest/agile/1.0/board",
+   "jira-software:POST:/rest/agile/1.0/sprint",
+   "jira-platform:GET:/rest/api/3/issue/createmeta"
+  ],
+  "recommended": "confluence:POST:/pages/{page-id}/properties",
+  "scores": [
+   14.0,
+   13.0,
+   13.0,
+   13.0,
+   13.0,
+   13.0,
+   13.0,
+   7.0
+  ]
+ },
+ "create a new confluence page in a space": {
+  "actionable": true,
+  "keys": [
+   "confluence:POST:/pages",
+   "confluence:POST:/pages/{page-id}/properties",
+   "confluence:POST:/blogposts",
+   "jira-platform:POST:/rest/api/3/user",
+   "jira-software:POST:/rest/agile/1.0/board",
+   "jira-platform:POST:/rest/api/3/issue",
+   "jira-software:POST:/rest/agile/1.0/sprint",
+   "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/comment",
+   "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/transitions",
+   "jira-platform:POST:/rest/api/3/search/jql"
+  ],
+  "recommended": "confluence:POST:/pages",
+  "scores": [
+   45.0,
+   31.0,
+   16.0,
+   15.0,
+   12.0,
+   11.0,
+   11.0,
+   1.0,
+   1.0,
+   1.0
+  ]
+ },
+ "create board": {
+  "actionable": true,
+  "keys": [
+   "jira-software:POST:/rest/agile/1.0/board",
+   "jira-software:POST:/rest/agile/1.0/sprint",
+   "jira-software:POST:/rest/agile/1.0/backlog/{boardId}/issue",
+   "confluence:POST:/pages/{page-id}/properties",
+   "confluence:POST:/blogposts",
+   "confluence:POST:/pages",
+   "jira-platform:POST:/rest/api/3/issue",
+   "jira-platform:POST:/rest/api/3/user",
+   "jira-software:GET:/rest/agile/1.0/board",
+   "jira-software:GET:/rest/agile/1.0/board/{boardId}/sprint"
+  ],
+  "recommended": "jira-software:POST:/rest/agile/1.0/board",
+  "scores": [
+   43.0,
+   17.0,
+   16.0,
+   12.0,
+   11.0,
+   11.0,
+   11.0,
+   11.0,
+   27.0,
+   7.0
+  ]
+ },
+ "create confluence page": {
+  "actionable": true,
+  "keys": [
+   "confluence:POST:/pages",
+   "confluence:POST:/pages/{page-id}/properties",
+   "confluence:POST:/blogposts",
+   "jira-platform:POST:/rest/api/3/user",
+   "jira-platform:POST:/rest/api/3/issue",
+   "jira-software:POST:/rest/agile/1.0/board",
+   "jira-software:POST:/rest/agile/1.0/sprint",
+   "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/comment",
+   "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/transitions",
+   "jira-platform:POST:/rest/api/3/search/jql"
+  ],
+  "recommended": "confluence:POST:/pages",
+  "scores": [
+   46.0,
+   32.0,
+   14.0,
+   12.0,
+   11.0,
+   11.0,
+   11.0,
+   1.0,
+   1.0,
+   1.0
+  ]
+ },
+ "create issue": {
+  "actionable": true,
+  "keys": [
+   "jira-platform:POST:/rest/api/3/issue",
+   "jira-software:POST:/rest/agile/1.0/backlog/issue",
+   "jira-software:POST:/rest/agile/1.0/backlog/{boardId}/issue",
+   "jira-software:POST:/rest/agile/1.0/sprint/{sprintId}/issue",
+   "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/transitions",
+   "jira-platform:POST:/rest/api/3/search/jql",
+   "confluence:POST:/pages/{page-id}/properties",
+   "confluence:POST:/blogposts",
+   "confluence:POST:/pages",
+   "jira-platform:POST:/rest/api/3/user"
+  ],
+  "recommended": "jira-platform:POST:/rest/api/3/issue",
+  "scores": [
+   42.0,
+   24.0,
+   24.0,
+   24.0,
+   14.0,
+   13.0,
+   12.0,
+   11.0,
+   11.0,
+   11.0
+  ]
+ },
+ "create page jira": {
+  "actionable": true,
+  "keys": [
+   "confluence:POST:/pages",
+   "confluence:POST:/pages/{page-id}/properties",
+   "jira-platform:POST:/rest/api/3/issue",
+   "jira-platform:POST:/rest/api/3/user",
+   "jira-software:POST:/rest/agile/1.0/board",
+   "jira-software:POST:/rest/agile/1.0/sprint",
+   "jira-platform:POST:/rest/api/3/expression/eval",
+   "confluence:POST:/blogposts",
+   "jira-platform:POST:/rest/api/3/search/jql",
+   "jira-software:POST:/rest/builds/0.1/bulk"
+  ],
+  "recommended": "confluence:POST:/pages",
+  "scores": [
+   40.0,
+   26.0,
+   15.0,
+   15.0,
+   15.0,
+   14.0,
+   12.6,
+   11.0,
+   4.0,
+   4.0
+  ]
+ },
+ "createIssue": {
+  "actionable": true,
+  "keys": [
+   "jira-platform:POST:/rest/api/3/issue",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-platform:DELETE:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-software:GET:/rest/agile/1.0/issue/{issueIdOrKey}",
+   "jira-software:POST:/rest/agile/1.0/backlog/issue",
+   "jira-software:POST:/rest/agile/1.0/backlog/{boardId}/issue",
+   "jira-software:POST:/rest/agile/1.0/sprint/{sprintId}/issue",
+   "jira-software:GET:/rest/software/1.0/sprint/{sprintId}/issue",
+   "jira-platform:GET:/rest/api/3/issue/createmeta"
+  ],
+  "recommended": "jira-platform:POST:/rest/api/3/issue",
+  "scores": [
+   27.0,
+   26.0,
+   26.0,
+   24.0,
+   24.0,
+   24.0,
+   24.0,
+   24.0,
+   22.0,
+   20.3
+  ]
+ },
+ "dashboard widget property": {
+  "actionable": false,
+  "keys": [
+   "confluence:GET:/pages/{page-id}/properties",
+   "confluence:GET:/pages/{page-id}/properties/{property-id}",
+   "confluence:POST:/pages/{page-id}/properties",
+   "confluence:PUT:/pages/{page-id}/properties/{property-id}",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/properties",
+   "confluence:DELETE:/pages/{page-id}/properties/{property-id}"
+  ],
+  "recommended": null,
+  "scores": [
+   27.0,
+   27.0,
+   27.0,
+   27.0,
+   27.0,
+   25.0
+  ]
+ },
+ "delete": {
+  "actionable": true,
+  "keys": [
+   "confluence:DELETE:/attachments/{id}",
+   "confluence:DELETE:/pages/{id}",
+   "jira-platform:DELETE:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-platform:DELETE:/rest/api/3/issuetypescheme/{issueTypeSchemeId}",
+   "jira-platform:DELETE:/rest/api/3/project/{projectIdOrKey}",
+   "confluence:DELETE:/pages/{page-id}/properties/{property-id}",
+   "jira-platform:DELETE:/rest/api/3/attachment/{id}",
+   "jira-platform:DELETE:/rest/api/3/user"
+  ],
+  "recommended": "confluence:DELETE:/attachments/{id}",
+  "scores": [
+   14.0,
+   14.0,
+   14.0,
+   14.0,
+   14.0,
+   13.0,
+   9.0,
+   9.0
+  ]
+ },
+ "delete an attachment": {
+  "actionable": true,
+  "keys": [
+   "confluence:DELETE:/attachments/{id}",
+   "jira-platform:DELETE:/rest/api/3/attachment/{id}",
+   "confluence:DELETE:/pages/{id}",
+   "jira-platform:DELETE:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-platform:DELETE:/rest/api/3/issuetypescheme/{issueTypeSchemeId}",
+   "jira-platform:DELETE:/rest/api/3/project/{projectIdOrKey}",
+   "confluence:DELETE:/pages/{page-id}/properties/{property-id}",
+   "jira-platform:DELETE:/rest/api/3/user",
+   "confluence:GET:/attachments",
+   "confluence:GET:/attachments/{id}"
+  ],
+  "recommended": "confluence:DELETE:/attachments/{id}",
+  "scores": [
+   41.0,
+   36.0,
+   12.0,
+   12.0,
+   12.0,
+   12.0,
+   11.0,
+   7.0,
+   26.0,
+   26.0
+  ]
+ },
+ "delete attachment": {
+  "actionable": true,
+  "keys": [
+   "confluence:DELETE:/attachments/{id}",
+   "jira-platform:DELETE:/rest/api/3/attachment/{id}",
+   "confluence:DELETE:/pages/{id}",
+   "jira-platform:DELETE:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-platform:DELETE:/rest/api/3/issuetypescheme/{issueTypeSchemeId}",
+   "jira-platform:DELETE:/rest/api/3/project/{projectIdOrKey}",
+   "confluence:DELETE:/pages/{page-id}/properties/{property-id}",
+   "jira-platform:DELETE:/rest/api/3/user",
+   "confluence:GET:/attachments",
+   "confluence:GET:/attachments/{id}"
+  ],
+  "recommended": "confluence:DELETE:/attachments/{id}",
+  "scores": [
+   41.0,
+   36.0,
+   12.0,
+   12.0,
+   12.0,
+   12.0,
+   11.0,
+   7.0,
+   26.0,
+   26.0
+  ]
+ },
+ "delete board": {
+  "actionable": true,
+  "keys": [
+   "confluence:DELETE:/attachments/{id}",
+   "confluence:DELETE:/pages/{id}",
+   "jira-platform:DELETE:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-platform:DELETE:/rest/api/3/issuetypescheme/{issueTypeSchemeId}",
+   "jira-platform:DELETE:/rest/api/3/project/{projectIdOrKey}",
+   "confluence:DELETE:/pages/{page-id}/properties/{property-id}",
+   "jira-platform:DELETE:/rest/api/3/attachment/{id}",
+   "jira-platform:DELETE:/rest/api/3/user",
+   "jira-software:GET:/rest/agile/1.0/board",
+   "jira-software:POST:/rest/agile/1.0/board"
+  ],
+  "recommended": "confluence:DELETE:/attachments/{id}",
+  "scores": [
+   12.0,
+   12.0,
+   12.0,
+   12.0,
+   12.0,
+   11.0,
+   7.0,
+   7.0,
+   27.0,
+   27.0
+  ]
+ },
+ "delete id": {
+  "actionable": true,
+  "keys": [
+   "confluence:DELETE:/pages/{page-id}/properties/{property-id}",
+   "confluence:DELETE:/attachments/{id}",
+   "confluence:DELETE:/pages/{id}",
+   "jira-platform:DELETE:/rest/api/3/issuetypescheme/{issueTypeSchemeId}",
+   "jira-platform:DELETE:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-platform:DELETE:/rest/api/3/project/{projectIdOrKey}",
+   "jira-platform:DELETE:/rest/api/3/attachment/{id}",
+   "jira-platform:DELETE:/rest/api/3/user",
+   "confluence:GET:/attachments/{id}",
+   "confluence:GET:/pages/{id}"
+  ],
+  "recommended": "confluence:DELETE:/pages/{page-id}/properties/{property-id}",
+  "scores": [
+   26.0,
+   18.0,
+   18.0,
+   18.0,
+   17.0,
+   17.0,
+   12.0,
+   7.0,
+   9.0,
+   9.0
+  ]
+ },
+ "delete something": {
+  "actionable": true,
+  "keys": [
+   "confluence:DELETE:/attachments/{id}",
+   "confluence:DELETE:/pages/{id}",
+   "jira-platform:DELETE:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-platform:DELETE:/rest/api/3/issuetypescheme/{issueTypeSchemeId}",
+   "jira-platform:DELETE:/rest/api/3/project/{projectIdOrKey}",
+   "confluence:DELETE:/pages/{page-id}/properties/{property-id}",
+   "jira-platform:DELETE:/rest/api/3/attachment/{id}",
+   "jira-platform:DELETE:/rest/api/3/user"
+  ],
+  "recommended": "confluence:DELETE:/attachments/{id}",
+  "scores": [
+   12.0,
+   12.0,
+   12.0,
+   12.0,
+   12.0,
+   11.0,
+   7.0,
+   7.0
+  ]
+ },
+ "delete xyzzy": {
+  "actionable": true,
+  "keys": [
+   "confluence:DELETE:/attachments/{id}",
+   "confluence:DELETE:/pages/{id}",
+   "jira-platform:DELETE:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-platform:DELETE:/rest/api/3/issuetypescheme/{issueTypeSchemeId}",
+   "jira-platform:DELETE:/rest/api/3/project/{projectIdOrKey}",
+   "confluence:DELETE:/pages/{page-id}/properties/{property-id}",
+   "jira-platform:DELETE:/rest/api/3/attachment/{id}",
+   "jira-platform:DELETE:/rest/api/3/user"
+  ],
+  "recommended": "confluence:DELETE:/attachments/{id}",
+  "scores": [
+   12.0,
+   12.0,
+   12.0,
+   12.0,
+   12.0,
+   11.0,
+   7.0,
+   7.0
+  ]
+ },
+ "discard this uploaded ticket file": {
+  "actionable": true,
+  "keys": [
+   "jira-platform:DELETE:/rest/api/3/attachment/{id}",
+   "confluence:DELETE:/attachments/{id}",
+   "jira-platform:DELETE:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-platform:DELETE:/rest/api/3/issuetypescheme/{issueTypeSchemeId}",
+   "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/attachments",
+   "jira-platform:GET:/rest/api/3/attachment/{id}",
+   "confluence:GET:/attachments",
+   "confluence:GET:/attachments/{id}",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-platform:POST:/rest/api/3/issue"
+  ],
+  "recommended": "jira-platform:DELETE:/rest/api/3/attachment/{id}",
+  "scores": [
+   30.0,
+   28.0,
+   28.0,
+   9.0,
+   32.5,
+   28.0,
+   26.0,
+   26.0,
+   26.0,
+   26.0
+  ]
+ },
+ "draft a fresh confluence page": {
+  "actionable": false,
+  "keys": [
+   "confluence:POST:/pages",
+   "confluence:PUT:/pages/{id}",
+   "confluence:GET:/pages",
+   "confluence:GET:/pages/{id}",
+   "confluence:DELETE:/pages/{id}",
+   "confluence:GET:/spaces/{id}/pages",
+   "confluence:PUT:/pages/{id}/title",
+   "confluence:DELETE:/pages/{page-id}/properties/{property-id}",
+   "confluence:GET:/pages/{page-id}/properties",
+   "confluence:GET:/pages/{page-id}/properties/{property-id}"
+  ],
+  "recommended": null,
+  "scores": [
+   33.0,
+   33.0,
+   32.0,
+   32.0,
+   31.0,
+   31.0,
+   21.0,
+   16.0,
+   16.0,
+   16.0
+  ]
+ },
+ "fetch page by id": {
+  "actionable": true,
+  "keys": [
+   "confluence:GET:/pages/{id}",
+   "confluence:GET:/spaces/{id}/pages",
+   "confluence:GET:/pages",
+   "confluence:GET:/pages/{page-id}/properties/{property-id}",
+   "confluence:GET:/pages/{page-id}/properties",
+   "confluence:GET:/attachments/{id}",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/comment",
+   "jira-software:GET:/rest/agile/1.0/issue/{issueIdOrKey}",
+   "jira-software:GET:/rest/software/1.0/sprint/{sprintId}/issue"
+  ],
+  "recommended": "confluence:GET:/pages/{id}",
+  "scores": [
+   47.0,
+   37.0,
+   35.0,
+   32.0,
+   22.0,
+   18.0,
+   10.0,
+   10.0,
+   10.0,
+   10.0
+  ]
+ },
+ "filter owner jira": {
+  "actionable": false,
+  "keys": [
+   "jira-platform:POST:/rest/api/3/expression/eval",
+   "jira-software:POST:/rest/agile/1.0/board",
+   "jira-platform:DELETE:/rest/api/3/issuetypescheme/{issueTypeSchemeId}",
+   "jira-platform:DELETE:/rest/api/3/project/{projectIdOrKey}",
+   "jira-platform:DELETE:/rest/api/3/user",
+   "jira-platform:GET:/rest/api/3/user",
+   "jira-platform:GET:/rest/api/3/users",
+   "jira-platform:POST:/rest/api/3/issue",
+   "jira-platform:POST:/rest/api/3/user",
+   "jira-platform:PUT:/rest/api/3/issuetypescheme/{issueTypeSchemeId}"
+  ],
+  "recommended": null,
+  "scores": [
+   11.2,
+   4.0,
+   3.0,
+   3.0,
+   3.0,
+   3.0,
+   3.0,
+   3.0,
+   3.0,
+   3.0
+  ]
+ },
+ "get attachment": {
+  "actionable": true,
+  "keys": [
+   "confluence:GET:/attachments",
+   "confluence:GET:/attachments/{id}",
+   "jira-platform:GET:/rest/api/3/attachment/{id}",
+   "confluence:GET:/blogposts",
+   "confluence:GET:/pages",
+   "confluence:GET:/pages/{id}",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-platform:GET:/rest/api/3/project/{projectIdOrKey}",
+   "jira-platform:GET:/rest/api/3/user",
+   "jira-platform:GET:/rest/api/3/users"
+  ],
+  "recommended": "confluence:GET:/attachments",
+  "scores": [
+   42.0,
+   42.0,
+   42.0,
+   11.0,
+   11.0,
+   11.0,
+   11.0,
+   11.0,
+   11.0,
+   11.0
+  ]
+ },
+ "get attachments": {
+  "actionable": true,
+  "keys": [
+   "confluence:GET:/attachments",
+   "jira-platform:GET:/rest/api/3/attachment/{id}",
+   "confluence:GET:/attachments/{id}",
+   "confluence:GET:/blogposts",
+   "confluence:GET:/pages",
+   "confluence:GET:/pages/{id}",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-platform:GET:/rest/api/3/project/{projectIdOrKey}",
+   "jira-platform:GET:/rest/api/3/user",
+   "jira-platform:GET:/rest/api/3/users"
+  ],
+  "recommended": "confluence:GET:/attachments",
+  "scores": [
+   55.0,
+   46.0,
+   45.0,
+   11.0,
+   11.0,
+   11.0,
+   11.0,
+   11.0,
+   11.0,
+   11.0
+  ]
+ },
+ "get data": {
+  "actionable": true,
+  "keys": [
+   "confluence:GET:/attachments",
+   "confluence:GET:/attachments/{id}",
+   "confluence:GET:/blogposts",
+   "confluence:GET:/pages",
+   "confluence:GET:/pages/{id}",
+   "jira-platform:GET:/rest/api/3/attachment/{id}",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-platform:GET:/rest/api/3/project/{projectIdOrKey}",
+   "jira-platform:GET:/rest/api/3/user",
+   "jira-platform:GET:/rest/api/3/users"
+  ],
+  "recommended": "confluence:GET:/attachments",
+  "scores": [
+   11.0,
+   11.0,
+   11.0,
+   11.0,
+   11.0,
+   11.0,
+   11.0,
+   11.0,
+   11.0,
+   11.0
+  ]
+ },
+ "get issue by key": {
+  "actionable": true,
+  "keys": [
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/properties",
+   "jira-software:GET:/rest/agile/1.0/issue/{issueIdOrKey}",
+   "jira-software:GET:/rest/software/1.0/sprint/{sprintId}/issue",
+   "jira-platform:GET:/rest/api/3/projectvalidate/validProjectKey",
+   "jira-software:GET:/rest/agile/1.0/sprint/{sprintId}/issue",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/comment",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/transitions",
+   "jira-platform:GET:/rest/api/3/issue/createmeta",
+   "jira-platform:GET:/rest/api/3/search/jql"
+  ],
+  "recommended": "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}",
+  "scores": [
+   46.0,
+   44.0,
+   44.0,
+   36.0,
+   25.0,
+   23.8,
+   23.0,
+   23.0,
+   20.3,
+   18.0
+  ]
+ },
+ "get issue status": {
+  "actionable": true,
+  "keys": [
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-software:GET:/rest/agile/1.0/issue/{issueIdOrKey}",
+   "jira-software:GET:/rest/software/1.0/sprint/{sprintId}/issue",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/properties",
+   "jira-software:GET:/rest/agile/1.0/sprint/{sprintId}/issue",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/transitions",
+   "jira-platform:GET:/rest/api/3/issue/createmeta",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/comment",
+   "jira-platform:GET:/rest/api/3/search/jql",
+   "jira-platform:GET:/rest/api/3/attachment/{id}"
+  ],
+  "recommended": "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}",
+  "scores": [
+   40.0,
+   38.0,
+   36.0,
+   27.0,
+   23.8,
+   21.0,
+   20.3,
+   18.0,
+   18.0,
+   15.0
+  ]
+ },
+ "get issue user": {
+  "actionable": true,
+  "keys": [
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-platform:GET:/rest/api/3/user",
+   "jira-platform:GET:/rest/api/3/users",
+   "jira-software:GET:/rest/software/1.0/sprint/{sprintId}/issue",
+   "jira-software:GET:/rest/agile/1.0/issue/{issueIdOrKey}",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/properties",
+   "jira-platform:GET:/rest/api/3/users/search",
+   "jira-software:GET:/rest/agile/1.0/sprint/{sprintId}/issue",
+   "jira-platform:GET:/rest/api/3/issue/createmeta",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/comment"
+  ],
+  "recommended": "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}",
+  "scores": [
+   40.0,
+   40.0,
+   40.0,
+   39.0,
+   38.0,
+   30.0,
+   29.0,
+   25.9,
+   22.4,
+   21.0
+  ]
+ },
+ "get page": {
+  "actionable": true,
+  "keys": [
+   "confluence:GET:/pages",
+   "confluence:GET:/pages/{id}",
+   "confluence:GET:/spaces/{id}/pages",
+   "confluence:GET:/pages/{page-id}/properties",
+   "confluence:GET:/pages/{page-id}/properties/{property-id}",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/comment",
+   "jira-software:GET:/rest/software/1.0/sprint/{sprintId}/issue",
+   "confluence:GET:/attachments",
+   "confluence:GET:/attachments/{id}",
+   "confluence:GET:/blogposts"
+  ],
+  "recommended": "confluence:GET:/pages",
+  "scores": [
+   42.0,
+   42.0,
+   41.0,
+   26.0,
+   26.0,
+   14.0,
+   13.0,
+   11.0,
+   11.0,
+   11.0
+  ]
+ },
+ "get page property": {
+  "actionable": true,
+  "keys": [
+   "confluence:GET:/pages/{page-id}/properties",
+   "confluence:GET:/pages/{page-id}/properties/{property-id}",
+   "confluence:GET:/pages",
+   "confluence:GET:/pages/{id}",
+   "confluence:GET:/spaces/{id}/pages",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/properties",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/comment",
+   "confluence:GET:/attachments",
+   "confluence:GET:/attachments/{id}",
+   "confluence:GET:/blogposts"
+  ],
+  "recommended": "confluence:GET:/pages/{page-id}/properties",
+  "scores": [
+   55.0,
+   55.0,
+   40.0,
+   40.0,
+   39.0,
+   39.0,
+   12.0,
+   11.0,
+   11.0,
+   11.0
+  ]
+ },
+ "get pages": {
+  "actionable": true,
+  "keys": [
+   "confluence:GET:/pages",
+   "confluence:GET:/spaces/{id}/pages",
+   "confluence:GET:/pages/{id}",
+   "confluence:GET:/pages/{page-id}/properties",
+   "confluence:GET:/pages/{page-id}/properties/{property-id}",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/comment",
+   "jira-software:GET:/rest/software/1.0/sprint/{sprintId}/issue",
+   "confluence:GET:/attachments",
+   "confluence:GET:/attachments/{id}",
+   "confluence:GET:/blogposts"
+  ],
+  "recommended": "confluence:GET:/pages",
+  "scores": [
+   55.0,
+   54.0,
+   45.0,
+   29.0,
+   29.0,
+   14.0,
+   13.0,
+   11.0,
+   11.0,
+   11.0
+  ]
+ },
+ "get project by key": {
+  "actionable": true,
+  "keys": [
+   "jira-platform:GET:/rest/api/3/project/{projectIdOrKey}",
+   "jira-platform:GET:/rest/api/3/projectvalidate/validProjectKey",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/properties",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/comment",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/transitions",
+   "jira-software:GET:/rest/agile/1.0/issue/{issueIdOrKey}",
+   "jira-platform:GET:/rest/api/3/attachment/{id}",
+   "jira-software:GET:/rest/agile/1.0/board",
+   "confluence:GET:/attachments"
+  ],
+  "recommended": "jira-platform:GET:/rest/api/3/project/{projectIdOrKey}",
+  "scores": [
+   45.0,
+   44.0,
+   28.0,
+   18.0,
+   16.0,
+   16.0,
+   15.0,
+   12.0,
+   12.0,
+   11.0
+  ]
+ },
+ "get something": {
+  "actionable": true,
+  "keys": [
+   "confluence:GET:/attachments",
+   "confluence:GET:/attachments/{id}",
+   "confluence:GET:/blogposts",
+   "confluence:GET:/pages",
+   "confluence:GET:/pages/{id}",
+   "jira-platform:GET:/rest/api/3/attachment/{id}",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-platform:GET:/rest/api/3/project/{projectIdOrKey}",
+   "jira-platform:GET:/rest/api/3/user",
+   "jira-platform:GET:/rest/api/3/users"
+  ],
+  "recommended": "confluence:GET:/attachments",
+  "scores": [
+   11.0,
+   11.0,
+   11.0,
+   11.0,
+   11.0,
+   11.0,
+   11.0,
+   11.0,
+   11.0,
+   11.0
+  ]
+ },
+ "get transitions": {
+  "actionable": true,
+  "keys": [
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/transitions",
+   "confluence:GET:/attachments",
+   "confluence:GET:/attachments/{id}",
+   "confluence:GET:/blogposts",
+   "confluence:GET:/pages",
+   "confluence:GET:/pages/{id}",
+   "jira-platform:GET:/rest/api/3/attachment/{id}",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-platform:GET:/rest/api/3/project/{projectIdOrKey}",
+   "jira-platform:GET:/rest/api/3/user"
+  ],
+  "recommended": "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/transitions",
+  "scores": [
+   53.0,
+   11.0,
+   11.0,
+   11.0,
+   11.0,
+   11.0,
+   11.0,
+   11.0,
+   11.0,
+   11.0
+  ]
+ },
+ "get user": {
+  "actionable": true,
+  "keys": [
+   "jira-platform:GET:/rest/api/3/user",
+   "jira-platform:GET:/rest/api/3/users",
+   "jira-platform:GET:/rest/api/3/users/search",
+   "confluence:GET:/blogposts",
+   "confluence:GET:/pages",
+   "jira-software:GET:/rest/agile/1.0/board",
+   "confluence:GET:/spaces/{id}/pages",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/comment",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/properties",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/transitions"
+  ],
+  "recommended": "jira-platform:GET:/rest/api/3/user",
+  "scores": [
+   42.0,
+   42.0,
+   31.0,
+   14.0,
+   14.0,
+   14.0,
+   13.0,
+   13.0,
+   13.0,
+   13.0
+  ]
+ },
+ "issue attachment": {
+  "actionable": false,
+  "keys": [
+   "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/attachments",
+   "jira-platform:GET:/rest/api/3/attachment/{id}",
+   "jira-platform:DELETE:/rest/api/3/attachment/{id}",
+   "confluence:GET:/attachments",
+   "confluence:GET:/attachments/{id}",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-platform:POST:/rest/api/3/issue",
+   "jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}",
+   "confluence:DELETE:/attachments/{id}",
+   "jira-platform:DELETE:/rest/api/3/issue/{issueIdOrKey}"
+  ],
+  "recommended": null,
+  "scores": [
+   37.0,
+   34.0,
+   32.0,
+   28.0,
+   28.0,
+   28.0,
+   28.0,
+   28.0,
+   26.0,
+   26.0
+  ]
+ },
+ "issue type scheme": {
+  "actionable": false,
+  "keys": [
+   "jira-platform:PUT:/rest/api/3/issuetypescheme/{issueTypeSchemeId}",
+   "jira-platform:DELETE:/rest/api/3/issuetypescheme/{issueTypeSchemeId}",
+   "jira-platform:POST:/rest/api/3/issue",
+   "jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-platform:DELETE:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-software:GET:/rest/agile/1.0/issue/{issueIdOrKey}",
+   "jira-software:GET:/rest/software/1.0/sprint/{sprintId}/issue",
+   "jira-software:POST:/rest/agile/1.0/backlog/issue",
+   "jira-software:POST:/rest/agile/1.0/backlog/{boardId}/issue"
+  ],
+  "recommended": null,
+  "scores": [
+   69.0,
+   64.0,
+   29.0,
+   29.0,
+   28.0,
+   26.0,
+   26.0,
+   24.0,
+   22.0,
+   22.0
+  ]
+ },
+ "jira delete": {
+  "actionable": true,
+  "keys": [
+   "jira-platform:DELETE:/rest/api/3/issuetypescheme/{issueTypeSchemeId}",
+   "jira-platform:DELETE:/rest/api/3/project/{projectIdOrKey}",
+   "jira-platform:DELETE:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-platform:DELETE:/rest/api/3/user",
+   "confluence:DELETE:/attachments/{id}",
+   "confluence:DELETE:/pages/{id}",
+   "confluence:DELETE:/pages/{page-id}/properties/{property-id}",
+   "jira-platform:DELETE:/rest/api/3/attachment/{id}",
+   "jira-platform:POST:/rest/api/3/expression/eval",
+   "jira-platform:GET:/rest/api/3/user"
+  ],
+  "recommended": "jira-platform:DELETE:/rest/api/3/issuetypescheme/{issueTypeSchemeId}",
+  "scores": [
+   18.0,
+   18.0,
+   15.0,
+   13.0,
+   12.0,
+   12.0,
+   11.0,
+   10.0,
+   9.8,
+   1.0
+  ]
+ },
+ "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/comment": {
+  "actionable": true,
+  "keys": [
+   "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/comment",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/comment",
+   "jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-platform:POST:/rest/api/3/issue",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/properties",
+   "jira-platform:DELETE:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-software:GET:/rest/agile/1.0/issue/{issueIdOrKey}",
+   "jira-software:POST:/rest/agile/1.0/sprint/{sprintId}/issue",
+   "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/transitions"
+  ],
+  "recommended": "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/comment",
+  "scores": [
+   49.0,
+   48.0,
+   46.0,
+   43.0,
+   43.0,
+   40.0,
+   39.0,
+   38.0,
+   35.0,
+   34.0
+  ]
+ },
+ "leave feedback on this jira ticket": {
+  "actionable": true,
+  "keys": [
+   "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/comment",
+   "jira-platform:POST:/rest/api/3/issue",
+   "jira-platform:DELETE:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-software:POST:/rest/agile/1.0/backlog/issue",
+   "jira-software:POST:/rest/agile/1.0/backlog/{boardId}/issue",
+   "jira-software:POST:/rest/agile/1.0/sprint/{sprintId}/issue",
+   "jira-platform:DELETE:/rest/api/3/issuetypescheme/{issueTypeSchemeId}",
+   "jira-platform:POST:/rest/api/3/expression/eval",
+   "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/transitions",
+   "jira-platform:POST:/rest/api/3/search/jql"
+  ],
+  "recommended": "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/comment",
+  "scores": [
+   36.5,
+   34.0,
+   31.0,
+   27.0,
+   27.0,
+   27.0,
+   13.0,
+   12.6,
+   10.5,
+   10.5
+  ]
+ },
+ "list boards": {
+  "actionable": true,
+  "keys": [
+   "jira-software:GET:/rest/agile/1.0/board",
+   "jira-software:GET:/rest/agile/1.0/board/{boardId}/sprint",
+   "jira-software:GET:/rest/agile/1.0/board/{boardId}/backlog",
+   "jira-platform:GET:/rest/api/3/users",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/transitions",
+   "jira-platform:GET:/rest/api/3/users/search",
+   "jira-software:POST:/rest/agile/1.0/board",
+   "jira-software:POST:/rest/agile/1.0/backlog/{boardId}/issue"
+  ],
+  "recommended": "jira-software:GET:/rest/agile/1.0/board",
+  "scores": [
+   38.0,
+   8.0,
+   5.6,
+   2.0,
+   1.0,
+   1.0,
+   24.0,
+   9.0
+  ]
+ },
+ "list sprints": {
+  "actionable": true,
+  "keys": [
+   "jira-software:GET:/rest/agile/1.0/board/{boardId}/sprint",
+   "jira-software:GET:/rest/software/1.0/sprint/{sprintId}/issue",
+   "jira-software:GET:/rest/agile/1.0/sprint/{sprintId}/issue",
+   "jira-software:GET:/rest/agile/1.0/issue/{issueIdOrKey}",
+   "jira-platform:GET:/rest/api/3/users",
+   "jira-software:GET:/rest/agile/1.0/board/{boardId}/backlog",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/transitions",
+   "jira-platform:GET:/rest/api/3/users/search",
+   "jira-software:POST:/rest/agile/1.0/sprint",
+   "jira-software:POST:/rest/agile/1.0/sprint/{sprintId}/issue"
+  ],
+  "recommended": "jira-software:GET:/rest/agile/1.0/board/{boardId}/sprint",
+  "scores": [
+   34.0,
+   18.0,
+   11.9,
+   3.0,
+   2.0,
+   1.4,
+   1.0,
+   1.0,
+   25.0,
+   14.0
+  ]
+ },
+ "list users": {
+  "actionable": true,
+  "keys": [
+   "jira-platform:GET:/rest/api/3/users",
+   "jira-platform:GET:/rest/api/3/users/search",
+   "jira-platform:GET:/rest/api/3/user",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/transitions",
+   "jira-platform:GET:/rest/api/3/field/{fieldId}/context/defaultValue",
+   "confluence:GET:/blogposts",
+   "confluence:GET:/pages",
+   "jira-software:GET:/rest/agile/1.0/board",
+   "confluence:GET:/spaces/{id}/pages",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/comment"
+  ],
+  "recommended": "jira-platform:GET:/rest/api/3/users",
+  "scores": [
+   49.0,
+   38.0,
+   34.0,
+   4.0,
+   2.8,
+   2.0,
+   2.0,
+   2.0,
+   1.0,
+   1.0
+  ]
+ },
+ "move issue to backlog": {
+  "actionable": true,
+  "keys": [
+   "jira-software:POST:/rest/agile/1.0/backlog/issue",
+   "jira-software:POST:/rest/agile/1.0/backlog/{boardId}/issue",
+   "jira-software:POST:/rest/agile/1.0/sprint/{sprintId}/issue",
+   "jira-platform:POST:/rest/api/3/issue",
+   "jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-platform:PUT:/rest/api/3/issuetypescheme/{issueTypeSchemeId}",
+   "jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}/assignee",
+   "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/transitions",
+   "jira-platform:POST:/rest/api/3/search/jql",
+   "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/attachments"
+  ],
+  "recommended": "jira-software:POST:/rest/agile/1.0/backlog/issue",
+  "scores": [
+   56.0,
+   56.0,
+   37.0,
+   31.0,
+   30.0,
+   19.0,
+   17.0,
+   14.0,
+   13.0,
+   8.0
+  ]
+ },
+ "post a comment on an issue": {
+  "actionable": true,
+  "keys": [
+   "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/comment",
+   "jira-platform:POST:/rest/api/3/issue",
+   "jira-software:POST:/rest/agile/1.0/backlog/issue",
+   "jira-software:POST:/rest/agile/1.0/backlog/{boardId}/issue",
+   "jira-software:POST:/rest/agile/1.0/sprint/{sprintId}/issue",
+   "jira-platform:POST:/rest/api/3/search/jql",
+   "confluence:POST:/blogposts",
+   "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/attachments",
+   "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/transitions",
+   "jira-software:POST:/rest/builds/0.1/bulk"
+  ],
+  "recommended": "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/comment",
+  "scores": [
+   45.0,
+   31.0,
+   25.0,
+   25.0,
+   25.0,
+   23.0,
+   17.0,
+   15.0,
+   15.0,
+   3.0
+  ]
+ },
+ "project role actors": {
+  "actionable": false,
+  "keys": [
+   "jira-platform:GET:/rest/api/3/project/{projectIdOrKey}",
+   "jira-platform:PUT:/rest/api/3/project/{projectIdOrKey}",
+   "jira-platform:DELETE:/rest/api/3/project/{projectIdOrKey}",
+   "jira-platform:GET:/rest/api/3/projectvalidate/validProjectKey"
+  ],
+  "recommended": null,
+  "scores": [
+   28.0,
+   28.0,
+   26.0,
+   13.0
+  ]
+ },
+ "publish a new project release": {
+  "actionable": true,
+  "keys": [
+   "jira-platform:POST:/rest/api/3/user",
+   "jira-software:POST:/rest/agile/1.0/board",
+   "confluence:POST:/blogposts",
+   "confluence:POST:/pages/{page-id}/properties",
+   "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/comment",
+   "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/transitions",
+   "jira-platform:POST:/rest/api/3/search/jql",
+   "jira-platform:GET:/rest/api/3/project/{projectIdOrKey}",
+   "jira-platform:PUT:/rest/api/3/project/{projectIdOrKey}",
+   "jira-platform:DELETE:/rest/api/3/project/{projectIdOrKey}"
+  ],
+  "recommended": "jira-platform:POST:/rest/api/3/user",
+  "scores": [
+   4.0,
+   3.0,
+   2.0,
+   1.0,
+   1.0,
+   1.0,
+   1.0,
+   26.0,
+   26.0,
+   24.0
+  ]
+ },
+ "read issue comments": {
+  "actionable": true,
+  "keys": [
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/comment",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-software:GET:/rest/agile/1.0/issue/{issueIdOrKey}",
+   "jira-software:GET:/rest/software/1.0/sprint/{sprintId}/issue",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/properties",
+   "jira-software:GET:/rest/agile/1.0/sprint/{sprintId}/issue",
+   "jira-platform:GET:/rest/api/3/issue/createmeta",
+   "jira-platform:GET:/rest/api/3/search/jql",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/transitions",
+   "jira-platform:GET:/rest/api/3/attachment/{id}"
+  ],
+  "recommended": "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/comment",
+  "scores": [
+   57.0,
+   35.0,
+   33.0,
+   31.0,
+   22.0,
+   20.3,
+   16.8,
+   16.5,
+   13.0,
+   12.0
+  ]
+ },
+ "remove a watcher from this ticket": {
+  "actionable": true,
+  "keys": [
+   "jira-platform:DELETE:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-platform:DELETE:/rest/api/3/issuetypescheme/{issueTypeSchemeId}",
+   "jira-platform:DELETE:/rest/api/3/attachment/{id}",
+   "jira-platform:DELETE:/rest/api/3/user",
+   "confluence:DELETE:/attachments/{id}",
+   "confluence:DELETE:/pages/{id}",
+   "jira-platform:DELETE:/rest/api/3/project/{projectIdOrKey}",
+   "confluence:DELETE:/pages/{page-id}/properties/{property-id}",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-platform:POST:/rest/api/3/issue"
+  ],
+  "recommended": "jira-platform:DELETE:/rest/api/3/issue/{issueIdOrKey}",
+  "scores": [
+   33.5,
+   14.5,
+   11.0,
+   9.0,
+   6.5,
+   6.5,
+   6.5,
+   5.5,
+   26.0,
+   26.0
+  ]
+ },
+ "remove page": {
+  "actionable": true,
+  "keys": [
+   "confluence:DELETE:/pages/{id}",
+   "confluence:DELETE:/pages/{page-id}/properties/{property-id}",
+   "jira-platform:DELETE:/rest/api/3/attachment/{id}",
+   "jira-platform:DELETE:/rest/api/3/user",
+   "confluence:DELETE:/attachments/{id}",
+   "jira-platform:DELETE:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-platform:DELETE:/rest/api/3/issuetypescheme/{issueTypeSchemeId}",
+   "jira-platform:DELETE:/rest/api/3/project/{projectIdOrKey}",
+   "confluence:GET:/pages",
+   "confluence:GET:/pages/{id}"
+  ],
+  "recommended": "confluence:DELETE:/pages/{id}",
+  "scores": [
+   33.5,
+   19.5,
+   9.0,
+   9.0,
+   6.5,
+   6.5,
+   6.5,
+   6.5,
+   26.0,
+   26.0
+  ]
+ },
+ "remove this agile board": {
+  "actionable": true,
+  "keys": [
+   "jira-platform:DELETE:/rest/api/3/attachment/{id}",
+   "jira-platform:DELETE:/rest/api/3/user",
+   "confluence:DELETE:/attachments/{id}",
+   "confluence:DELETE:/pages/{id}",
+   "jira-platform:DELETE:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-platform:DELETE:/rest/api/3/issuetypescheme/{issueTypeSchemeId}",
+   "jira-platform:DELETE:/rest/api/3/project/{projectIdOrKey}",
+   "confluence:DELETE:/pages/{page-id}/properties/{property-id}",
+   "jira-software:GET:/rest/agile/1.0/board",
+   "jira-software:POST:/rest/agile/1.0/board"
+  ],
+  "recommended": "jira-platform:DELETE:/rest/api/3/attachment/{id}",
+  "scores": [
+   9.0,
+   9.0,
+   6.5,
+   6.5,
+   6.5,
+   6.5,
+   6.5,
+   5.5,
+   30.0,
+   30.0
+  ]
+ },
+ "revise dates for this iteration": {
+  "actionable": true,
+  "keys": [
+   "jira-software:POST:/rest/agile/1.0/sprint",
+   "jira-software:POST:/rest/agile/1.0/sprint/{sprintId}/issue",
+   "jira-software:POST:/rest/agile/1.0/backlog/issue",
+   "jira-software:POST:/rest/agile/1.0/backlog/{boardId}/issue",
+   "jira-software:GET:/rest/agile/1.0/board/{boardId}/sprint",
+   "jira-software:GET:/rest/software/1.0/sprint/{sprintId}/issue",
+   "jira-software:GET:/rest/agile/1.0/sprint/{sprintId}/issue"
+  ],
+  "recommended": "jira-software:POST:/rest/agile/1.0/sprint",
+  "scores": [
+   29.0,
+   9.0,
+   0.5,
+   0.5,
+   20.0,
+   5.0,
+   3.5
+  ]
+ },
+ "revise project configuration details": {
+  "actionable": true,
+  "keys": [
+   "jira-platform:PUT:/rest/api/3/project/{projectIdOrKey}",
+   "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/transitions",
+   "jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-platform:PUT:/rest/api/3/issuetypescheme/{issueTypeSchemeId}",
+   "jira-platform:POST:/rest/api/3/issue",
+   "jira-platform:POST:/rest/api/3/user",
+   "jira-software:POST:/rest/agile/1.0/board",
+   "jira-software:POST:/rest/builds/0.1/bulk",
+   "jira-platform:POST:/rest/api/3/expression/eval",
+   "jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}/assignee"
+  ],
+  "recommended": "jira-platform:PUT:/rest/api/3/project/{projectIdOrKey}",
+  "scores": [
+   36.0,
+   7.0,
+   6.0,
+   5.0,
+   5.0,
+   5.0,
+   2.0,
+   2.0,
+   1.4,
+   1.0
+  ]
+ },
+ "rewrite this wiki blog entry": {
+  "actionable": true,
+  "keys": [
+   "confluence:POST:/blogposts",
+   "confluence:GET:/blogposts"
+  ],
+  "recommended": "confluence:POST:/blogposts",
+  "scores": [
+   33.0,
+   29.0
+  ]
+ },
+ "run jql query": {
+  "actionable": true,
+  "keys": [
+   "jira-platform:POST:/rest/api/3/search/jql",
+   "jira-platform:POST:/rest/api/3/jql/parse",
+   "jira-platform:GET:/rest/api/3/search/jql",
+   "jira-platform:GET:/rest/api/3/users/search"
+  ],
+  "recommended": "jira-platform:POST:/rest/api/3/search/jql",
+  "scores": [
+   43.0,
+   31.0,
+   40.0,
+   10.0
+  ]
+ },
+ "set up a jira planning board": {
+  "actionable": true,
+  "keys": [
+   "jira-software:POST:/rest/agile/1.0/board",
+   "jira-software:POST:/rest/agile/1.0/backlog/{boardId}/issue",
+   "jira-platform:POST:/rest/api/3/expression/eval",
+   "jira-platform:PUT:/rest/api/3/field/{fieldId}/context/defaultValue",
+   "jira-platform:POST:/rest/api/3/issue",
+   "jira-software:POST:/rest/agile/1.0/sprint",
+   "jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-platform:PUT:/rest/api/3/issuetypescheme/{issueTypeSchemeId}",
+   "jira-platform:PUT:/rest/api/3/project/{projectIdOrKey}",
+   "jira-platform:POST:/rest/api/3/user"
+  ],
+  "recommended": "jira-software:POST:/rest/agile/1.0/board",
+  "scores": [
+   32.0,
+   17.0,
+   12.6,
+   8.4,
+   6.0,
+   6.0,
+   5.0,
+   5.0,
+   5.0,
+   5.0
+  ]
+ },
+ "show files attached to this page": {
+  "actionable": true,
+  "keys": [
+   "confluence:GET:/attachments",
+   "confluence:GET:/attachments/{id}",
+   "confluence:GET:/pages",
+   "confluence:GET:/pages/{id}",
+   "jira-platform:GET:/rest/api/3/attachment/{id}",
+   "confluence:GET:/spaces/{id}/pages",
+   "confluence:GET:/pages/{page-id}/properties/{property-id}",
+   "confluence:GET:/pages/{page-id}/properties",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/comment",
+   "jira-software:GET:/rest/software/1.0/sprint/{sprintId}/issue"
+  ],
+  "recommended": "confluence:GET:/attachments",
+  "scores": [
+   30.0,
+   30.0,
+   30.0,
+   30.0,
+   30.0,
+   29.0,
+   15.0,
+   14.0,
+   2.0,
+   1.0
+  ]
+ },
+ "show my starred searches": {
+  "actionable": true,
+  "keys": [
+   "jira-platform:GET:/rest/api/3/search/jql",
+   "jira-platform:GET:/rest/api/3/users/search",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-software:GET:/rest/agile/1.0/board/{boardId}/backlog",
+   "jira-platform:POST:/rest/api/3/search/jql"
+  ],
+  "recommended": "jira-platform:GET:/rest/api/3/search/jql",
+  "scores": [
+   20.0,
+   14.0,
+   2.0,
+   1.4,
+   16.0
+  ]
+ },
+ "show time entries for ticket": {
+  "actionable": true,
+  "keys": [
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-software:GET:/rest/agile/1.0/issue/{issueIdOrKey}",
+   "jira-software:GET:/rest/software/1.0/sprint/{sprintId}/issue",
+   "jira-software:GET:/rest/agile/1.0/sprint/{sprintId}/issue",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/properties",
+   "jira-platform:GET:/rest/api/3/issue/createmeta",
+   "jira-platform:GET:/rest/api/3/search/jql",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/comment",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}/transitions",
+   "jira-software:GET:/rest/agile/1.0/board/{boardId}/backlog"
+  ],
+  "recommended": "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}",
+  "scores": [
+   30.0,
+   28.0,
+   26.0,
+   16.8,
+   9.0,
+   7.0,
+   6.5,
+   4.5,
+   4.5,
+   3.5
+  ]
+ },
+ "site access emails": {
+  "actionable": false,
+  "keys": [
+   "confluence:GET:/blogposts",
+   "confluence:GET:/pages"
+  ],
+  "recommended": null,
+  "scores": [
+   1.0,
+   1.0
+  ]
+ },
+ "sprint board backlog": {
+  "actionable": false,
+  "keys": [
+   "jira-software:POST:/rest/agile/1.0/backlog/{boardId}/issue",
+   "jira-software:GET:/rest/agile/1.0/board/{boardId}/sprint",
+   "jira-software:POST:/rest/agile/1.0/sprint",
+   "jira-software:GET:/rest/agile/1.0/board",
+   "jira-software:POST:/rest/agile/1.0/board",
+   "jira-software:GET:/rest/agile/1.0/board/{boardId}/backlog",
+   "jira-software:POST:/rest/agile/1.0/backlog/issue",
+   "jira-software:GET:/rest/software/1.0/sprint/{sprintId}/issue",
+   "jira-software:POST:/rest/agile/1.0/sprint/{sprintId}/issue",
+   "jira-software:GET:/rest/agile/1.0/sprint/{sprintId}/issue"
+  ],
+  "recommended": null,
+  "scores": [
+   34.0,
+   33.0,
+   30.0,
+   29.0,
+   29.0,
+   25.2,
+   19.0,
+   18.0,
+   18.0,
+   12.6
+  ]
+ },
+ "transition issue status": {
+  "actionable": true,
+  "keys": [
+   "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/transitions",
+   "jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-platform:POST:/rest/api/3/issue",
+   "jira-software:POST:/rest/agile/1.0/backlog/issue",
+   "jira-software:POST:/rest/agile/1.0/backlog/{boardId}/issue",
+   "jira-software:POST:/rest/agile/1.0/sprint/{sprintId}/issue",
+   "jira-platform:PUT:/rest/api/3/issuetypescheme/{issueTypeSchemeId}",
+   "jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}/assignee",
+   "jira-platform:POST:/rest/api/3/search/jql",
+   "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/attachments"
+  ],
+  "recommended": "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/transitions",
+  "scores": [
+   42.0,
+   32.0,
+   31.0,
+   24.0,
+   24.0,
+   24.0,
+   19.0,
+   17.0,
+   13.0,
+   8.0
+  ]
+ },
+ "trash this confluence wiki page": {
+  "actionable": true,
+  "keys": [
+   "confluence:DELETE:/pages/{id}",
+   "confluence:DELETE:/pages/{page-id}/properties/{property-id}",
+   "confluence:DELETE:/attachments/{id}",
+   "jira-platform:DELETE:/rest/api/3/attachment/{id}",
+   "jira-platform:DELETE:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-platform:DELETE:/rest/api/3/issuetypescheme/{issueTypeSchemeId}",
+   "jira-platform:DELETE:/rest/api/3/project/{projectIdOrKey}",
+   "jira-platform:DELETE:/rest/api/3/user",
+   "confluence:GET:/pages",
+   "confluence:GET:/pages/{id}"
+  ],
+  "recommended": "confluence:DELETE:/pages/{id}",
+  "scores": [
+   33.0,
+   18.0,
+   6.0,
+   2.0,
+   2.0,
+   2.0,
+   2.0,
+   2.0,
+   30.0,
+   30.0
+  ]
+ },
+ "update issue sprint": {
+  "actionable": true,
+  "keys": [
+   "jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-platform:PUT:/rest/api/3/issuetypescheme/{issueTypeSchemeId}",
+   "jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}/assignee",
+   "jira-platform:PUT:/rest/api/3/project/{projectIdOrKey}",
+   "confluence:PUT:/pages/{page-id}/properties/{property-id}",
+   "confluence:PUT:/pages/{id}",
+   "confluence:PUT:/pages/{id}/title",
+   "jira-platform:PUT:/rest/api/3/field/{fieldId}/context/defaultValue",
+   "jira-software:GET:/rest/software/1.0/sprint/{sprintId}/issue",
+   "jira-software:POST:/rest/agile/1.0/sprint/{sprintId}/issue"
+  ],
+  "recommended": "jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}",
+  "scores": [
+   33.0,
+   31.0,
+   17.0,
+   13.0,
+   12.0,
+   11.0,
+   10.0,
+   2.8,
+   42.0,
+   40.0
+  ]
+ },
+ "update issue summary": {
+  "actionable": true,
+  "keys": [
+   "jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-platform:PUT:/rest/api/3/issuetypescheme/{issueTypeSchemeId}",
+   "jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}/assignee",
+   "jira-platform:PUT:/rest/api/3/project/{projectIdOrKey}",
+   "confluence:PUT:/pages/{page-id}/properties/{property-id}",
+   "confluence:PUT:/pages/{id}",
+   "confluence:PUT:/pages/{id}/title",
+   "jira-platform:PUT:/rest/api/3/field/{fieldId}/context/defaultValue",
+   "jira-platform:POST:/rest/api/3/issue",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}"
+  ],
+  "recommended": "jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}",
+  "scores": [
+   33.0,
+   31.0,
+   17.0,
+   13.0,
+   12.0,
+   11.0,
+   10.0,
+   2.8,
+   29.0,
+   26.0
+  ]
+ },
+ "update issue user": {
+  "actionable": true,
+  "keys": [
+   "jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-platform:PUT:/rest/api/3/issuetypescheme/{issueTypeSchemeId}",
+   "jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}/assignee",
+   "jira-platform:PUT:/rest/api/3/project/{projectIdOrKey}",
+   "confluence:PUT:/pages/{page-id}/properties/{property-id}",
+   "confluence:PUT:/pages/{id}",
+   "confluence:PUT:/pages/{id}/title",
+   "jira-platform:PUT:/rest/api/3/field/{fieldId}/context/defaultValue",
+   "jira-platform:POST:/rest/api/3/issue",
+   "jira-platform:GET:/rest/api/3/issue/{issueIdOrKey}"
+  ],
+  "recommended": "jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}",
+  "scores": [
+   33.0,
+   31.0,
+   20.0,
+   13.0,
+   12.0,
+   11.0,
+   10.0,
+   4.9,
+   29.0,
+   26.0
+  ]
+ },
+ "update page content": {
+  "actionable": true,
+  "keys": [
+   "confluence:PUT:/pages/{id}",
+   "confluence:PUT:/pages/{page-id}/properties/{property-id}",
+   "confluence:PUT:/pages/{id}/title",
+   "jira-platform:PUT:/rest/api/3/issuetypescheme/{issueTypeSchemeId}",
+   "jira-platform:PUT:/rest/api/3/project/{projectIdOrKey}",
+   "jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-platform:PUT:/rest/api/3/field/{fieldId}/context/defaultValue",
+   "confluence:GET:/pages",
+   "confluence:GET:/pages/{id}",
+   "confluence:POST:/pages"
+  ],
+  "recommended": "confluence:PUT:/pages/{id}",
+  "scores": [
+   43.0,
+   38.0,
+   29.0,
+   13.0,
+   13.0,
+   4.0,
+   0.7,
+   26.0,
+   26.0,
+   26.0
+  ]
+ },
+ "update page title": {
+  "actionable": true,
+  "keys": [
+   "confluence:PUT:/pages/{id}/title",
+   "confluence:PUT:/pages/{id}",
+   "confluence:PUT:/pages/{page-id}/properties/{property-id}",
+   "jira-platform:PUT:/rest/api/3/issuetypescheme/{issueTypeSchemeId}",
+   "jira-platform:PUT:/rest/api/3/project/{projectIdOrKey}",
+   "jira-platform:PUT:/rest/api/3/issue/{issueIdOrKey}",
+   "jira-platform:PUT:/rest/api/3/field/{fieldId}/context/defaultValue",
+   "confluence:POST:/pages",
+   "confluence:GET:/pages",
+   "confluence:GET:/pages/{id}"
+  ],
+  "recommended": "confluence:PUT:/pages/{id}/title",
+  "scores": [
+   55.0,
+   40.0,
+   26.0,
+   13.0,
+   13.0,
+   4.0,
+   0.7,
+   27.0,
+   26.0,
+   26.0
+  ]
+ },
+ "upload attachment to issue": {
+  "actionable": true,
+  "keys": [
+   "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/attachments",
+   "jira-platform:POST:/rest/api/3/issue",
+   "jira-software:POST:/rest/agile/1.0/backlog/issue",
+   "jira-software:POST:/rest/agile/1.0/backlog/{boardId}/issue",
+   "jira-software:POST:/rest/agile/1.0/sprint/{sprintId}/issue",
+   "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/transitions",
+   "jira-platform:POST:/rest/api/3/search/jql",
+   "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/comment",
+   "jira-software:POST:/rest/builds/0.1/bulk",
+   "jira-platform:GET:/rest/api/3/attachment/{id}"
+  ],
+  "recommended": "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/attachments",
+  "scores": [
+   40.0,
+   30.0,
+   24.0,
+   24.0,
+   24.0,
+   14.0,
+   13.0,
+   8.0,
+   2.0,
+   30.0
+  ]
+ },
+ "which agile boards exist": {
+  "actionable": false,
+  "keys": [
+   "jira-software:GET:/rest/agile/1.0/board",
+   "jira-software:POST:/rest/agile/1.0/board",
+   "jira-software:POST:/rest/agile/1.0/backlog/{boardId}/issue",
+   "jira-software:GET:/rest/agile/1.0/board/{boardId}/sprint",
+   "jira-software:GET:/rest/agile/1.0/board/{boardId}/backlog",
+   "jira-software:GET:/rest/agile/1.0/issue/{issueIdOrKey}",
+   "jira-software:POST:/rest/agile/1.0/sprint",
+   "jira-software:POST:/rest/agile/1.0/backlog/issue",
+   "jira-software:POST:/rest/agile/1.0/sprint/{sprintId}/issue",
+   "jira-software:POST:/rest/builds/0.1/bulk"
+  ],
+  "recommended": null,
+  "scores": [
+   42.0,
+   32.0,
+   17.0,
+   12.0,
+   9.1,
+   6.0,
+   6.0,
+   4.0,
+   4.0,
+   3.0
+  ]
+ }
+}

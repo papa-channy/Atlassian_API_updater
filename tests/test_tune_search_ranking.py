@@ -582,9 +582,10 @@ class TestRound5Wiring(unittest.TestCase):
     def test_round_identity(self):
         import importlib
         from tests.benchmarks import evaluator as ev
-        self.assertEqual(tune.KU, ev.known_unreachable(5))                     # before T: KU from the pending round
+        self.assertEqual(tune.KU, ev.known_unreachable(ev.pending_round() or 5))   # before T: KU from the pending round (6 since H19)
         try:
-            with mock.patch.object(ev, "load_round_freeze", return_value=[{"round": 1}, {"round": 2}, {"round": 5}]):
+            with mock.patch.object(ev, "load_round_freeze", return_value=[{"round": 1}, {"round": 2}, {"round": 5}]), \
+                    mock.patch.object(ev, "pending_round", return_value=None):
                 importlib.reload(tune)
                 self.assertEqual(tune.ROUND, 5); self.assertEqual(tune.KU, ev.known_unreachable(5))
                 self.assertTrue(tune.LOG_REL.endswith("search-tuning-round5.jsonl"))

@@ -1,4 +1,5 @@
 """Weighted lexical operation search: tokenizer + prebuilt index (spec §13)."""
+import contextlib
 import re
 from dataclasses import dataclass
 from typing import Any, Mapping, Optional
@@ -193,7 +194,8 @@ def expand_query(query: str, pol) -> QueryExpansion:
     return QueryExpansion(frozenset(base), frozenset(direct), frozenset(cond))
 
 
-LEGACY_ORDERING_RULES = {"intent_tier": False, "preferred_method_tiebreak": False, "terminal_alias_full_weight": False}
+LEGACY_ORDERING_RULES = {"intent_tier": False, "preferred_method_tiebreak": False, "terminal_alias_full_weight": False,
+                         "singular_collection_tiebreak": False}
 
 
 def _score(entry, lexical_base: frozenset, direct: frozenset, cond: frozenset, bonus_tokens: tuple, pol, terminal_full: bool = False):
@@ -251,6 +253,174 @@ def method_intent(query_unigrams, verb_methods):
         methods = frozenset(verb_methods[v])
         allowed = methods if allowed is None else (allowed & methods)
     return verbs, allowed
+
+
+# ---- Round 6 spec §3: recommendation rules R0–R3 (boolean, no constants) ----------------------------------------------------
+PRODUCT_NAME_TOKENS = frozenset().union(*(tokenize_unigrams(s) for s in sources.SOURCES))   # {confluence, jira, platform, software}
+WRITE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+RULES = ("R0", "R1", "R2", "R3")
+_enabled = frozenset(RULES)
+
+
+@contextlib.contextmanager
+def scorer_rules(enabled):
+    """Evaluation-only switch (Round 6 plan PR-3): the scorer-rule counterexample compares OFF (()) with ON (RULES). Never read
+    from policy files and never set by the MCP server."""
+    global _enabled
+    prev, _enabled = _enabled, frozenset(enabled)
+    try:
+        yield
+    finally:
+        _enabled = prev
+
+
+def enabled_rules() -> tuple:
+    return tuple(r for r in RULES if r in _enabled)
+
+
+def literal_path_tokens(path) -> tuple:
+    """Unigrams of the literal (non-{param}) path segments, digits dropped, noise kept (order preserved, may repeat)."""
+    out = []
+    for seg in (path or "").split("/"):
+        if not seg or (seg.startswith("{") and seg.endswith("}")):
+            continue
+        out += [t for t in tokenize_unigrams(seg) if not t.isdigit()]
+    return tuple(out)
+
+
+_VOCAB: dict = {}
+
+
+def op_vocabulary(op) -> frozenset:
+    """spec §3.2: operationId · path literal · summary · tag tokens (singular/plural forms)."""
+    k = (op.source, op.key, op.operation_id, op.summary, tuple(op.tags))
+    if k not in _VOCAB:
+        toks = set(tokenize(op.operation_id)) | set(tokenize(op.summary)) | set(expand_token_forms(literal_path_tokens(op.path)))
+        for t in op.tags:
+            toks |= tokenize(t)
+        _VOCAB[k] = frozenset(toks)
+    return _VOCAB[k]
+
+
+_CONCEPTS: dict = {}
+
+
+def concept_vocabulary(state, noise) -> frozenset:
+    """Catalog concept words (singular): path literal tokens minus path_noise, plus tag tokens (Round 3 concept_tokens)."""
+    k = (state.registry.fingerprint, frozenset(noise))
+    if k not in _CONCEPTS:
+        out = set()
+        for sr in state.registry.sources.values():
+            for op in sr.operations:
+                out |= {singular(t) for t in literal_path_tokens(op.path) if t not in noise}
+                for tag in op.tags:
+                    out |= {singular(t) for t in tokenize_unigrams(tag)}
+        _CONCEPTS[k] = frozenset(out)
+    return _CONCEPTS[k]
+
+
+_PLACEHOLDER = re.compile(r"\{[^}]*\}")
+
+
+def rule_unigrams(query) -> tuple:
+    """Round 6 plan PR-7: rule inputs ignore {param} placeholders (a canonical key's parameter names are not resources)."""
+    return tokenize_unigrams(_PLACEHOLDER.sub(" ", query or ""))
+
+
+def content_tokens(unigrams, verb_methods) -> tuple:
+    """spec §3.2a content(q): query unigrams minus verb keys minus product-name tokens (unknown words included)."""
+    return tuple(t for t in unigrams if t not in verb_methods and t not in PRODUCT_NAME_TOKENS)
+
+
+def head_info(unigrams, verb_methods, concepts):
+    """spec §3.2: the LAST non-verb, non-product-name token whose singular is a catalog concept word."""
+    head = None
+    for t in unigrams:
+        if t in verb_methods or t in PRODUCT_NAME_TOKENS:
+            continue
+        s = singular(t)
+        if s in concepts:
+            head = {"concept": s, "original_token": t,
+                    "number": "singular" if t == s else "plural" if t in (s + "s", s + "es") else "unknown"}
+    return head
+
+
+def covered(token, vocab, aliases) -> bool:
+    """spec §3.2a: token_forms(t) ∪ token_forms(direct alias targets of t's forms) meets the operation vocabulary."""
+    forms = set(token_forms(token))
+    for f in list(forms):
+        for target in aliases.get(f, ()):
+            forms |= token_forms(target)
+    return bool(forms & vocab)
+
+
+def abstain_reason(*, allowed, top_op, pinned, unigrams, rp, pol, concepts):
+    """spec §3.1 precedence: no_method_intent > no_resource_evidence (R0) > product_conflict (R2) > uncovered_head_resource (R1).
+    pinned: the top result is an exact key/operationId pin (counts as R0 evidence, spec §3.2a review 4 P1-1)."""
+    if not allowed:
+        return "no_method_intent"
+    if top_op is None:
+        return None
+    vocab = op_vocabulary(top_op)
+    if "R0" in _enabled and not pinned and not any(covered(t, vocab, pol.aliases) for t in content_tokens(unigrams, rp.verb_methods)):
+        return "no_resource_evidence"
+    if "R2" in _enabled:
+        hinted = set()
+        for t in unigrams:
+            hinted |= rp.product_hints.get(t, frozenset())
+        if hinted and top_op.source not in hinted:
+            return "product_conflict"
+    if "R1" in _enabled and top_op.method.upper() in WRITE_METHODS:
+        h = head_info(unigrams, rp.verb_methods, concepts)
+        if h is not None and not covered(h["concept"], vocab, pol.aliases):
+            return "uncovered_head_resource"
+    return None
+
+
+def _collection_item(coll, item) -> bool:
+    """item is coll + one '/{param}' segment, same source and method."""
+    base = (coll.path or "").rstrip("/")
+    rest = (item.path or "")[len(base):]
+    return (coll.source == item.source and coll.method == item.method and (item.path or "").startswith(base + "/")
+            and rest.count("/") == 1 and rest.startswith("/{") and rest.endswith("}"))
+
+
+def _reorder_run(run, number):
+    run = list(run)
+    ops = [c[1] for c in run]
+    pairs = sorted(((a, b) for a in ops for b in ops if _collection_item(a, b)), key=lambda p: (p[0].key, p[1].key))
+    for coll, item in pairs:
+        pref, other = (item, coll) if number == "singular" else (coll, item)
+        keys = [c[1].key for c in run]
+        pi, oi = keys.index(pref.key), keys.index(other.key)
+        if pi > oi:
+            run.insert(oi, run.pop(pi))
+    return run
+
+
+def singular_collection_order(cands, number, group_key) -> list:
+    """spec §3.4 R3: inside each run of equal group_key (tier, exact final score), put the single item first for a singular head
+    and the collection first for a plural head; nothing else moves."""
+    if number not in ("singular", "plural"):
+        return list(cands)
+    out, i = list(cands), 0
+    while i < len(out):
+        j = i
+        while j + 1 < len(out) and group_key(out[j + 1]) == group_key(out[i]):
+            j += 1
+        if j > i:
+            out[i:j + 1] = _reorder_run(out[i:j + 1], number)
+        i = j + 1
+    return out
+
+
+def order_candidates(cands, rules, allowed, preferred, number=None) -> list:
+    """Production ordering, shared with the tuning GridEvaluator. cands: (final, op, signals, method)."""
+    key = lambda c: _order_key(rules, allowed, preferred, c[0], c[3], c[1].deprecated, c[1].key)
+    out = sorted(cands, key=key)
+    if "R3" in _enabled and rules.get("singular_collection_tiebreak"):
+        out = singular_collection_order(out, number, lambda c: (key(c)[0], c[0]))
+    return out
 
 
 def _structural_signals(entry, query_unigrams: tuple, exp_all: frozenset, rp, intent=None):
@@ -368,7 +538,9 @@ def search_operations(state, query: str, *, source=None, method=None, tag=None,
             if final == 0.0:
                 continue
             candidates.append((final, op, signals, entry.method))
-    candidates.sort(key=lambda c: _order_key(rules, allowed, preferred, c[0], c[3], c[1].deprecated, c[1].key))
+    concepts, run = concept_vocabulary(state, rp.path_noise), rule_unigrams(query)
+    head = head_info(run, rp.verb_methods, concepts)
+    candidates = order_candidates(candidates, rules, allowed, preferred, head["number"] if head else None)
     non_pinned = [c for c in candidates if c[1].key not in pinned_keys]
     pinned_score = (non_pinned[0][0] if non_pinned else 0.0) + 1.0
     results = [_item(op, pinned_score, _zero_signals(), kind) for op, kind in pinned] + \
@@ -379,7 +551,13 @@ def search_operations(state, query: str, *, source=None, method=None, tag=None,
     shown = payload["results"]
     payload["method_intent_consistent"] = bool(allowed)
     payload["intent_methods"] = sorted(allowed) if allowed else []
-    payload["actionable"] = payload["method_intent_consistent"]              # spec §3.3: the product abstains without a clear intent
+    top_op = None
+    if shown:
+        top_op = state.registry.sources[shown[0]["source"]].operations_by_key[shown[0]["key"]]
+    reason = abstain_reason(allowed=allowed, top_op=top_op, pinned=bool(shown) and shown[0]["key"] in pinned_keys,
+                            unigrams=run, rp=rp, pol=pol, concepts=concepts)
+    payload["abstain_reason"] = reason
+    payload["actionable"] = payload["method_intent_consistent"] and reason is None          # Round 6 spec §3.1
     payload["recommended_operation"] = shown[0]["key"] if payload["actionable"] and shown else None
     ov = policy.overrides()
     payload["intelligence_fingerprint"] = policy.intelligence_fingerprint(

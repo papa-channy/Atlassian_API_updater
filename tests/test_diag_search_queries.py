@@ -219,7 +219,7 @@ class TestDiagScript(unittest.TestCase):
 
     def test_round3_report_fields_raw_effective_and_actionable_failures(self):
         code, rep = self.run_diag("--bench-file", str(self.good_bench), "--bench", str(self.plain_path))
-        self.assertEqual(rep["evaluation_domain"], "actionable recommendation queries"); self.assertEqual(rep["policy_version"], 4)
+        self.assertEqual(rep["evaluation_domain"], "actionable recommendation queries"); self.assertEqual(rep["policy_version"], 5)
         self.assertEqual(rep["tuning_grid_sha256"], ev.tuning_grid_sha256(json.loads((diag.policy.DATA_DIR / "search_ranking.json").read_text(encoding="utf-8"))))
         for name in ("regression_negative", "negative"):
             self.assertEqual(set(rep["sets"][name]) >= {"passed", "raw_passed", "effective_passed", "actionable", "abstained"}, True, name)

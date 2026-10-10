@@ -130,8 +130,8 @@ class TestRankingTablesFrozen(unittest.TestCase):
         Round 2 prefix invariant (suffixes may be added before T); from T the full structure equals the Round 3 freeze."""
         raw = json.loads(RANKING.read_text(encoding="utf-8"))
         self.assertEqual(ev.structure_check_problems(raw), [])
-        if ev.current_round()["round"] >= 3:
-            self.assertIsNone(ev.pending_round()); self.assertEqual(ranking_structure_sha256(raw), ev.freeze_for(ev.current_round()["round"])["structure_sha256"])
+        if ev.current_round()["round"] >= 3 and ev.pending_round() is None:
+            self.assertEqual(ranking_structure_sha256(raw), ev.freeze_for(ev.current_round()["round"])["structure_sha256"])
         else:
             pending = ev.pending_round()                      # Round 4 spec §9.1: the round after the last decided one is pending (3, 4 closed -> 5)
             decided = {o["round"] for o in ev.load_round_outcomes()}
@@ -773,9 +773,10 @@ class TestRound5Pending(unittest.TestCase):
         self.assertEqual(ev.pending_round(fz, oc), 5)
         self.assertEqual(ev.PRE_FREEZE_NONVERB_STRUCTURE_SHA256[5], ev.PRE_FREEZE_NONVERB_STRUCTURE_SHA256[4])
 
-    def test_live_tree_pending_round_is_5(self):
-        """Before T round 5 is pending; from T on it is the frozen current round (no pending round)."""
-        self.assertTrue(ev.pending_round() == 5 or (ev.pending_round() is None and ev.current_round()["round"] == 5),
+    def test_live_tree_pending_round_is_6(self):
+        """Round 5 is frozen and decided (D); Round 6 H19 registered PRE_FREEZE[6]: before T round 6 is pending, from T on it is
+        the frozen current round (no pending round)."""
+        self.assertTrue(ev.pending_round() == 6 or (ev.pending_round() is None and ev.current_round()["round"] == 6),
                         (ev.pending_round(), ev.current_round()))
 
 
