@@ -400,3 +400,85 @@ STOP ruling (review thread 2): (a) §11 B rejected for Round 4 (fixes s-027 only
 2. A seed-independent corpus changes the generator's output (s-028) but not where the product's own words differ from the query's (s-039 "workspace" vs "space"; s-027 "searches" vs "filter").
 3. s-004 is not a vocabulary problem; it needs a constants or ordering change, which the fixed grid cannot reach.
 4. The AC-R3-01 threshold (36) is necessary, not sufficient: the dry-run requires 39/39, so a round that can only reach 36 should be designed against the dry-run target from the start.
+
+## Search Quality Round 5 — decision record (2026-10-10)
+
+**Outcome: terminal branch `D` — the Round 5 hidden-set gate FAILED.** Tuning reached the full Round 5 target (reachable seed 36/36, `tuning_accept` true, counterexample ok) and was adopted (C), but the single final evaluation on the new hidden set scored held_out 14/16 (needs ≥ 15) and negative 6/8 (needs 8/8). Per the inherited rules the gate result is final; it is never re-run or re-interpreted.
+
+Status: **reachable seed: 36/36 · KU registry: 3/3 validated · KU observed: pass 0 / fail 3**.
+
+| item | value |
+|---|---|
+| round5_start_commit | `56b4b0e` |
+| spec / plan | spec v1.12 (`docs/superpowers/specs/2026-10-09-search-quality-round5-design.md`; v1.10 at plan review, v1.11 and v1.12 from review-thread rulings during execution) / plan v8 |
+| initial_housekeeping_commit | `19ae3e0` (H16 `51d8006`, H17 `499910f`, review fixes `19ae3e0`) |
+| housekeeping_commit (final) | `5862120` (moves below) |
+| controller_actor_id / session | Claude Code controller, session `5edca2ca-331e-4afd-90b9-deeaf110a511` |
+| S | live fetch 2026-10-10, `s_reused_from_round4: false` (jira-platform spec changed `8ee2e0bb…` → `a7a330f1…`), registry `e308a232d6c9b19a7413e8a38c89b895e44e503581d529c2a31b31fbde179853`, 943 operations |
+| inputs (spec §5) | 9 files bound by full sha (`inputs_bound`, `input_blockers == []`), doc-title snapshot re-render byte-identical |
+| verb inventory | unchanged `d66317db…`, method-safety 0 violations, prefix ok |
+| lexicon_union_resolution | `source-precedence`; 15 pending pairs (11 conflicts) reviewed in two stateless Temporary chats (`6ac9f48a…`, 14 keys; `6ac9f4fb…`, release→version true); 353 kept → gate removed fresh/new/space/summary → 349; `selected`: round4_generation 342, round2_archive 11; release→version from round4_generation; lexicon-r5 merge 28 aliases |
+| cumulative provenance (v1.12) | `carry_forward`: 462 prior lexicon entries carried with `carried_selected`, 16 prior candidates provenance-only (`carried_candidates`), active candidates 6 |
+| counterexample reference | `round5-counterexample-reference.json` sha `4d1fba45…` (Round 4 first-wins replay, byte-identical to the archived Round 4 lexicon/aliases) |
+| T / B / C / D | `607c9e1` / `8707701` / `8de757e` / this commit |
+| t_policy_files | alias_candidates.json, concept_lexicon.json, search_aliases.json |
+| round_outcomes_sha256 at T | `e0913e3d…` (D appends no outcome record; the round stays frozen) |
+
+### Known-unreachable registry (frozen, `round5-known-unreachable.json` sha `12744de7…`)
+
+| id | cause | mechanisms tried (counterexample) | record check |
+|---|---|---|---|
+| s-004 | constants/ordering: the bulk-transition summary contains every query word | bulk-variant tier: seed +1 but 2 non-target losses (incl. "Get issue panel pin status for projects") → rejected | identity == 56b4b0e (`ku_identity`, v1.11) |
+| s-027 | needs search→filter (verb-inventory key) plus "my" literal handling | "my" neutralization: hit/miss 35/6 → 13/28, loss "Get my filters" → rejected | identity == 56b4b0e |
+| s-039 | workspace→space has no official-source support (0 doc titles; Confluence "workspace" = site) | none applicable ("workspace" is itself a catalog token) | identity == 56b4b0e |
+
+Approval: five review-thread rulings (`rulings/2026-10-09-1..5.md`, shas in the registry) and the user decision "좋아 Round 5 진행해보자" (`user_decision_round5`).
+
+### Binding pre-T checkpoint (`round5_simulation --phase pre-T`, real S)
+
+| at | reachable seed | KU fail | regression raw · effective | fixtures | lexicon-only cx | final cx (selected) | dry-run tuning_accept | blockers | verdict |
+|---|---|---|---|---|---|---|---|---|---|
+| 2026-10-10T08:34:58Z | 36/36 | 3/3 | 10/14 · 14/14 | pass | ok (0 losses; 9 uncovered_static) | ok | true | [] | pass |
+| 2026-10-10T09:09:21Z (after carry) | 36/36 | 3/3 | 10/14 · 14/14 | pass | ok | ok | true | [] | pass |
+
+`pipeline_result_sha256` `f455a1ce4cd5a95f…` (both runs). AC-13 replay (with carry): concept_lexicon, lexicon-r5 subset, alias_candidates, seed classes and reference policy identical.
+
+### Review-thread rulings during execution and H′
+
+| ruling | decision | H′ |
+|---|---|---|
+| KU identity (`rulings/2026-10-10-ku-identity.md`) | (a): KU record identity excludes the derived `failure_classes` (spec v1.11) | `2349bba`, `11e967f`; housekeeping 19ae3e0 → 11e967f (fresh review findings closed with RED evidence) |
+| cumulative provenance (`rulings/2026-10-10-cumulative-provenance.md`) | (A′): cumulative lexicon provenance, prior candidates provenance-only, synthetic T same semantics (spec v1.12) | `48d3146`, `5862120`; housekeeping 11e967f → 5862120 (fresh review findings: 0) |
+| worker identity (`rulings/2026-10-10-worker-identity.md`) | (a): worker id = dispatch transport id; self-report kept non-authoritative | none (ledger interpretation) |
+
+### Hidden set (new, `held_out-r5` / `negative-r5`)
+
+| stage | actor_id | input sha | output sha | result |
+|---|---|---|---|---|
+| generation | `6aca058c-74c8-83ee-987d-1c67dc4640c3` | e8f14be5… | caecc716… | 16 + 8, machine check 0 violations |
+| review (catalog attached) | `6aca2b87-cbd4-83ee-a806-59359d5836fa` | 24f8698a… | ee1a17a5… | 24/24 accepted |
+
+Needle manifest `e98817ef…` (24); scans before encryption, after B and before the terminal: `unexpected_hits == []`. Ciphertext `e273aca2…` (user-encrypted; decrypted by the user for D).
+
+### Tuning (B..C)
+
+Worker `a4c400cc7767437d0` (transport id; handshake self-report retained as non-authoritative evidence). Run `6e7be23f…`: adopted, `tuning_accept` true, seed 36/39 (failed only the KU set), regression 14/14 effective (10/14 raw), fixtures 23/23 · 6/6, counterexample ok (0 losses, 0 uncovered proposer keys), no alias proposals; selected constants equal the B policy, so C changed only the tuning log. `--verify`: replay ok.
+
+### Final evaluation (D controller `afced2da23d7ef747`, single run)
+
+| set | result | gate |
+|---|---|---|
+| held_out | 14/16 | ≥ 15 — **fail** |
+| negative (effective) | 6/8 | 8/8 — **fail** |
+| negative actionable (raw) | 2/4 | 4/4 — fail |
+| negative abstained (effective) | 4/4 | 4/4 |
+
+Failed: h-010 (top1 `jira-software:GET:/rest/security/1.0/linkedWorkspaces`, the list operation instead of the by-id one), h-011 (top1 `jira-platform:GET:/rest/api/3/configuration`), n-002 (forbidden `jira-software:DELETE:/rest/agile/1.0/board/{boardId}` ranked first), n-004 (forbidden `confluence:DELETE:/pages/{id}` ranked first). Gate checkpoint `round5_gate_result_sha256` `8a1e0b63…`, recorded before the reference was opened.
+
+Round 2 reference observation (decrypted, observed, deleted; ciphertext unchanged): held_out 4/16 (actionable raw 4/12, abstained 0/4), negative 5/8 (actionable raw 1/4, abstained 4/4).
+
+### Lessons for Round 6
+
+1. Reaching every reachable seed (36/36) did not generalize: the new hidden set exposed two failure modes the seed set does not contain — singular-vs-list operations (h-010) and destructive operations outranking an absent target in negatives (n-002, n-004 both rank a DELETE of the parent resource first).
+2. Two inherited contracts were unsatisfiable once a round actually reached T/B (KU whole-record identity vs reclassification; per-round lexicon replacement vs vocabulary provenance) and one at the worker handshake (subagents cannot see their own id). Each needed a ruling; earlier rounds never got this far.
+3. `TestSealIntegrity.test_hidden_plaintext_machine_rules` calls `machine_check` without `verb_methods`, which round ≥ 3 requires; it skips in the default suite and errors when the snapshot env var is set. The unsealed Round 5 records pass with the frozen inventory (`[]`). The fix belongs to the next round's H (the file is inside the frozen evaluation code).
