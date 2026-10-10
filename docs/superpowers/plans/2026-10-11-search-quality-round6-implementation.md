@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Plan version:** v3 (2026-10-11; v3 = plan review 2 (P0 2 / P1 4) applied: Round 6 proposer notes bound to `TUNING_ROUND` (pre-T, rehearsal and worker produce byte-identical alias policies); the H22 training split is immutable (a semantic change after H22 is a STOP, never a re-ledger); `promotion_sealed` is historical evidence only; stricter label provenance; rehearsal seeding failures are reported; v2 = plan review 1 (P0 4 / P1 5) applied: PR-7 adopted as spec v1.6 §3.0; `training_split_sha256` over a `failure_classes`-free projection, pinned at H22 and re-checked at pre-T and freeze; rehearsal work seeded with the pre-T evidence; PR-8 conflict detection → STOP; promotion payload re-checked after relabel; `verb_methods_sha256` provenance; loss reasons; H adoption re-measured before the pin; required label provenance schema)
+**Plan version:** v4 (2026-10-11; v4 = plan review 3 (P0 1 / P1 4) applied: an immutable training projection (`immutable_split_sha256`) that a `relabel_rerun_ruling` can never re-baseline — a rerun may only change relabel-managed fields, starts from the last authorized benchmark, and the ruling event is bound to the generation it replaces; the latest authorized `relabel_applied` is the baseline; no promotion-payload false STOP on `failure_classes`-only H′; direct tests for the rehearsal seeding failure and `compute_tuning_round`; v3 = plan review 2 (P0 2 / P1 4) applied: Round 6 proposer notes bound to `TUNING_ROUND` (pre-T, rehearsal and worker produce byte-identical alias policies); the H22 training split is immutable (a semantic change after H22 is a STOP, never a re-ledger); `promotion_sealed` is historical evidence only; stricter label provenance; rehearsal seeding failures are reported; v2 = plan review 1 (P0 4 / P1 5) applied: PR-7 adopted as spec v1.6 §3.0; `training_split_sha256` over a `failure_classes`-free projection, pinned at H22 and re-checked at pre-T and freeze; rehearsal work seeded with the pre-T evidence; PR-8 conflict detection → STOP; promotion payload re-checked after relabel; `verb_methods_sha256` provenance; loss reasons; H adoption re-measured before the pin; required label provenance schema)
 
 **Goal:** Make the MCP search fit real agent use — recommend only with evidence, never recommend a wrong write — and judge Round 6 by the usage-grounded Discovery gate (reach@3, recommendation coverage, precision, write safety, abstention) on a fresh sealed hidden set.
 
@@ -1278,7 +1278,26 @@ class TestGridEvaluatorUsageEquivalence(unittest.TestCase):
 
 - [ ] **Step 4: Implement — Round 6 evaluation and ordering parity in `tune_search_ranking.py`**
 
-(a) After `LOG_PATH = ROOT / LOG_REL` add `TUNING_ROUND = ev.pending_round() or ROUND                       # Round 6 plan PR-5`.
+(a) After `LOG_PATH = ROOT / LOG_REL` add
+
+```python
+def compute_tuning_round() -> int:
+    """Round 6 plan PR-5: the pending round before T (H/pre-T), the frozen round after T."""
+    return ev.pending_round() or ev.current_round()["round"]
+
+
+TUNING_ROUND = compute_tuning_round()
+```
+
+with the test (plan review 3 P1-4)
+
+```python
+class TestComputeTuningRound(unittest.TestCase):
+    def test_cases(self):
+        for pending, current, want in ((6, 5, 6), (None, 6, 6), (None, 5, 5)):
+            with mock.patch.object(ev, "pending_round", return_value=pending), mock.patch.object(ev, "current_round", return_value={"round": current}):
+                self.assertEqual(tune.compute_tuning_round(), want)
+```
 
 (b) Replace `fixture_bench`:
 
@@ -1664,7 +1683,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Modify: `tests/benchmarks/evaluator.py` (`TOOLING_FILES` += the three files above)
 
 **Interfaces:**
-- Produces (module `labels`): `PROMOTED_SEED_IDS = s-040…s-055`, `PROMOTED_NEG_IDS = rn-015…rn-022`, `promote(bench, r5_plain, r5_seal) -> (bench, payload)`, `promotion_identity(rec) -> dict`, `source_identity(src) -> dict`, `promotion_payload_sha256(bench) -> str`, `relabel_targets(bench) -> list[{"id","query"}]` (22), `render_relabel_input(targets, template_text) -> str`, `check_review(doc, ids, catalog_keys) -> list[str]`, `disagreements(a, b) -> list[id]`, `final_labels(a, b, c=None) -> dict`, `reconcile_forbidden(rec, acceptable) -> rec`, `apply_labels(bench, labels, migration) -> bench`, `catalog_closure(bench, catalog_keys) -> (bench, stop_ids)`, `training_identity(rec)`, `training_split_sha256(bench) -> str` (over `training_identity`), `fixture_label_conflicts(bench) -> list[id]`, `label_provenance_problems(bench) -> list[str]`; CLI `python -m tests.benchmarks.round6_labels {promote|relabel-input|check-review|apply|closure|verify}`.
+- Produces (module `labels`): `PROMOTED_SEED_IDS = s-040…s-055`, `PROMOTED_NEG_IDS = rn-015…rn-022`, `promote(bench, r5_plain, r5_seal) -> (bench, payload)`, `promotion_identity(rec) -> dict`, `source_identity(src) -> dict`, `promotion_payload_sha256(bench) -> str`, `relabel_targets(bench) -> list[{"id","query"}]` (22), `render_relabel_input(targets, template_text) -> str`, `check_review(doc, ids, catalog_keys) -> list[str]`, `disagreements(a, b) -> list[id]`, `final_labels(a, b, c=None) -> dict`, `reconcile_forbidden(rec, acceptable) -> rec`, `apply_labels(bench, labels, migration) -> bench`, `catalog_closure(bench, catalog_keys) -> (bench, stop_ids)`, `training_identity(rec)`, `training_split_sha256(bench) -> str` (over `training_identity`), `immutable_split_sha256(bench) -> str`, `fixture_label_conflicts(bench) -> list[id]`, `label_provenance_problems(bench) -> list[str]`; CLI `python -m tests.benchmarks.round6_labels {promote|relabel-input|check-review|apply|closure|verify}`.
 
 - [ ] **Step 1: Write the failing tests** — `tests/benchmarks/test_round6_labels.py`:
 
@@ -1786,6 +1805,19 @@ class TestRelabel(unittest.TestCase):
                        lambda x: x["seed"].pop()):
             b3 = copy.deepcopy(b); mutate(b3)
             self.assertNotEqual(L.training_split_sha256(b3), base)
+
+    def test_immutable_split_ignores_relabel_fields_only(self):
+        b = _bench(); base = L.immutable_split_sha256(b)
+        labels = {r["id"]: {"answerable": r["id"] == "rn-001", "acceptable_keys": ["c:DELETE:/p/{id}"] if r["id"] == "rn-001" else []}
+                  for r in b["regression_negative"]}
+        mig = {i: {"reviewers": ["x", "y"], "review_output_sha256s": ["a" * 64] * 2, "adjudicated": False} for i in labels}
+        relabeled = L.apply_labels(b, labels, mig)
+        self.assertEqual(L.immutable_split_sha256(relabeled), base)                    # placement/expected/no_answer/legacy move: same
+        self.assertNotEqual(L.training_split_sha256(relabeled), L.training_split_sha256(b))
+        for mutate in (lambda x: x["seed"][0].update(query="other"), lambda x: x["seed"][0].update(expected_top1_any=["z:GET:/q"]),
+                       lambda x: x["regression_negative"][0].update(query="other"), lambda x: x["regression_negative"].pop()):
+            b2 = copy.deepcopy(b); mutate(b2)
+            self.assertNotEqual(L.immutable_split_sha256(b2), base)
 
     def test_fixture_label_conflict_detected(self):
         b = _bench()
@@ -2003,6 +2035,21 @@ def training_split_sha256(bench) -> str:
     return ev.canonical_sha256({s: [training_identity(r) for r in bench.get(s) or []] for s in ev.TRAINING_SECTIONS})
 
 
+RELABEL_MANAGED = ("expected_top1_any", "no_answer", "forbidden_top1", "legacy_forbidden_top1", "label_migration", "catalog_missing_keys", "failure_classes")
+
+
+def immutable_split_sha256(bench) -> str:
+    """plan review 3 P0-1: what no relabel rerun may change — every seed record (failure_classes aside; closure-removed expected keys
+    restored) and every regression record's identity regardless of section (id, query, origin, provenance, historical forbidden
+    = active ∪ legacy); relabel-managed fields and the positive/negative placement are excluded."""
+    seed = [{**{k: v for k, v in r.items() if k not in ("failure_classes", "catalog_missing_keys")},
+             "expected_top1_any": _sorted_union(r.get("expected_top1_any"), r.get("catalog_missing_keys"))} for r in bench.get("seed") or []]
+    reg = sorted(({**{k: v for k, v in r.items() if k not in RELABEL_MANAGED},
+                   "historical_forbidden": _sorted_union(r.get("forbidden_top1"), r.get("legacy_forbidden_top1"))}
+                  for s in ("regression_negative", "regression_positive") for r in bench.get(s) or []), key=lambda r: r["id"])
+    return ev.canonical_sha256({"seed": seed, "regression": reg})
+
+
 def fixture_label_conflicts(bench) -> list:
     """plan review 1 P0-4 (PR-8): r0 records relabeled answerable whose acceptable keys include a historical fixture forbidden key."""
     return sorted(r["id"] for r in bench.get("regression_positive") or [] if r["origin"].endswith("-r0")
@@ -2137,7 +2184,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Test: `tests/benchmarks/test_round_seal.py` (append)
 
 **Interfaces:**
-- Produces: `sim6.load_pre_t_evidence(work) -> (events, problems)`, `sim6.seed_rehearsal_work(real_work, temp_work) -> {path: sha}`, `sim6.pre_t_blockers_r6(result, event, equivalence, extra=()) -> list` (kinds `metric_threshold`, `training_split_mismatch`, `pre_t_evidence_missing`, `scorer_rule_violation`, `alias_validation_error`, `counterexample_loss`, `counterexample_uncovered_proposer`, `fixture_fail`, `equivalence_mismatch`, `tuning_accept_false`), `sim6.metric_violations(m) -> list[{"item","value","bound"}]`, `sim6.run_pre_t(cache, work) -> int`, `sim6.run_rehearsal(cache, work) -> int` (writes only inside a temp tree; appends `rehearsal_report` to `work/controller-events.jsonl`), `sim6.t_commands(cache, work, tree) -> list[list[str]]` (the exact T command sequence the controller also runs), `rs.HIDDEN_RULES_R6`.
+- Produces: `sim6.load_pre_t_evidence(work) -> (events, problems)`, `sim6.relabel_chain_problems(lines) -> list`, `sim6.seed_rehearsal_work(real_work, temp_work) -> {path: sha}`, `sim6.pre_t_blockers_r6(result, event, equivalence, extra=()) -> list` (kinds `metric_threshold`, `training_split_mismatch`, `pre_t_evidence_missing`, `scorer_rule_violation`, `alias_validation_error`, `counterexample_loss`, `counterexample_uncovered_proposer`, `fixture_fail`, `equivalence_mismatch`, `tuning_accept_false`), `sim6.metric_violations(m) -> list[{"item","value","bound"}]`, `sim6.run_pre_t(cache, work) -> int`, `sim6.run_rehearsal(cache, work) -> int` (writes only inside a temp tree; appends `rehearsal_report` to `work/controller-events.jsonl`), `sim6.t_commands(cache, work, tree) -> list[list[str]]` (the exact T command sequence the controller also runs), `rs.HIDDEN_RULES_R6`.
 - Plan ruling **PR-6 (counterexample reference in Round 6):** there is no lexicon resolution in Round 6, so `round6-counterexample-reference.json` binds the alias policy at the H final commit (`policy` = `search_aliases.json` at `housekeeping_commit`) with `inputs = {"aliases_h_sha256", "registry_fingerprint"}`; `INPUT_SHA256 = {}`; `counterexample_reference_problems` checks exactly those two inputs plus the internal-consistency hashes (`policy_canonical_sha256`, `canonical_policy_map(_sha256)`, `titles_sha256` over the Round 4 doc-title snapshot copied into `$W/inputs/round4/` as in Round 5).
 
 - [ ] **Step 1: Copy and substitute**
@@ -2190,22 +2237,39 @@ class TestRound6PreT(unittest.TestCase):
             (real / "inputs/round4").mkdir(parents=True)
             (real / "aliases-h.json").write_text("{}", encoding="utf-8"); (real / "inputs/round4/doc-titles-snapshot.json").write_text("{}", encoding="utf-8")
             events = [{"event": "scorer_rule_corpus_pinned", "corpus_sha256": "c", "registry_fingerprint": "f"},
-                      {"event": "relabel_applied", "training_split_sha256": "s"}, {"event": "promotion_sealed", "promotion_payload_sha256": "p"},
+                      {"event": "relabel_applied", "training_split_sha256": "s", "immutable_split_sha256": "i"}, {"event": "promotion_sealed", "promotion_payload_sha256": "p"},
                       {"event": "other"}]
             (real / "controller-events.jsonl").write_text("\n".join(json.dumps(e) for e in events) + "\n", encoding="utf-8")
             self.assertEqual(sim.load_pre_t_evidence(tmp)[1] != [], True)                  # empty temp work: evidence missing
             sim.seed_rehearsal_work(real, tmp)
             got, probs = sim.load_pre_t_evidence(tmp)
             self.assertEqual(probs, []); self.assertEqual(got["relabel_applied"]["training_split_sha256"], "s")
-            with open(real / "controller-events.jsonl", "a", encoding="utf-8") as fh:            # silent re-baseline of the split
-                fh.write(json.dumps({"event": "relabel_applied", "training_split_sha256": "s2"}) + "\n")
-            self.assertTrue(any("relabel_rerun_ruling" in x for x in sim.load_pre_t_evidence(real)[1]))
-            with open(real / "controller-events.jsonl", "a", encoding="utf-8") as fh:
-                fh.write(json.dumps({"event": "relabel_rerun_ruling"}) + "\n" + json.dumps({"event": "relabel_applied", "training_split_sha256": "s3"}) + "\n")
-            self.assertEqual(sum("relabel_rerun_ruling" in x for x in sim.load_pre_t_evidence(real)[1]), 1)   # only the unruled pair
             (real / "aliases-h.json").unlink()
             with self.assertRaises(SystemExit):
                 sim.seed_rehearsal_work(real, pathlib.Path(td) / "T2")
+
+    def test_relabel_chain(self):
+        a = {"event": "relabel_applied", "training_split_sha256": "s1", "immutable_split_sha256": "i1"}
+        ruling = {"event": "relabel_rerun_ruling", "from_training_split_sha256": "s1", "immutable_split_sha256": "i1", "reason": "r",
+                  "thread": "t", "review_output_sha256": "h"}
+        ok_b = {"event": "relabel_applied", "training_split_sha256": "s2", "immutable_split_sha256": "i1"}
+        self.assertEqual(sim.relabel_chain_problems([a]), [])
+        self.assertEqual(sim.relabel_chain_problems([a, ruling, ok_b]), [])
+        self.assertTrue(sim.relabel_chain_problems([a, ok_b]))                                          # no ruling
+        self.assertTrue(sim.relabel_chain_problems([a, {"event": "relabel_rerun_ruling"}, ok_b]))       # malformed ruling
+        self.assertTrue(sim.relabel_chain_problems([a, {**ruling, "from_training_split_sha256": "s0"}, ok_b]))   # wrong generation
+        self.assertTrue(sim.relabel_chain_problems([a, ruling, {**ok_b, "immutable_split_sha256": "i2"}]))       # seed/query drift
+
+    def test_rehearsal_seed_failure_is_reported(self):
+        with tempfile.TemporaryDirectory() as td, mock.patch.object(sim, "seed_rehearsal_work", side_effect=SystemExit("boom")), \
+                mock.patch.object(sim, "_run_in_tree") as run_in_tree, mock.patch.object(sim.subprocess, "run") as sp_run:
+            sp_run.return_value = types.SimpleNamespace(stdout=b"", returncode=0)
+            W = pathlib.Path(td) / "W"
+            code = sim.run_rehearsal(pathlib.Path(td) / "S", W)
+            report = [json.loads(l) for l in (W / "controller-events.jsonl").read_text(encoding="utf-8").splitlines()][-1]
+        self.assertEqual(code, 1); run_in_tree.assert_not_called()
+        self.assertEqual(report["steps"][0]["exit"], 1)
+        self.assertEqual(report["steps"][0]["output_sha256"], hashlib.sha256(b"boom").hexdigest()); self.assertGreaterEqual(report["failures"], 1)
 
     def test_rehearsal_never_writes_the_working_tree(self):
         before = subprocess.run(["git", "status", "--porcelain"], cwd=sim.ROOT, capture_output=True, text=True).stdout
@@ -2217,7 +2281,7 @@ class TestRound6PreT(unittest.TestCase):
         self.assertEqual(subprocess.run(["git", "status", "--porcelain"], cwd=sim.ROOT, capture_output=True, text=True).stdout, before)
 ```
 
-(add `import json, types, subprocess, tempfile, pathlib` and `from unittest import mock` if missing; `sim` is the module alias the copied test file already uses.)
+(add `import hashlib, json, types, subprocess, tempfile, pathlib` and `from unittest import mock` if missing; `sim` is the module alias the copied test file already uses.)
 
 Append to `tests/benchmarks/test_round_seal.py`:
 
@@ -2333,11 +2397,31 @@ def load_pre_t_evidence(work) -> tuple:
     for rel in PRE_T_FILES:
         if not (work / rel).is_file():
             probs.append(f"file {rel} missing")
-    relabels = [i for i, x in enumerate(lines) if x.get("event") == "relabel_applied"]
-    for prev, cur in zip(relabels, relabels[1:]):                   # plan review 2 P0-2: the H22 split is never re-baselined silently
-        if not any(x.get("event") == "relabel_rerun_ruling" for x in lines[prev + 1:cur]):
-            probs.append("relabel_applied re-ledgered without a relabel_rerun_ruling (training split re-baseline)")
+    probs += relabel_chain_problems(lines)
     return out, probs
+
+
+RULING_KEYS = {"event", "from_training_split_sha256", "immutable_split_sha256", "reason", "thread", "review_output_sha256"}
+
+
+def relabel_chain_problems(lines) -> list:
+    """plan review 2 P0-2 / review 3 P0-1 + P1-1: a later relabel_applied needs, between it and the previous one, a well-formed
+    relabel_rerun_ruling bound to the previous generation (its split) and to the unchanged immutable projection; the new generation
+    must keep that immutable projection. Only relabel-managed fields can therefore ever be re-baselined."""
+    probs, idx = [], [i for i, x in enumerate(lines) if x.get("event") == "relabel_applied"]
+    for i in idx:
+        if not lines[i].get("immutable_split_sha256") or not lines[i].get("training_split_sha256"):
+            probs.append("relabel_applied lacks training_split_sha256 / immutable_split_sha256")
+    for prev, cur in zip(idx, idx[1:]):
+        rulings = [x for x in lines[prev + 1:cur] if x.get("event") == "relabel_rerun_ruling"]
+        if len(rulings) != 1 or set(rulings[0]) != RULING_KEYS:
+            probs.append("relabel_applied re-ledgered without exactly one well-formed relabel_rerun_ruling"); continue
+        r, a, b = rulings[0], lines[prev], lines[cur]
+        if r["from_training_split_sha256"] != a.get("training_split_sha256"):
+            probs.append("relabel_rerun_ruling does not name the previous generation's training split")
+        if not (r["immutable_split_sha256"] == a.get("immutable_split_sha256") == b.get("immutable_split_sha256")):
+            probs.append("relabel rerun changed the immutable training projection (only relabel-managed fields may change)")
+    return probs
 
 
 def seed_rehearsal_work(real_work, temp_work) -> dict:
@@ -2379,8 +2463,10 @@ def run_pre_t(cache: pathlib.Path, work: pathlib.Path) -> int:
         extra = [{"kind": "pre_t_evidence_missing", "problems": ev_problems}] if ev_problems else []
         from tests.benchmarks import round6_labels as labels
         pinned_split = (evidence.get("relabel_applied") or {}).get("training_split_sha256")
-        if pinned_split != labels.training_split_sha256(bench):                       # plan review 1 P0-2: H22 pin == pre-T
-            extra.append({"kind": "training_split_mismatch", "pinned": pinned_split, "current": labels.training_split_sha256(bench)})
+        pinned_imm = (evidence.get("relabel_applied") or {}).get("immutable_split_sha256")
+        if pinned_split != labels.training_split_sha256(bench) or pinned_imm != labels.immutable_split_sha256(bench):   # latest authorized == pre-T
+            extra.append({"kind": "training_split_mismatch", "pinned": [pinned_split, pinned_imm],
+                          "current": [labels.training_split_sha256(bench), labels.immutable_split_sha256(bench)]})
         if corpus_meta is None or corpus_meta["registry_fingerprint"] != state.registry.fingerprint or corpus_meta["corpus_sha256"] != ev.canonical_sha256(corpus):
             extra.append({"kind": "scorer_rule_binding", "problems": ["corpus metadata missing or differs from the ledger pin"]})
         result = dry_run_pipeline_r6(state, rp, bench, aliases_raw, cands_doc, corpus)
@@ -2554,7 +2640,7 @@ EOF
 - [ ] **Step 1: Inputs** — `python -m tests.benchmarks.round6_labels relabel-input --bench tests/benchmarks/search_queries.json --template tests/benchmarks/round6-relabel-prompt.md --out $W/relabel-input.txt`; the attachment is `$W/round6-generator-catalog.json`. Ledger both shas and `engine_output_in_input: false`.
 - [ ] **Step 2: Reviewers A and B** — two new ChatGPT Temporary chats (personalization off; UI-state screenshot per chat), each given the attachment + the byte-exact input; extract the first JSON object to `$W/relabel-A.json` / `$W/relabel-B.json`; `check-review --review … --catalog $W/round6-internal-catalog.json` → `ok` (a schema failure → one retry with the identical input in a new chat; a second failure → STOP). Actor ids differ from each other and from every earlier generator/reviewer. Ledger each attempt in `$W/attempts.jsonl` (stage `relabel-r6`).
 - [ ] **Step 3: Reviewer C (only if A ≠ B on some id)** — same input restricted to the disagreeing ids (render with a bench filtered to those records), same schema check.
-- [ ] **Step 4: Apply, close, pin the split** — `round6_labels apply --review $W/relabel-A.json --review $W/relabel-B.json [--review $W/relabel-C.json] --actors A B [C] --bench … --out tests/benchmarks/search_queries.json`; `round6_labels closure --catalog $W/round6-internal-catalog.json --bench … --out tests/benchmarks/search_queries.json` → exit 0 (exit 3 = STOP: label/catalog migration problem to thread 2); `round6_labels verify --bench tests/benchmarks/search_queries.json --sealed-payload <promotion_sealed.promotion_payload_sha256>` → `ok` (it also checks the label provenance schema and PR-8). A `PR-8 fixture label conflict` line → `STOP_FOR_AMENDMENT`: the thread rules on redefining the r0 fixture by the current catalog-fact labels (spec + plan amendment), nothing is committed meanwhile. Ledger `{"event": "relabel_applied", "positive", "negative", "adjudicated", "review_output_sha256s", "training_split_sha256", "promotion_payload_recheck": true}`.
+- [ ] **Step 4: Apply, close, pin the split** — `round6_labels apply --review $W/relabel-A.json --review $W/relabel-B.json [--review $W/relabel-C.json] --actors A B [C] --bench … --out tests/benchmarks/search_queries.json`; `round6_labels closure --catalog $W/round6-internal-catalog.json --bench … --out tests/benchmarks/search_queries.json` → exit 0 (exit 3 = STOP: label/catalog migration problem to thread 2); `round6_labels verify --bench tests/benchmarks/search_queries.json --sealed-payload <promotion_sealed.promotion_payload_sha256>` → `ok` (it also checks the label provenance schema and PR-8). A `PR-8 fixture label conflict` line → `STOP_FOR_AMENDMENT`: the thread rules on redefining the r0 fixture by the current catalog-fact labels (spec + plan amendment), nothing is committed meanwhile. Ledger `{"event": "relabel_applied", "positive", "negative", "adjudicated", "review_output_sha256s", "training_split_sha256", "immutable_split_sha256", "promotion_payload_recheck": true}`.
 - [ ] **Step 5: Commit the data (H22)** — run the suite (`test_committed_benchmark_labels` now runs instead of skipping); tests that pin the inherited counts (39 seeds / 14 regression records) are updated to the new totals only where they pin counts (`SEED_TOTAL`/`REGRESSION_TOTAL` are computed, not pinned). `git add tests/benchmarks/search_queries.json [count-pinning tests]`; commit `H22: Round 6 promotion (16 seed + 8 regression) and catalog-fact relabel (regression_positive N / regression_negative M); training_split_sha256 <sha>` with the trailer.
 
 ### Task 11: **[controller]** H adoption measurement (spec §3.5) — thread-2 ruling
@@ -2590,7 +2676,7 @@ EOF
 ### Task 12: **[controller + fresh reviewer]** Whole-branch review, `housekeeping_commit`
 
 - [ ] **Step 1: Fresh reviewer** — one fresh reviewer on the most capable model reviews `29f298f..HEAD` (H18–H22) against spec v1.6 + this plan (superpowers:requesting-code-review); findings are fixed as H′ commits (suite → `--phase H` → reviewer re-check) until findings 0.
-- [ ] **Step 1b: Re-measure before the pin (plan review 1 P1-4)** — if any H′ landed after Task 11: when `scorer_rule_cx.py` changed, re-run Task 8 Step 3 (new `scorer_rule_corpus_pinned` event); when the benchmark changed, require `training_split_sha256(HEAD) ==` the sealed H22 value (a `failure_classes`-only change keeps it) and re-run `round6_labels verify --sealed-payload <promotion_sealed value>` — **never re-ledger `relabel_applied`**; a different split is a semantic label change → STOP_FOR_AMENDMENT (the thread may rule `relabel_rerun_ruling`, after which Task 10 runs again with new independent reviews and only then a new `relabel_applied` is ledgered; `load_pre_t_evidence` rejects a second `relabel_applied` without that ruling); then always re-run Task 11 Step 1 on HEAD and require `h_adoption_ok == true` (otherwise Task 11 Step 2's ruling path).
+- [ ] **Step 1b: Re-measure before the pin (plan review 1 P1-4)** — if any H′ landed after Task 11: when `scorer_rule_cx.py` changed, re-run Task 8 Step 3 (new `scorer_rule_corpus_pinned` event); when the benchmark changed, require `training_split_sha256(HEAD)` and `immutable_split_sha256(HEAD)` to equal the **latest authorized `relabel_applied`** (equal split ⇒ only `failure_classes` changed in the training sections, which the promotion payload check would flag falsely, so `--sealed-payload` is re-run only when the split differs); **never re-ledger `relabel_applied` to match HEAD**. A difference is STOP_FOR_AMENDMENT: if `immutable_split_sha256` differs (seed/query/record identity drift) the H′ is reverted or the benchmark migration goes through a spec amendment — a relabel rerun cannot authorize it; if only relabel-managed fields differ, the thread may rule a rerun, ledgered as `{"event": "relabel_rerun_ruling", "from_training_split_sha256": <latest authorized>, "immutable_split_sha256": <unchanged>, "reason", "thread", "review_output_sha256"}`, and Task 10 then runs again **starting from the last authorized benchmark** (`git show <commit that carried the latest authorized relabel>:tests/benchmarks/search_queries.json`) with new independent reviews before a new `relabel_applied` (its immutable sha must be unchanged — `relabel_chain_problems` enforces the chain at pre-T); then always re-run Task 11 Step 1 on HEAD and require `h_adoption_ok == true` (otherwise Task 11 Step 2's ruling path).
 - [ ] **Step 2: Pin** — ledger `{"event": "housekeeping_commit", "sha": HEAD, "tooling_code_sha256": ev.tooling_code_sha256(ROOT), "intelligence_fingerprint": <from a search payload on $S>}` and `{"event": "runtime_stability_qualifying_start", "intelligence_fingerprint": <same>, "at": <now>}` (spec §6: the H final fingerprint restarts the qualifying window). From here the TOOLING_FILES and the scorer/policy structure are frozen.
 
 ### Task 13: **[controller]** Frozen texts and the real-data T rehearsal (spec §5.2)
