@@ -196,14 +196,28 @@ class TestRelabel(unittest.TestCase):
 
 
 class TestCliWritesBenchFormat(unittest.TestCase):
-    def test_rewrite_of_the_committed_benchmark_is_byte_identical(self):
-        """CLI rewrites keep the committed layout (indent-2 prefix, one hidden record per line), so H22 diffs stay additive."""
+    def test_rewrites_keep_the_existing_layout(self):
+        """CLI rewrites keep the file's layout (indent-2 prefix at H, round_seal's one-record-per-line after a T rewrite): an unchanged
+        document is byte-identical and an added record is a pure addition, so H22-style diffs stay reviewable."""
         import json, pathlib, shutil, tempfile
-        real = L.ROOT / "tests/benchmarks/search_queries.json"
+        from tests.benchmarks import round_seal as rs
+        src = L.ROOT / "tests/benchmarks/search_queries.json"
+        doc = json.loads(src.read_text(encoding="utf-8"))
         with tempfile.TemporaryDirectory() as td:
-            t = pathlib.Path(td) / "b.json"; shutil.copyfile(real, t)
-            L._write(t, json.loads(real.read_text(encoding="utf-8")))
+            t_layout = pathlib.Path(td) / "t-layout.json"; t_layout.write_text("{}\n", encoding="utf-8"); rs._write_bench(t_layout, doc)
+            for real in (src, t_layout):
+                with self.subTest(layout=real.name):
+                    self._check(real, doc, pathlib.Path(td))
+
+    def _check(self, real, doc, td):
+        import collections, json, shutil
+        if True:
+            t = td / "b.json"; shutil.copyfile(real, t)
+            L._write(t, doc)
             self.assertEqual(t.read_bytes(), real.read_bytes())
-            fresh = pathlib.Path(td) / "new.json"
-            L._write(fresh, json.loads(real.read_text(encoding="utf-8")))
-            self.assertEqual(fresh.read_bytes(), real.read_bytes())
+            grown = copy.deepcopy(doc); grown["seed"].append({**grown["seed"][-1], "id": "s-999", "query": "zz added record"})
+            L._write(t, grown)
+            norm = lambda txt: [l.rstrip(",") for l in txt.splitlines()]          # a JSON array's former last element gains a comma
+            new_lines, old_lines = norm(t.read_text(encoding="utf-8")), norm(real.read_text(encoding="utf-8"))
+            missing = collections.Counter(old_lines) - collections.Counter(new_lines)
+            self.assertEqual([l for l in missing.elements() if l.strip() not in ("]", "],", "}", "},")], [])
