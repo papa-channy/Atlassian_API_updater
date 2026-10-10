@@ -1,6 +1,6 @@
 # Search Quality Round 6 — Technical Specification
 
-**문서 버전:** v1.3 (2026-10-11; v1.3 = 검수 3(P0 2/P1 5) 반영: 재라벨 후 active `forbidden_top1` ∩ `expected_top1_any` = ∅(충돌하는 기존 값은 `legacy_forbidden_top1`로 이동), 승격 negative 8개도 Round 6 S에서 재판정(재라벨 대상 22개), 승격 payload sha 선봉인 + `label_migration` 메타데이터, positive 기대 key의 Round 6 S 카탈로그 폐포 검사, `scorer_rule_ok`는 `eligible > 0` 필요, H 실행 순서 고정, Runtime 자격은 현재 채택 지문 기준(변경 시 재시작), selector 수용 풀에 `scorer_rule_ok` 포함; v1.2 = 검수 2(P0 4/P1 5) 반영: R1–R3 채택을 안전 비악화 + 지표 하한 계약으로, 제안기 입력·trial 개선을 모든 수용 위반 레코드로 일반화, scorer-rule counterexample을 H 채택·pre-T dry-run·B..C 최종 정책에 적용하고 `tuning_accept`에 포함, 손실 기준을 검수 판정으로 우회 불가한 hard 계약으로, fallback에 rp3, 손실 분모 = OFF 자기정답 추천 수, 코퍼스를 Round 6 S에 바인딩, 재라벨 출력 스키마 machine-check, selection 매칭을 결과 포함 검색 기준으로; v1.1 = 검수 1(P0 5/P1 5) 반영: 추천 커버리지 지표 추가, §4.2가 Round 5 §4.1–4.2의 KU·reachable·selector·제안기 trial·regression 수용 의미를 전부 대체, R1–R3 전용 scorer-rule counterexample, 승격 provenance와 promotion_identity, 답이 있는 regression 레코드의 positive 평가(`regression_positive`), Runtime stability 자격 구간, 세션 상관키, R3 단·복수 판정 단일화, 기권 사유 우선순위, 이중 독립 라벨 검토; 정수 분수 비교; v1.0 = 사용자 승인 섹션 1–4 기반 초안)
+**문서 버전:** v1.4 (2026-10-11; v1.4 = 사용자 지시 개정(검수 회차 아님): MCP 실사용 점검에서 `delete something`·`delete xyzzy`·`get something`이 근거 없는 임의 작업을 `actionable: true`로 추천함을 확인(`docs/superpowers/handoffs/2026-10-11-abstention-gap-report.md`) → **R0 근거 없음 기권(GET 포함 전 메서드)** 추가(§3.1·§3.2a), `head_info`의 제품 힌트 제외를 **제품 이름 토큰만** 제외로 정정(§3.2, `board`·`sprint`·`epic`·`backlog`가 R1·R3에서 무시되던 결함), §0 설계 측정 추가, scorer-rule counterexample·AC·테스트·로그 범위를 R0–R3으로 확장; v1.3 = 검수 3(P0 2/P1 5) 반영: 재라벨 후 active `forbidden_top1` ∩ `expected_top1_any` = ∅(충돌하는 기존 값은 `legacy_forbidden_top1`로 이동), 승격 negative 8개도 Round 6 S에서 재판정(재라벨 대상 22개), 승격 payload sha 선봉인 + `label_migration` 메타데이터, positive 기대 key의 Round 6 S 카탈로그 폐포 검사, `scorer_rule_ok`는 `eligible > 0` 필요, H 실행 순서 고정, Runtime 자격은 현재 채택 지문 기준(변경 시 재시작), selector 수용 풀에 `scorer_rule_ok` 포함; v1.2 = 검수 2(P0 4/P1 5) 반영: R1–R3 채택을 안전 비악화 + 지표 하한 계약으로, 제안기 입력·trial 개선을 모든 수용 위반 레코드로 일반화, scorer-rule counterexample을 H 채택·pre-T dry-run·B..C 최종 정책에 적용하고 `tuning_accept`에 포함, 손실 기준을 검수 판정으로 우회 불가한 hard 계약으로, fallback에 rp3, 손실 분모 = OFF 자기정답 추천 수, 코퍼스를 Round 6 S에 바인딩, 재라벨 출력 스키마 machine-check, selection 매칭을 결과 포함 검색 기준으로; v1.1 = 검수 1(P0 5/P1 5) 반영: 추천 커버리지 지표 추가, §4.2가 Round 5 §4.1–4.2의 KU·reachable·selector·제안기 trial·regression 수용 의미를 전부 대체, R1–R3 전용 scorer-rule counterexample, 승격 provenance와 promotion_identity, 답이 있는 regression 레코드의 positive 평가(`regression_positive`), Runtime stability 자격 구간, 세션 상관키, R3 단·복수 판정 단일화, 기권 사유 우선순위, 이중 독립 라벨 검토; 정수 분수 비교; v1.0 = 사용자 승인 섹션 1–4 기반 초안)
 **기준일:** 2026-10-11
 **선행:** Round 5 (spec v1.12, plan v8; 종료 2026-10-10, terminal branch **D**: pre-T reachable seed 36/36 통과, 튜닝 채택, 최종 단일 평가 held_out 14/16·negative 6/8로 Discovery 게이트 미충족; `docs/phase3-readiness.md` Round 5 decision record; PR #2 병합 `29f298f`).
 **상속:** 이 문서에 적지 않은 것은 **Round 5 스펙 v1.12를 그대로 상속**한다(그 상속 체인으로 Round 4 v1.13·Round 3 v1.25.1 포함: 수명주기 H→T→B→C/D/F/X/X_preB, 역할·봉인·needle·AC-18b, 상태 모델, T allowlist 방식, source-precedence 사전 해소, 누적 provenance, counterexample 스위트, 워커 식별 판정). 이름 치환: `round5`→`round6`, `-r5`→`-r6`, `lexicon-r5`→`lexicon-r6`, `round5_seal`→`round6_seal`, `round5-*.md`→`round6-*.md`, `round5_simulation`→`round6_simulation`, `ROUND5_EXTRA_KEYS`→`ROUND6_EXTRA_KEYS`. 이 문서는 **델타**만 규정하며 충돌 시 이 문서가 우선한다.
@@ -44,6 +44,16 @@ Round 5에서 "통과"로 센 n-001·n-003도 실제로는 엉뚱한 쓰기 작�
 | 같은 규칙, 쓰기 추천만, 수식어 제외 | negative 3 | held_out 2, seed 3 | s-004, rn-006, n-003 |
 | **머리 명사(질의의 마지막 개념어) 미반영 시 기권, 쓰기 추천만** | negative 3 | held_out 1 (h-012), seed 3 | s-004, rn-006, n-003 |
 
+**v1.4 추가 측정 — 근거 없는 질의(R0, §3.2a; 설계 측정, 채택 아님):** registry `e308a232…`, Round 5 정책. 개념어가 하나도 없거나 처음 보는 단어만 있는 질의(`delete`, `delete something`, `delete xyzzy`, `get something`, `create`, `jira delete`)도 동사→메서드 교집합만 비어 있지 않으면 동점 후보 중 key 정렬상 첫 작업이 추천된다(예: `confluence:DELETE:/space-roles/{id}`, `jira-platform:GET:/rest/api/3/bulk/issues/fields`). v1.3의 R1은 `head_info = None`이면 적용되지 않아 이 경우를 잡지 못한다.
+
+| 후보 | seed·held_out 잃은 맞는 추천 | 없앤 틀린 추천 | summary-as-query 코퍼스 손실 / eligible |
+|---|---|---|---|
+| 개념어 0개면 기권(v1.3 `head_info` 정의 그대로, 전 메서드) | seed 6 | — | 11 / 647 (쓰기 8) — `100×losses ≤ eligible` 위반 |
+| 개념어 0개면 기권(제품 이름 제외 정정 + 직접 alias 반영) | 0 | held_out 1 (h-011, 읽기) | 4 / 647 |
+| **1위 작업 어휘가 질의의 내용 토큰을 하나도 덮지 않으면 기권(§3.2a 채택안)** | **0** | **held_out 1 (h-011, 읽기), negative 1 (n-001, 쓰기 POST)** | **1 / 647** (`Add comment` — 두 토큰 모두 동사 키) |
+
+첫 행의 손실은 대부분 `board`·`sprint`·`epic`·`backlog`처럼 **제품 힌트 키이면서 카탈로그 개념어인 토큰**을 v1.3 `head_info`가 힌트로 보고 버렸기 때문이다(§3.2 정정). 이 정정으로 `head_info`가 달라지는 학습 레코드는 5건이다: s-008·s-031·s-034는 None → `backlog`/`board`, s-016(`add issue to sprint`)은 `issue` → `sprint`, s-021(`move issue to backlog`)은 `issue` → `backlog`. s-016·s-021은 "마지막 개념어" 규칙상 목적지 명사가 머리 명사로 잡히는 경우로, R1 쓰기 기권에 미치는 영향은 §3.5 H 채택 측정의 손실 목록으로 확인한다.
+
 남은 세 건의 원인: n-003은 질의가 "jira"를 명시했는데 Confluence 쓰기 작업 추천(제품 불일치), rn-006 "remove page"는 실제로 `DELETE /pages/{id}`가 정답인데 기존 regression negative 레코드가 "정답 없음"이 아니라 "금지 작업이 1위가 아님"으로 정의돼 있었다(§4.3 라벨 이관), s-004는 상속된 constants/ordering 문제(bulk 전환이 1위).
 
 ## 1. 목표
@@ -63,13 +73,22 @@ Round 6은 **H에서만** `search.py`·`policy.py`·`search_ranking.json` 구조
 
 ### 3.1 추천 판정 (payload 계약)
 
-`actionable := method_intent_consistent ∧ abstain_reason is None`, `recommended_operation := shown[0].key if actionable else None`. payload에 `abstain_reason ∈ {None, "no_method_intent", "product_conflict", "uncovered_head_resource"}`를 추가한다(`no_method_intent`는 기존 `method_intent_consistent == false`에 해당). 여러 사유가 동시에 성립하면 우선순위 `no_method_intent > product_conflict > uncovered_head_resource`로 하나만 기록한다(검수 1 P1-4). 결과 목록(`results`)과 순위는 기권과 무관하게 그대로 반환한다 — 에이전트는 목록을 계속 볼 수 있다.
+`actionable := method_intent_consistent ∧ abstain_reason is None`, `recommended_operation := shown[0].key if actionable else None`. payload에 `abstain_reason ∈ {None, "no_method_intent", "no_resource_evidence", "product_conflict", "uncovered_head_resource"}`를 추가한다(`no_method_intent`는 기존 `method_intent_consistent == false`에 해당; `no_resource_evidence`는 v1.4 R0). 여러 사유가 동시에 성립하면 우선순위 `no_method_intent > no_resource_evidence > product_conflict > uncovered_head_resource`로 하나만 기록한다(검수 1 P1-4; v1.4: 대상 자체가 없는 경우가 대상 불일치보다 앞선다). 결과 목록(`results`)과 순위는 기권과 무관하게 그대로 반환한다 — 에이전트는 목록을 계속 볼 수 있다.
 
 ### 3.2 R1 머리 명사 기권 (쓰기 추천만)
 
-- 머리 명사 정보 `head_info(q) -> {concept, original_token, number}`를 **한 번에** 계산한다(검수 1 P1-3): 질의 원문 토큰을 순서대로 보며 각 토큰의 단수형(`singular`)을 만들고, 동사(`verb_methods` 키)·제품 힌트(`product_hints`)를 뺀 뒤, 단수형이 **카탈로그 개념어 집합**(path literal 토큰 ∪ tag 토큰, `path_noise` 제외 — Round 3부터의 `concept_tokens`와 같은 정의, 캐시 registry에서 계산)에 속하는 토큰 중 **마지막** 것을 고른다. `concept`=단수형, `original_token`=원문 토큰, `number`= 원문이 단수형과 같으면 `singular`, 원문이 단수형+`s`/`es`이면 `plural`, 그 밖(불규칙·불변)은 `unknown`. 해당 토큰이 없으면 `head_info = None`이고 R1·R3은 적용되지 않는다.
+- 머리 명사 정보 `head_info(q) -> {concept, original_token, number}`를 **한 번에** 계산한다(검수 1 P1-3): 질의 원문 토큰을 순서대로 보며 각 토큰의 단수형(`singular`)을 만들고, 동사(`verb_methods` 키)와 **제품 이름 토큰**(`PRODUCT_NAME_TOKENS` := 소스 이름 `sources.SOURCES`를 `tokenize_unigrams`한 합집합 = 현재 `{confluence, jira, platform, software}`; v1.4 정정 — v1.3은 `product_hints` 키 전체를 뺐으나 그중 `board`·`sprint`·`epic`·`backlog`는 개념어다)을 뺀 뒤, 단수형이 **카탈로그 개념어 집합**(path literal 토큰 ∪ tag 토큰, `path_noise` 제외 — Round 3부터의 `concept_tokens`와 같은 정의, 캐시 registry에서 계산)에 속하는 토큰 중 **마지막** 것을 고른다. `concept`=단수형, `original_token`=원문 토큰, `number`= 원문이 단수형과 같으면 `singular`, 원문이 단수형+`s`/`es`이면 `plural`, 그 밖(불규칙·불변)은 `unknown`. 해당 토큰이 없으면 `head_info = None`이고 R1·R3은 적용되지 않는다.
 - 1위 작업 `top`의 메서드가 POST·PUT·PATCH·DELETE이고, `head_info(q).concept`가 `top`의 어휘(operationId·path literal·summary·tag 토큰)에도, 그 concept의 alias 타깃(직접 alias, 정책 파일)에도 없으면 `abstain_reason = "uncovered_head_resource"`.
-- GET 추천에는 적용하지 않는다(설계 측정상 GET까지 적용하면 맞는 추천 손실이 커짐; 읽기 오추천은 §4.1 정확도 지표가 별도로 잡는다).
+- GET 추천에는 적용하지 않는다(설계 측정상 GET까지 적용하면 맞는 추천 손실이 커짐; 읽기 오추천은 §4.1 정확도 지표가 별도로 잡는다). 근거가 **전혀 없는** GET 추천은 R0(§3.2a)가 막는다.
+
+### 3.2a R0 근거 없음 기권 (전 메서드, v1.4)
+
+- **내용 토큰** `content(q)` := `tokenize_unigrams(q)`에서 동사(`verb_methods` 키)와 `PRODUCT_NAME_TOKENS`(§3.2)를 뺀 토큰들(질의 순서). 개념어 여부는 보지 않는다 — 처음 보는 단어도 내용 토큰이다.
+- **덮음:** 토큰 `t`가 1위 작업 `top`에 덮인다 := `token_forms(t) ∪ (t의 직접 alias 타깃들의 token_forms)`가 `top`의 어휘(R1과 같은 정의: operationId·path literal·summary·tag 토큰)와 교집합을 가진다.
+- `content(q) = ∅`이거나, `content(q)`의 어떤 토큰도 `top`에 덮이지 않으면 `abstain_reason = "no_resource_evidence"`. **GET을 포함한 모든 메서드에 적용한다.**
+- R1과의 관계: R0는 "1위가 질의의 무엇이든 하나라도 반영하는가"(약한 하한, 전 메서드), R1은 "1위가 질의의 대상(머리 명사)을 반영하는가"(강한 조건, 쓰기만)다. R0를 통과해도 R1에 걸릴 수 있다.
+- 알려진 손실(§0 측정): 내용 토큰이 모두 동사 키인 질의(`add comment` — `comment`는 동사 키이자 개념어)는 기권한다. 동사 키 재정의는 이번 범위 밖이며, §3.5 측정의 손실 목록으로 보고한다.
+- 정확 일치 핀(`exact_match`)도 같은 규칙을 거친다. 핀된 1위의 operationId·path가 질의 토큰을 덮으므로 정상 추천이 유지되어야 하며, 이는 테스트로 고정한다(§8).
 
 ### 3.3 R2 제품 불일치 기권
 
@@ -81,7 +100,7 @@ Round 6은 **H에서만** `search.py`·`policy.py`·`search_ranking.json` 구조
 
 ### 3.5 채택 기준과 scorer-rule counterexample
 
-상속 counterexample 스위트는 alias/phrase 정책 diff만 관찰하므로 R1–R3(추천 판정·동점 정렬 변화)을 볼 수 없다(검수 1 P0-3). R1–R3은 별도의 **scorer-rule counterexample**로 검사한다.
+상속 counterexample 스위트는 alias/phrase 정책 diff만 관찰하므로 R0–R3(추천 판정·동점 정렬 변화)을 볼 수 없다(검수 1 P0-3). R0–R3은 별도의 **scorer-rule counterexample**로 검사한다. 이 절 이하와 §4–§13에서 "R1–R3"은 v1.4부터 **R0–R3**을 뜻한다(OFF = 네 규칙 모두 끔, ON = 모두 켬; 개별 OFF 진단에 R0 포함).
 
 - **코퍼스와 바인딩(검수 2 P1-3):** Round 6 S(컨트롤러가 H 채택 측정 **전에** 만드는 실제 스냅샷; §5.1)의 모든 작업에 대해 `summary`를 질의로 쓰는 summary-as-query 코퍼스(빈 summary 제외)를 결정적으로 생성한다. 코퍼스는 benchmark·seed·hidden id를 읽지 않는다. 메타데이터 `{registry_fingerprint, operation_count, corpus_sha256, generator_sha256}`를 H 측정 전에 원장에 고정하고, `registry_fingerprint == Round 6 S` 바인딩 검사를 H 채택·리허설·pre-T·B..C 모두에서 수행한다.
 - **비교:** 같은 constants·같은 aliases에서 R1–R3을 모두 끈 정책(OFF)과 켠 정책(ON)으로 코퍼스를 평가한다. 각 질의의 자기 작업(summary의 원 작업)을 정답으로 본다.
@@ -169,7 +188,7 @@ Round 6은 **H에서만** `search.py`·`policy.py`·`search_ranking.json` 구조
 
 ## 7. 도구 변경 요약
 
-- `tools/atlassian_docs/intelligence/search.py`: §3.1–3.4 (abstain_reason, R1–R3).
+- `tools/atlassian_docs/intelligence/search.py`: §3.1–3.4 (abstain_reason, R0–R3, `PRODUCT_NAME_TOKENS`, `content(q)`).
 - `tools/atlassian_docs/intelligence/policy.py` / `data/search_ranking.json`: `ordering_rules.singular_collection_tiebreak`, 구조 sha 갱신, `POLICY_VERSIONS["search"] = 5`.
 - `tools/atlassian_docs/intelligence/search_log.py`, `mcp/` 도구 계층: §6 로그 필드와 selection 레코드.
 - `tests/benchmarks/evaluator.py`: §4.1·§4.2 지표 계산(`reach_at_k`, `rec_precision`, `write_safety_violations`, `no_answer_abstention`, `forbidden_recommended`), `KNOWN_UNREACHABLE[6] = ()`, `ROUND6_EXTRA_KEYS`, `TestSealIntegrity.test_hidden_plaintext_machine_rules`의 `verb_methods` 전달 수정(Round 5 교훈 3).
@@ -180,10 +199,13 @@ Round 6은 **H에서만** `search.py`·`policy.py`·`search_ranking.json` 구조
 
 ## 8. 테스트 전략 델타
 
+- R0(v1.4): `delete`·`delete something`·`delete xyzzy`·`create`·`jira delete` → 기권(`no_resource_evidence`); `get something` → 기권(GET에도 적용); `delete board`·`get myself`·`create issue` → 추천 유지; 내용 토큰이 alias 타깃으로만 덮여도 추천 유지; operationId·key 정확 일치 질의 → 추천 유지; `add comment` → 기권(알려진 손실 고정); R0 기권 시 `results` 불변.
+- `PRODUCT_NAME_TOKENS`가 `sources.SOURCES`에서 파생되고 `board`·`sprint`·`epic`·`backlog`를 포함하지 않음; `head_info("remove this agile board").concept == "board"`, `head_info("filter owner jira").concept == "owner"`.
 - R1: 쓰기 추천 + 머리 명사 미반영 → 기권; 같은 경우 GET → 추천 유지; 머리 명사가 alias 타깃으로 반영되면 추천 유지; 개념어 없음 → 미적용.
 - R2: 질의 "jira" + Confluence 1위 → 기권; 힌트 없음 → 미적용.
 - R3: 정확한 동점 + 단수 머리 명사 → 단건 앞; 복수 → 목록 앞; 점수 차 → 순서 불변; 플래그 false → 상속 정렬과 바이트 동일.
-- 결과 목록 불변: 기권해도 `results`의 순서·점수는 R1·R2 이전과 같다.
+- 결과 목록 불변: 기권해도 `results`의 순서·점수는 R0·R1·R2 이전과 같다.
+- 기권 사유 우선순위: `no_method_intent > no_resource_evidence > product_conflict > uncovered_head_resource`(동시 성립 조합 각각).
 - 지표 함수: 손으로 만든 작은 결과 집합으로 각 지표 경계값(15/16, 90%, 0, 7/8) 검증.
 - 라벨 이관: `no_answer` 필드 스키마, `regression_positive` 섹션 스키마, 승격 id·origin·`promoted_from` 검사, `promotion_identity` 동일성(§4.3).
 - 지표·selector·제안기(§4.2): 손으로 만든 격자 결과에서 수용 풀·사전식 fallback·제안기 trial 거부(쓰기 위반 증가, 다른 지표 감소) 각각의 단위 테스트; 정수 분수 경계(14/16, 9/10, 7/8).
@@ -204,7 +226,7 @@ Round 6은 **H에서만** `search.py`·`policy.py`·`search_ranking.json` 구조
 | AC | 기준 | 검증 |
 |---|---|---|
 | AC-R6-01 | payload `actionable`·`recommended_operation`·`abstain_reason`이 §3.1 계약대로; 기권해도 `results` 불변 | unit |
-| AC-R6-02 | R1·R2·R3이 §3.2–3.4 정의대로 동작하고 R3 플래그 false에서 상속 정렬과 동일 | unit |
+| AC-R6-02 | R0·R1·R2·R3이 §3.2–3.4(§3.2a 포함) 정의대로 동작하고 R3 플래그 false에서 상속 정렬과 동일; §8 R0 질의 표와 `PRODUCT_NAME_TOKENS`·`head_info` 정정 케이스 통과 | unit |
 | AC-R6-03 | §3.5 scorer-rule counterexample: 코퍼스 메타데이터 고정·S 바인딩, `100 × losses ≤ eligible`(hard), H 채택 조건(안전 비악화 + 지표 하한), pre-T·B..C 최종 정책 재검사가 `tuning_accept`에 포함, 손실 목록 보고 | unit + ledger |
 | AC-R6-04 | §4.1 지표(도달·커버리지·정확도·쓰기 안전·기권) 함수가 정수 분수 비교로 계산되고 최종 산출물·readiness에 기준과 함께 기록됨 | unit + 산출물 |
 | AC-R6-05 | §4.2가 Round 5 §4.1–4.2를 대체: 지표 벡터, `accept`, selector(수용 풀·사전식 fallback), 제안기 입력과 trial 수용, pre-T blocker(`metric_threshold`)가 정의대로; `KNOWN_UNREACHABLE[6] == ()` | unit |
@@ -223,9 +245,9 @@ Round 6은 **H에서만** `search.py`·`policy.py`·`search_ranking.json` 구조
 
 ## 12. 한 줄 정의
 
-Round 6 = 실사용 기준 게이트(도달·추천 정확도·쓰기 안전·기권) + 추천/기권 규칙(R1 머리 명사, R2 제품 불일치, R3 단건/목록 동점) + Runtime stability 측정 개시 + 실데이터 T 리허설.
+Round 6 = 실사용 기준 게이트(도달·추천 정확도·쓰기 안전·기권) + 추천/기권 규칙(R0 근거 없음, R1 머리 명사, R2 제품 불일치, R3 단건/목록 동점) + Runtime stability 측정 개시 + 실데이터 T 리허설.
 
 ## 13. 구현 계획 입력
 
-- H 순서 제안: H18 지표·라벨 스키마·evaluator(§4, §7) → H19 스코어러 R1–R3·payload(§3) → H20 로그·MCP(§6) → H21 승격·재라벨 도구와 round6_simulation·리허설(§4.3, §5.2) → [컨트롤러: S 생성 → 승격·재라벨 → 학습 분할 sha → §3.5 H 채택 측정] → whole-branch 리뷰 → 리허설 → 컨트롤러 T 이후.
+- H 순서 제안: H18 지표·라벨 스키마·evaluator(§4, §7) → H19 스코어러 R0–R3·payload(§3) → H20 로그·MCP(§6) → H21 승격·재라벨 도구와 round6_simulation·리허설(§4.3, §5.2) → [컨트롤러: S 생성 → 승격·재라벨 → 학습 분할 sha → §3.5 H 채택 측정] → whole-branch 리뷰 → 리허설 → 컨트롤러 T 이후.
 - 라벨 이관 검토(§4.3)와 R1–R3 채택 측정(§3.5)은 H 안의 컨트롤러 단계이며 검수 스레드 판정을 받는다.
