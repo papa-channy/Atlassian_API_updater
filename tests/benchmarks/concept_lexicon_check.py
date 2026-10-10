@@ -431,6 +431,31 @@ def cmd_round4_reference(args):
     print(f"round4 reference lexicon: {len(lexicon)} kept"); return 0
 
 
+def carry_forward(lexicon_doc, prior_lexicon_doc, cands_doc, prior_cands_doc, prior_shas) -> tuple:
+    """Round 5 spec v1.12 (thread 2 ruling A′): the frozen lexicon is a cumulative provenance snapshot — prior lexicon entries the
+    current resolution does not define are carried with entry-level provenance (current values/provenance win on collision); prior
+    candidates are kept only in the provenance-only `carried_candidates` field, never in the active `candidates` surface."""
+    lex, cands = copy.deepcopy(lexicon_doc), copy.deepcopy(cands_doc)
+    prior, prior_carried = prior_lexicon_doc.get("lexicon") or {}, prior_lexicon_doc.get("carried_selected") or {}
+    carried = {w: t for w, t in sorted(prior.items()) if w not in lex["lexicon"]}
+    lex["lexicon"] = {**carried, **lex["lexicon"]}
+    lex["carried_selected"] = {w: prior_carried.get(w) or {"from_round": prior_lexicon_doc.get("round"), "targets": list(t),
+                                                             **({"selected": prior_lexicon_doc["selected"][w]} if w in (prior_lexicon_doc.get("selected") or {}) else {})}
+                               for w, t in carried.items()}
+    lex["components"] = {**(lex.get("components") or {}), "carried_from": {"round": prior_lexicon_doc.get("round"), **prior_shas}}
+    old = {**(prior_cands_doc.get("carried_candidates") or {}), **(prior_cands_doc.get("candidates") or {})}
+    cands["carried_candidates"] = {w: c for w, c in sorted(old.items()) if w not in cands["candidates"]}
+    return lex, cands
+
+
+def cmd_carry(args):
+    pl, pc = pathlib.Path(args.prior_lexicon), pathlib.Path(args.prior_candidates)
+    lex, cands = carry_forward(_read(args.lexicon), _read(pl), _read(args.candidates), _read(pc),
+                               {"concept_lexicon_sha256": _sha(pl), "alias_candidates_sha256": _sha(pc)})
+    act._write(args.lexicon, lex); act._write(args.candidates, cands)
+    print(f"carried {len(lex['carried_selected'])} lexicon entries, {len(cands['carried_candidates'])} provenance-only candidates"); return 0
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -445,6 +470,8 @@ def main(argv=None):
     p = sub.add_parser("render-generation-input"); p.add_argument("--cache-dir", required=True); p.add_argument("--round", type=int, default=3)
     p.add_argument("--template", required=True); p.add_argument("--out", required=True)
     p.add_argument("--doc-titles", default=None); p.add_argument("--attachment-out", default=None); p.set_defaults(fn=cmd_render_generation_input)
+    p = sub.add_parser("carry"); p.add_argument("--lexicon", required=True); p.add_argument("--candidates", required=True)
+    p.add_argument("--prior-lexicon", required=True); p.add_argument("--prior-candidates", required=True); p.set_defaults(fn=cmd_carry)
     p = sub.add_parser("merge"); p.add_argument("--lexicon", required=True); p.add_argument("--aliases", required=True)
     p.add_argument("--round", type=int, default=2); p.set_defaults(fn=cmd_merge)
     p = sub.add_parser("resolve"); p.add_argument("--cache-dir", required=True); p.add_argument("--round", type=int, default=5)

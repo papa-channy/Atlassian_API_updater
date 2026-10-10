@@ -640,3 +640,17 @@ class TestRound5ReviewFixes(unittest.TestCase):
                     self.assertIsNotNone(tune.final_counterexample_fn(object(), policy.load_ranking(), {}, round=5, root=root))
                 with mock.patch.object(ev, "load_round_freeze", return_value=[{"round": 2}]):           # before T: nothing frozen yet
                     self.assertIsNotNone(tune.final_counterexample_fn(object(), policy.load_ranking(), {}, round=5, root=root))
+
+
+class TestRound5CarriedCandidates(unittest.TestCase):
+    def test_proposer_never_reads_carried_candidates(self):
+        seen = []
+        def fake_propose(eval_fn, bench, base, cands, fixture_fn=None):
+            seen.append(set(cands)); return base, {"aliases": {}, "rules": [], "notes": {}}
+        consts = json.loads(tune.RANKING_PATH.read_text(encoding="utf-8"))["constants"]
+        grid = {k: [v] for k, v in consts.items()}
+        ev_fn = lambda p, r: ({"passed": 39, "failed": [], "total": 39}, {"passed": 14, "failed": [], "effective_passed": 14, "raw_passed": 10})
+        doc = {"candidates": {"hour": {"targets": ["time"]}}, "carried_candidates": {"feedback": {"targets": ["comment"]}}}
+        with mock.patch.object(tune, "propose_aliases", fake_propose):
+            tune.run_pipeline(ev_fn, {"seed": []}, {"aliases": {}, "rules": [], "notes": {}}, doc, grid, dict(consts), lambda p, r: [])
+        self.assertEqual(seen, [{"hour"}])

@@ -418,30 +418,31 @@ def apply_T():
     _, internal, fp, shas = rs.load_catalogs_from_cache(cache, ROUND)
     ranking = _read(f"{DATA_REL}/search_ranking.json")
     aliases = _read(f"{DATA_REL}/search_aliases.json")
-    # Additive merge: concept_lexicon.json / alias_candidates.json already carry the real, catalog_df-scale Round
-    # 1/2 documents (hundreds of entries the live search_aliases.json's words/targets are justified by, spec §10.2
-    # TestPolicyVocabularyProvenance); the synthetic lexicon-r4 word is merged IN rather than replacing them.
+    # Round 5 spec v1.12 (thread 2 ruling A′), same semantics as the real T: the Round 5 lexicon document (synthetic resolution) is
+    # carried forward over the prior frozen lexicon (cumulative provenance), and the prior candidates become provenance-only
+    # carried_candidates (clc.carry_forward, step 2b below).
     synthetic = {LEXICON_WORD: [LEXICON_TARGET], LEXICON_PHRASE: [LEXICON_PHRASE_TARGET]}
     raw, review = dict(synthetic), {k: True for k in synthetic}
-    lexicon = _read(f"{DATA_REL}/concept_lexicon.json")
-    lexicon["lexicon"] = {**lexicon.get("lexicon", {}), **synthetic}
-    lexicon["round"] = ROUND
-    lexicon["generated_from"] = act.provenance(fp, shas, {
-        "verb_inventory": canonical_sha256(ranking["verb_methods"]), "aliases": canonical_sha256(aliases),
-        "raw_generation": canonical_sha256(raw), "semantic_review": canonical_sha256(review)})
-    lexicon["components"] = {**(lexicon.get("components") or {}), "union_resolution": "source-precedence"}     # Round 5 spec §6.1
-    lexicon["selected"] = {**(lexicon.get("selected") or {}), **{w: {"source": "round4_generation", "provenance_rank": 1} for w in synthetic}}
-    act._write(ROOT / DATA_REL / "concept_lexicon.json", lexicon)              # 1. synthetic lexicon, merged as lexicon-r5
+    prior_lexicon_path = ROOT / DATA_REL / "concept_lexicon.json"; prior_lexicon = _read(f"{DATA_REL}/concept_lexicon.json")
+    lexicon = {"round": ROUND, "lexicon": dict(synthetic), "rejected": {},
+               "selected": {w: {"source": "round4_generation", "provenance_rank": 1} for w in synthetic},
+               "components": {"union_resolution": "source-precedence"},                                   # Round 5 spec §6.1
+               "generated_from": act.provenance(fp, shas, {
+                   "verb_inventory": canonical_sha256(ranking["verb_methods"]), "aliases": canonical_sha256(aliases),
+                   "raw_generation": canonical_sha256(raw), "semantic_review": canonical_sha256(review)})}
+    prior_lexicon_sha = ev.file_sha256(prior_lexicon_path)
     premerge = copy.deepcopy(aliases)
     merged, skipped = clc.merge(aliases, synthetic, ROUND)
     assert not skipped
     (ROOT / DATA_REL / "search_aliases.json").write_text(json.dumps(merged, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     bench = _read("tests/benchmarks/search_queries.json")
     doc = act.candidates(bench, internal, ranking, merged, ROUND)              # 2. candidates after the merge (fixture-scale)
-    old_doc = _read(f"{DATA_REL}/alias_candidates.json")
-    doc["candidates"] = {**old_doc.get("candidates", {}), **doc["candidates"]}
+    old_doc = _read(f"{DATA_REL}/alias_candidates.json"); old_doc_sha = ev.file_sha256(ROOT / DATA_REL / "alias_candidates.json")
     doc["generated_from"] = act.provenance(fp, shas, {"ranking": canonical_sha256(ranking), "aliases": canonical_sha256(merged),
                                                       "bench": canonical_sha256(bench), "verb_inventory": canonical_sha256(ranking["verb_methods"])})
+    lexicon, doc = clc.carry_forward(lexicon, prior_lexicon, doc, old_doc,                              # 2b. cumulative provenance (A′)
+                                     {"concept_lexicon_sha256": prior_lexicon_sha, "alias_candidates_sha256": old_doc_sha})
+    act._write(ROOT / DATA_REL / "concept_lexicon.json", lexicon)
     act._write(ROOT / DATA_REL / "alias_candidates.json", doc)
     cls = act.classify(bench, internal, ranking, merged)                       # 3. R5/R6
     for rec in bench["seed"]:

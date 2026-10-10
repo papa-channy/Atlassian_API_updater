@@ -280,3 +280,38 @@ class TestRound5Union(unittest.TestCase):
                 self.assertEqual(clc.main(args + ["--review-r5", str(d / "rv5.json"), str(d / "pending" / "review-input-1.txt")]), 0)
             doc = json.loads((d / "lex.json").read_text())
             self.assertEqual(doc["lexicon"], {"release": ["version"]}); self.assertEqual(doc["components"]["union_resolution"], "source-precedence")
+
+
+class TestRound5CarryForward(unittest.TestCase):
+    """Round 5 spec v1.12 (thread 2 ruling A′): cumulative lexicon provenance; prior candidates are provenance-only."""
+    PRIOR_LEX = {"round": 2, "lexicon": {"crew": ["team"], "release": ["build"], "old": ["x"]}}
+    NEW_LEX = {"round": 5, "lexicon": {"release": ["version"], "hour": ["time"]}, "selected": {"release": {"source": "round4_generation", "provenance_rank": 1},
+               "hour": {"source": "round2_archive", "provenance_rank": 0}}, "rejected": {"old": {"reason": "no-eligible-candidate"}},
+               "components": {"union_resolution": "source-precedence"}}
+    PRIOR_C = {"candidates": {"feedback": {"targets": ["comment"]}, "hour": {"targets": ["worklog"]}}}
+    NEW_C = {"candidates": {"hour": {"targets": ["time"]}}}
+
+    def _carry(self):
+        return clc.carry_forward(self.NEW_LEX, self.PRIOR_LEX, self.NEW_C, self.PRIOR_C, prior_shas={"concept_lexicon_sha256": "L", "alias_candidates_sha256": "C"})
+
+    def test_prior_key_absent_from_round5_is_kept_with_carried_provenance(self):
+        lex, _ = self._carry()
+        self.assertEqual(lex["lexicon"]["crew"], ["team"]); self.assertEqual(lex["lexicon"]["old"], ["x"])
+        self.assertEqual(lex["carried_selected"]["crew"]["from_round"], 2); self.assertNotIn("release", lex["carried_selected"])
+        self.assertEqual(lex["components"]["carried_from"], {"round": 2, "concept_lexicon_sha256": "L", "alias_candidates_sha256": "C"})
+        self.assertEqual(lex["components"]["union_resolution"], "source-precedence")
+
+    def test_round5_value_and_provenance_win_on_collision(self):
+        lex, _ = self._carry()
+        self.assertEqual(lex["lexicon"]["release"], ["version"]); self.assertEqual(lex["selected"], self.NEW_LEX["selected"])
+
+    def test_prior_candidates_are_provenance_only(self):
+        _, cands = self._carry()
+        self.assertEqual(cands["candidates"], self.NEW_C["candidates"])                  # active surface unchanged
+        self.assertEqual(set(cands["carried_candidates"]), {"feedback"})               # Round 5 key not duplicated
+
+    def test_carry_is_idempotent_over_a_prior_carry(self):
+        lex, cands = self._carry()
+        lex2, cands2 = clc.carry_forward({**self.NEW_LEX, "round": 6}, lex, {"candidates": {}}, cands, prior_shas={"concept_lexicon_sha256": "L5", "alias_candidates_sha256": "C5"})
+        self.assertEqual(lex2["carried_selected"]["crew"]["from_round"], 2)              # original round preserved through chains
+        self.assertIn("feedback", cands2["carried_candidates"]); self.assertIn("hour", cands2["carried_candidates"])

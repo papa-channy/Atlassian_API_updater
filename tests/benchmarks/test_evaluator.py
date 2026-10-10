@@ -393,7 +393,8 @@ class TestPolicyVocabularyProvenance(unittest.TestCase):
     @staticmethod
     def frozen_docs():
         lex = json.loads(LEXICON.read_text(encoding="utf-8")) if LEXICON.exists() else {"lexicon": {}}
-        cands = json.loads(CANDIDATES_DOC.read_text(encoding="utf-8"))["candidates"] if CANDIDATES_DOC.exists() else {}
+        cdoc = json.loads(CANDIDATES_DOC.read_text(encoding="utf-8")) if CANDIDATES_DOC.exists() else {}
+        cands = {**(cdoc.get("carried_candidates") or {}), **(cdoc.get("candidates") or {})}   # Round 5 v1.12: provenance-only carried candidates count here
         return lex["lexicon"], cands
 
     def catalog_tokens(self):
