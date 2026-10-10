@@ -114,6 +114,22 @@ def evaluate(records, search_fn, section=None):
 
 
 
+_RELABEL_FIELDS = ("no_answer", "label_migration", "legacy_forbidden_top1", "catalog_missing_keys")
+
+
+def regression_records(bench) -> list:
+    """Every regression record (Round 6: split into regression_negative / regression_positive by the relabel), in id order."""
+    return sorted((r for s in ("regression_negative", REGRESSION_POSITIVE) for r in bench.get(s) or []), key=lambda r: r["id"])
+
+
+def r0_regression_records(bench) -> list:
+    """Round 6 plan PR-8: the r0 regression records wherever the relabel put them, judged with their original label (no expected
+    key; forbidden = active ∪ legacy); relabel fields dropped."""
+    return [{**{k: v for k, v in r.items() if k not in _RELABEL_FIELDS}, "expected_top1_any": [],
+             "forbidden_top1": sorted(set(r["forbidden_top1"]) | set(r.get("legacy_forbidden_top1") or []))}
+            for r in regression_records(bench) if r["origin"].endswith("-r0")]
+
+
 # ---- Round 6 spec §4.1/§4.2: usage-grounded metrics -------------------------------------------------------------------
 def usage_row(rec, ranked, recommended) -> dict:
     """One record judged as the agent sees it: top-3 reach, the recommendation, and its safety."""

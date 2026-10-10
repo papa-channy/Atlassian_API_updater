@@ -26,7 +26,7 @@ class TestSelector(unittest.TestCase):
         path = pathlib.Path(__file__).resolve().parent / "benchmarks" / "search_queries.json"
         with path.open(encoding="utf-8") as fh:
             b = json.load(fh)
-        self.assertEqual((tune.SEED_TOTAL, tune.REGRESSION_TOTAL), (39, 14))
+        self.assertEqual((tune.SEED_TOTAL, tune.REGRESSION_TOTAL), (55, 9))          # Round 6 H22: +16 promoted seeds; 13 relabeled positive
         self.assertEqual((tune.SEED_TOTAL, tune.REGRESSION_TOTAL), (len(b["seed"]), len(b["regression_negative"])))
 
     def test_grid_cardinality_and_order(self):
@@ -547,7 +547,7 @@ class TestPipelineResult(unittest.TestCase):
 class TestRound5KU(unittest.TestCase):
     """Round 5 spec §4.2: KU semantics in acceptance, proposer input and selector; counterexample term; equivalences."""
     def _res(self, failed):
-        return {"passed": 39 - len(failed), "failed": [{"id": i} for i in failed]}
+        return {"passed": tune.SEED_TOTAL - len(failed), "failed": [{"id": i} for i in failed]}   # computed: Round 6 H22 adds promoted seeds
 
     def test_tuning_accept_ku_and_equivalence(self):
         reg = {"effective_passed": tune.REGRESSION_TOTAL}
@@ -760,9 +760,17 @@ class TestRound6NoteOrigin(unittest.TestCase):
             self.assertEqual(tune.apply_actions(self.BASE, [("zz", "issue")], "s-001")["notes"]["zz"]["origin"], "round5")
 
 
+def _pre_relabel(bench):
+    """The benchmark with its r0 regression records back in regression_negative under their original labels (state-independent)."""
+    b = copy.deepcopy(bench); r0 = ev.r0_regression_records(b); ids = {r["id"] for r in r0}
+    b["regression_negative"] = [r for r in b["regression_negative"] if r["id"] not in ids] + r0
+    b["regression_positive"] = [r for r in b.get("regression_positive") or [] if r["id"] not in ids]
+    return b
+
+
 class TestRound6FixtureBench(unittest.TestCase):
     def test_r0_regression_records_keep_original_label(self):
-        bench = json.loads(tune.BENCH_PATH.read_text(encoding="utf-8"))
+        bench = _pre_relabel(json.loads(tune.BENCH_PATH.read_text(encoding="utf-8")))
         moved = copy.deepcopy(bench)
         r = next(x for x in moved["regression_negative"] if x["origin"].endswith("-r0"))
         moved["regression_negative"].remove(r)
@@ -775,7 +783,7 @@ class TestRound6FixtureBench(unittest.TestCase):
         self.assertEqual(key(a["regression_negative"]), key(b["regression_negative"]))
 
     def test_conflicting_relabel_stops(self):                                  # PR-8 / plan review 1 P0-4
-        bench = json.loads(tune.BENCH_PATH.read_text(encoding="utf-8"))
+        bench = _pre_relabel(json.loads(tune.BENCH_PATH.read_text(encoding="utf-8")))
         moved = copy.deepcopy(bench)
         r = next(x for x in moved["regression_negative"] if x["origin"].endswith("-r0"))
         moved["regression_negative"].remove(r)

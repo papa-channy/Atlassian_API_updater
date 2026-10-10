@@ -26,8 +26,12 @@ def canonical_sha256(obj) -> str:
 
 
 def query_sets(bench) -> tuple:
-    """(snapshot queries: seed + regression_negative in file order; fixture queries: their r0 subset)."""
-    recs = bench["seed"] + bench["regression_negative"]
+    """(snapshot queries: seed + regression_negative in file order; fixture queries: their r0 subset). Round 6 spec §4.3: records
+    promoted later (origin promoted-rN) are not part of the pinned reference, and relabeled regression records are read from both
+    regression sections in id order (the pre-relabel file order)."""
+    keep = lambda r: not r["origin"].startswith("promoted-")
+    reg = sorted((r for s in ("regression_negative", "regression_positive") for r in bench.get(s) or [] if keep(r)), key=lambda r: r["id"])
+    recs = [r for r in bench["seed"] if keep(r)] + reg
     return [r["query"] for r in recs], [r["query"] for r in recs if r["origin"].endswith("-r0")]
 
 

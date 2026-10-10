@@ -87,8 +87,9 @@ class TestSchemaAndSemantics(unittest.TestCase):
         # Round 1 hidden sets were observed at commit D and demoted before Round 2 (s-024..s-039, rn-007..rn-014)
         self.assertEqual([r["id"] for r in b["seed"][23:39]], [f"s-{i:03d}" for i in range(24, 40)])
         self.assertEqual({r["origin"] for r in b["seed"][23:39]}, {"held_out-r1"})
-        self.assertEqual([r["id"] for r in b["regression_negative"][6:14]], [f"rn-{i:03d}" for i in range(7, 15)])
-        self.assertEqual({r["origin"] for r in b["regression_negative"][6:14]}, {"negative-r1"})
+        reg = ev.regression_records(b)                                     # Round 6: across both regression sections
+        self.assertEqual([r["id"] for r in reg[6:14]], [f"rn-{i:03d}" for i in range(7, 15)])
+        self.assertEqual({r["origin"] for r in reg[6:14]}, {"negative-r1"})
         # hidden sections belong to the current round: [] only before its commit B (no round{N}_seal) or once demoted
         rnd = ev.current_round()["round"]
         seal = b.get(f"round{rnd}_seal")

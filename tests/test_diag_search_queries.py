@@ -31,8 +31,9 @@ def base_bench() -> dict:
     records with an r0 origin (their answers are in the fixtures), empty held_out/negative and only round1_seal (the
     tests rewrite its fingerprint; a later round's seal from the bundled bench is dropped)."""
     b = json.loads(diag.BENCH.read_text(encoding="utf-8"))
-    for sect in ("seed", "regression_negative"):
-        b[sect] = [r for r in b[sect] if r["origin"].endswith("-r0")]
+    b["seed"] = [r for r in b["seed"] if r["origin"].endswith("-r0")]
+    b["regression_negative"] = ev.r0_regression_records(b)          # Round 6 PR-8: original r0 labels, wherever the relabel put them
+    b.pop("regression_positive", None)
     b["held_out"], b["negative"] = [], []
     for key in [k for k in b if k.startswith("round") and k.endswith("_seal") and k != "round1_seal"]:
         del b[key]

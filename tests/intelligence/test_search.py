@@ -228,7 +228,8 @@ class TestSeedBenchmark(unittest.TestCase):
         fn = lambda q: [r["key"] for r in search.search_operations(state, q, limit=5)["results"]]
         # Only the Round-1 tuning set (r0 origins) targets fixture operations; demoted r1 records mostly do not.
         seed = [r for r in BENCH["seed"] if r["origin"].endswith("-r0")]
-        neg = [r for r in BENCH["regression_negative"] if r["origin"].endswith("-r0")]
+        from tests.benchmarks import evaluator as ev
+        neg = ev.r0_regression_records(BENCH)                         # Round 6 PR-8: original labels wherever the relabel put them
         self.assertEqual((len(seed), len(neg)), (23, 6))
         res = evaluate(seed, fn)
         self.assertEqual(res["failed"], [], res)
@@ -245,6 +246,7 @@ class TestSeedBenchmark(unittest.TestCase):
         for sect in ("seed", "regression_negative"):
             ev.check_schema(sect, BENCH[sect])
             r1[sect] = [r for r in BENCH[sect] if r["origin"].endswith("-r1")]
+        r1["regression_negative"] = [r for r in ev.regression_records(BENCH) if r["origin"].endswith("-r1")]   # Round 6: both sections
         self.assertEqual((len(r1["seed"]), len(r1["regression_negative"])), (16, 8))
         cache = os.environ.get("ATLASSIAN_DOCS_ROUND1_CACHE")
         if not cache or not pathlib.Path(cache).is_dir():
