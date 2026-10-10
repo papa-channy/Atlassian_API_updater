@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-09-search-quality-round5-design.md` **v1.10** (v1.7 passed review 8 with P0 0 / P1 3 "구현 계획으로 진행 가능"; v1.8 applied those P1s; v1.9 and v1.10 are planning-time deltas ruled on review thread 2: counterexample reference file at T, per-round T allowlist, and removal of §6.2 doc-relation extraction). The spec inherits Round 4 v1.13 (`docs/superpowers/specs/2026-10-09-search-quality-round4-design.md`) and, through it, Round 3 v1.25.1. "As Round 4 plan v7 Task N Step M" means `docs/superpowers/plans/2026-10-09-search-quality-round4-implementation.md` with the substitution table below applied verbatim.
 
-**Plan version:** v3 (2026-10-10; v3 = plan review 2 (P0 2/P1 4): KU registry schema validator used by the H test and pre-T, ruling records carry date/summary; `selected` kept as the resolution provenance ledger through the concept cap; `prov` computed before use; single authority for validation blockers; blocker-kind list aligned; counterexample-reference self-check; v2 = plan review 1 (P0 3/P1 3): fresh Round 5 verdicts replace only pending pairs (`resolve_verdicts`), tuning round identity pinned by tests (dynamic `current_round`, KU via pending round before T), counterexample result carries scope/policy shas/selected constants and the final call gets titles+provenance with strict provenance validation, richer reference-file provenance, normalized path tokens, split blocker kinds).
+**Plan version:** v4 (2026-10-10; v4 = plan review 3 (P0 1/P1 3): pre-T blockers read the selected-constants counterexample and the dry-run `tuning_accept` (not only the lexicon-only check), exact reference input-key set checked against `$W` files, registry schema checks round/id types/uniqueness, reference-checker tests; v3 = plan review 2 (P0 2/P1 4): KU registry schema validator used by the H test and pre-T, ruling records carry date/summary; `selected` kept as the resolution provenance ledger through the concept cap; `prov` computed before use; single authority for validation blockers; blocker-kind list aligned; counterexample-reference self-check; v2 = plan review 1 (P0 3/P1 3): fresh Round 5 verdicts replace only pending pairs (`resolve_verdicts`), tuning round identity pinned by tests (dynamic `current_round`, KU via pending round before T), counterexample result carries scope/policy shas/selected constants and the final call gets titles+provenance with strict provenance validation, richer reference-file provenance, normalized path tokens, split blocker kinds).
 
 ## Global Constraints
 
@@ -411,11 +411,13 @@ class TestRound5Registry(unittest.TestCase):
         self.assertEqual(ev.ku_record_problems(5, bench, bench, doc), []); self.assertEqual(ev.ku_registry_schema_problems(5, doc), [])
 
     def test_registry_schema_validator(self):
-        good = {"approval": {"rulings": [{f: "x" for f in ev.KU_RULING_FIELDS}] * 5, "user_decision": {"date": "d", "words": "w", "event_sha256": "e"}},
+        good = {"round": 5, "approval": {"rulings": [{**{f: "x" for f in ev.KU_RULING_FIELDS}, "file": f"r{i}.md"} for i in range(5)], "user_decision": {"date": "d", "words": "w", "event_sha256": "e"}},
                 "seeds": [{f: (sid if f == "id" else "x") for f in ev.KU_SEED_FIELDS} for sid in ev.KNOWN_UNREACHABLE[5]]}
         self.assertEqual(ev.ku_registry_schema_problems(5, good), [])
         bad = json.loads(json.dumps(good)); del bad["approval"]["rulings"][0]["summary"]; bad["seeds"] = bad["seeds"][:2]
         self.assertEqual(len(ev.ku_registry_schema_problems(5, bad)), 2)
+        self.assertTrue(ev.ku_registry_schema_problems(5, {**good, "round": 4}))
+        self.assertTrue(ev.ku_registry_schema_problems(5, {**good, "seeds": good["seeds"] + [{"cause": "no id"}]}))   # reported, no exception
 ```
 
 Run: `python -m unittest tests.benchmarks.test_evaluator.TestRound5Registry -v` → Expected: ERROR `AttributeError: … 'KNOWN_UNREACHABLE'`.
@@ -467,10 +469,18 @@ def ku_registry_schema_problems(round, registry_doc) -> list:
     out += [f"ruling {i}: missing {f}" for i, r in enumerate(rulings) for f in KU_RULING_FIELDS if not r.get(f)]
     ud = ap.get("user_decision") or {}
     out += [f"user_decision: missing {f}" for f in ("date", "words", "event_sha256") if not ud.get(f)]
+    if registry_doc.get("round") != round:
+        out.append(f"round: expected {round}, got {registry_doc.get('round')!r}")
     seeds = registry_doc.get("seeds") or []
-    if sorted(s.get("id") for s in seeds) != sorted(KNOWN_UNREACHABLE.get(round, ())):
-        out.append("seeds: ids differ from KNOWN_UNREACHABLE")
-    out += [f"seed {s.get('id')}: missing {f}" for s in seeds for f in KU_SEED_FIELDS if not s.get(f)]
+    if not all(isinstance(s, dict) and isinstance(s.get("id"), str) and s.get("id") for s in seeds):
+        return out + ["seeds: every entry must be an object with a non-empty string id"]
+    ids = [s["id"] for s in seeds]
+    if len(ids) != len(set(ids)) or sorted(ids) != sorted(KNOWN_UNREACHABLE.get(round, ())):
+        out.append("seeds: ids differ from KNOWN_UNREACHABLE (exact, unique)")
+    files = [r.get("file") for r in rulings]
+    if len(files) != len(set(files)):
+        out.append("approval.rulings: duplicate ruling files")
+    out += [f"seed {s['id']}: missing {f}" for s in seeds for f in KU_SEED_FIELDS if not s.get(f)]
     return out
 
 
@@ -889,9 +899,37 @@ class TestRound5PreT(unittest.TestCase):
         self.assertEqual([x["kind"] for x in b], ["unreachable_seed"]); self.assertEqual(b[0]["seeds"], ["s-028"])
 
     def test_counterexample_loss_and_record_mismatch_are_blockers(self):
-        b = sim.pre_t_blockers(self._res([]), {"pass": True}, cx={"ok": False, "losses": [{"key": ["alias", "release"], "op": "x"}], "classes": {"uncovered_proposer": []}, "validation_errors": []},
+        b = sim.pre_t_blockers(self._res([]), {"pass": True}, lexicon_cx={"scope": "lexicon_only", "ok": False, "losses": [{"key": ["alias", "release"], "op": "x"}], "classes": {"uncovered_proposer": []}, "validation_errors": []},
                                extra=[{"kind": "ku_record_mismatch", "problems": ["s-004: seed record differs from the start commit"]}])
         self.assertEqual(sorted(x["kind"] for x in b), ["counterexample_loss", "ku_record_mismatch"])
+
+    def test_selected_constants_counterexample_failure_is_a_blocker(self):
+        r = self._res([], accept=False)
+        r.counterexample_result = {"scope": "final_policy", "ok": False, "losses": [{"key": ["alias", "release"], "op": "x"}], "classes": {"uncovered_proposer": []}, "validation_errors": []}
+        b = sim.pre_t_blockers(r, {"pass": True}, lexicon_cx={"scope": "lexicon_only", "ok": True, "losses": [], "classes": {"uncovered_proposer": []}, "validation_errors": []})
+        self.assertEqual([x["kind"] for x in b], ["counterexample_loss"]); self.assertEqual(b[0]["losses"][0]["scope"], "final_policy")
+
+    def test_false_accept_alone_is_a_blocker(self):
+        self.assertEqual([x["kind"] for x in sim.pre_t_blockers(self._res([], accept=False), {"pass": True})], ["tuning_accept_false"])
+
+    def test_counterexample_reference_problems(self):
+        from tests.benchmarks import counterexample as cx
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            w = pathlib.Path(td)
+            for n in ("aliases-premerge.json", "round4-reference-lexicon.json"):
+                (w / n).write_text("{}\n")
+            pol = {"aliases": {"ticket": ["issue"]}, "rules": [], "notes": {}}
+            cmap = {json.dumps(list(k)): list(v) for k, v in cx.canonical_policy_map(pol).items()}
+            good = {"policy": pol, "policy_canonical_sha256": ev.canonical_sha256(pol), "canonical_policy_map": cmap, "canonical_policy_map_sha256": ev.canonical_sha256(cmap),
+                    "inputs": {**sim.INPUT_SHA256, "aliases_premerge_sha256": ev.file_sha256(w / "aliases-premerge.json"),
+                               "round4_reference_lexicon_sha256": ev.file_sha256(w / "round4-reference-lexicon.json"), "registry_fingerprint": "fp"}}
+            self.assertEqual(sim.counterexample_reference_problems(good, w, "fp"), [])
+            missing = json.loads(json.dumps(good)); del missing["inputs"]["round2/lexicon_raw.json"]
+            self.assertTrue(sim.counterexample_reference_problems(missing, w, "fp"))
+            wrong_map = json.loads(json.dumps(good)); wrong_map["canonical_policy_map"] = {}
+            self.assertTrue(sim.counterexample_reference_problems(wrong_map, w, "fp"))
+            self.assertTrue(sim.counterexample_reference_problems(good, w, "other-fp"))
 
     def test_ku_record_mismatch_is_a_blocker(self):
         bench = json.loads((pathlib.Path(sim.ROOT) / "tests/benchmarks/search_queries.json").read_text(encoding="utf-8"))
@@ -944,10 +982,16 @@ def counterexample_reference_problems(ref, work, registry_fp) -> list:
         out.append("policy_canonical_sha256")
     if cmap != ref.get("canonical_policy_map") or ev.canonical_sha256(cmap) != ref.get("canonical_policy_map_sha256"):
         out.append("canonical_policy_map")
-    for name, sha in (ref.get("inputs") or {}).items():
-        if name in INPUT_SHA256 and sha != INPUT_SHA256[name]:
-            out.append(f"input {name}")
-    if (ref.get("inputs") or {}).get("registry_fingerprint") != registry_fp:
+    inputs = ref.get("inputs") or {}
+    expected = set(INPUT_SHA256) | {"aliases_premerge_sha256", "round4_reference_lexicon_sha256", "registry_fingerprint"}
+    if set(inputs) != expected:
+        out.append(f"input keys {sorted(set(inputs) ^ expected)}")
+    out += [f"input {n}" for n, sha in INPUT_SHA256.items() if inputs.get(n) != sha]
+    for key, fname in (("aliases_premerge_sha256", "aliases-premerge.json"), ("round4_reference_lexicon_sha256", "round4-reference-lexicon.json")):
+        f = work / fname
+        if not f.exists() or inputs.get(key) != ev.file_sha256(f):
+            out.append(key)
+    if inputs.get("registry_fingerprint") != registry_fp:
         out.append("registry_fingerprint")
     return out
 
@@ -969,8 +1013,10 @@ def approval_blockers(work, registry_doc) -> list:
 3. Replace `pre_t_blockers` with:
 
 ```python
-def pre_t_blockers(result, event, diagnostics=None, ku=None, cx=None, extra=()) -> list:
-    """Round 5 spec §4.2/§8: only non-KU failures are unreachable; counterexample and registry problems are blockers."""
+def pre_t_blockers(result, event, diagnostics=None, ku=None, lexicon_cx=None, extra=()) -> list:
+    """Round 5 spec §4.2/§8/AC-R5-09: only non-KU failures are unreachable; both counterexample results (lexicon-only at baseline
+    constants and final policy at the selected constants) and registry problems are blockers; the dry-run tuning_accept stays the
+    authority (a false accept with no other blocker is still a blocker)."""
     ku = ev.known_unreachable(ROUND) if ku is None else ku
     out = []
     unreachable = sorted({f["id"] for f in result.seed_result["failed"]} - set(ku))
@@ -983,20 +1029,25 @@ def pre_t_blockers(result, event, diagnostics=None, ku=None, cx=None, extra=()) 
         out.append({"kind": "alias_validation_error", "errors": list(result.validation_errors)})
     if not event["pass"]:
         out.append({"kind": "inherited_ac_r3_01_failure", "event": {k: event.get(k) for k in ("seed", "regression_raw", "regression_effective", "fixture_failing")}})
-    if cx is not None and cx.get("losses"):
-        out.append({"kind": "counterexample_loss", "losses": cx["losses"]})
-    if cx is not None and cx["classes"].get("uncovered_proposer"):
-        out.append({"kind": "counterexample_uncovered_proposer", "keys": cx["classes"]["uncovered_proposer"]})
+    results = [c for c in (lexicon_cx, getattr(result, "counterexample_result", None)) if c is not None]
+    losses = sorted({(c.get("scope"), json.dumps(l["key"]), l["op"]) for c in results for l in c.get("losses", [])})
+    if losses:
+        out.append({"kind": "counterexample_loss", "losses": [{"scope": sc, "key": json.loads(k), "op": op} for sc, k, op in losses]})
+    unc = sorted({(c.get("scope"), json.dumps(k)) for c in results for k in c["classes"].get("uncovered_proposer", [])})
+    if unc:
+        out.append({"kind": "counterexample_uncovered_proposer", "keys": [{"scope": sc, "key": json.loads(k)} for sc, k in unc]})
     # counterexample validation errors reach result.validation_errors via run_pipeline_result (single authority, no duplicate blocker)
+    if not result.tuning_accept and not out:
+        out.append({"kind": "tuning_accept_false", "invariants": {"reason": "dry-run tuning_accept false with no other blocker"}})
     return out + list(extra)
 ```
 
 4. `pre_t_verdict(seed_passed, …)` becomes `pre_t_verdict(failed_ids, reg_raw, reg_eff, fixture_failing)` = `set(failed_ids) <= ev.known_unreachable(ROUND) and reg_raw >= 10 and reg_eff == 14 and not fixture_failing`; `pre_t_event` passes the failed id list.
-5. `run_pre_t(cache, work)`: first load `ref = round5-counterexample-reference.json`, `pre_raw = ref["policy"]`, `snapshot_titles = ref["titles"]` and `prov = cx.provenance_from_lexicon(concept_lexicon.json)` (all before any `cx.suite` call); then compute `extra = input_blockers(work) + registry_blockers(bench, base_bench, registry_doc) + approval_blockers(work, registry_doc)` plus `[{"kind": "counterexample_reference_mismatch", "problems": p}]` when `p = counterexample_reference_problems(ref, work, fp)` is non-empty where `base_bench` is the `56b4b0e` blob of `tests/benchmarks/search_queries.json` (`git show 56b4b0e:tests/benchmarks/search_queries.json`) and `registry_doc` the committed `round5-known-unreachable.json`; compute the lexicon-only counterexample at baseline constants: `cxr = cx.suite(index, cx.production_top1(state, rp, dict(rp.constants)), pre_raw, aliases_raw, aliases_raw, summaries, titles=snapshot_titles, provenance=prov)` (the reference is written by the controller in Task 4 Step 5; a lexicon-only pre-T check with `cx.suite(…, scope="lexicon_only")` follows); pass `counterexample_fn=lambda point, working: cx.suite(index, cx.production_top1(state, rp, point), pre_raw, aliases_raw, working, summaries, titles=snapshot_titles, provenance=prov, scope="final_policy", selected_constants=point)` into `dry_run_pipeline` → `tune.run_pipeline_result`; record `cxr`, `result.counterexample_result`, all blockers and `pipeline_result_sha256` (which now includes `counterexample_result`) in the event. Event name stays `pre_t_checkpoint`.
+5. `run_pre_t(cache, work)`: first load `ref = round5-counterexample-reference.json`, `pre_raw = ref["policy"]`, `snapshot_titles = ref["titles"]` and `prov = cx.provenance_from_lexicon(concept_lexicon.json)` (all before any `cx.suite` call); then compute `extra = input_blockers(work) + registry_blockers(bench, base_bench, registry_doc) + approval_blockers(work, registry_doc)` plus `[{"kind": "counterexample_reference_mismatch", "problems": p}]` when `p = counterexample_reference_problems(ref, work, fp)` is non-empty where `base_bench` is the `56b4b0e` blob of `tests/benchmarks/search_queries.json` (`git show 56b4b0e:tests/benchmarks/search_queries.json`) and `registry_doc` the committed `round5-known-unreachable.json`; compute the lexicon-only counterexample at baseline constants: `cxr = cx.suite(index, cx.production_top1(state, rp, dict(rp.constants)), pre_raw, aliases_raw, aliases_raw, summaries, titles=snapshot_titles, provenance=prov)` (the reference is written by the controller in Task 4 Step 5; a lexicon-only pre-T check with `cx.suite(…, scope="lexicon_only")` follows); pass `counterexample_fn=lambda point, working: cx.suite(index, cx.production_top1(state, rp, point), pre_raw, aliases_raw, working, summaries, titles=snapshot_titles, provenance=prov, scope="final_policy", selected_constants=point)` into `dry_run_pipeline` → `tune.run_pipeline_result`; call `pre_t_blockers(result, event, diagnostics, lexicon_cx=cxr, extra=extra)`; record `cxr`, `result.counterexample_result`, `result.tuning_accept`, all blockers and `pipeline_result_sha256` (which now includes `counterexample_result`) in the event. Event name stays `pre_t_checkpoint`.
 6. `apply_T`: after the synthetic merge write `concept_lexicon.json["components"]["union_resolution"] = "source-precedence"` and `concept_lexicon.json["selected"]` for the synthetic entries (`{"source": "round4_generation", "provenance_rank": 1}`), and write `tests/benchmarks/round5-counterexample-reference.json` = `{"round": 5, "policy": <pre-merge aliases raw>, "policy_canonical_sha256": canonical_sha256(…), "canonical_policy_map": …, "titles": <synthetic bundle snapshot titles>, "inputs": {}}` before the freeze call.
 7. `BRANCHES`, X_preB and recovery helpers are unchanged apart from the round number.
 
-Run: `python -m unittest tests.benchmarks.test_round5_simulation -v` → Expected: 5 OK.
+Run: `python -m unittest tests.benchmarks.test_round5_simulation -v` → Expected: 8 OK.
 
 - [ ] **Step 8: Suite, `--phase H`, AC-R5-05, `TOOLING_FILES`, commit H17**
 
@@ -1056,16 +1107,14 @@ python - <<'EOF'
 import json, pathlib
 from tests.benchmarks.evaluator import canonical_sha256
 W = pathlib.Path.home() / ".atlassian_api_updater/round5-work"; pol = json.loads((W / "round4-reference-aliases.json").read_text(encoding="utf-8"))
-from tests.benchmarks import counterexample as cx, evaluator as ev
+from tests.benchmarks import counterexample as cx, evaluator as ev, round5_simulation as sim
 snap = json.loads((W / "inputs/round4/doc-titles-snapshot.json").read_text(encoding="utf-8"))
 cmap = {json.dumps(list(k)): list(v) for k, v in cx.canonical_policy_map(pol).items()}
 doc = {"round": 5, "policy": pol, "policy_canonical_sha256": canonical_sha256(pol), "canonical_policy_map": cmap, "canonical_policy_map_sha256": canonical_sha256(cmap),
        "titles": sorted(({"product": t["product"], "url": t["url"], "title": t["title"]} for t in snap["titles"]), key=lambda t: (t["product"], t["url"])),
        "inputs": {"aliases_premerge_sha256": ev.file_sha256(W / "aliases-premerge.json"),
                   "round4_reference_lexicon_sha256": ev.file_sha256(W / "round4-reference-lexicon.json"),
-                  **{n: ev.file_sha256(W / "inputs" / n) for n in ("round2/lexicon_raw.json", "round2/lexicon_review.json", "round2/lexicon-review-input.txt",
-                                                                    "round4/lexicon_raw_r4.json", "round4/lexicon_review_r4.json", "round4/lexicon-review-input-r4.txt",
-                                                                    "round4/doc-titles-snapshot.json")},
+                  **{n: ev.file_sha256(W / "inputs" / n) for n in sim.INPUT_SHA256},
                   "registry_fingerprint": json.loads((W / "round5-internal-catalog.json").read_text(encoding="utf-8")).get("registry_fingerprint")}}
 pathlib.Path("tests/benchmarks/round5-counterexample-reference.json").write_text(json.dumps(doc, indent=1, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
 print(doc["policy_canonical_sha256"])
