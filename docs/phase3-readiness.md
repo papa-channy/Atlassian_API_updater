@@ -413,7 +413,7 @@ Status: **reachable seed: 36/36 · KU registry: 3/3 validated · KU observed: pa
 | spec / plan | spec v1.12 (`docs/superpowers/specs/2026-10-09-search-quality-round5-design.md`; v1.10 at plan review, v1.11 and v1.12 from review-thread rulings during execution) / plan v8 |
 | initial_housekeeping_commit | `19ae3e0` (H16 `51d8006`, H17 `499910f`, review fixes `19ae3e0`) |
 | housekeeping_commit (final) | `5862120` (moves below) |
-| controller_actor_id / session | Claude Code controller, session `5edca2ca-331e-4afd-90b9-deeaf110a511` |
+| controller_actor_id / session | Claude Code controller, session `42e25099-9d61-4b2a-b9f5-db24bf29e3ba` (corrected after the post-terminal provenance review; the ledger carries a `ledger_correction` event) |
 | S | live fetch 2026-10-10, `s_reused_from_round4: false` (jira-platform spec changed `8ee2e0bb…` → `a7a330f1…`), registry `e308a232d6c9b19a7413e8a38c89b895e44e503581d529c2a31b31fbde179853`, 943 operations |
 | inputs (spec §5) | 9 files bound by full sha (`inputs_bound`, `input_blockers == []`), doc-title snapshot re-render byte-identical |
 | verb inventory | unchanged `d66317db…`, method-safety 0 violations, prefix ok |
@@ -458,11 +458,11 @@ Approval: five review-thread rulings (`rulings/2026-10-09-1..5.md`, shas in the 
 | generation | `6aca058c-74c8-83ee-987d-1c67dc4640c3` | e8f14be5… | caecc716… | 16 + 8, machine check 0 violations |
 | review (catalog attached) | `6aca2b87-cbd4-83ee-a806-59359d5836fa` | 24f8698a… | ee1a17a5… | 24/24 accepted |
 
-Needle manifest `e98817ef…` (24); scans before encryption, after B and before the terminal: `unexpected_hits == []`. Ciphertext `e273aca2…` (user-encrypted; decrypted by the user for D).
+Needle manifest `e98817ef…` (24); scans before encryption, after B and before the terminal: `unexpected_hits == []`. Ciphertext `e273aca2…` (user-encrypted; decrypted by the user for D — first attempt bad decrypt, garbage output deleted, second attempt ok; seal check `seal ok`, ledgered retroactively as `user_decryption_for_D`).
 
 ### Tuning (B..C)
 
-Worker `a4c400cc7767437d0` (transport id; handshake self-report retained as non-authoritative evidence). Run `6e7be23f…`: adopted, `tuning_accept` true, seed 36/39 (failed only the KU set), regression 14/14 effective (10/14 raw), fixtures 23/23 · 6/6, counterexample ok (0 losses, 0 uncovered proposer keys), no alias proposals; selected constants equal the B policy, so C changed only the tuning log. `--verify`: replay ok.
+Worker `a4c400cc7767437d0` (transport id; handshake self-report retained as non-authoritative evidence). Run `6e7be23f…`: adopted, `tuning_accept` true, seed 36/39 (failed only the KU set), regression 14/14 effective (10/14 raw), fixtures 23/23 · 6/6, counterexample ok (0 losses, 0 uncovered proposer keys), no alias proposals; selected constants equal the B policy, so the worker commit `c970857` changed only the tuning log; C `8de757e` is the empty pre-evaluation commit. `--verify`: replay ok.
 
 ### Final evaluation (D controller `afced2da23d7ef747`, single run)
 
