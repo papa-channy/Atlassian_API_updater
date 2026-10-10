@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Plan version:** v2 (2026-10-11; v2 = plan review 1 (P0 4 / P1 5) applied: PR-7 adopted as spec v1.6 §3.0; `training_split_sha256` over a `failure_classes`-free projection, pinned at H22 and re-checked at pre-T and freeze; rehearsal work seeded with the pre-T evidence; PR-8 conflict detection → STOP; promotion payload re-checked after relabel; `verb_methods_sha256` provenance; loss reasons; H adoption re-measured before the pin; required label provenance schema)
+**Plan version:** v3 (2026-10-11; v3 = plan review 2 (P0 2 / P1 4) applied: Round 6 proposer notes bound to `TUNING_ROUND` (pre-T, rehearsal and worker produce byte-identical alias policies); the H22 training split is immutable (a semantic change after H22 is a STOP, never a re-ledger); `promotion_sealed` is historical evidence only; stricter label provenance; rehearsal seeding failures are reported; v2 = plan review 1 (P0 4 / P1 5) applied: PR-7 adopted as spec v1.6 §3.0; `training_split_sha256` over a `failure_classes`-free projection, pinned at H22 and re-checked at pre-T and freeze; rehearsal work seeded with the pre-T evidence; PR-8 conflict detection → STOP; promotion payload re-checked after relabel; `verb_methods_sha256` provenance; loss reasons; H adoption re-measured before the pin; required label provenance schema)
 
 **Goal:** Make the MCP search fit real agent use — recommend only with evidence, never recommend a wrong write — and judge Round 6 by the usage-grounded Discovery gate (reach@3, recommendation coverage, precision, write safety, abstention) on a fresh sealed hidden set.
 
@@ -1127,7 +1127,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: Task 1 (`ev.usage_rows`, `ev.training_vector`, `ev.accept_vector`, `ev.fallback_key`, `ev.violation`, `ev.TRAINING_SECTIONS`), Task 2 (`search.order_candidates`, `search.abstain_reason`, `search.rule_unigrams`, `search.head_info`, `search.concept_vocabulary`), Task 4 (`cx6.compare`, `cx6.corpus`).
-- Produces (module `tune`): `TUNING_ROUND`, `usage_fn(state)`, `evaluate_usage(bench, fn) -> {"seed": rows, "regression_positive": rows, "regression_negative": rows, "m": vector}`, `evaluate_usage_point(state, rp, point, bench, alias_policy)`, `evaluate_usage_fast(ge, rp, point, bench)`, `GridEvaluator.usage(query, rp, limit=5) -> (keys, recommended)`, `select_candidate_r6(results, baseline, grid, scorer_ok_fn) -> (point, info)`, `improved(before_row, after_row, section) -> bool`, `no_worse(m0, m1) -> bool`, `propose_aliases_r6(eval_fn, bench, base_raw, cands, budget, per_seed, fixture_fn) -> (working, patch)`, `tuning_accept_r6(m, fixture_final, cx, scorer, errors) -> bool`, `run_pipeline_r6(...)`, `run_pipeline_result_r6(...) -> PipelineResult` (new optional fields `metrics`, `scorer_rule`, `selection`), `classes_r6(bench, cands) -> dict`, `verify_replay_r6(...)`.
+- Produces (module `tune`): `TUNING_ROUND`, `usage_fn(state)`, `evaluate_usage(bench, fn) -> {"seed": rows, "regression_positive": rows, "regression_negative": rows, "m": vector}`, `evaluate_usage_point(state, rp, point, bench, alias_policy)`, `evaluate_usage_fast(ge, rp, point, bench)`, `GridEvaluator.usage(query, rp, limit=5) -> (keys, recommended)`, `select_candidate_r6(results, baseline, grid, scorer_ok_fn) -> (point, info)`, `improved(before_row, after_row, section) -> bool`, `no_worse(m0, m1) -> bool`, `round_note_r6(word, sid, target)`, `apply_actions_r6(working, actions, sid)` (notes carry `round{TUNING_ROUND}`), `propose_aliases_r6(eval_fn, bench, base_raw, cands, budget, per_seed, fixture_fn) -> (working, patch)`, `tuning_accept_r6(m, fixture_final, cx, scorer, errors) -> bool`, `run_pipeline_r6(...)`, `run_pipeline_result_r6(...) -> PipelineResult` (new optional fields `metrics`, `scorer_rule`, `selection`), `classes_r6(bench, cands) -> dict`, `verify_replay_r6(...)`.
 - Plan ruling **PR-8 (fixture suite after relabel):** `fixture_bench` keeps the inherited r0 suite (23 seed + 6 regression records with an `-r0` origin) wherever the relabel put a record (`regression_negative` or `regression_positive`), and judges the 6 r0 regression records with their **original** label: `expected_top1_any = []`, `forbidden_top1 = forbidden_top1 ∪ legacy_forbidden_top1`. The fixture contract (`23/23`, `6/6` raw) is therefore byte-for-byte the inherited one.
 
 - [ ] **Step 1: Write the failing tests** (append to `tests/test_tune_search_ranking.py`):
@@ -1209,6 +1209,29 @@ class TestRound6Proposer(unittest.TestCase):
         self.assertFalse(tune.tuning_accept_r6(m, ["s-001"], cx, {"ok": True}, []))
         self.assertFalse(tune.tuning_accept_r6(m, [], {"ok": False}, {"ok": True}, []))
         self.assertFalse(tune.tuning_accept_r6(m, [], cx, {"ok": True}, ["err"]))
+
+
+class TestRound6NoteOrigin(unittest.TestCase):
+    """plan review 2 P0-1: the same proposer run before T (ROUND 5, pending 6) and after T (ROUND 6) yields identical aliases."""
+    BENCH = {"seed": [{"id": "s-001", "query": "q1"}], "regression_positive": [], "regression_negative": []}
+    CANDS = {"zz": {"seed_ids": ["s-001"], "targets_by_seed": {"s-001": ["issue"]}, "allowed_targets": ["issue"], "catalog_df": 0}}
+    BASE = {"version": 1, "alias_damping": 0.5, "rule_damping": 0.5, "aliases": {}, "rules": [], "notes": {}}
+
+    def run_at(self, rnd):
+        def eval_fn(raw):
+            fixed = "zz" in raw["aliases"]
+            return _usage([_row("s-001", top3=fixed, rec_correct=fixed)])
+        with mock.patch.object(tune, "ROUND", rnd), mock.patch.object(tune, "TUNING_ROUND", 6):
+            return tune.propose_aliases_r6(eval_fn, self.BENCH, self.BASE, self.CANDS)
+
+    def test_pre_and_post_t_identical(self):
+        (w5, p5), (w6, p6) = self.run_at(5), self.run_at(6)
+        self.assertEqual(w5["notes"]["zz"]["origin"], "round6"); self.assertEqual(w5, w6)
+        self.assertEqual(tune.result_sha256({"a": 1}, p5), tune.result_sha256({"a": 1}, p6))
+
+    def test_round5_path_unchanged(self):
+        with mock.patch.object(tune, "ROUND", 5):
+            self.assertEqual(tune.apply_actions(self.BASE, [("zz", "issue")], "s-001")["notes"]["zz"]["origin"], "round5")
 
 
 class TestRound6FixtureBench(unittest.TestCase):
@@ -1385,6 +1408,19 @@ def no_worse(m0, m1) -> bool:
     return m1["wv"] <= m0["wv"] and m1["fr"] <= m0["fr"] and all(m1[k] >= m0[k] for k in ("sr3", "src", "srk", "rp3", "rpk", "nab"))
 
 
+def round_note_r6(word, sid, target) -> dict:
+    """plan review 2 P0-1: the Round 6 note origin is TUNING_ROUND, never the module ROUND (which is 5 before T and 6 after)."""
+    return {"origin": f"round{TUNING_ROUND}", "seed_query_id": sid, "candidate_word": word, "failure_classes": ["R6"],
+            "evidence": f"alias {word} -> {target} for {sid} (frozen candidate, deterministic atomic-action proposer)"}
+
+
+def apply_actions_r6(working, actions, sid):
+    trial = copy.deepcopy(working)
+    for word, target in actions:
+        trial["aliases"][word] = [target]; trial["notes"][word] = round_note_r6(word, sid, target)
+    return trial
+
+
 def _find(res, section, rid):
     return next(r for r in res[section] if r["id"] == rid)
 
@@ -1409,7 +1445,7 @@ def propose_aliases_r6(eval_fn, bench, base_raw, cands, budget=BUDGET, per_seed=
         for combo in trial_order(actions):
             if len(combo) > per_seed or accepted_n + len(combo) > budget:
                 continue
-            trial = apply_actions(working, combo, rid)
+            trial = apply_actions_r6(working, combo, rid)
             patch["trials"] += 1
             new = eval_fn(trial)
             if not (improved(row, _find(new, section, rid), section) and no_worse(cur["m"], new["m"])):
@@ -1765,9 +1801,14 @@ class TestRelabel(unittest.TestCase):
     def test_label_provenance_required(self):
         b = _bench()
         labels = {r["id"]: {"answerable": False, "acceptable_keys": []} for r in b["regression_negative"]}
-        mig = {i: {"reviewers": ["x", "y"], "review_output_sha256s": ["1", "2"], "adjudicated": False} for i in labels}
+        mig = {i: {"reviewers": ["x", "y"], "review_output_sha256s": ["a" * 64, "a" * 64], "adjudicated": False} for i in labels}   # equal outputs allowed
         out = L.apply_labels(b, labels, mig)
         self.assertEqual(L.label_provenance_problems(out), [])
+        for bad in ({"reviewers": ["x", "x"], "review_output_sha256s": ["a" * 64, "b" * 64], "adjudicated": False},
+                    {"reviewers": ["x", "y"], "review_output_sha256s": ["a" * 64, None], "adjudicated": False},
+                    {"reviewers": ["x", "y", "z"], "review_output_sha256s": ["a" * 64] * 3, "adjudicated": False}):
+            o2 = copy.deepcopy(out); o2["regression_negative"][0]["label_migration"] = bad
+            self.assertTrue(L.label_provenance_problems(o2), bad)
         out["regression_negative"][0].pop("label_migration")
         self.assertTrue(L.label_provenance_problems(out))
 
@@ -1805,7 +1846,7 @@ class TestRelabel(unittest.TestCase):
     python -m tests.benchmarks.round6_labels closure --bench B --catalog C --out B2
     python -m tests.benchmarks.round6_labels verify --bench B --plain P --catalog C
 """
-import argparse, copy, json, pathlib, sys
+import argparse, copy, json, pathlib, re, sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT)) if str(ROOT) not in sys.path else None
@@ -1968,6 +2009,9 @@ def fixture_label_conflicts(bench) -> list:
                   and set(r["expected_top1_any"]) & (set(r.get("forbidden_top1") or []) | set(r.get("legacy_forbidden_top1") or [])))
 
 
+_SHA = re.compile(r"[0-9a-f]{64}")
+
+
 def label_provenance_problems(bench) -> list:
     """plan review 1 P1-5: once relabeled, every regression record carries no_answer and a well-formed label_migration."""
     out = []
@@ -1977,8 +2021,11 @@ def label_provenance_problems(bench) -> list:
                 out.append(f"{r['id']}: no_answer must be {want}")
             m = r.get("label_migration")
             if not (isinstance(m, dict) and set(m) == {"reviewers", "review_output_sha256s", "adjudicated"} and isinstance(m["adjudicated"], bool)
-                    and isinstance(m["reviewers"], list) and len(m["reviewers"]) in (2, 3) and isinstance(m["review_output_sha256s"], list)
-                    and len(m["review_output_sha256s"]) == len(m["reviewers"]) and (len(m["reviewers"]) == 3) == m["adjudicated"]):
+                    and isinstance(m["reviewers"], list) and len(m["reviewers"]) in (2, 3)
+                    and all(isinstance(a, str) and a for a in m["reviewers"]) and len(set(m["reviewers"])) == len(m["reviewers"])
+                    and isinstance(m["review_output_sha256s"], list) and len(m["review_output_sha256s"]) == len(m["reviewers"])
+                    and all(isinstance(h, str) and _SHA.fullmatch(h) for h in m["review_output_sha256s"])
+                    and (len(m["reviewers"]) == 3) == m["adjudicated"]):
                 out.append(f"{r['id']}: label_migration must be {{reviewers[2|3], review_output_sha256s (same length), adjudicated (== 3 reviewers)}}")
     return out
 
@@ -2150,6 +2197,12 @@ class TestRound6PreT(unittest.TestCase):
             sim.seed_rehearsal_work(real, tmp)
             got, probs = sim.load_pre_t_evidence(tmp)
             self.assertEqual(probs, []); self.assertEqual(got["relabel_applied"]["training_split_sha256"], "s")
+            with open(real / "controller-events.jsonl", "a", encoding="utf-8") as fh:            # silent re-baseline of the split
+                fh.write(json.dumps({"event": "relabel_applied", "training_split_sha256": "s2"}) + "\n")
+            self.assertTrue(any("relabel_rerun_ruling" in x for x in sim.load_pre_t_evidence(real)[1]))
+            with open(real / "controller-events.jsonl", "a", encoding="utf-8") as fh:
+                fh.write(json.dumps({"event": "relabel_rerun_ruling"}) + "\n" + json.dumps({"event": "relabel_applied", "training_split_sha256": "s3"}) + "\n")
+            self.assertEqual(sum("relabel_rerun_ruling" in x for x in sim.load_pre_t_evidence(real)[1]), 1)   # only the unruled pair
             (real / "aliases-h.json").unlink()
             with self.assertRaises(SystemExit):
                 sim.seed_rehearsal_work(real, pathlib.Path(td) / "T2")
@@ -2262,7 +2315,7 @@ def dry_run_pipeline_r6(state, rp, bench, aliases_raw, cands_doc, corpus):
                                            counterexample_fn=tune.final_counterexample_fn(state, rp, aliases_raw, round=ROUND, root=ROOT))
 
 
-PRE_T_EVENTS = ("scorer_rule_corpus_pinned", "relabel_applied", "promotion_sealed")
+PRE_T_EVENTS = ("scorer_rule_corpus_pinned", "relabel_applied")       # promotion_sealed is historical pre-relabel evidence (plan review 2 P1-1)
 PRE_T_FILES = ("aliases-h.json", "inputs/round4/doc-titles-snapshot.json")
 
 
@@ -2280,6 +2333,10 @@ def load_pre_t_evidence(work) -> tuple:
     for rel in PRE_T_FILES:
         if not (work / rel).is_file():
             probs.append(f"file {rel} missing")
+    relabels = [i for i, x in enumerate(lines) if x.get("event") == "relabel_applied"]
+    for prev, cur in zip(relabels, relabels[1:]):                   # plan review 2 P0-2: the H22 split is never re-baselined silently
+        if not any(x.get("event") == "relabel_rerun_ruling" for x in lines[prev + 1:cur]):
+            probs.append("relabel_applied re-ledgered without a relabel_rerun_ruling (training split re-baseline)")
     return out, probs
 
 
@@ -2291,7 +2348,7 @@ def seed_rehearsal_work(real_work, temp_work) -> dict:
     if probs:
         raise SystemExit(f"error: real work dir lacks pre-T evidence: {probs}")
     temp_work.mkdir(parents=True, exist_ok=True)
-    lines = [json.dumps(evidence[n]) for n in PRE_T_EVENTS]
+    lines = [json.dumps(evidence[n]) for n in PRE_T_EVENTS]           # latest event of each kind (already validated on the real ledger)
     (temp_work / "controller-events.jsonl").write_text("\n".join(lines) + "\n", encoding="utf-8")
     shas = {}
     for rel in PRE_T_FILES:
@@ -2381,10 +2438,13 @@ def run_rehearsal(cache, work, dry=False) -> int:
             subprocess.run(["tar", "-x", "-C", str(tree)], input=archive, check=True)
             for f in sorted((pathlib.Path(work) / "frozen").glob("round6-*")):
                 shutil.copyfile(f, tree / "tests/benchmarks" / f.name)
-            steps.append({"argv": ["seed_rehearsal_work"], "exit": 0, "output_sha256": ev.canonical_sha256(seed_rehearsal_work(work, temp_work))})
-        for argv in t_commands(cache, work, tree) + [[sys.executable, "-m", "unittest", "discover", "-s", "tests", "-t", "."],
+            try:
+                seeded = seed_rehearsal_work(work, temp_work); steps.append({"argv": ["seed_rehearsal_work"], "exit": 0, "output_sha256": ev.canonical_sha256(seeded)})
+            except SystemExit as exc:                                 # plan review 2 P1-4: a seeding failure is a recorded rehearsal failure
+                steps.append({"argv": ["seed_rehearsal_work"], "exit": 1, "output_sha256": hashlib.sha256(str(exc).encode("utf-8")).hexdigest()})
+        for argv in ([] if steps and steps[-1]["exit"] else t_commands(cache, work, tree) + [[sys.executable, "-m", "unittest", "discover", "-s", "tests", "-t", "."],
                                                      [sys.executable, "tests/benchmarks/round6_simulation.py", "--phase", "pre-T",
-                                                      "--cache-dir", str(cache), "--work", str(temp_work)]]:
+                                                      "--cache-dir", str(cache), "--work", str(temp_work)]]):
             code, out = _run_in_tree(tree, argv)
             steps.append({"argv": argv[1:3], "exit": code, "output_sha256": hashlib.sha256(out.encode("utf-8")).hexdigest()})
             if code != 0:
@@ -2486,7 +2546,7 @@ EOF
 ### Task 9: **[controller]** Promotion (spec §4.3; Keychain decryption authorized by the user for this archive)
 
 - [ ] **Step 1: Decrypt to `$W` only** — `security find-generic-password -a "$USER" -s atlassian-round5-sealed -w | openssl enc -d -aes-256-cbc -pbkdf2 -pass stdin -in ~/.atlassian_api_updater/archive/round5/sealed/round5-sealed.json.enc -out $W/round5-plain.json` (same cipher parameters as the Round 5 encryption ledger; the password never appears in argv or files). Check `ev.canonical_sha256` of each section against `round5_seal` in the benchmark (also done inside `promote`).
-- [ ] **Step 2: Promote and seal the payload** — `python -m tests.benchmarks.round6_labels promote --bench tests/benchmarks/search_queries.json --plain $W/round5-plain.json --out tests/benchmarks/search_queries.json`; ledger `{"event": "promotion_sealed", "promotion_payload_sha256", "seed_ids": "s-040..s-055", "regression_ids": "rn-015..rn-022"}` **before** any relabel step; `python -m tests.benchmarks.round6_labels verify --bench tests/benchmarks/search_queries.json --plain $W/round5-plain.json` → `ok`.
+- [ ] **Step 2: Promote and seal the payload** — `python -m tests.benchmarks.round6_labels promote --bench tests/benchmarks/search_queries.json --plain $W/round5-plain.json --out tests/benchmarks/search_queries.json`; ledger `{"event": "promotion_sealed", "promotion_payload_sha256", "seed_ids": "s-040..s-055", "regression_ids": "rn-015..rn-022"}` **before** any relabel step (historical pre-relabel evidence: re-checked at Task 10/H22 and on any H′ benchmark change, not at pre-T — T's classify may rewrite promoted seeds' `failure_classes`); `python -m tests.benchmarks.round6_labels verify --bench tests/benchmarks/search_queries.json --plain $W/round5-plain.json` → `ok`.
 - [ ] **Step 3: Remove the plaintext** — `rm $W/round5-plain.json` after Step 2 (the promoted records are now public seed/regression data by spec; the ciphertext stays archived). Ledger `round5_plaintext_removed`.
 
 ### Task 10: **[controller]** Relabel the 22 regression records (two stateless reviewers, third on disagreement)
@@ -2530,13 +2590,13 @@ EOF
 ### Task 12: **[controller + fresh reviewer]** Whole-branch review, `housekeeping_commit`
 
 - [ ] **Step 1: Fresh reviewer** — one fresh reviewer on the most capable model reviews `29f298f..HEAD` (H18–H22) against spec v1.6 + this plan (superpowers:requesting-code-review); findings are fixed as H′ commits (suite → `--phase H` → reviewer re-check) until findings 0.
-- [ ] **Step 1b: Re-measure before the pin (plan review 1 P1-4)** — if any H′ landed after Task 11: when `scorer_rule_cx.py` changed, re-run Task 8 Step 3 (new `scorer_rule_corpus_pinned` event); when the benchmark changed, re-run `round6_labels verify` and re-ledger `relabel_applied`; then always re-run Task 11 Step 1 on HEAD and require `h_adoption_ok == true` (otherwise Task 11 Step 2's ruling path).
+- [ ] **Step 1b: Re-measure before the pin (plan review 1 P1-4)** — if any H′ landed after Task 11: when `scorer_rule_cx.py` changed, re-run Task 8 Step 3 (new `scorer_rule_corpus_pinned` event); when the benchmark changed, require `training_split_sha256(HEAD) ==` the sealed H22 value (a `failure_classes`-only change keeps it) and re-run `round6_labels verify --sealed-payload <promotion_sealed value>` — **never re-ledger `relabel_applied`**; a different split is a semantic label change → STOP_FOR_AMENDMENT (the thread may rule `relabel_rerun_ruling`, after which Task 10 runs again with new independent reviews and only then a new `relabel_applied` is ledgered; `load_pre_t_evidence` rejects a second `relabel_applied` without that ruling); then always re-run Task 11 Step 1 on HEAD and require `h_adoption_ok == true` (otherwise Task 11 Step 2's ruling path).
 - [ ] **Step 2: Pin** — ledger `{"event": "housekeeping_commit", "sha": HEAD, "tooling_code_sha256": ev.tooling_code_sha256(ROOT), "intelligence_fingerprint": <from a search payload on $S>}` and `{"event": "runtime_stability_qualifying_start", "intelligence_fingerprint": <same>, "at": <now>}` (spec §6: the H final fingerprint restarts the qualifying window). From here the TOOLING_FILES and the scorer/policy structure are frozen.
 
 ### Task 13: **[controller]** Frozen texts and the real-data T rehearsal (spec §5.2)
 
 - [ ] **Step 1: Frozen texts into `$W/frozen/`** — `round6-worker-brief.md`, `round6-hidden-generation-prompt.md`, `round6-hidden-reviewer-prompt.md` = the Round 5 texts with the substitution table applied; in the worker brief the acceptance line is replaced by exactly: `Acceptance (Round 6 spec §4.2, byte-for-byte): tuning_accept := wv == 0 ∧ fr == 0 ∧ 10·sr3 ≥ 9·|seed| ∧ 10·src ≥ 9·|seed| ∧ 10·srk ≥ 9·src ∧ rp3 == |regression_positive| ∧ rpk == |regression_positive| ∧ 8·nab ≥ 7·|regression_negative| ∧ fixture_positive == 23/23 ∧ fixture_negative_raw == 6/6 ∧ counterexample ok (no loss, no uncovered proposer key) ∧ scorer_rule_ok (eligible > 0 ∧ 100·losses ≤ eligible) ∧ no validation errors`; the generation prompt's negative rule adds `every negative record carries "no_answer": true`; `round6-method-safety.json` as Round 5 Task 3 Step 3; `round6-counterexample-reference.json` per PR-6 (`cp tools/atlassian_docs/intelligence/data/search_aliases.json $W/aliases-h.json` first). `git show <housekeeping_commit>:tools/atlassian_docs/intelligence/data/concept_lexicon.json > $W/prior-concept_lexicon.json` and the same for `alias_candidates.json`.
-- [ ] **Step 2: Rehearse** — `python tests/benchmarks/round6_simulation.py --phase rehearsal --cache-dir $S --work $W` → exit 0, `rehearsal_report.failures == 0`, `git status --porcelain` unchanged. A failure is fixed by H′ (then Task 12 Step 1 re-check, `housekeeping_commit_moved`, rehearse again).
+- [ ] **Step 2: Rehearse** — `python tests/benchmarks/round6_simulation.py --phase rehearsal --cache-dir $S --work $W` → exit 0, `rehearsal_report.failures == 0`, `git status --porcelain` unchanged. A failure is fixed by H′, after which **Task 12 Steps 1 → 1b → 2 run in full** (re-check, re-measurement, `housekeeping_commit_moved`) and the rehearsal runs again (plan review 2 P1-3).
 
 ### Task 14: **[controller]** T: candidates, classify, carry, binding pre-T gate, freeze, T commit, post-T check
 
