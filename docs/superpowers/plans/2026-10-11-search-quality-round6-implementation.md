@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Plan version:** v5 (2026-10-11; v5 = plan review 4 **passed (P0 0 / P1 3, 구현 진행 가능)**; its P1s applied without re-review (spec §5.3): ruling value formats + canonical thread id, `relabel_committed` event binding the authorized benchmark to its commit/blob, direct tests of the immutable projection's normalizations; v4 = plan review 3 (P0 1 / P1 4) applied: an immutable training projection (`immutable_split_sha256`) that a `relabel_rerun_ruling` can never re-baseline — a rerun may only change relabel-managed fields, starts from the last authorized benchmark, and the ruling event is bound to the generation it replaces; the latest authorized `relabel_applied` is the baseline; no promotion-payload false STOP on `failure_classes`-only H′; direct tests for the rehearsal seeding failure and `compute_tuning_round`; v3 = plan review 2 (P0 2 / P1 4) applied: Round 6 proposer notes bound to `TUNING_ROUND` (pre-T, rehearsal and worker produce byte-identical alias policies); the H22 training split is immutable (a semantic change after H22 is a STOP, never a re-ledger); `promotion_sealed` is historical evidence only; stricter label provenance; rehearsal seeding failures are reported; v2 = plan review 1 (P0 4 / P1 5) applied: PR-7 adopted as spec v1.6 §3.0; `training_split_sha256` over a `failure_classes`-free projection, pinned at H22 and re-checked at pre-T and freeze; rehearsal work seeded with the pre-T evidence; PR-8 conflict detection → STOP; promotion payload re-checked after relabel; `verb_methods_sha256` provenance; loss reasons; H adoption re-measured before the pin; required label provenance schema)
+**Plan version:** v6 (2026-10-11; v6 = spec v1.7 (thread-2 ruling on the Task 11 H adoption STOP, ruling sha `bae06fff…`): Task 7′ (H′) adds recommendation eligibility to the usage layer (`eligible` rows, `ir`, eligible denominators for `src`/`rpk`, held_out coverage), the R1 direct-object head span (`search.r1_head`), and `ev.h_adoption_ok` (rule non-regression/safety gate); Task 11 uses it; benchmark, splits and corpus unchanged (no re-relabel); v5 = plan review 4 **passed (P0 0 / P1 3, 구현 진행 가능)**; its P1s applied without re-review (spec §5.3): ruling value formats + canonical thread id, `relabel_committed` event binding the authorized benchmark to its commit/blob, direct tests of the immutable projection's normalizations; v4 = plan review 3 (P0 1 / P1 4) applied: an immutable training projection (`immutable_split_sha256`) that a `relabel_rerun_ruling` can never re-baseline — a rerun may only change relabel-managed fields, starts from the last authorized benchmark, and the ruling event is bound to the generation it replaces; the latest authorized `relabel_applied` is the baseline; no promotion-payload false STOP on `failure_classes`-only H′; direct tests for the rehearsal seeding failure and `compute_tuning_round`; v3 = plan review 2 (P0 2 / P1 4) applied: Round 6 proposer notes bound to `TUNING_ROUND` (pre-T, rehearsal and worker produce byte-identical alias policies); the H22 training split is immutable (a semantic change after H22 is a STOP, never a re-ledger); `promotion_sealed` is historical evidence only; stricter label provenance; rehearsal seeding failures are reported; v2 = plan review 1 (P0 4 / P1 5) applied: PR-7 adopted as spec v1.6 §3.0; `training_split_sha256` over a `failure_classes`-free projection, pinned at H22 and re-checked at pre-T and freeze; rehearsal work seeded with the pre-T evidence; PR-8 conflict detection → STOP; promotion payload re-checked after relabel; `verb_methods_sha256` provenance; loss reasons; H adoption re-measured before the pin; required label provenance schema)
 
 **Goal:** Make the MCP search fit real agent use — recommend only with evidence, never recommend a wrong write — and judge Round 6 by the usage-grounded Discovery gate (reach@3, recommendation coverage, precision, write safety, abstention) on a fresh sealed hidden set.
 
@@ -10,7 +10,7 @@
 
 **Tech Stack:** Python 3.11 stdlib + the project's MCP SDK; `unittest` (`python -m unittest discover -s tests -t .`); ChatGPT Temporary chats for stateless reviewers; review thread 2 for rulings.
 
-**Spec:** `docs/superpowers/specs/2026-10-11-search-quality-round6-design.md` **v1.6** (review 4: P0 0 / P1 4, "구현 계획으로 진행 가능"; v1.6 = plan review 1 P0-1, the rule token stream §3.0). It inherits Round 5 spec v1.12 (and through it Round 4 v1.13 / Round 3 v1.25.1). "As Round 5 plan v8 Task N" imports that committed procedure verbatim with the substitution table below.
+**Spec:** `docs/superpowers/specs/2026-10-11-search-quality-round6-design.md` **v1.7** (v1.6 + thread-2 ruling: eligibility, R1 span, H adoption gate) (review 4: P0 0 / P1 4, "구현 계획으로 진행 가능"; v1.6 = plan review 1 P0-1, the rule token stream §3.0). It inherits Round 5 spec v1.12 (and through it Round 4 v1.13 / Round 3 v1.25.1). "As Round 5 plan v8 Task N" imports that committed procedure verbatim with the substitution table below.
 
 ## Global Constraints
 
@@ -2627,6 +2627,27 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ---
 
+### Task 7′ (H′, spec v1.7): recommendation eligibility, R1 direct-object head span, H adoption gate
+
+**Files:** `tests/benchmarks/evaluator.py` (usage layer), `tools/atlassian_docs/intelligence/search.py` (`r1_tokens`, `R1_BOUNDARY`, `r1_head`, `abstain_reason(query=…)`), `tests/tune_search_ranking.py` (`eligible_fn`, `evaluate_usage*`, `improved`, `no_worse`, `GridEvaluator._ordered`), `tests/diag_search_queries.py` (eligible rows), `tests/benchmarks/round6_simulation.py` (`BOUNDS`/`metric_violations`, synthetic metrics), tests in `tests/benchmarks/test_evaluator.py`, `tests/intelligence/test_scorer_rules.py`, `tests/test_tune_search_ranking.py`, `tests/test_diag_search_queries.py`, `tests/benchmarks/test_round6_simulation.py`.
+
+**Interfaces:**
+- `ev.usage_row(rec, ranked, recommended, eligible=True)` (row gains `"eligible"`), `ev.usage_rows(records, usage_fn, eligible_fn=None)` (`eligible_fn(query) -> bool`, default all eligible).
+- `ev.training_vector(...)` adds `ir` (ineligible seed/regression_positive rows that were recommended), `n_seed_elig`, `n_rp_elig`; `ev.accept_vector(m)` := `wv == 0 ∧ fr == 0 ∧ ir == 0 ∧ 10·sr3 ≥ 9·n_seed ∧ 10·src ≥ 9·n_seed_elig ∧ 10·srk ≥ 9·src ∧ rp3 == n_rp ∧ rpk == n_rp_elig ∧ 8·nab ≥ 7·n_rn` (missing `ir`/`n_*_elig` read as 0 / `n_seed` / `n_rp` for pre-v1.7 synthetic vectors); `ev.ACCEPT_COMPONENTS` / `ev.FALLBACK_ORDER` gain `("ir", -1)` after `fr`.
+- `ev.violation(row, section)`: an ineligible positive row violates iff it is recommended or misses the top 3.
+- `ev.gate_metrics`: coverage `16·cov ≥ 14·n_eligible_held_out`; new check `"eligibility"` = no ineligible held_out row recommended; counts gain `held_out_eligible`.
+- `ev.h_adoption_ok(m_on, m_off, scorer) -> bool` = spec v1.7 §3.5.
+- `search.r1_head(query, verb_methods, concepts)`; `search.abstain_reason(..., query=None)` (R1 uses `r1_head(query or " ".join(unigrams), …)`; R3 keeps `head_info`).
+- `tune.eligible_fn(rp) -> fn(query) -> bool` (production `method_intent` over `tokenize_unigrams`); `evaluate_usage(bench, fn, eligible_fn=None)`; `improved` counts an ineligible row's recommended → abstained; `no_worse` includes `ir`.
+
+- [ ] **Step 1: Failing tests** — evaluator: `test_eligibility_denominators_and_ir` (8 eligible + 2 ineligible seeds: `src`/`n_seed_elig` use 8, an ineligible recommended row sets `ir = 1` and fails `accept`), `test_fallback_order_covers_accept_components_once` updated to `["wv", "fr", "ir", "sr3", "srk", "src", "rp3", "rpk", "nab"]`, `test_violation_for_ineligible_rows`, `test_gate_coverage_uses_eligible_heldout`, `test_h_adoption_gate` (the Task 11 measured vectors: v1.6-style ON/OFF pass the v1.7 gate only when `10·src_on ≥ 9·n_seed_elig`); scorer rules: `test_r1_head_direct_object_span` (`create a new confluence page in a space` → `page`, `delete jira board column` → `column`, `move issue to sprint` → `sprint`, `register jira callbacks for events` → head not `event`), `test_r1_uses_span_in_payload` (fixture: `create page in space` keeps its POST recommendation when `space` is uncovered); tune: `test_eligible_fn_matches_method_intent`, `test_usage_rows_carry_eligibility`; sim: `M_OK` gains `ir`/`n_*_elig`.
+- [ ] **Step 2: Run → RED.**
+- [ ] **Step 3: Implement** per the interfaces (search: `r1_tokens(q)` = placeholder-free, camel-split, lower-case tokens of length ≥ 2 **keeping stopwords and duplicates**; `R1_BOUNDARY = {"in","for","of","on","with","by","at"}`; `r1_head` = `head_info` over the non-stopword tokens between the first `verb_methods` key and the first boundary).
+- [ ] **Step 4: Suite → OK; `round6_simulation --phase H` → ALL STEPS PASS.**
+- [ ] **Step 5: Commit** `H′ (spec v1.7): recommendation eligibility (ir, eligible denominators, held_out coverage), R1 direct-object head span, H adoption gate` (+ trailer). Ledger `housekeeping_amendment {"spec": "v1.7", "plan": "v6", "commit"}`.
+
+---
+
 ## Controller tasks
 
 `$S = ~/.atlassian_api_updater/round6-cache`, `$W = ~/.atlassian_api_updater/round6-work` (the ledger `$W/controller-events.jsonl` already holds `runtime_observation_started` and the review-4 ruling). Every STOP below goes to review thread 2 with a written report; the user is interrupted only for hard stops (decryption/encryption, push/merge) and completion reports.
@@ -2681,13 +2702,13 @@ rp, raw = policy.load_ranking(tune.RANKING_PATH), json.loads(tune.ALIASES_PATH.r
 ap, bench, point = tune._alias_policy(raw), tune._BENCH, dict(policy.load_ranking(tune.RANKING_PATH).constants)
 def body(st):
     corpus = cx6.corpus(st); kw = dict(bound_fingerprint=st.registry.fingerprint, aliases_sha256=ev.canonical_sha256(raw))
-    on = tune.evaluate_usage_point(st, rp, point, bench, ap)
+    on = tune.evaluate_usage_point(st, rp, point, bench, ap)                                 # rows carry eligibility (plan v6)
     with search.scorer_rules(()):
         off = tune.evaluate_usage_point(st, rp, point, bench, ap)
     return {"scorer_rule": cx6.compare(st, rp, point, ap, corpus, **kw), "per_rule_off": cx6.per_rule_off(st, rp, point, ap, corpus, **kw),
             "m_on": on["m"], "m_off": off["m"]}
 r = tune._with_state(S, body)
-r["h_adoption_ok"] = r["scorer_rule"]["ok"] and r["m_on"]["wv"] <= r["m_off"]["wv"] and r["m_on"]["fr"] <= r["m_off"]["fr"] and ev.accept_vector(r["m_on"])
+r["h_adoption_ok"] = ev.h_adoption_ok(r["m_on"], r["m_off"], r["scorer_rule"])          # spec v1.7 §3.5 (plan v6)
 with open(W / "controller-events.jsonl", "a", encoding="utf-8") as fh:
     fh.write(json.dumps({"event": "h_adoption_measurement", **r}) + "\n")
 print(json.dumps({k: r[k] for k in ("h_adoption_ok", "m_on", "m_off")}, indent=1)); print(r["scorer_rule"]["loss_list"])
