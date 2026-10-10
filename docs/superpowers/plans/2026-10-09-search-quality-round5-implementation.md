@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-09-search-quality-round5-design.md` **v1.10** (v1.7 passed review 8 with P0 0 / P1 3 "구현 계획으로 진행 가능"; v1.8 applied those P1s; v1.9 and v1.10 are planning-time deltas ruled on review thread 2: counterexample reference file at T, per-round T allowlist, and removal of §6.2 doc-relation extraction). The spec inherits Round 4 v1.13 (`docs/superpowers/specs/2026-10-09-search-quality-round4-design.md`) and, through it, Round 3 v1.25.1. "As Round 4 plan v7 Task N Step M" means `docs/superpowers/plans/2026-10-09-search-quality-round4-implementation.md` with the substitution table below applied verbatim.
 
-**Plan version:** v4 (2026-10-10; v4 = plan review 3 (P0 1/P1 3): pre-T blockers read the selected-constants counterexample and the dry-run `tuning_accept` (not only the lexicon-only check), exact reference input-key set checked against `$W` files, registry schema checks round/id types/uniqueness, reference-checker tests; v3 = plan review 2 (P0 2/P1 4): KU registry schema validator used by the H test and pre-T, ruling records carry date/summary; `selected` kept as the resolution provenance ledger through the concept cap; `prov` computed before use; single authority for validation blockers; blocker-kind list aligned; counterexample-reference self-check; v2 = plan review 1 (P0 3/P1 3): fresh Round 5 verdicts replace only pending pairs (`resolve_verdicts`), tuning round identity pinned by tests (dynamic `current_round`, KU via pending round before T), counterexample result carries scope/policy shas/selected constants and the final call gets titles+provenance with strict provenance validation, richer reference-file provenance, normalized path tokens, split blocker kinds).
+**Plan version:** v5 (2026-10-10; v5 = plan review 4 (P0 1/P1 3): lexicon-only counterexample validation errors join the single `alias_validation_error` blocker, interface name `lexicon_cx`, synthetic T reference satisfies the production schema (input binding scoped out explicitly), type guards for malformed ruling/user-decision records; v4 = plan review 3 (P0 1/P1 3): pre-T blockers read the selected-constants counterexample and the dry-run `tuning_accept` (not only the lexicon-only check), exact reference input-key set checked against `$W` files, registry schema checks round/id types/uniqueness, reference-checker tests; v3 = plan review 2 (P0 2/P1 4): KU registry schema validator used by the H test and pre-T, ruling records carry date/summary; `selected` kept as the resolution provenance ledger through the concept cap; `prov` computed before use; single authority for validation blockers; blocker-kind list aligned; counterexample-reference self-check; v2 = plan review 1 (P0 3/P1 3): fresh Round 5 verdicts replace only pending pairs (`resolve_verdicts`), tuning round identity pinned by tests (dynamic `current_round`, KU via pending round before T), counterexample result carries scope/policy shas/selected constants and the final call gets titles+provenance with strict provenance validation, richer reference-file provenance, normalized path tokens, split blocker kinds).
 
 ## Global Constraints
 
@@ -370,7 +370,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: Task 1 `canonical_key`; existing `select_candidate`, `propose_aliases`, `validate_alias_change`, `evaluate_point`, `ranking_with`, `_alias_policy`.
-- Produces: `ev.KNOWN_UNREACHABLE: dict[int, tuple]`, `ev.known_unreachable(round) -> frozenset`, `ev.t_allowlist(round) -> tuple`, `ev.ku_record_problems(round, bench, base_bench, registry_doc) -> list[str]`; `counterexample.canonical_policy_map(raw) -> dict`, `counterexample.diff(a, b) -> list`, `counterexample.counterexample_tokens(ckey) -> tuple`, `counterexample.suite(index, top1, pre_raw, static_raw, post_raw, titles=()) -> dict`, `counterexample.catalog_index(state) -> list`, `counterexample.production_top1(state, rp, point) -> callable`; `tune.tuning_accept(seed_res, reg_res, fixture_final, ku=frozenset(), cx=None) -> bool`; `PipelineResult.counterexample_result: dict | None`; `round5_simulation.pre_t_blockers(result, event, diagnostics=None, ku=…, cx=None, extra=())`.
+- Produces: `ev.KNOWN_UNREACHABLE: dict[int, tuple]`, `ev.known_unreachable(round) -> frozenset`, `ev.t_allowlist(round) -> tuple`, `ev.ku_record_problems(round, bench, base_bench, registry_doc) -> list[str]`; `counterexample.canonical_policy_map(raw) -> dict`, `counterexample.diff(a, b) -> list`, `counterexample.counterexample_tokens(ckey) -> tuple`, `counterexample.suite(index, top1, pre_raw, static_raw, post_raw, titles=()) -> dict`, `counterexample.catalog_index(state) -> list`, `counterexample.production_top1(state, rp, point) -> callable`; `tune.tuning_accept(seed_res, reg_res, fixture_final, ku=frozenset(), cx=None) -> bool`; `PipelineResult.counterexample_result: dict | None`; `round5_simulation.pre_t_blockers(result, event, diagnostics=None, ku=None, lexicon_cx=None, extra=())`.
 
 - [ ] **Step 1: KU registry, per-round allowlist, Round 5 freeze keys — failing tests**
 
@@ -418,6 +418,7 @@ class TestRound5Registry(unittest.TestCase):
         self.assertEqual(len(ev.ku_registry_schema_problems(5, bad)), 2)
         self.assertTrue(ev.ku_registry_schema_problems(5, {**good, "round": 4}))
         self.assertTrue(ev.ku_registry_schema_problems(5, {**good, "seeds": good["seeds"] + [{"cause": "no id"}]}))   # reported, no exception
+        self.assertTrue(ev.ku_registry_schema_problems(5, {**good, "approval": {"rulings": ["not an object"], "user_decision": {}}}))
 ```
 
 Run: `python -m unittest tests.benchmarks.test_evaluator.TestRound5Registry -v` → Expected: ERROR `AttributeError: … 'KNOWN_UNREACHABLE'`.
@@ -462,8 +463,14 @@ KU_SEED_FIELDS = ("id", "query_sha256", "record_sha256", "cause", "mechanisms_tr
 def ku_registry_schema_problems(round, registry_doc) -> list:
     """Round 5 spec §4.1 / AC-R5-03: required approval and seed fields, exactly the registry ids, five rulings."""
     out = []
-    ap = registry_doc.get("approval") or {}
+    ap = registry_doc.get("approval")
+    if not isinstance(ap, dict):
+        return ["approval: must be an object"]
     rulings = ap.get("rulings") or []
+    if not isinstance(rulings, list) or not all(isinstance(r, dict) for r in rulings):
+        return ["approval.rulings: must be a list of objects"]
+    if not isinstance(ap.get("user_decision") or {}, dict):
+        return ["approval.user_decision: must be an object"]
     if len(rulings) != 5:
         out.append(f"approval.rulings: expected 5, got {len(rulings)}")
     out += [f"ruling {i}: missing {f}" for i, r in enumerate(rulings) for f in KU_RULING_FIELDS if not r.get(f)]
@@ -909,6 +916,11 @@ class TestRound5PreT(unittest.TestCase):
         b = sim.pre_t_blockers(r, {"pass": True}, lexicon_cx={"scope": "lexicon_only", "ok": True, "losses": [], "classes": {"uncovered_proposer": []}, "validation_errors": []})
         self.assertEqual([x["kind"] for x in b], ["counterexample_loss"]); self.assertEqual(b[0]["losses"][0]["scope"], "final_policy")
 
+    def test_lexicon_only_validation_error_is_a_blocker(self):
+        lex = {"scope": "lexicon_only", "ok": False, "losses": [], "classes": {"uncovered_proposer": []}, "validation_errors": ["counterexample_diagnostic_incomplete"]}
+        b = sim.pre_t_blockers(self._res([]), {"pass": True}, lexicon_cx=lex)
+        self.assertEqual([x["kind"] for x in b], ["alias_validation_error"]); self.assertEqual(b[0]["errors"][0]["scope"], "lexicon_only")
+
     def test_false_accept_alone_is_a_blocker(self):
         self.assertEqual([x["kind"] for x in sim.pre_t_blockers(self._res([], accept=False), {"pass": True})], ["tuning_accept_false"])
 
@@ -997,7 +1009,10 @@ def counterexample_reference_problems(ref, work, registry_fp) -> list:
 
 
 def approval_blockers(work, registry_doc) -> list:
-    """Round 5 spec §4.1: each ruling file sha and the user-decision event sha recompute exactly."""
+    """Round 5 spec §4.1: each ruling file sha and the user-decision event sha recompute exactly (schema problems are reported by
+    registry_blockers; malformed approval records yield a blocker here instead of an exception)."""
+    if ev.ku_registry_schema_problems(ROUND, registry_doc):
+        return [{"kind": "ku_approval_mismatch", "problems": ["registry schema invalid (see ku_record_mismatch)"]}]
     probs = []
     for r in registry_doc.get("approval", {}).get("rulings", []):
         f = work / "rulings" / r["file"]
@@ -1025,8 +1040,10 @@ def pre_t_blockers(result, event, diagnostics=None, ku=None, lexicon_cx=None, ex
     broken = {"regression_effective": result.regression_result["effective_passed"], "fixture_final": list(result.fixture_result["final"])}
     if result.regression_result["effective_passed"] != 14 or result.fixture_result["final"]:
         out.append({"kind": "tuning_accept_false", "invariants": broken})
-    if result.validation_errors:
-        out.append({"kind": "alias_validation_error", "errors": list(result.validation_errors)})
+    all_errors = [{"scope": "lexicon_only", "error": e} for e in (lexicon_cx or {}).get("validation_errors", [])] + \
+                 [{"scope": "final_policy", "error": e} for e in result.validation_errors]          # final-policy cx errors are already in result.validation_errors
+    if all_errors:
+        out.append({"kind": "alias_validation_error", "errors": all_errors})
     if not event["pass"]:
         out.append({"kind": "inherited_ac_r3_01_failure", "event": {k: event.get(k) for k in ("seed", "regression_raw", "regression_effective", "fixture_failing")}})
     results = [c for c in (lexicon_cx, getattr(result, "counterexample_result", None)) if c is not None]
@@ -1036,7 +1053,7 @@ def pre_t_blockers(result, event, diagnostics=None, ku=None, lexicon_cx=None, ex
     unc = sorted({(c.get("scope"), json.dumps(k)) for c in results for k in c["classes"].get("uncovered_proposer", [])})
     if unc:
         out.append({"kind": "counterexample_uncovered_proposer", "keys": [{"scope": sc, "key": json.loads(k)} for sc, k in unc]})
-    # counterexample validation errors reach result.validation_errors via run_pipeline_result (single authority, no duplicate blocker)
+    # final-policy counterexample validation errors arrive via result.validation_errors (run_pipeline_result); lexicon-only ones via lexicon_cx (above)
     if not result.tuning_accept and not out:
         out.append({"kind": "tuning_accept_false", "invariants": {"reason": "dry-run tuning_accept false with no other blocker"}})
     return out + list(extra)
@@ -1044,10 +1061,10 @@ def pre_t_blockers(result, event, diagnostics=None, ku=None, lexicon_cx=None, ex
 
 4. `pre_t_verdict(seed_passed, …)` becomes `pre_t_verdict(failed_ids, reg_raw, reg_eff, fixture_failing)` = `set(failed_ids) <= ev.known_unreachable(ROUND) and reg_raw >= 10 and reg_eff == 14 and not fixture_failing`; `pre_t_event` passes the failed id list.
 5. `run_pre_t(cache, work)`: first load `ref = round5-counterexample-reference.json`, `pre_raw = ref["policy"]`, `snapshot_titles = ref["titles"]` and `prov = cx.provenance_from_lexicon(concept_lexicon.json)` (all before any `cx.suite` call); then compute `extra = input_blockers(work) + registry_blockers(bench, base_bench, registry_doc) + approval_blockers(work, registry_doc)` plus `[{"kind": "counterexample_reference_mismatch", "problems": p}]` when `p = counterexample_reference_problems(ref, work, fp)` is non-empty where `base_bench` is the `56b4b0e` blob of `tests/benchmarks/search_queries.json` (`git show 56b4b0e:tests/benchmarks/search_queries.json`) and `registry_doc` the committed `round5-known-unreachable.json`; compute the lexicon-only counterexample at baseline constants: `cxr = cx.suite(index, cx.production_top1(state, rp, dict(rp.constants)), pre_raw, aliases_raw, aliases_raw, summaries, titles=snapshot_titles, provenance=prov)` (the reference is written by the controller in Task 4 Step 5; a lexicon-only pre-T check with `cx.suite(…, scope="lexicon_only")` follows); pass `counterexample_fn=lambda point, working: cx.suite(index, cx.production_top1(state, rp, point), pre_raw, aliases_raw, working, summaries, titles=snapshot_titles, provenance=prov, scope="final_policy", selected_constants=point)` into `dry_run_pipeline` → `tune.run_pipeline_result`; call `pre_t_blockers(result, event, diagnostics, lexicon_cx=cxr, extra=extra)`; record `cxr`, `result.counterexample_result`, `result.tuning_accept`, all blockers and `pipeline_result_sha256` (which now includes `counterexample_result`) in the event. Event name stays `pre_t_checkpoint`.
-6. `apply_T`: after the synthetic merge write `concept_lexicon.json["components"]["union_resolution"] = "source-precedence"` and `concept_lexicon.json["selected"]` for the synthetic entries (`{"source": "round4_generation", "provenance_rank": 1}`), and write `tests/benchmarks/round5-counterexample-reference.json` = `{"round": 5, "policy": <pre-merge aliases raw>, "policy_canonical_sha256": canonical_sha256(…), "canonical_policy_map": …, "titles": <synthetic bundle snapshot titles>, "inputs": {}}` before the freeze call.
+6. `apply_T`: after the synthetic merge write `concept_lexicon.json["components"]["union_resolution"] = "source-precedence"` and `concept_lexicon.json["selected"]` for the synthetic entries (`{"source": "round4_generation", "provenance_rank": 1}`), and write `tests/benchmarks/round5-counterexample-reference.json` before the freeze call with the production schema: `policy` (pre-merge aliases raw), `policy_canonical_sha256`, `canonical_policy_map` + `canonical_policy_map_sha256` (computed exactly as Task 4 Step 5), `titles` (synthetic bundle snapshot titles), and `inputs` with the exact 12-key set (the nine `INPUT_SHA256` keys mapped to their fixed shas, `aliases_premerge_sha256`/`round4_reference_lexicon_sha256` = shas of two synthetic files written under `SIM_DIR`, `registry_fingerprint` = the fixture snapshot's). `apply_T` asserts `counterexample_reference_problems(ref, SIM_DIR, fp) == []`; the synthetic lifecycle does not simulate the real archived input files themselves (the pure checker tests in Step 7 cover the input binding).
 7. `BRANCHES`, X_preB and recovery helpers are unchanged apart from the round number.
 
-Run: `python -m unittest tests.benchmarks.test_round5_simulation -v` → Expected: 8 OK.
+Run: `python -m unittest tests.benchmarks.test_round5_simulation -v` → Expected: 9 OK.
 
 - [ ] **Step 8: Suite, `--phase H`, AC-R5-05, `TOOLING_FILES`, commit H17**
 
