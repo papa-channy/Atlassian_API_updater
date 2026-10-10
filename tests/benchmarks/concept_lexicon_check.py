@@ -436,6 +436,7 @@ def carry_forward(lexicon_doc, prior_lexicon_doc, cands_doc, prior_cands_doc, pr
     current resolution does not define are carried with entry-level provenance (current values/provenance win on collision); prior
     candidates are kept only in the provenance-only `carried_candidates` field, never in the active `candidates` surface."""
     lex, cands = copy.deepcopy(lexicon_doc), copy.deepcopy(cands_doc)
+    prior_lexicon_doc, prior_cands_doc = copy.deepcopy(prior_lexicon_doc), copy.deepcopy(prior_cands_doc)   # outputs never alias the prior files
     prior, prior_carried = prior_lexicon_doc.get("lexicon") or {}, prior_lexicon_doc.get("carried_selected") or {}
     carried = {w: t for w, t in sorted(prior.items()) if w not in lex["lexicon"]}
     lex["lexicon"] = {**carried, **lex["lexicon"]}

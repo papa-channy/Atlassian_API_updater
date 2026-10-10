@@ -101,7 +101,7 @@ Round 3–4의 `union_docs`(같은 key는 첫 입력이 이김)를 다음으로 
 4. **해석:** key마다 eligible 후보 중 **source precedence(rank)가 가장 높은 후보 하나**를 고른다. eligible 후보가 없으면 key는 rejected(후보별 사유 목록).
 5. **후행 gate(상속, 대체 없음):** 해석된 lexicon 전체에 상속된 lexicon gate(`seed-incompatible`, `seed-regression`)를 적용한다. gate는 해석된 entry를 **제거만** 할 수 있고, 같은 key의 다른(오래된) 후보로 **대체하지 않는다**(fallback 금지). 제거로 reachable seed가 실패하면 그것은 pre-T(§4)·counterexample(§8)에서 드러나며 STOP_FOR_AMENDMENT다.
 6. **기록:** `concept_lexicon.json`의 각 entry에 `source`·`provenance_rank`, rejected 항목에 후보별 사유, gate 제거 항목에 `gate_reason`; `components`에 `union_resolution: "source-precedence"`와 source 표(§5).
-7. **누적 provenance(v1.12, A′):** 병합 후 `carry_forward`가 이전 frozen lexicon 중 Round 5 해소에 없는 entry를 `lexicon`에 이월하고 entry별 `carried_selected`(원래 라운드·타깃·이전 provenance)와 `components.carried_from`(이전 라운드, 이전 두 파일 sha)을 기록한다; Round 5 값·provenance가 우선. `alias_candidates.json`의 `candidates`는 Round 5 active 후보만이고 이전 후보는 `carried_candidates`(출처 증명 전용 — proposer·validation·replay는 `candidates`만 읽는다).
+7. **누적 provenance(v1.12, A′):** 병합 후(그리고 Task 5 Step 1 후보 생성 후) `carry_forward`가 이전 frozen lexicon 중 Round 5 해소 결과 `lexicon`에 없는 entry(Round 5가 `rejected`로 기록한 key 포함 — 정책에 남아 있는 한 출처가 필요하다)를 `lexicon`에 이월하고 entry별 `carried_selected`(원래 라운드·타깃·이전 provenance)와 `components.carried_from`(이전 라운드, 이전 두 파일 sha)을 기록한다; Round 5 값·provenance가 우선. `alias_candidates.json`의 `candidates`는 Round 5 active 후보만이고 이전 후보는 `carried_candidates`(출처 증명 전용 — proposer·validation·replay는 `candidates`만 읽는다).
 7. 구문(phrase) key도 같은 규칙(정렬 토큰 집합이 canonical key, Round 3 v1.25 표시 규칙 유지).
 
 ### 6.2 (v1.10 삭제) 문서 근거 같은 제품 동의어

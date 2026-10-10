@@ -315,3 +315,16 @@ class TestRound5CarryForward(unittest.TestCase):
         lex2, cands2 = clc.carry_forward({**self.NEW_LEX, "round": 6}, lex, {"candidates": {}}, cands, prior_shas={"concept_lexicon_sha256": "L5", "alias_candidates_sha256": "C5"})
         self.assertEqual(lex2["carried_selected"]["crew"]["from_round"], 2)              # original round preserved through chains
         self.assertIn("feedback", cands2["carried_candidates"]); self.assertIn("hour", cands2["carried_candidates"])
+
+
+class TestRound5CarryIsolation(unittest.TestCase):
+    def test_inputs_unchanged_and_outputs_independent(self):
+        import copy as _copy
+        prior_lex = {"round": 2, "lexicon": {"crew": ["team"]}, "carried_selected": {}, "selected": {"crew": {"source": "round2", "notes": ["a"]}}}
+        prior_c = {"candidates": {"feedback": {"targets": ["comment"]}}}
+        new_lex, new_c = {"round": 5, "lexicon": {}, "selected": {}}, {"candidates": {}}
+        before = _copy.deepcopy((new_lex, prior_lex, new_c, prior_c))
+        lex, cands = clc.carry_forward(new_lex, prior_lex, new_c, prior_c, prior_shas={})
+        self.assertEqual((new_lex, prior_lex, new_c, prior_c), before)
+        lex["carried_selected"]["crew"]["selected"]["notes"].append("mutated"); cands["carried_candidates"]["feedback"]["targets"].append("x")
+        self.assertEqual((prior_lex, prior_c), before[1::2])                       # outputs share no objects with the prior documents
