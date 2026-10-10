@@ -1,6 +1,6 @@
-You are labelling search queries against an API catalog. The attached file is the complete operation catalog (one operation per
-line: key, method, path, operationId, summary, tags). For each record below decide only from the catalog whether some operation
-answers the query as an action a developer would call.
+You are labelling search queries against an API catalog. The attached file is the complete operation catalog (a JSON array; each
+operation has key = "<source>:<METHOD>:<path>", source, method, summary, tags). For each record below decide only from the catalog
+whether some operation answers the query as an action a developer would call.
 
 Rules:
 - Use only the attached catalog. Do not guess operations that are not in it.
