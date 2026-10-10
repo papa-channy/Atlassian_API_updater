@@ -396,7 +396,8 @@ def files_sha256(root, files) -> str:
 EVALUATION_CODE_FILES = tuple(sorted(("tests/benchmarks/evaluator.py", "tests/benchmarks/test_evaluator.py",
                                       "tests/diag_search_queries.py", "tests/tune_search_ranking.py",
                                       "tests/benchmarks/round_seal.py", "tests/benchmarks/alias_candidates_tool.py",
-                                      "tests/benchmarks/regression_reference.py")))
+                                      "tests/benchmarks/regression_reference.py",
+                                      "tests/benchmarks/scorer_rule_cx.py")))                                                   # Round 6 (H21a)
 TOOLING_FILES = tuple(sorted(EVALUATION_CODE_FILES + ("tests/benchmarks/concept_lexicon_check.py",
                                                       "tests/benchmarks/test_round_seal.py", "tests/test_tune_search_ranking.py",
                                                       "tests/test_diag_search_queries.py", "tests/intelligence/test_policy.py",
@@ -405,7 +406,8 @@ TOOLING_FILES = tuple(sorted(EVALUATION_CODE_FILES + ("tests/benchmarks/concept_
                                                       "tests/benchmarks/doc_titles.py", "tests/benchmarks/test_doc_titles.py",            # Round 4 (H14)
                                                       "tests/benchmarks/round4_simulation.py", "tests/benchmarks/test_round4_simulation.py",    # Round 4 (H15)
                                                       "tests/benchmarks/counterexample.py", "tests/benchmarks/test_counterexample.py",
-                                                      "tests/benchmarks/round5_simulation.py", "tests/benchmarks/test_round5_simulation.py")))   # Round 5 (H17)
+                                                      "tests/benchmarks/round5_simulation.py", "tests/benchmarks/test_round5_simulation.py",    # Round 5 (H17)
+                                                      "tests/benchmarks/test_scorer_rule_cx.py")))                                                # Round 6 (H21a)
 
 
 def evaluation_code_sha256(root) -> str:
