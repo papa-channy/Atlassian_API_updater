@@ -407,9 +407,20 @@ def baseline_sha256(aliases_raw, ranking_raw, fp, cands_doc, bench, root=ROOT) -
                                     "evaluation_code_sha256": ev.evaluation_code_sha256(root), "tuning_grid_sha256": ev.tuning_grid_sha256(ranking_raw)})
 
 
-def tuning_accept(seed_res, reg_res, fixture_final) -> bool:
-    """spec §5.5 v1.22: seed 39/39 ∧ regression_effective 14/14 ∧ fixture positive 23/23 ∧ fixture negative raw 6/6."""
-    return seed_res["passed"] == SEED_TOTAL and reg_res["effective_passed"] == REGRESSION_TOTAL and not fixture_final
+KU = ev.known_unreachable(ev.pending_round() or ROUND)                 # Round 5 spec §4.1: the pending round before T (pre-T dry-run), the frozen round after T; empty without a registry
+
+
+def reachable_results(raw_results, ku):
+    """(point, seed_res, reg_res) -> (point, reachable_passed, regression_passed); KU pass counts never enter selection."""
+    total = SEED_TOTAL - len(ku)
+    return [(p, total - len({f["id"] for f in s["failed"]} - ku), r["passed"]) for p, s, r in raw_results]
+
+
+def tuning_accept(seed_res, reg_res, fixture_final, ku=frozenset(), cx=None) -> bool:
+    """Round 5 spec §4.2 base_tuning_accept: failed ⊆ KU ∧ regression effective ∧ fixture ∧ counterexample ok (when computed)."""
+    failed = {f["id"] for f in seed_res["failed"]}
+    seed_ok = failed <= set(ku) and seed_res["passed"] == SEED_TOTAL - len(failed & set(ku))      # empty KU → exactly seed 39/39 (Round 4)
+    return seed_ok and reg_res["effective_passed"] == REGRESSION_TOTAL and not fixture_final and (cx is None or cx["ok"])
 
 
 LOG_MUTABLE_KEYS = ("run_log_sha256", "status", "adopted", "reject_reason", "reject_evidence")
@@ -448,19 +459,20 @@ def run_pipeline(evaluate_fn, bench, aliases_raw, cands_doc, grid, baseline, fix
     fixture-admissible grid points, then the proposer exactly once at those constants under the same fixture constraint.
     Returns (results, selected, working, patch, seed_res, reg_res, fixture_fail) where fixture_fail =
     {"constants": [grid_points indices excluded], "final": [ids failing with the final config]}."""
-    results, excluded = [], []
+    raw, excluded = [], []
     for i, point in enumerate(grid_points(grid)):
         if fixture_fn(point, aliases_raw):
             excluded.append(i); continue
         s, r = evaluate_fn(point, aliases_raw)
-        results.append((point, s["passed"], r["passed"]))
-    if not results:
+        raw.append((point, s, r))
+    if not raw:
         raise SystemExit("error: every constants grid point fails the r0 fixture suite (fixture_fail)")
-    selected = select_candidate(results, baseline, grid)
+    results = reachable_results(raw, KU)                                    # Round 5 spec §4.2: KU pass counts never rank points
+    selected = select_candidate(results, baseline, grid, seed_total=SEED_TOTAL - len(KU))
 
     def eval_fn(raw):
         s, r = evaluate_fn(selected, raw)
-        return frozenset(f["id"] for f in s["failed"]), frozenset(f["id"] for f in r["failed"])
+        return frozenset(f["id"] for f in s["failed"]) - KU, frozenset(f["id"] for f in r["failed"])      # proposer never sees KU seeds
     working, patch = propose_aliases(eval_fn, bench, aliases_raw, cands_doc["candidates"],
                                      fixture_fn=lambda raw: fixture_fn(selected, raw))
     seed_res, reg_res = evaluate_fn(selected, working)
@@ -477,16 +489,32 @@ class PipelineResult:
     regression_result: dict
     fixture_result: dict
     tuning_accept: bool
+    counterexample_result: dict = None
 
 
-def run_pipeline_result(evaluate_fn, bench, aliases_raw, cands_doc, grid, baseline, fixture_fn, queries, classes) -> PipelineResult:
-    """The ONE production orchestration, pure: run_pipeline (grid → select_candidate once → propose_aliases once) then
-    validate_alias_change and tuning_accept. main() and round4_simulation --phase pre-T both call this."""
+def final_counterexample_fn(state, rp, aliases_raw, round=None, root=None):
+    """Round 5 spec §8: the final-policy counterexample at the selected constants (pre = T-committed reference policy,
+    static = the B aliases, post = the working aliases); None before Round 5."""
+    round, root = (ROUND if round is None else round), (ROOT if root is None else pathlib.Path(root))
+    if round < 5:
+        return None
+    from tests.benchmarks import counterexample as cx
+    ref = json.loads((root / f"tests/benchmarks/round{round}-counterexample-reference.json").read_text(encoding="utf-8"))
+    prov = cx.provenance_from_lexicon(json.loads((RANKING_PATH.parent / "concept_lexicon.json").read_text(encoding="utf-8")))
+    index, summaries = cx.catalog_index(state)
+    return lambda point, working: cx.suite(index, cx.production_top1(state, rp, point), ref["policy"], aliases_raw, working, summaries,
+                                           titles=ref["titles"], provenance=prov, scope="final_policy", selected_constants=point)
+
+
+def run_pipeline_result(evaluate_fn, bench, aliases_raw, cands_doc, grid, baseline, fixture_fn, queries, classes, counterexample_fn=None) -> PipelineResult:
     results, selected, working, patch, seed_res, reg_res, fixture_fail = run_pipeline(evaluate_fn, bench, aliases_raw, cands_doc, grid, baseline, fixture_fn)
     errors = validate_alias_change(aliases_raw, working, cands_doc["candidates"], queries, classes)
-    accept = tuning_accept(seed_res, reg_res, fixture_fail["final"]) and not errors
-    res = PipelineResult(selected, patch, errors, seed_res, reg_res, fixture_fail, accept)
-    res.grid_results, res.working_aliases = results, working          # extra attributes for main()'s log line (not part of the dataclass)
+    cxr = counterexample_fn(selected, working) if counterexample_fn is not None else None
+    if cxr is not None:
+        errors = errors + list(cxr["validation_errors"])
+    accept = tuning_accept(seed_res, reg_res, fixture_fail["final"], ku=KU, cx=cxr) and not errors      # PipelineResult.tuning_accept (spec §4.2)
+    res = PipelineResult(selected, patch, errors, seed_res, reg_res, fixture_fail, accept, cxr)
+    res.grid_results, res.working_aliases = results, working
     return res
 
 
@@ -591,7 +619,8 @@ def main(argv=None) -> int:
             return fixture_failures_fast(ge_fx, rp, point, fx_bench) if raw_sha(raw) == b_sha else fixture_failures(fx_state, rp, point, fx_bench, _alias_policy(raw))
         t0 = time.perf_counter()
         res = run_pipeline_result(evaluate_fn, bench, aliases_raw, cands_doc, rp.tuning_grid, dict(rp.baseline), fixture_fn,
-                                  {r["id"]: r["query"] for r in bench["seed"]}, {r["id"]: r["failure_classes"] for r in bench["seed"]})
+                                  {r["id"]: r["query"] for r in bench["seed"]}, {r["id"]: r["failure_classes"] for r in bench["seed"]},
+                                  counterexample_fn=final_counterexample_fn(state, rp, aliases_raw))
         results, selected, working, patch = res.grid_results, res.selected_point, res.working_aliases, res.proposed_actions
         seed_res, reg_res, fixture_fail = res.seed_result, res.regression_result, res.fixture_result
         grid_runtime = time.perf_counter() - t0
@@ -610,17 +639,20 @@ def main(argv=None) -> int:
             print(f"  FAIL {f['id']} {f['query']!r}")
             for key, score, sig in top5(state, rp, selected, f["query"], _alias_policy(working)):
                 print(f"      {score:8.3f}  {key}  {json.dumps(sig, sort_keys=True)}")
-        return fp, results, selected, working, patch, seed_res, reg_res, fixture_fail, grid_runtime, fixture_diag
+        return fp, results, selected, working, patch, seed_res, reg_res, fixture_fail, grid_runtime, fixture_diag, res
     try:
-        fp, results, selected, working, patch, seed_res, reg_res, fixture_fail, grid_runtime, fixture_diag = _with_state(cache, body)
+        fp, results, selected, working, patch, seed_res, reg_res, fixture_fail, grid_runtime, fixture_diag, res = _with_state(cache, body)
     except SystemExit as e:
         print(e, file=sys.stderr); return 2
     return _finish(args, rp, fp, results, selected, patch, working, seed_res, reg_res,
-                   baseline_sha256(aliases_raw, ranking_raw, fp, cands_doc, bench), fixture_fail, grid_runtime, fixture_diag)
+                   baseline_sha256(aliases_raw, ranking_raw, fp, cands_doc, bench), fixture_fail, grid_runtime, fixture_diag,
+                   accept=res.tuning_accept, counterexample=res.counterexample_result)
 
 
-def _finish(args, rp, fp, results, selected, patch, working, seed_res, reg_res, base_sha, fixture_fail, grid_runtime, fixture_diag) -> int:
-    accept = tuning_accept(seed_res, reg_res, fixture_fail["final"])
+def _finish(args, rp, fp, results, selected, patch, working, seed_res, reg_res, base_sha, fixture_fail, grid_runtime, fixture_diag,
+            accept=None, counterexample=None) -> int:
+    if accept is None:                                               # direct callers without a PipelineResult (main always passes it)
+        accept = tuning_accept(seed_res, reg_res, fixture_fail["final"], ku=KU)
     effects = plan_effects(args.dry_run, accept)
     pos_fail = [i for i in fixture_fail["final"] if i.startswith("s-")]
     neg_fail = [i for i in fixture_fail["final"] if i.startswith("rn-")]
@@ -629,14 +661,14 @@ def _finish(args, rp, fp, results, selected, patch, working, seed_res, reg_res, 
             "baseline_sha256": base_sha, "events": list(EVENTS), "constants_selected": selected,
             "grid_size": len(results) + len(fixture_fail["constants"]), "grid_runtime_s": round(grid_runtime, 1),
             "fixture_fail": fixture_fail,
-            "passing_combos": sum(1 for _, s, r in results if s == SEED_TOTAL and r == REGRESSION_TOTAL),
+            "passing_combos": sum(1 for _, s, r in results if s == SEED_TOTAL - len(KU) and r == REGRESSION_TOTAL),   # results carry reachable counts
             "aliases_proposed": patch, "seed": f"{seed_res['passed']}/{SEED_TOTAL}",
             "regression_negative": f"{reg_res['effective_passed']}/{REGRESSION_TOTAL}",
             "regression_raw": f"{reg_res['raw_passed']}/{REGRESSION_TOTAL}",
             "fixture_positive": f"{FIXTURE_COUNTS[0] - len(pos_fail)}/{FIXTURE_COUNTS[0]}",
             "fixture_negative_raw": f"{FIXTURE_COUNTS[1] - len(neg_fail)}/{FIXTURE_COUNTS[1]}",
             "fixture_negative_effective_diagnostic": f"{fixture_diag['effective_passed']}/{FIXTURE_COUNTS[1]}",
-            "tuning_accept": accept, "tuning_failed": not accept,
+            "tuning_accept": accept, "tuning_failed": not accept, "counterexample": counterexample,
             "result_sha256": result_sha256(selected, patch),
             "dirty": dirty_paths(_git("status", "--porcelain", "--untracked-files=no")), "note": args.note,
             "ranking_structure_sha256": rp.structure_sha256, "baseline": dict(rp.baseline)}

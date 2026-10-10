@@ -41,6 +41,7 @@ HIDDEN_RULES_R3 = ("schema", "catalog", "words", "ascii", "actionable", "negativ
 RECORD_RULES, SECTION_RULES = HIDDEN_RULES_R3[:10], HIDDEN_RULES_R3[10:]
 _ASCII_QUERY = re.compile(r"^[A-Za-z0-9 '\-]+$")
 HIDDEN_RULES_R4 = tuple(HIDDEN_RULES_R3)                                   # Round 4 spec §4: same ids, same order
+HIDDEN_RULES_R5 = tuple(HIDDEN_RULES_R4)                                   # Round 5: same ids, same order
 RECOVERY_DIFF_ONLY = ("tests/benchmarks/round_recoveries.json",)
 CANONICAL_SUITE = "python -m unittest discover -s tests -t ."
 
@@ -582,7 +583,7 @@ def freeze_entry(round: int, cache_dir, reference_enc=None, doc_sources=None, do
         r2 = _read_json(BENCH_PATH)["round2_seal"]
         entry["reference_set"] = {"origin": "round2", "enc_sha256": ev.file_sha256(reference_enc),
                                   "held_out_sha256": r2["held_out_sha256"], "negative_sha256": r2["negative_sha256"]}
-        entry["hidden_generation_rules"] = list(HIDDEN_RULES_R4 if round >= 4 else HIDDEN_RULES_R3)
+        entry["hidden_generation_rules"] = list(HIDDEN_RULES_R5 if round >= 5 else HIDDEN_RULES_R4 if round >= 4 else HIDDEN_RULES_R3)
         entry["hidden_set_origin"] = f"round{round}"
     if round >= 4:
         from tests.benchmarks import doc_titles as dt                  # Round 4 spec §5 / §9.6 (Task 2)
@@ -594,10 +595,18 @@ def freeze_entry(round: int, cache_dir, reference_enc=None, doc_sources=None, do
         entry["doc_titles_source_bundle_sha256"] = dt.bundle_sha256(doc_sources)
         entry["doc_titles_snapshot_sha256"] = ev.file_sha256(doc_titles_path)
         changed = ev.changed_files_since(ROOT, base_commit)
-        outside = [p for p in changed if p not in ev.T_ALLOWLIST]
+        outside = [p for p in changed if p not in ev.t_allowlist(round)]
         if outside:
             raise SystemExit(f"REFUSED: files outside the T allowlist changed since {base_commit}: {outside}")
         entry["t_policy_files"] = ev.t_policy_files(ROOT, base_commit)
+    if round >= 5:                                                     # Round 5 spec §4.1, §6.1, §9
+        lex = _read_json(RANKING_PATH.parent / "concept_lexicon.json")
+        entry["known_unreachable_seeds"] = sorted(ev.KNOWN_UNREACHABLE[round])
+        entry["known_unreachable_registry_sha256"] = ev.file_sha256(ROOT / f"tests/benchmarks/round{round}-known-unreachable.json")
+        entry["lexicon_union_resolution"] = (lex.get("components") or {}).get("union_resolution")
+        entry["counterexample_reference_sha256"] = ev.file_sha256(ROOT / f"tests/benchmarks/round{round}-counterexample-reference.json")
+        if entry["lexicon_union_resolution"] != "source-precedence":
+            raise SystemExit("REFUSED: concept_lexicon.json was not built by the Round 5 source-precedence resolution")
     return entry
 
 

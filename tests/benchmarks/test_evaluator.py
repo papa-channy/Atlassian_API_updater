@@ -772,4 +772,50 @@ class TestRound5Pending(unittest.TestCase):
         self.assertEqual(ev.PRE_FREEZE_NONVERB_STRUCTURE_SHA256[5], ev.PRE_FREEZE_NONVERB_STRUCTURE_SHA256[4])
 
     def test_live_tree_pending_round_is_5(self):
-        self.assertEqual(ev.pending_round(), 5)
+        """Before T round 5 is pending; from T on it is the frozen current round (no pending round)."""
+        self.assertTrue(ev.pending_round() == 5 or (ev.pending_round() is None and ev.current_round()["round"] == 5),
+                        (ev.pending_round(), ev.current_round()))
+
+
+class TestRound5Registry(unittest.TestCase):
+    """Round 5 spec §4.1/§9: exact KU set mirrored from the spec, record machine-check, per-round T allowlist, freeze keys."""
+    SPEC = pathlib.Path(__file__).resolve().parents[2] / "docs/superpowers/specs/2026-10-09-search-quality-round5-design.md"
+
+    def test_registry_equals_spec_set(self):
+        import re
+        m = re.search(r"`KNOWN_UNREACHABLE = \{5: \(([^)]*)\)\}`", self.SPEC.read_text(encoding="utf-8"))
+        self.assertEqual(ev.KNOWN_UNREACHABLE[5], tuple(re.findall(r'"(s-\d+)"', m.group(1))))
+        self.assertEqual(ev.known_unreachable(5), frozenset({"s-004", "s-027", "s-039"})); self.assertEqual(ev.known_unreachable(4), frozenset())
+
+    def test_t_allowlist_round4_unchanged_round5_exact(self):
+        self.assertEqual(ev.T_ALLOWLIST, ev.t_allowlist(4))
+        self.assertIn("tests/benchmarks/round5-counterexample-reference.json", ev.t_allowlist(5))
+        self.assertFalse(any("lexicon-generation-prompt" in p or "lexicon-review-prompt" in p for p in ev.t_allowlist(5)))
+        self.assertNotIn("tests/benchmarks/round5-known-unreachable.json", ev.t_allowlist(5))
+
+    def test_round5_freeze_keys(self):
+        self.assertEqual(ev.freeze_key_set(5) - ev.freeze_key_set(4),
+                         {"known_unreachable_seeds", "known_unreachable_registry_sha256", "lexicon_union_resolution", "counterexample_reference_sha256"})
+
+    def test_ku_record_check(self):
+        rec = {"id": "s-004", "query": "transition issue status", "expected_top1_any": ["k"], "forbidden_top1": [], "failure_classes": []}
+        bench = {"seed": [rec]}; doc = {"seeds": [{"id": "s-004", "query_sha256": ev.sha256_text(rec["query"]), "record_sha256": ev.canonical_sha256(rec)}]}
+        self.assertEqual(ev.ku_record_problems(5, bench, bench, doc, ids=("s-004",)), [])
+        changed = {"seed": [{**rec, "query": "transition an issue"}]}
+        self.assertTrue(ev.ku_record_problems(5, changed, bench, doc, ids=("s-004",)))       # same id, different query → problem
+
+    def test_committed_registry_file_matches_bench(self):
+        doc = json.loads((pathlib.Path(__file__).resolve().parent / "round5-known-unreachable.json").read_text(encoding="utf-8"))
+        self.assertEqual(sorted(s["id"] for s in doc["seeds"]), sorted(ev.KNOWN_UNREACHABLE[5]))
+        bench = json.loads(BENCH.read_text(encoding="utf-8"))
+        self.assertEqual(ev.ku_record_problems(5, bench, bench, doc), []); self.assertEqual(ev.ku_registry_schema_problems(5, doc), [])
+
+    def test_registry_schema_validator(self):
+        good = {"round": 5, "approval": {"rulings": [{**{f: "x" for f in ev.KU_RULING_FIELDS}, "file": f"r{i}.md"} for i in range(5)], "user_decision": {"date": "d", "words": "w", "event_sha256": "e"}},
+                "seeds": [{f: (sid if f == "id" else "x") for f in ev.KU_SEED_FIELDS} for sid in ev.KNOWN_UNREACHABLE[5]]}
+        self.assertEqual(ev.ku_registry_schema_problems(5, good), [])
+        bad = json.loads(json.dumps(good)); del bad["approval"]["rulings"][0]["summary"]; bad["seeds"] = bad["seeds"][:2]
+        self.assertEqual(len(ev.ku_registry_schema_problems(5, bad)), 2)
+        self.assertTrue(ev.ku_registry_schema_problems(5, {**good, "round": 4}))
+        self.assertTrue(ev.ku_registry_schema_problems(5, {**good, "seeds": good["seeds"] + [{"cause": "no id"}]}))   # reported, no exception
+        self.assertTrue(ev.ku_registry_schema_problems(5, {**good, "approval": {"rulings": ["not an object"], "user_decision": {}}}))

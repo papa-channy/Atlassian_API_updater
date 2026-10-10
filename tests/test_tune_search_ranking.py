@@ -1,6 +1,7 @@
 import json
 import pathlib
 import unittest
+from unittest import mock
 from tests import tune_search_ranking as tune
 from tools.atlassian_docs.intelligence import policy
 
@@ -541,3 +542,69 @@ class TestPipelineResult(unittest.TestCase):
         import inspect
         src = inspect.getsource(tune.main)
         self.assertIn("run_pipeline_result(", src); self.assertNotIn(" run_pipeline(", src)
+class TestRound5KU(unittest.TestCase):
+    """Round 5 spec §4.2: KU semantics in acceptance, proposer input and selector; counterexample term; equivalences."""
+    def _res(self, failed):
+        return {"passed": 39 - len(failed), "failed": [{"id": i} for i in failed]}
+
+    def test_tuning_accept_ku_and_equivalence(self):
+        reg = {"effective_passed": tune.REGRESSION_TOTAL}
+        ku = frozenset({"s-004", "s-027", "s-039"})
+        self.assertTrue(tune.tuning_accept(self._res(["s-004", "s-039"]), reg, [], ku=ku))
+        self.assertFalse(tune.tuning_accept(self._res(["s-004", "s-028"]), reg, [], ku=ku))
+        self.assertEqual(tune.tuning_accept(self._res(["s-004"]), reg, []), tune.tuning_accept(self._res(["s-004"]), reg, [], ku=frozenset()))
+        self.assertFalse(tune.tuning_accept(self._res([]), reg, [], ku=ku, cx={"ok": False}))
+
+    def test_selector_ignores_ku_pass_counts(self):
+        ku = frozenset({"s-004", "s-027", "s-039"})
+        a = tune.reachable_results([({"p": 1}, self._res(["s-004"]), {"passed": 14})], ku)
+        b = tune.reachable_results([({"p": 1}, self._res(["s-004", "s-027", "s-039"]), {"passed": 14})], ku)
+        self.assertEqual(a, b)                                   # same reachable performance → same selector input
+        c = tune.reachable_results([({"p": 2}, self._res(["s-028"]), {"passed": 14})], ku)
+        self.assertEqual(c[0][1], tune.SEED_TOTAL - len(ku) - 1)
+
+    def test_proposer_never_sees_ku(self):
+        seen = []
+        def evaluate_fn(point, raw):
+            return self._res(["s-004", "s-028"]), {"passed": 14, "failed": [], "effective_passed": 14, "raw_passed": 10}
+        def fake_propose(eval_fn, bench, base, cands, fixture_fn=None):
+            seen.append(eval_fn(base)[0]); return base, {"aliases": {}, "rules": [], "notes": {}}
+        consts = json.loads(tune.RANKING_PATH.read_text(encoding="utf-8"))["constants"]
+        grid = {k: [v] for k, v in consts.items()}                    # one grid point: every CONSTANT_KEY present
+        with mock.patch.object(tune, "propose_aliases", fake_propose), mock.patch.object(tune, "KU", frozenset({"s-004"})):
+            tune.run_pipeline(evaluate_fn, {"seed": []}, {"aliases": {}, "rules": [], "notes": {}}, {"candidates": {}},
+                              grid, dict(consts), lambda p, r: [])
+        self.assertEqual(seen, [frozenset({"s-028"})])
+
+
+class TestRound5Wiring(unittest.TestCase):
+    """Round 5 plan Task 2 Step 6 pin tests: round identity and the final-policy counterexample built by main."""
+    def test_round_identity(self):
+        import importlib
+        from tests.benchmarks import evaluator as ev
+        self.assertEqual(tune.KU, ev.known_unreachable(5))                     # before T: KU from the pending round
+        try:
+            with mock.patch.object(ev, "load_round_freeze", return_value=[{"round": 1}, {"round": 2}, {"round": 5}]):
+                importlib.reload(tune)
+                self.assertEqual(tune.ROUND, 5); self.assertEqual(tune.KU, ev.known_unreachable(5))
+                self.assertTrue(tune.LOG_REL.endswith("search-tuning-round5.jsonl"))
+                self.assertEqual(tune.round_note("w", "s-001", "t")["origin"], "round5")
+        finally:
+            importlib.reload(tune)
+
+    def test_main_loads_reference(self):
+        import tempfile
+        from tests.benchmarks import counterexample as cx
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td); (root / "tests/benchmarks").mkdir(parents=True)
+            ref = {"policy": {"aliases": {"ticket": ["issue"]}, "rules": [], "notes": {}}, "titles": [{"product": "jira", "url": "u", "title": "t"}]}
+            (root / "tests/benchmarks/round5-counterexample-reference.json").write_text(json.dumps(ref), encoding="utf-8")
+            calls = []
+            with mock.patch.object(cx, "catalog_index", return_value=([], {})), mock.patch.object(cx, "production_top1", return_value="TOP1"), \
+                    mock.patch.object(cx, "suite", side_effect=lambda *a, **k: calls.append((a, k)) or {"ok": True}):
+                fn = tune.final_counterexample_fn(object(), policy.load_ranking(), {"aliases": {}}, round=5, root=root)
+                fn({"c": 1}, {"aliases": {"x": ["y"]}})
+                self.assertIsNone(tune.final_counterexample_fn(object(), policy.load_ranking(), {}, round=4, root=root))
+        (a, k), = calls
+        self.assertEqual((k["scope"], k["selected_constants"], k["titles"]), ("final_policy", {"c": 1}, ref["titles"]))
+        self.assertEqual((a[1], a[2], a[3], a[4]), ("TOP1", ref["policy"], {"aliases": {}}, {"aliases": {"x": ["y"]}}))
