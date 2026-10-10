@@ -216,9 +216,8 @@ def _write(p, doc):
     """Benchmark outputs keep round_seal._write_bench's layout (one record per line) so the committed diff stays reviewable."""
     from tests.benchmarks import round_seal as rs
     p = pathlib.Path(p)
-    if not p.exists():
-        p.write_text("{}\n", encoding="utf-8")
-    rs._write_bench(p, doc)
+    p.write_text(json.dumps(doc, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")    # the hand-formatted prefix is indent-2 JSON
+    rs._write_bench(p, doc)                                                                    # held_out onward: one record per line
 
 
 def _catalog_keys(path) -> set:

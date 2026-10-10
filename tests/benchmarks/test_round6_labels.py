@@ -196,16 +196,14 @@ class TestRelabel(unittest.TestCase):
 
 
 class TestCliWritesBenchFormat(unittest.TestCase):
-    def test_promote_output_uses_the_benchmark_writer(self):
-        """A CLI rewrite of search_queries.json keeps round_seal._write_bench's layout (one record per line), so H22 diffs stay additive."""
-        import json, pathlib, tempfile
-        from tests.benchmarks import round_seal as rs
-        plain = _plain(); bench = {**_bench(), "held_out": [], "negative": [], "round5_seal": _seal(plain)}
+    def test_rewrite_of_the_committed_benchmark_is_byte_identical(self):
+        """CLI rewrites keep the committed layout (indent-2 prefix, one hidden record per line), so H22 diffs stay additive."""
+        import json, pathlib, shutil, tempfile
+        real = L.ROOT / "tests/benchmarks/search_queries.json"
         with tempfile.TemporaryDirectory() as td:
-            b, pp, ref = pathlib.Path(td) / "b.json", pathlib.Path(td) / "p.json", pathlib.Path(td) / "ref.json"
-            for f in (b, ref):
-                f.write_text("{}\n", encoding="utf-8")
-            rs._write_bench(b, bench); pp.write_text(json.dumps(plain), encoding="utf-8")
-            self.assertEqual(L.main(["promote", "--bench", str(b), "--plain", str(pp), "--out", str(b)]), 0)
-            rs._write_bench(ref, json.loads(b.read_text(encoding="utf-8")))
-            self.assertEqual(b.read_text(encoding="utf-8"), ref.read_text(encoding="utf-8"))
+            t = pathlib.Path(td) / "b.json"; shutil.copyfile(real, t)
+            L._write(t, json.loads(real.read_text(encoding="utf-8")))
+            self.assertEqual(t.read_bytes(), real.read_bytes())
+            fresh = pathlib.Path(td) / "new.json"
+            L._write(fresh, json.loads(real.read_text(encoding="utf-8")))
+            self.assertEqual(fresh.read_bytes(), real.read_bytes())
