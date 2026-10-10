@@ -650,85 +650,9 @@
       "ambiguous": false
     }
   ],
-  "held_out": [],
-  "negative": [],
-  "round1_seal": {
-    "held_out_sha256": "606535e10663bc7ab7eb2a16a8044f9a5f9e4aa326eb082193c6a1233553e568",
-    "negative_sha256": "17313ddaf16080c0b2a9e9729f80c0313fccc9b8020cf51888f48a272aa3a1d4",
-    "held_out_distribution": {
-      "source": {
-        "confluence": 5,
-        "jira-platform": 7,
-        "jira-software": 4
-      },
-      "method": {
-        "DELETE": 4,
-        "GET": 5,
-        "POST": 4,
-        "PUT": 3
-      },
-      "product_named": 4
-    },
-    "negative_distribution": {
-      "source": {
-        "confluence": 2,
-        "jira-platform": 5,
-        "jira-software": 1
-      },
-      "method": {
-        "GET": 6,
-        "POST": 1,
-        "PUT": 1
-      },
-      "product_named": 2
-    },
-    "registry_fingerprint": "a13ba026ab6b6a3f19845a3aaa694a1e98427220fdbdc74bb711c316730a793f",
-    "spec_sha256": {
-      "confluence": "e4de6c1134a19d8717a309dbb7285a525ae31a9e3c733d046e9e144741f6e313",
-      "jira-platform": "2aa6ef12fca713d5b7fc10042e458439ccb3e20eab5d86fd82323f56783f7ab1",
-      "jira-software": "cb7e24b331ad9b31944fa9a588f70d4ea60d74d1dfb52d39a59770230b79207a"
-    }
-  },
-  "round2_seal": {
-    "held_out_sha256": "0f990f2fc134cd41eca2061931c65cfdd4bc21819051f9ae8538c0258aaf3540",
-    "negative_sha256": "7750a2020923bcf8ddfa22e79f2c071001db9942194c3215cc03c60f363dde76",
-    "held_out_distribution": {
-      "source": {
-        "confluence": 5,
-        "jira-platform": 7,
-        "jira-software": 4
-      },
-      "method": {
-        "DELETE": 3,
-        "GET": 4,
-        "POST": 6,
-        "PUT": 3
-      },
-      "product_named": 6
-    },
-    "negative_distribution": {
-      "source": {
-        "confluence": 4,
-        "jira-platform": 2,
-        "jira-software": 2
-      },
-      "method": {
-        "GET": 2,
-        "POST": 3,
-        "PUT": 3
-      },
-      "product_named": 7
-    },
-    "registry_fingerprint": "f3c2e9d48aa85c96ca62cdd84ff700cc2714c888cf4148b3a91c604c45b47b62",
-    "spec_sha256": {
-      "confluence": "b3d010b6438677d864495ce15828f57080ff72afe190efdf7f86f0f5140b700d",
-      "jira-platform": "3d0edfb02ff91873f99421de579182b6d66f07b804063e9ae458a30d6901a2db",
-      "jira-software": "cb7e24b331ad9b31944fa9a588f70d4ea60d74d1dfb52d39a59770230b79207a"
-    },
-    "machine_check": "passed",
-    "origins": {
-      "held_out": "held_out-r2",
-      "negative": "negative-r2"
-    }
-  }
+  "held_out": {"sealed": true, "round": 5, "count": 16, "sha256": "c11872473b41be12133a951d9cc65ef04483c2530628e8dcb2192592f6a2304c", "distribution": {"source": {"confluence": 5, "jira-platform": 6, "jira-software": 5}, "method": {"DELETE": 3, "GET": 5, "POST": 5, "PUT": 3}, "product_named": 4}},
+  "negative": {"sealed": true, "round": 5, "count": 8, "sha256": "723087b013f8057ada39814b6cf1d1ff982816c3c73e8287fc1f44702a8cab6f", "distribution": {"source": {"confluence": 4, "jira-platform": 2, "jira-software": 2}, "method": {"DELETE": 2, "GET": 3, "POST": 2, "PUT": 1}, "product_named": 8}},
+  "round1_seal": {"held_out_sha256": "606535e10663bc7ab7eb2a16a8044f9a5f9e4aa326eb082193c6a1233553e568", "negative_sha256": "17313ddaf16080c0b2a9e9729f80c0313fccc9b8020cf51888f48a272aa3a1d4", "held_out_distribution": {"source": {"confluence": 5, "jira-platform": 7, "jira-software": 4}, "method": {"DELETE": 4, "GET": 5, "POST": 4, "PUT": 3}, "product_named": 4}, "negative_distribution": {"source": {"confluence": 2, "jira-platform": 5, "jira-software": 1}, "method": {"GET": 6, "POST": 1, "PUT": 1}, "product_named": 2}, "registry_fingerprint": "a13ba026ab6b6a3f19845a3aaa694a1e98427220fdbdc74bb711c316730a793f", "spec_sha256": {"confluence": "e4de6c1134a19d8717a309dbb7285a525ae31a9e3c733d046e9e144741f6e313", "jira-platform": "2aa6ef12fca713d5b7fc10042e458439ccb3e20eab5d86fd82323f56783f7ab1", "jira-software": "cb7e24b331ad9b31944fa9a588f70d4ea60d74d1dfb52d39a59770230b79207a"}},
+  "round2_seal": {"held_out_sha256": "0f990f2fc134cd41eca2061931c65cfdd4bc21819051f9ae8538c0258aaf3540", "negative_sha256": "7750a2020923bcf8ddfa22e79f2c071001db9942194c3215cc03c60f363dde76", "held_out_distribution": {"source": {"confluence": 5, "jira-platform": 7, "jira-software": 4}, "method": {"DELETE": 3, "GET": 4, "POST": 6, "PUT": 3}, "product_named": 6}, "negative_distribution": {"source": {"confluence": 4, "jira-platform": 2, "jira-software": 2}, "method": {"GET": 2, "POST": 3, "PUT": 3}, "product_named": 7}, "registry_fingerprint": "f3c2e9d48aa85c96ca62cdd84ff700cc2714c888cf4148b3a91c604c45b47b62", "spec_sha256": {"confluence": "b3d010b6438677d864495ce15828f57080ff72afe190efdf7f86f0f5140b700d", "jira-platform": "3d0edfb02ff91873f99421de579182b6d66f07b804063e9ae458a30d6901a2db", "jira-software": "cb7e24b331ad9b31944fa9a588f70d4ea60d74d1dfb52d39a59770230b79207a"}, "machine_check": "passed", "origins": {"held_out": "held_out-r2", "negative": "negative-r2"}},
+  "round5_seal": {"held_out_sha256": "c11872473b41be12133a951d9cc65ef04483c2530628e8dcb2192592f6a2304c", "negative_sha256": "723087b013f8057ada39814b6cf1d1ff982816c3c73e8287fc1f44702a8cab6f", "held_out_distribution": {"source": {"confluence": 5, "jira-platform": 6, "jira-software": 5}, "method": {"DELETE": 3, "GET": 5, "POST": 5, "PUT": 3}, "product_named": 4}, "negative_distribution": {"source": {"confluence": 4, "jira-platform": 2, "jira-software": 2}, "method": {"DELETE": 2, "GET": 3, "POST": 2, "PUT": 1}, "product_named": 8}, "registry_fingerprint": "e308a232d6c9b19a7413e8a38c89b895e44e503581d529c2a31b31fbde179853", "spec_sha256": {"confluence": "b3d010b6438677d864495ce15828f57080ff72afe190efdf7f86f0f5140b700d", "jira-platform": "a7a330f1e293c58d57420fa58f1b95c22976dad5390ce466b55150051040fe9e", "jira-software": "cb7e24b331ad9b31944fa9a588f70d4ea60d74d1dfb52d39a59770230b79207a"}, "machine_check": "passed", "origins": {"held_out": "held_out-r5", "negative": "negative-r5"}, "needle_manifest_sha256": "e98817ef153f85af5b22353a018f022989f25c84e520ffb17aa053ff251a450b"}
 }
