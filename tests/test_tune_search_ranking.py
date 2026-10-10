@@ -584,7 +584,7 @@ class TestRound5Wiring(unittest.TestCase):
     def test_round_identity(self):
         import importlib
         from tests.benchmarks import evaluator as ev
-        self.assertEqual(tune.KU, ev.known_unreachable(ev.pending_round() or 5))   # before T: KU from the pending round (6 since H19)
+        self.assertEqual(tune.KU, ev.known_unreachable(ev.pending_round() or ev.current_round()["round"]))   # pending round before T, frozen round after
         try:
             with mock.patch.object(ev, "load_round_freeze", return_value=[{"round": 1}, {"round": 2}, {"round": 5}]), \
                     mock.patch.object(ev, "pending_round", return_value=None):

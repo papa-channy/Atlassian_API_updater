@@ -593,6 +593,8 @@ class TestRound2PreTProvenance(unittest.TestCase):
         for path in (LEXICON, CANDIDATES_DOC):
             doc, e = self._doc(path)
             if doc is not None:
+                if path == LEXICON and e["round"] >= 6 and doc.get("round", e["round"]) < e["round"]:
+                    e = ev.freeze_for(doc["round"])      # Round 6 spec §5: the lexicon is carried, not re-resolved - bound to its own round's S
                 self.assertEqual(doc["generated_from"]["registry_fingerprint"], e["source_registry_fingerprint"], path.name)
 
     def test_lexicon_generated_from_frozen_verb_inventory(self):
