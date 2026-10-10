@@ -185,3 +185,19 @@ class TestRelabel(unittest.TestCase):
         txt = L.render_relabel_input([{"id": "rn-001", "query": "remove page 1"}], "PROMPT\n{RECORDS}\n")
         self.assertIn('"rn-001"', txt); self.assertIn("remove page 1", txt)
         self.assertNotIn("forbidden", txt); self.assertNotIn("expected", txt)
+
+
+class TestCliWritesBenchFormat(unittest.TestCase):
+    def test_promote_output_uses_the_benchmark_writer(self):
+        """A CLI rewrite of search_queries.json keeps round_seal._write_bench's layout (one record per line), so H22 diffs stay additive."""
+        import json, pathlib, tempfile
+        from tests.benchmarks import round_seal as rs
+        plain = _plain(); bench = {**_bench(), "held_out": [], "negative": [], "round5_seal": _seal(plain)}
+        with tempfile.TemporaryDirectory() as td:
+            b, pp, ref = pathlib.Path(td) / "b.json", pathlib.Path(td) / "p.json", pathlib.Path(td) / "ref.json"
+            for f in (b, ref):
+                f.write_text("{}\n", encoding="utf-8")
+            rs._write_bench(b, bench); pp.write_text(json.dumps(plain), encoding="utf-8")
+            self.assertEqual(L.main(["promote", "--bench", str(b), "--plain", str(pp), "--out", str(b)]), 0)
+            rs._write_bench(ref, json.loads(b.read_text(encoding="utf-8")))
+            self.assertEqual(b.read_text(encoding="utf-8"), ref.read_text(encoding="utf-8"))
