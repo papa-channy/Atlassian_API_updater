@@ -1,13 +1,31 @@
 """Round 6 spec §3 / §8: R0–R3, abstain_reason precedence, results invariance, rules-off == Round 5 (golden)."""
+import contextlib
+import dataclasses
 import json
 import pathlib
+import tempfile
 import unittest
+from types import MappingProxyType
 from unittest import mock
 
 from tests.intelligence.helpers import make_state
 from tools.atlassian_docs.intelligence import policy, search
 
-GOLDEN = json.loads((pathlib.Path(__file__).resolve().parents[1] / "fixtures" / "round5_search_golden.json").read_text(encoding="utf-8"))
+FIXTURES = pathlib.Path(__file__).resolve().parents[1] / "fixtures"
+GOLDEN = json.loads((FIXTURES / "round5_search_golden.json").read_text(encoding="utf-8"))
+GOLDEN_POLICY = json.loads((FIXTURES / "round5_search_golden_policy.json").read_text(encoding="utf-8"))
+
+
+@contextlib.contextmanager
+def golden_policy(rp=None):
+    """The constants and alias policy the golden was captured under (C may tune both; the rule invariances are judged at H's policy)."""
+    rp = rp or policy.ranking()
+    with tempfile.TemporaryDirectory() as td:
+        pth = pathlib.Path(td) / "aliases.json"; pth.write_text(json.dumps(GOLDEN_POLICY["aliases"]), encoding="utf-8")
+        ap = policy.load_aliases(pth)
+    rpg = dataclasses.replace(rp, constants=MappingProxyType(dict(GOLDEN_POLICY["constants"])))
+    with mock.patch.object(policy, "ranking", return_value=rpg), mock.patch.object(policy, "aliases", return_value=ap):
+        yield
 JP = "jira-platform:"
 
 
@@ -109,12 +127,12 @@ class TestScorerRules(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             pth = pathlib.Path(td) / "r.json"; pth.write_text(json.dumps(raw), encoding="utf-8")
             rp = policy.load_ranking(pth)
-        with mock.patch.object(policy, "ranking", return_value=rp):
+        with golden_policy(rp):
             for q, g in GOLDEN.items():
                 self.assertEqual([r["key"] for r in self.s(q)["results"]], g["keys"], q)
 
     def test_rules_off_equals_round5_behavior(self):
-        with search.scorer_rules(()):
+        with golden_policy(), search.scorer_rules(()):
             for q, g in GOLDEN.items():
                 p = self.s(q)
                 self.assertEqual(([r["key"] for r in p["results"]], [r["score"] for r in p["results"]], p["actionable"], p["recommended_operation"]),
@@ -122,9 +140,18 @@ class TestScorerRules(unittest.TestCase):
 
     def test_abstention_never_changes_results(self):
         for q, g in GOLDEN.items():
-            with search.scorer_rules(("R0", "R1", "R2")):                                         # R3 is the only ordering rule
+            with golden_policy(), search.scorer_rules(("R0", "R1", "R2")):                       # R3 is the only ordering rule
                 p = self.s(q)
             self.assertEqual([r["key"] for r in p["results"]], g["keys"], q)
+
+    def test_golden_checks_survive_a_changed_live_policy(self):
+        """Round 6 H21d (simulation branch D): C changes constants and aliases; the Round 5 golden equivalences are judged under the
+        policy the golden was captured with, so a tuned live policy cannot break them."""
+        tuned = dataclasses.replace(policy.ranking(), constants=MappingProxyType({**dict(policy.ranking().constants), "method_match_bonus": 1.0}))
+        with mock.patch.object(policy, "ranking", return_value=tuned):
+            with golden_policy(), search.scorer_rules(()):
+                for q, g in GOLDEN.items():
+                    self.assertEqual([r["key"] for r in self.s(q)["results"]], g["keys"], q)
 
     def test_r0_generic_token_diagnostics_recorded(self):
         """spec §8 (review 4 P1-2): weak-floor limits, recorded not gated. Values are the fixture registry's."""
