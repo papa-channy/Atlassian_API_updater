@@ -799,7 +799,7 @@ class TestRound5Registry(unittest.TestCase):
 
     def test_ku_record_check(self):
         rec = {"id": "s-004", "query": "transition issue status", "expected_top1_any": ["k"], "forbidden_top1": [], "failure_classes": []}
-        bench = {"seed": [rec]}; doc = {"seeds": [{"id": "s-004", "query_sha256": ev.sha256_text(rec["query"]), "record_sha256": ev.canonical_sha256(rec)}]}
+        bench = {"seed": [rec]}; doc = {"seeds": [{"id": "s-004", "query_sha256": ev.sha256_text(rec["query"]), "record_sha256": ev.canonical_sha256(ev.ku_identity(rec))}]}
         self.assertEqual(ev.ku_record_problems(5, bench, bench, doc, ids=("s-004",)), [])
         changed = {"seed": [{**rec, "query": "transition an issue"}]}
         self.assertTrue(ev.ku_record_problems(5, changed, bench, doc, ids=("s-004",)))       # same id, different query → problem
@@ -819,3 +819,23 @@ class TestRound5Registry(unittest.TestCase):
         self.assertTrue(ev.ku_registry_schema_problems(5, {**good, "round": 4}))
         self.assertTrue(ev.ku_registry_schema_problems(5, {**good, "seeds": good["seeds"] + [{"cause": "no id"}]}))   # reported, no exception
         self.assertTrue(ev.ku_registry_schema_problems(5, {**good, "approval": {"rulings": ["not an object"], "user_decision": {}}}))
+
+
+class TestRound5KuIdentity(unittest.TestCase):
+    """Round 5 spec v1.11 §4.1 (thread 2 ruling (a), 2026-10-10): KU record identity excludes the derived failure_classes."""
+    BASE = {"id": "s-004", "query": "transition issue status", "expected_top1_any": ["k"], "forbidden_top1": [], "origin": "seed",
+            "ambiguous": False, "failure_classes": ["R6"]}
+
+    def _check(self, cur):
+        doc = {"seeds": [{"id": "s-004", "query_sha256": ev.sha256_text(cur["query"]), "record_sha256": ev.canonical_sha256(ev.ku_identity(cur))}]}
+        return ev.ku_record_problems(5, {"seed": [cur]}, {"seed": [self.BASE]}, doc, ids=("s-004",))
+
+    def test_reclassified_failure_classes_are_not_a_mismatch(self):
+        self.assertEqual(self._check({**self.BASE, "failure_classes": []}), [])
+
+    def test_query_change_is_a_mismatch(self):
+        self.assertTrue(self._check({**self.BASE, "query": "transition issue state"}))
+
+    def test_expected_or_forbidden_change_is_a_mismatch(self):
+        self.assertTrue(self._check({**self.BASE, "expected_top1_any": ["other"]}))
+        self.assertTrue(self._check({**self.BASE, "forbidden_top1": ["k2"]}))

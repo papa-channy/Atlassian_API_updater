@@ -239,8 +239,16 @@ def ku_registry_schema_problems(round, registry_doc) -> list:
     return out
 
 
+KU_DERIVED_FIELDS = ("failure_classes",)                                # Round 5 spec v1.11 §4.1: recomputed at T, not identity
+
+
+def ku_identity(record) -> dict:
+    """Round 5 spec v1.11 §4.1 (thread 2 ruling (a)): a KU seed's identity is its record minus the derived failure_classes."""
+    return {k: v for k, v in record.items() if k not in KU_DERIVED_FIELDS}
+
+
 def ku_record_problems(round, bench, base_bench, registry_doc, ids=None) -> list:
-    """Round 5 spec §4.1: every KU seed record equals the start-commit record and the registry's query/record hashes."""
+    """Round 5 spec §4.1 (v1.11): every KU seed's identity equals the start-commit identity and the registry's query/record hashes."""
     ids = tuple(ids) if ids is not None else KNOWN_UNREACHABLE.get(round, ())
     cur = {r["id"]: r for r in bench["seed"]}; base = {r["id"]: r for r in base_bench["seed"]}
     reg = {s["id"]: s for s in registry_doc.get("seeds", [])}
@@ -249,9 +257,9 @@ def ku_record_problems(round, bench, base_bench, registry_doc, ids=None) -> list
         r, b, g = cur.get(sid), base.get(sid), reg.get(sid)
         if r is None or b is None or g is None:
             out.append(f"{sid}: missing in bench/base/registry"); continue
-        if canonical_sha256(r) != canonical_sha256(b):
+        if canonical_sha256(ku_identity(r)) != canonical_sha256(ku_identity(b)):
             out.append(f"{sid}: seed record differs from the start commit")
-        if g.get("query_sha256") != sha256_text(r["query"]) or g.get("record_sha256") != canonical_sha256(r):
+        if g.get("query_sha256") != sha256_text(r["query"]) or g.get("record_sha256") != canonical_sha256(ku_identity(r)):
             out.append(f"{sid}: registry query/record sha mismatch")
     return out
 

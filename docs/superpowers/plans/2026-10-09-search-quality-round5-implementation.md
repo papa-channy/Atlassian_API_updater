@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-09-search-quality-round5-design.md` **v1.10** (v1.7 passed review 8 with P0 0 / P1 3 "구현 계획으로 진행 가능"; v1.8 applied those P1s; v1.9 and v1.10 are planning-time deltas ruled on review thread 2: counterexample reference file at T, per-round T allowlist, and removal of §6.2 doc-relation extraction). The spec inherits Round 4 v1.13 (`docs/superpowers/specs/2026-10-09-search-quality-round4-design.md`) and, through it, Round 3 v1.25.1. "As Round 4 plan v7 Task N Step M" means `docs/superpowers/plans/2026-10-09-search-quality-round4-implementation.md` with the substitution table below applied verbatim.
 
-**Plan version:** v6 (2026-10-10; **plan review 5 of v5 = P0 0 / P1 3 "구현 진행 가능"**; v6 applies those P1s: `registry_blockers` short-circuits on schema problems, reference `titles_sha256` recomputed from the bound snapshot, explicit `Path` for the simulation work dir; v5 = plan review 4 (P0 1/P1 3): lexicon-only counterexample validation errors join the single `alias_validation_error` blocker, interface name `lexicon_cx`, synthetic T reference satisfies the production schema (input binding scoped out explicitly), type guards for malformed ruling/user-decision records; v4 = plan review 3 (P0 1/P1 3): pre-T blockers read the selected-constants counterexample and the dry-run `tuning_accept` (not only the lexicon-only check), exact reference input-key set checked against `$W` files, registry schema checks round/id types/uniqueness, reference-checker tests; v3 = plan review 2 (P0 2/P1 4): KU registry schema validator used by the H test and pre-T, ruling records carry date/summary; `selected` kept as the resolution provenance ledger through the concept cap; `prov` computed before use; single authority for validation blockers; blocker-kind list aligned; counterexample-reference self-check; v2 = plan review 1 (P0 3/P1 3): fresh Round 5 verdicts replace only pending pairs (`resolve_verdicts`), tuning round identity pinned by tests (dynamic `current_round`, KU via pending round before T), counterexample result carries scope/policy shas/selected constants and the final call gets titles+provenance with strict provenance validation, richer reference-file provenance, normalized path tokens, split blocker kinds).
+**Plan version:** v7 (2026-10-10; v7 = spec v1.11 KU identity (thread 2 ruling (a)): `ku_identity(record)` excludes the derived `failure_classes` in `ku_record_problems` and the registry `record_sha256`, H′ with three regression tests (`TestRound5KuIdentity`); v6 = **plan review 5 of v5 = P0 0 / P1 3 "구현 진행 가능"**; v6 applies those P1s: `registry_blockers` short-circuits on schema problems, reference `titles_sha256` recomputed from the bound snapshot, explicit `Path` for the simulation work dir; v5 = plan review 4 (P0 1/P1 3): lexicon-only counterexample validation errors join the single `alias_validation_error` blocker, interface name `lexicon_cx`, synthetic T reference satisfies the production schema (input binding scoped out explicitly), type guards for malformed ruling/user-decision records; v4 = plan review 3 (P0 1/P1 3): pre-T blockers read the selected-constants counterexample and the dry-run `tuning_accept` (not only the lexicon-only check), exact reference input-key set checked against `$W` files, registry schema checks round/id types/uniqueness, reference-checker tests; v3 = plan review 2 (P0 2/P1 4): KU registry schema validator used by the H test and pre-T, ruling records carry date/summary; `selected` kept as the resolution provenance ledger through the concept cap; `prov` computed before use; single authority for validation blockers; blocker-kind list aligned; counterexample-reference self-check; v2 = plan review 1 (P0 3/P1 3): fresh Round 5 verdicts replace only pending pairs (`resolve_verdicts`), tuning round identity pinned by tests (dynamic `current_round`, KU via pending round before T), counterexample result carries scope/policy shas/selected constants and the final call gets titles+provenance with strict provenance validation, richer reference-file provenance, normalized path tokens, split blocker kinds).
 
 ## Global Constraints
 
@@ -399,7 +399,7 @@ class TestRound5Registry(unittest.TestCase):
 
     def test_ku_record_check(self):
         rec = {"id": "s-004", "query": "transition issue status", "expected_top1_any": ["k"], "forbidden_top1": [], "failure_classes": []}
-        bench = {"seed": [rec]}; doc = {"seeds": [{"id": "s-004", "query_sha256": ev.sha256_text(rec["query"]), "record_sha256": ev.canonical_sha256(rec)}]}
+        bench = {"seed": [rec]}; doc = {"seeds": [{"id": "s-004", "query_sha256": ev.sha256_text(rec["query"]), "record_sha256": ev.canonical_sha256(ev.ku_identity(rec))}]}
         self.assertEqual(ev.ku_record_problems(5, bench, bench, doc, ids=("s-004",)), [])
         changed = {"seed": [{**rec, "query": "transition an issue"}]}
         self.assertTrue(ev.ku_record_problems(5, changed, bench, doc, ids=("s-004",)))       # same id, different query → problem
@@ -503,7 +503,7 @@ def ku_record_problems(round, bench, base_bench, registry_doc, ids=None) -> list
             out.append(f"{sid}: missing in bench/base/registry"); continue
         if canonical_sha256(r) != canonical_sha256(b):
             out.append(f"{sid}: seed record differs from the start commit")
-        if g.get("query_sha256") != sha256_text(r["query"]) or g.get("record_sha256") != canonical_sha256(r):
+        if g.get("query_sha256") != sha256_text(r["query"]) or g.get("record_sha256") != canonical_sha256(ku_identity(r)):
             out.append(f"{sid}: registry query/record sha mismatch")
     return out
 ```
@@ -536,7 +536,7 @@ assert len(rulings) == len(SUMMARIES), "exactly the five Round 5 rulings, in Ste
 doc = {"round": 5, "approval": {"rulings": [{"thread": "review thread 2", "date": p.name[:10], "summary": SUMMARIES[i], "file": p.name,
                                              "review_output_sha256": hashlib.sha256(p.read_bytes()).hexdigest()} for i, p in enumerate(rulings)],
                                 "user_decision": {"date": "2026-10-09", "words": "좋아 Round 5 진행해보자", "event_sha256": UD_SHA}},
-       "seeds": [{"id": sid, "query_sha256": ev.sha256_text(seeds[sid]["query"]), "record_sha256": ev.canonical_sha256(seeds[sid]),
+       "seeds": [{"id": sid, "query_sha256": ev.sha256_text(seeds[sid]["query"]), "record_sha256": ev.canonical_sha256(ev.ku_identity(seeds[sid])),
                   "cause": CAUSE[sid][0], "mechanisms_tried": CAUSE[sid][1], "official_source_check": "Round 4 doc-title snapshot 2d3caa6e…"}
                  for sid in ev.KNOWN_UNREACHABLE[5]]}
 pathlib.Path("tests/benchmarks/round5-known-unreachable.json").write_text(json.dumps(doc, indent=1, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")

@@ -70,7 +70,7 @@
    ],
    "official_source_check": "Round 4 doc-title snapshot 2d3caa6e…",
    "query_sha256": "0a3dfd5ed1f86c3f70440b6e5243d51dfcb0638597d0fb0620ebfc353c352a73",
-   "record_sha256": "81c8ac07b809ec4512e68dbd681e7445f7a21dcc5d2c7e9e8d051f82e085c3a4"
+   "record_sha256": "32b0488a37da3a055afaf6eca7cc29b477cfda8af05ad391bf00413d56d605f2"
   },
   {
    "cause": "needs search→filter (verb-inventory key, same-product token) and 'my' literal-terminal handling",
@@ -96,7 +96,7 @@
    ],
    "official_source_check": "Round 4 doc-title snapshot 2d3caa6e…",
    "query_sha256": "589325dcf2ccc9d8b42991614393f88398153a4e99074159a5e7f8505be6e6d4",
-   "record_sha256": "4c5c99b0b12ff8b17ddcce2bf5cac5364c2271493206384c7275676ae532172d"
+   "record_sha256": "99ed3119688c889a9a45d9bfbc7c3ce03965381c390969d9653ab81910e0839b"
   },
   {
    "cause": "workspace→space has no official-source support (0 doc titles; Confluence API 'workspace' = site)",
@@ -115,7 +115,7 @@
    ],
    "official_source_check": "Round 4 doc-title snapshot 2d3caa6e…",
    "query_sha256": "da3a19226de260749bb8053bb124d31ba84342b21f5a464c4b6cdb687a974cfd",
-   "record_sha256": "97a83bc12cc3021433c818bed45c3f47efd9a3d3071ccacd427dd91f4d3a7c64"
+   "record_sha256": "a3d993710125c753dd464fc3f66b6af1ba8278c5fcc57efdfbcc83885d67a03b"
   }
  ]
 }
