@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-09-search-quality-round5-design.md` **v1.10** (v1.7 passed review 8 with P0 0 / P1 3 "구현 계획으로 진행 가능"; v1.8 applied those P1s; v1.9 and v1.10 are planning-time deltas ruled on review thread 2: counterexample reference file at T, per-round T allowlist, and removal of §6.2 doc-relation extraction). The spec inherits Round 4 v1.13 (`docs/superpowers/specs/2026-10-09-search-quality-round4-design.md`) and, through it, Round 3 v1.25.1. "As Round 4 plan v7 Task N Step M" means `docs/superpowers/plans/2026-10-09-search-quality-round4-implementation.md` with the substitution table below applied verbatim.
 
-**Plan version:** v5 (2026-10-10; v5 = plan review 4 (P0 1/P1 3): lexicon-only counterexample validation errors join the single `alias_validation_error` blocker, interface name `lexicon_cx`, synthetic T reference satisfies the production schema (input binding scoped out explicitly), type guards for malformed ruling/user-decision records; v4 = plan review 3 (P0 1/P1 3): pre-T blockers read the selected-constants counterexample and the dry-run `tuning_accept` (not only the lexicon-only check), exact reference input-key set checked against `$W` files, registry schema checks round/id types/uniqueness, reference-checker tests; v3 = plan review 2 (P0 2/P1 4): KU registry schema validator used by the H test and pre-T, ruling records carry date/summary; `selected` kept as the resolution provenance ledger through the concept cap; `prov` computed before use; single authority for validation blockers; blocker-kind list aligned; counterexample-reference self-check; v2 = plan review 1 (P0 3/P1 3): fresh Round 5 verdicts replace only pending pairs (`resolve_verdicts`), tuning round identity pinned by tests (dynamic `current_round`, KU via pending round before T), counterexample result carries scope/policy shas/selected constants and the final call gets titles+provenance with strict provenance validation, richer reference-file provenance, normalized path tokens, split blocker kinds).
+**Plan version:** v6 (2026-10-10; **plan review 5 of v5 = P0 0 / P1 3 "구현 진행 가능"**; v6 applies those P1s: `registry_blockers` short-circuits on schema problems, reference `titles_sha256` recomputed from the bound snapshot, explicit `Path` for the simulation work dir; v5 = plan review 4 (P0 1/P1 3): lexicon-only counterexample validation errors join the single `alias_validation_error` blocker, interface name `lexicon_cx`, synthetic T reference satisfies the production schema (input binding scoped out explicitly), type guards for malformed ruling/user-decision records; v4 = plan review 3 (P0 1/P1 3): pre-T blockers read the selected-constants counterexample and the dry-run `tuning_accept` (not only the lexicon-only check), exact reference input-key set checked against `$W` files, registry schema checks round/id types/uniqueness, reference-checker tests; v3 = plan review 2 (P0 2/P1 4): KU registry schema validator used by the H test and pre-T, ruling records carry date/summary; `selected` kept as the resolution provenance ledger through the concept cap; `prov` computed before use; single authority for validation blockers; blocker-kind list aligned; counterexample-reference self-check; v2 = plan review 1 (P0 3/P1 3): fresh Round 5 verdicts replace only pending pairs (`resolve_verdicts`), tuning round identity pinned by tests (dynamic `current_round`, KU via pending round before T), counterexample result carries scope/policy shas/selected constants and the final call gets titles+provenance with strict provenance validation, richer reference-file provenance, normalized path tokens, split blocker kinds).
 
 ## Global Constraints
 
@@ -934,6 +934,7 @@ class TestRound5PreT(unittest.TestCase):
             pol = {"aliases": {"ticket": ["issue"]}, "rules": [], "notes": {}}
             cmap = {json.dumps(list(k)): list(v) for k, v in cx.canonical_policy_map(pol).items()}
             good = {"policy": pol, "policy_canonical_sha256": ev.canonical_sha256(pol), "canonical_policy_map": cmap, "canonical_policy_map_sha256": ev.canonical_sha256(cmap),
+                    "titles": [], "titles_sha256": ev.canonical_sha256([]),
                     "inputs": {**sim.INPUT_SHA256, "aliases_premerge_sha256": ev.file_sha256(w / "aliases-premerge.json"),
                                "round4_reference_lexicon_sha256": ev.file_sha256(w / "round4-reference-lexicon.json"), "registry_fingerprint": "fp"}}
             self.assertEqual(sim.counterexample_reference_problems(good, w, "fp"), [])
@@ -981,7 +982,10 @@ def input_blockers(work) -> list:
 
 
 def registry_blockers(bench, base_bench, registry_doc) -> list:
-    p = ev.ku_registry_schema_problems(ROUND, registry_doc) + ev.ku_record_problems(ROUND, bench, base_bench, registry_doc)
+    schema = ev.ku_registry_schema_problems(ROUND, registry_doc)
+    if schema:
+        return [{"kind": "ku_record_mismatch", "problems": schema}]            # never call the record checker on a malformed registry
+    p = ev.ku_record_problems(ROUND, bench, base_bench, registry_doc)
     return [{"kind": "ku_record_mismatch", "problems": p}] if p else []
 
 
@@ -994,6 +998,15 @@ def counterexample_reference_problems(ref, work, registry_fp) -> list:
         out.append("policy_canonical_sha256")
     if cmap != ref.get("canonical_policy_map") or ev.canonical_sha256(cmap) != ref.get("canonical_policy_map_sha256"):
         out.append("canonical_policy_map")
+    titles = sorted(({"product": t["product"], "url": t["url"], "title": t["title"]} for t in ref.get("titles") or []), key=lambda t: (t["product"], t["url"]))
+    if ev.canonical_sha256(titles) != ref.get("titles_sha256"):
+        out.append("titles_sha256")
+    snap_p = work / "inputs/round4/doc-titles-snapshot.json"
+    if snap_p.exists():
+        snap = json.loads(snap_p.read_text(encoding="utf-8"))
+        want = sorted(({"product": t["product"], "url": t["url"], "title": t["title"]} for t in snap["titles"]), key=lambda t: (t["product"], t["url"]))
+        if titles != want:
+            out.append("titles differ from the bound snapshot")
     inputs = ref.get("inputs") or {}
     expected = set(INPUT_SHA256) | {"aliases_premerge_sha256", "round4_reference_lexicon_sha256", "registry_fingerprint"}
     if set(inputs) != expected:
@@ -1061,7 +1074,7 @@ def pre_t_blockers(result, event, diagnostics=None, ku=None, lexicon_cx=None, ex
 
 4. `pre_t_verdict(seed_passed, …)` becomes `pre_t_verdict(failed_ids, reg_raw, reg_eff, fixture_failing)` = `set(failed_ids) <= ev.known_unreachable(ROUND) and reg_raw >= 10 and reg_eff == 14 and not fixture_failing`; `pre_t_event` passes the failed id list.
 5. `run_pre_t(cache, work)`: first load `ref = round5-counterexample-reference.json`, `pre_raw = ref["policy"]`, `snapshot_titles = ref["titles"]` and `prov = cx.provenance_from_lexicon(concept_lexicon.json)` (all before any `cx.suite` call); then compute `extra = input_blockers(work) + registry_blockers(bench, base_bench, registry_doc) + approval_blockers(work, registry_doc)` plus `[{"kind": "counterexample_reference_mismatch", "problems": p}]` when `p = counterexample_reference_problems(ref, work, fp)` is non-empty where `base_bench` is the `56b4b0e` blob of `tests/benchmarks/search_queries.json` (`git show 56b4b0e:tests/benchmarks/search_queries.json`) and `registry_doc` the committed `round5-known-unreachable.json`; compute the lexicon-only counterexample at baseline constants: `cxr = cx.suite(index, cx.production_top1(state, rp, dict(rp.constants)), pre_raw, aliases_raw, aliases_raw, summaries, titles=snapshot_titles, provenance=prov)` (the reference is written by the controller in Task 4 Step 5; a lexicon-only pre-T check with `cx.suite(…, scope="lexicon_only")` follows); pass `counterexample_fn=lambda point, working: cx.suite(index, cx.production_top1(state, rp, point), pre_raw, aliases_raw, working, summaries, titles=snapshot_titles, provenance=prov, scope="final_policy", selected_constants=point)` into `dry_run_pipeline` → `tune.run_pipeline_result`; call `pre_t_blockers(result, event, diagnostics, lexicon_cx=cxr, extra=extra)`; record `cxr`, `result.counterexample_result`, `result.tuning_accept`, all blockers and `pipeline_result_sha256` (which now includes `counterexample_result`) in the event. Event name stays `pre_t_checkpoint`.
-6. `apply_T`: after the synthetic merge write `concept_lexicon.json["components"]["union_resolution"] = "source-precedence"` and `concept_lexicon.json["selected"]` for the synthetic entries (`{"source": "round4_generation", "provenance_rank": 1}`), and write `tests/benchmarks/round5-counterexample-reference.json` before the freeze call with the production schema: `policy` (pre-merge aliases raw), `policy_canonical_sha256`, `canonical_policy_map` + `canonical_policy_map_sha256` (computed exactly as Task 4 Step 5), `titles` (synthetic bundle snapshot titles), and `inputs` with the exact 12-key set (the nine `INPUT_SHA256` keys mapped to their fixed shas, `aliases_premerge_sha256`/`round4_reference_lexicon_sha256` = shas of two synthetic files written under `SIM_DIR`, `registry_fingerprint` = the fixture snapshot's). `apply_T` asserts `counterexample_reference_problems(ref, SIM_DIR, fp) == []`; the synthetic lifecycle does not simulate the real archived input files themselves (the pure checker tests in Step 7 cover the input binding).
+6. `apply_T`: after the synthetic merge write `concept_lexicon.json["components"]["union_resolution"] = "source-precedence"` and `concept_lexicon.json["selected"]` for the synthetic entries (`{"source": "round4_generation", "provenance_rank": 1}`), and write `tests/benchmarks/round5-counterexample-reference.json` before the freeze call with the production schema: `policy` (pre-merge aliases raw), `policy_canonical_sha256`, `canonical_policy_map` + `canonical_policy_map_sha256` (computed exactly as Task 4 Step 5), `titles` (synthetic bundle snapshot titles), and `inputs` with the exact 12-key set (the nine `INPUT_SHA256` keys mapped to their fixed shas, `aliases_premerge_sha256`/`round4_reference_lexicon_sha256` = shas of two synthetic files written under `SIM_DIR`, `registry_fingerprint` = the fixture snapshot's). `apply_T` asserts `counterexample_reference_problems(ref, ROOT / SIM_DIR, fp) == []` (a `pathlib.Path`, never the bare string; the synthetic reference also carries `titles_sha256`); the synthetic lifecycle does not simulate the real archived input files themselves (the pure checker tests in Step 7 cover the input binding).
 7. `BRANCHES`, X_preB and recovery helpers are unchanged apart from the round number.
 
 Run: `python -m unittest tests.benchmarks.test_round5_simulation -v` → Expected: 9 OK.
@@ -1128,7 +1141,8 @@ from tests.benchmarks import counterexample as cx, evaluator as ev, round5_simul
 snap = json.loads((W / "inputs/round4/doc-titles-snapshot.json").read_text(encoding="utf-8"))
 cmap = {json.dumps(list(k)): list(v) for k, v in cx.canonical_policy_map(pol).items()}
 doc = {"round": 5, "policy": pol, "policy_canonical_sha256": canonical_sha256(pol), "canonical_policy_map": cmap, "canonical_policy_map_sha256": canonical_sha256(cmap),
-       "titles": sorted(({"product": t["product"], "url": t["url"], "title": t["title"]} for t in snap["titles"]), key=lambda t: (t["product"], t["url"])),
+       "titles": (titles := sorted(({"product": t["product"], "url": t["url"], "title": t["title"]} for t in snap["titles"]), key=lambda t: (t["product"], t["url"]))),
+       "titles_sha256": canonical_sha256(titles),
        "inputs": {"aliases_premerge_sha256": ev.file_sha256(W / "aliases-premerge.json"),
                   "round4_reference_lexicon_sha256": ev.file_sha256(W / "round4-reference-lexicon.json"),
                   **{n: ev.file_sha256(W / "inputs" / n) for n in sim.INPUT_SHA256},
