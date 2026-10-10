@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Plan version:** v1 (2026-10-11)
+**Plan version:** v2 (2026-10-11; v2 = plan review 1 (P0 4 / P1 5) applied: PR-7 adopted as spec v1.6 §3.0; `training_split_sha256` over a `failure_classes`-free projection, pinned at H22 and re-checked at pre-T and freeze; rehearsal work seeded with the pre-T evidence; PR-8 conflict detection → STOP; promotion payload re-checked after relabel; `verb_methods_sha256` provenance; loss reasons; H adoption re-measured before the pin; required label provenance schema)
 
 **Goal:** Make the MCP search fit real agent use — recommend only with evidence, never recommend a wrong write — and judge Round 6 by the usage-grounded Discovery gate (reach@3, recommendation coverage, precision, write safety, abstention) on a fresh sealed hidden set.
 
@@ -10,7 +10,7 @@
 
 **Tech Stack:** Python 3.11 stdlib + the project's MCP SDK; `unittest` (`python -m unittest discover -s tests -t .`); ChatGPT Temporary chats for stateless reviewers; review thread 2 for rulings.
 
-**Spec:** `docs/superpowers/specs/2026-10-11-search-quality-round6-design.md` **v1.5** (review 4: P0 0 / P1 4, "구현 계획으로 진행 가능"). It inherits Round 5 spec v1.12 (and through it Round 4 v1.13 / Round 3 v1.25.1). "As Round 5 plan v8 Task N" imports that committed procedure verbatim with the substitution table below.
+**Spec:** `docs/superpowers/specs/2026-10-11-search-quality-round6-design.md` **v1.6** (review 4: P0 0 / P1 4, "구현 계획으로 진행 가능"; v1.6 = plan review 1 P0-1, the rule token stream §3.0). It inherits Round 5 spec v1.12 (and through it Round 4 v1.13 / Round 3 v1.25.1). "As Round 5 plan v8 Task N" imports that committed procedure verbatim with the substitution table below.
 
 ## Global Constraints
 
@@ -65,14 +65,14 @@
 
 ## Plan rulings (to be confirmed by plan review)
 
-- **PR-1 (proposer action source):** spec §4.2 makes every acceptance-violation record a proposer input. Alias actions still come from `alias_candidates.json`, whose generator (`alias_candidates_tool.candidates`) is run at T over **seed ∪ regression_positive** (both positive, answerable sets); `regression_negative` records and pure safety violations have no candidate actions and are logged under `no_actions` (an alias cannot create an abstention by itself). The Round 5 `R6`-class gate is replaced by "has candidate actions" (equivalent for seeds: a seed has a candidate word iff it is R6).
+- **PR-1 (proposer action source):** spec §4.2 makes every acceptance-violation record a proposer input. Alias actions still come from `alias_candidates.json`, whose generator (`alias_candidates_tool.candidates`) is run at T over **seed ∪ regression_positive** (both positive, answerable sets); `regression_negative` records have no principled target-derived candidate (they have no answer) and are logged under `no_actions`; a positive record's safety violation can have candidates. After the proposer, `no_actions` ids that no longer violate are reported under `resolved_after_no_actions` (diagnostic only). The Round 5 `R6`-class gate is replaced by "has candidate actions" (equivalent for seeds: a seed has a candidate word iff it is R6).
 - **PR-2 (selector cost):** `scorer_rule_ok` costs two corpus passes per point, so the selector walks the accept pool in Round 3 conservative tie-break order and returns the first point with `scorer_rule_ok` — identical to "filter the pool by `scorer_rule_ok`, then tie-break" (the minimum of a filtered set) without evaluating every grid point.
 - **PR-3 (rule switch):** R0–R2 have no policy flag (spec §3); the OFF/ON comparison uses an evaluation-only context switch `search.scorer_rules(enabled)` (module state, default all four on; never read from policy files, never set by the MCP server). R3 additionally requires `ordering_rules.singular_collection_tiebreak`.
 - **PR-4 (KU and freeze keys):** with no registry in Round 6, the round-6 freeze entry records `known_unreachable_seeds: []` and omits `known_unreachable_registry_sha256`; `ROUND6_EXTRA_KEYS = ("scorer_rule_corpus_sha256", "scorer_rule_registry_fingerprint", "training_split_sha256")`.
 - **PR-5 (pipeline selection by round):** the Round 5 functions (`tuning_accept`, `reachable_results`, `select_candidate`, `propose_aliases`) stay unchanged for the Round 5 simulation and its tests; Round 6 code paths are new functions selected by `TUNING_ROUND = ev.pending_round() or ROUND` (`>= 6`).
 - **PR-6 (counterexample reference without a lexicon round):** defined in Task 7.
-- **PR-7 (placeholder text is not query content — needs a thread-2 ruling before H19 is committed):** measured on the fixture registry, the canonical-key query `jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/comment` (spec §8: "추천 유지") abstains with `uncovered_head_resource`, because `head_info` over the raw key picks `key` out of the `{issueIdOrKey}` placeholder. The plan computes every rule input (content tokens, `head_info`, product hints) from `rule_unigrams(q)` := `tokenize_unigrams` of `q` with `{…}` placeholders removed; `method_intent` and scoring keep the raw unigrams. Only queries that contain braces are affected; spec §8's key case then keeps its recommendation (head = `issue`). This is a deviation from spec §3.2's "질의 원문 토큰" wording and is proposed to the review thread with the plan.
-- **PR-8 (fixture suite after relabel):** defined in Task 5.
+- **PR-7 (rule token stream) — adopted by plan review 1, now spec v1.6 §3.0:** every R0–R3 input (content tokens, `head_info`, product hints, the R3 number) is computed from `rule_unigrams(q)` = `tokenize_unigrams` of `q` with `{…}` placeholders removed; `method_intent`, scoring and ordering keep the raw unigrams. Measured on fixtures: without it the canonical key `jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/comment` abstained (`head_info` picked `key` from the placeholder).
+- **PR-8 (fixture suite after relabel) — conditional (plan review 1 P0-4):** defined in Task 5; a relabel that makes a historical r0 fixture `forbidden` key an acceptable answer is a conflict → `STOP_FOR_AMENDMENT` (Task 10 Step 4).
 
 ---
 
@@ -938,7 +938,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Modify: `tests/benchmarks/evaluator.py` (`EVALUATION_CODE_FILES` += `tests/benchmarks/scorer_rule_cx.py`; `TOOLING_FILES` += `tests/benchmarks/test_scorer_rule_cx.py`)
 
 **Interfaces:**
-- Produces: `cx6.corpus(state) -> list[{"query", "key"}]`, `cx6.corpus_metadata(state, corpus) -> {"registry_fingerprint", "operation_count", "corpus_sha256", "generator_sha256"}`, `cx6.usage_with(state, rp, point, alias_policy, enabled) -> fn(query) -> (ranked, recommended)`, `cx6.compare(state, rp, point, alias_policy, corpus, *, bound_fingerprint, aliases_sha256) -> dict` with keys `registry_fingerprint, ranking_structure_sha256, verb_methods_sha256, aliases_sha256, constants, enabled_rules, corpus_sha256, losses, gains, eligible, losses_write, losses_read, loss_list, ok`, `cx6.scorer_rule_ok(losses, eligible) -> bool`, `cx6.per_rule_off(state, rp, point, alias_policy, corpus, **kw) -> {rule: result}` (diagnostic).
+- Produces: `cx6.corpus(state) -> list[{"query", "key"}]`, `cx6.corpus_metadata(state, corpus) -> {"registry_fingerprint", "operation_count", "corpus_sha256", "generator_sha256"}`, `cx6.usage_with(state, rp, point, alias_policy, enabled) -> fn(query) -> (ranked, recommended, abstain_reason)`, `cx6.compare(state, rp, point, alias_policy, corpus, *, bound_fingerprint, aliases_sha256) -> dict` with keys `registry_fingerprint, ranking_structure_sha256, verb_methods_sha256, aliases_sha256, constants, enabled_rules, corpus_sha256, losses, gains, eligible, losses_write, losses_read, loss_list, ok`, `cx6.scorer_rule_ok(losses, eligible) -> bool`, `cx6.per_rule_off(state, rp, point, alias_policy, corpus, **kw) -> {rule: result}` (diagnostic).
 
 - [ ] **Step 1: Write the failing tests** — `tests/benchmarks/test_scorer_rule_cx.py`:
 
@@ -991,6 +991,20 @@ class TestScorerRuleCounterexample(unittest.TestCase):
         self.assertEqual(r["ok"], cx6.scorer_rule_ok(r["losses"], r["eligible"]))
         self.assertEqual(r["losses"], r["losses_write"] + r["losses_read"])
         self.assertEqual(search.enabled_rules(), search.RULES)        # the switch is restored
+
+    def test_verb_methods_sha_is_the_raw_inventory(self):
+        import json
+        raw = json.loads((policy.DATA_DIR / "search_ranking.json").read_text(encoding="utf-8"))
+        r = cx6.compare(self.st, self.rp, dict(self.rp.constants), self.ap, self.corpus[:5],
+                        bound_fingerprint=self.st.registry.fingerprint, aliases_sha256="a" * 64)
+        self.assertEqual(r["verb_methods_sha256"], policy.canonical_sha256(raw["verb_methods"]))
+
+    def test_loss_entries_carry_the_reason(self):
+        r = cx6.compare(self.st, self.rp, dict(self.rp.constants), self.ap, [{"query": "Add comment", "key": "jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/comment"}],
+                        bound_fingerprint=self.st.registry.fingerprint, aliases_sha256="a" * 64)
+        self.assertEqual(r["losses"], 1)                                  # spec §3.2a known loss: both tokens are verb keys
+        self.assertEqual(set(r["loss_list"][0]), {"key", "off_recommended", "on_recommended", "on_abstain_reason", "off_rank", "on_rank"})
+        self.assertEqual(r["loss_list"][0]["on_abstain_reason"], "no_resource_evidence")
 
     def test_per_rule_off_includes_r0(self):
         d = cx6.per_rule_off(self.st, self.rp, dict(self.rp.constants), self.ap, self.corpus,
@@ -1046,19 +1060,25 @@ def usage_with(state, rp, point, alias_policy, enabled):
         with mock.patch.object(policy, "ranking", return_value=rpp), mock.patch.object(policy, "aliases", return_value=alias_policy), \
                 search.scorer_rules(enabled):
             out = search.search_operations(state, q, limit=5)
-        return [r["key"] for r in out.get("results", [])], out.get("recommended_operation")
+        return [r["key"] for r in out.get("results", [])], out.get("recommended_operation"), out.get("abstain_reason")
     return fn
+
+
+def _rank(keys, key):
+    return keys.index(key) + 1 if key in keys else None
 
 
 def _run(state, rp, point, alias_policy, items, on_rules):
     off, on = usage_with(state, rp, point, alias_policy, ()), usage_with(state, rp, point, alias_policy, on_rules)
     losses, gains, eligible, loss_list = 0, 0, 0, []
     for it in items:
-        _, r_off = off(it["query"]); _, r_on = on(it["query"])
+        k_off, r_off, _ = off(it["query"]); k_on, r_on, why = on(it["query"])
         if r_off == it["key"]:
             eligible += 1
             if r_on != it["key"]:
-                losses += 1; loss_list.append({"key": it["key"], "on_recommended": r_on})
+                losses += 1
+                loss_list.append({"key": it["key"], "off_recommended": r_off, "on_recommended": r_on, "on_abstain_reason": why,
+                                  "off_rank": _rank(k_off, it["key"]), "on_rank": _rank(k_on, it["key"])})   # spec §3.5: key + reason
         elif r_on == it["key"]:
             gains += 1
     return losses, gains, eligible, loss_list
@@ -1070,7 +1090,7 @@ def compare(state, rp, point, alias_policy, items, *, bound_fingerprint, aliases
     losses, gains, eligible, loss_list = _run(state, rp, point, alias_policy, items, on_rules)
     write = sum(1 for l in loss_list if l["key"].split(":")[1] in search.WRITE_METHODS)
     return {"registry_fingerprint": state.registry.fingerprint, "ranking_structure_sha256": rp.structure_sha256,
-            "verb_methods_sha256": policy.canonical_sha256({k: sorted(v) for k, v in rp.verb_method_order.items()}),
+            "verb_methods_sha256": policy.canonical_sha256({k: list(v) for k, v in rp.verb_method_order.items()}),   # == sha of the raw verb_methods
             "aliases_sha256": aliases_sha256, "constants": dict(point), "enabled_rules": list(on_rules),
             "corpus_sha256": ev.canonical_sha256(items), "losses": losses, "gains": gains, "eligible": eligible,
             "losses_write": write, "losses_read": losses - write, "loss_list": loss_list, "ok": scorer_rule_ok(losses, eligible)}
@@ -1081,7 +1101,7 @@ def per_rule_off(state, rp, point, alias_policy, items, **kw) -> dict:
     return {r: compare(state, rp, point, alias_policy, items, on_rules=tuple(x for x in search.RULES if x != r), **kw) for r in search.RULES}
 ```
 
-Note: `verb_methods_sha256` hashes the ordered lists from `rp.verb_method_order` (`{k: list(v)}`) — use `{k: list(v) ...}` (ordered, matching `canonical_sha256(raw["verb_methods"])` used elsewhere) rather than `sorted(v)`; write it as `policy.canonical_sha256({k: list(v) for k, v in rp.verb_method_order.items()})`.
+`rp.verb_method_order` holds the `verb_methods` lists exactly as the policy file has them (`policy.load_ranking`: `order[k] = tuple(v)`), so the field is the canonical sha of `search_ranking.json["verb_methods"]`; `test_verb_methods_sha_is_the_raw_inventory` pins that.
 
 - [ ] **Step 4: Run** — `python -m unittest tests.benchmarks.test_scorer_rule_cx -v 2>&1 | tail -3` → `OK`; full suite `OK`.
 
@@ -1243,6 +1263,9 @@ class TestGridEvaluatorUsageEquivalence(unittest.TestCase):
 def fixture_bench(bench) -> dict:
     """The r0 fixture suite (spec v1.14 AC-06a). Round 6 plan PR-8: r0 regression records are found wherever the relabel put them
     and keep their original label (no expected key; forbidden = active ∪ legacy)."""
+    from tests.benchmarks.round6_labels import fixture_label_conflicts
+    if fixture_label_conflicts(bench):                                  # plan review 1 P0-4: PR-8 only holds conflict-free
+        raise SystemExit(f"error: relabel conflicts with the historical r0 fixture labels {fixture_label_conflicts(bench)} (STOP_FOR_AMENDMENT)")
     reg = [r for s in ("regression_negative", "regression_positive") for r in bench.get(s) or [] if r["origin"].endswith("-r0")]
     out = {"seed": [r for r in bench["seed"] if r["origin"].endswith("-r0")],
            "regression_negative": sorted(({**r, "expected_top1_any": [], "forbidden_top1": sorted(set(r["forbidden_top1"]) | set(r.get("legacy_forbidden_top1") or []))}
@@ -1399,6 +1422,10 @@ def propose_aliases_r6(eval_fn, bench, base_raw, cands, budget=BUDGET, per_seed=
             patch["unresolved"].append(rid); continue
         working, accepted_n = found[0], accepted_n + len(found[1])
         patch["actions_by_seed"][rid] = [list(a) for a in found[1]]
+    if patch["no_actions"]:                                          # PR-1 diagnostic: later aliases may have fixed a no-action record
+        final = eval_fn(working)
+        still = {r["id"] for s in ev.TRAINING_SECTIONS for r in final[s] if ev.violation(r, s)}
+        patch["resolved_after_no_actions"] = [i for i in patch["no_actions"] if i not in still]
     patch.update(alias_patch(base_raw, working))
     return working, patch
 
@@ -1601,7 +1628,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Modify: `tests/benchmarks/evaluator.py` (`TOOLING_FILES` += the three files above)
 
 **Interfaces:**
-- Produces (module `labels`): `PROMOTED_SEED_IDS = s-040…s-055`, `PROMOTED_NEG_IDS = rn-015…rn-022`, `promote(bench, r5_plain, r5_seal) -> (bench, payload)`, `promotion_identity(rec) -> dict`, `source_identity(src) -> dict`, `promotion_payload_sha256(bench) -> str`, `relabel_targets(bench) -> list[{"id","query"}]` (22), `render_relabel_input(targets, template_text) -> str`, `check_review(doc, ids, catalog_keys) -> list[str]`, `disagreements(a, b) -> list[id]`, `final_labels(a, b, c=None) -> dict`, `reconcile_forbidden(rec, acceptable) -> rec`, `apply_labels(bench, labels, migration) -> bench`, `catalog_closure(bench, catalog_keys) -> (bench, stop_ids)`, `training_split_sha256(bench) -> str`; CLI `python -m tests.benchmarks.round6_labels {promote|relabel-input|check-review|apply|closure|verify}`.
+- Produces (module `labels`): `PROMOTED_SEED_IDS = s-040…s-055`, `PROMOTED_NEG_IDS = rn-015…rn-022`, `promote(bench, r5_plain, r5_seal) -> (bench, payload)`, `promotion_identity(rec) -> dict`, `source_identity(src) -> dict`, `promotion_payload_sha256(bench) -> str`, `relabel_targets(bench) -> list[{"id","query"}]` (22), `render_relabel_input(targets, template_text) -> str`, `check_review(doc, ids, catalog_keys) -> list[str]`, `disagreements(a, b) -> list[id]`, `final_labels(a, b, c=None) -> dict`, `reconcile_forbidden(rec, acceptable) -> rec`, `apply_labels(bench, labels, migration) -> bench`, `catalog_closure(bench, catalog_keys) -> (bench, stop_ids)`, `training_identity(rec)`, `training_split_sha256(bench) -> str` (over `training_identity`), `fixture_label_conflicts(bench) -> list[id]`, `label_provenance_problems(bench) -> list[str]`; CLI `python -m tests.benchmarks.round6_labels {promote|relabel-input|check-review|apply|closure|verify}`.
 
 - [ ] **Step 1: Write the failing tests** — `tests/benchmarks/test_round6_labels.py`:
 
@@ -1713,6 +1740,50 @@ class TestRelabel(unittest.TestCase):
         b2 = copy.deepcopy(b); b2["seed"][1]["expected_top1_any"] = ["gone:GET:/old"]
         _, stop2 = L.catalog_closure(b2, {"a:GET:/x"})
         self.assertEqual(stop2, ["s-002"])
+
+    def test_split_sha_ignores_failure_classes_only(self):
+        b = _bench(); base = L.training_split_sha256(b)
+        b2 = copy.deepcopy(b); b2["seed"][0]["failure_classes"] = ["R6"]
+        self.assertEqual(L.training_split_sha256(b2), base)
+        for mutate in (lambda x: x["seed"][0].update(query="other"), lambda x: x["seed"][0].update(expected_top1_any=["z:GET:/q"]),
+                       lambda x: x["regression_negative"][0].update(forbidden_top1=["z:GET:/q"]), lambda x: x["regression_negative"][0].update(no_answer=True),
+                       lambda x: x["seed"].pop()):
+            b3 = copy.deepcopy(b); mutate(b3)
+            self.assertNotEqual(L.training_split_sha256(b3), base)
+
+    def test_fixture_label_conflict_detected(self):
+        b = _bench()
+        for r in b["regression_negative"]:
+            r["origin"] = "seed-r0"
+        labels = {r["id"]: {"answerable": r["id"] == "rn-001", "acceptable_keys": ["c:DELETE:/p/{id}"] if r["id"] == "rn-001" else []}
+                  for r in b["regression_negative"]}
+        mig = {i: {"reviewers": ["x", "y"], "review_output_sha256s": ["1", "2"], "adjudicated": False} for i in labels}
+        self.assertEqual(L.fixture_label_conflicts(L.apply_labels(b, labels, mig)), ["rn-001"])
+        labels["rn-001"] = {"answerable": True, "acceptable_keys": ["z:DELETE:/other"]}
+        self.assertEqual(L.fixture_label_conflicts(L.apply_labels(b, labels, mig)), [])
+
+    def test_label_provenance_required(self):
+        b = _bench()
+        labels = {r["id"]: {"answerable": False, "acceptable_keys": []} for r in b["regression_negative"]}
+        mig = {i: {"reviewers": ["x", "y"], "review_output_sha256s": ["1", "2"], "adjudicated": False} for i in labels}
+        out = L.apply_labels(b, labels, mig)
+        self.assertEqual(L.label_provenance_problems(out), [])
+        out["regression_negative"][0].pop("label_migration")
+        self.assertTrue(L.label_provenance_problems(out))
+
+    def test_promotion_payload_unchanged_by_relabel(self):
+        plain = _plain(); b, payload = L.promote(_bench(), plain, _seal(plain))
+        labels = {t["id"]: {"answerable": t["id"] == "rn-016", "acceptable_keys": ["a:DELETE:/z"] if t["id"] == "rn-016" else []} for t in L.relabel_targets(b)}
+        mig = {i: {"reviewers": ["x", "y"], "review_output_sha256s": ["1", "2"], "adjudicated": False} for i in labels}
+        self.assertEqual(L.promotion_payload_sha256(L.apply_labels(b, labels, mig)), payload["promotion_payload_sha256"])
+
+    def test_committed_benchmark_labels(self):
+        """Once H22 commits the relabel, the real benchmark satisfies the provenance schema and has no PR-8 conflict."""
+        import json
+        bench = json.loads((L.ROOT / "tests/benchmarks/search_queries.json").read_text(encoding="utf-8"))
+        if "regression_positive" not in bench:
+            self.skipTest("relabel not committed yet (before H22)")
+        self.assertEqual(L.label_provenance_problems(bench), []); self.assertEqual(L.fixture_label_conflicts(bench), [])
 
     def test_reviewer_input_has_queries_only(self):
         txt = L.render_relabel_input([{"id": "rn-001", "query": "remove page 1"}], "PROMPT\n{RECORDS}\n")
@@ -1882,8 +1953,34 @@ def catalog_closure(bench, catalog_keys):
     return out, sorted(stop)
 
 
+def training_identity(rec) -> dict:
+    """plan review 1 P0-2: the split identity ignores failure_classes (T's classify rewrites them)."""
+    return {k: v for k, v in rec.items() if k != "failure_classes"}
+
+
 def training_split_sha256(bench) -> str:
-    return ev.canonical_sha256({s: bench.get(s) or [] for s in ev.TRAINING_SECTIONS})
+    return ev.canonical_sha256({s: [training_identity(r) for r in bench.get(s) or []] for s in ev.TRAINING_SECTIONS})
+
+
+def fixture_label_conflicts(bench) -> list:
+    """plan review 1 P0-4 (PR-8): r0 records relabeled answerable whose acceptable keys include a historical fixture forbidden key."""
+    return sorted(r["id"] for r in bench.get("regression_positive") or [] if r["origin"].endswith("-r0")
+                  and set(r["expected_top1_any"]) & (set(r.get("forbidden_top1") or []) | set(r.get("legacy_forbidden_top1") or [])))
+
+
+def label_provenance_problems(bench) -> list:
+    """plan review 1 P1-5: once relabeled, every regression record carries no_answer and a well-formed label_migration."""
+    out = []
+    for s, want in (("regression_positive", False), ("regression_negative", True)):
+        for r in bench.get(s) or []:
+            if r.get("no_answer") is not want:
+                out.append(f"{r['id']}: no_answer must be {want}")
+            m = r.get("label_migration")
+            if not (isinstance(m, dict) and set(m) == {"reviewers", "review_output_sha256s", "adjudicated"} and isinstance(m["adjudicated"], bool)
+                    and isinstance(m["reviewers"], list) and len(m["reviewers"]) in (2, 3) and isinstance(m["review_output_sha256s"], list)
+                    and len(m["review_output_sha256s"]) == len(m["reviewers"]) and (len(m["reviewers"]) == 3) == m["adjudicated"]):
+                out.append(f"{r['id']}: label_migration must be {{reviewers[2|3], review_output_sha256s (same length), adjudicated (== 3 reviewers)}}")
+    return out
 
 
 def _read(p):
@@ -1904,6 +2001,7 @@ def main(argv=None) -> int:
     ap.add_argument("cmd", choices=("promote", "relabel-input", "check-review", "apply", "closure", "verify"))
     ap.add_argument("--bench", required=True); ap.add_argument("--plain"); ap.add_argument("--out"); ap.add_argument("--catalog")
     ap.add_argument("--template"); ap.add_argument("--review", action="append", default=[]); ap.add_argument("--actors", nargs="*", default=[])
+    ap.add_argument("--sealed-payload", default=None, help="promotion_payload_sha256 from the ledger (plan review 1 P1-1)")
     a = ap.parse_args(argv)
     bench = _read(a.bench)
     if a.cmd == "promote":
@@ -1939,6 +2037,11 @@ def main(argv=None) -> int:
     for r in bench.get("regression_positive") or []:
         if set(r["expected_top1_any"]) & set(r["forbidden_top1"]):
             probs.append(f"{r['id']}: forbidden ∩ expected")
+    if a.sealed_payload is not None and promotion_payload_sha256(bench) != a.sealed_payload:
+        probs.append("promotion_payload_sha256 differs from the sealed value")
+    if bench.get("regression_positive") is not None:
+        probs += label_provenance_problems(bench)
+        probs += [f"{i}: PR-8 fixture label conflict (STOP_FOR_AMENDMENT)" for i in fixture_label_conflicts(bench)]
     print("\n".join(probs) or "ok"); return 1 if probs else 0
 
 
@@ -1987,7 +2090,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Test: `tests/benchmarks/test_round_seal.py` (append)
 
 **Interfaces:**
-- Produces: `sim6.pre_t_blockers_r6(result, event, equivalence, extra=()) -> list` (kinds `metric_threshold`, `scorer_rule_violation`, `alias_validation_error`, `counterexample_loss`, `counterexample_uncovered_proposer`, `fixture_fail`, `equivalence_mismatch`, `tuning_accept_false`), `sim6.metric_violations(m) -> list[{"item","value","bound"}]`, `sim6.run_pre_t(cache, work) -> int`, `sim6.run_rehearsal(cache, work) -> int` (writes only inside a temp tree; appends `rehearsal_report` to `work/controller-events.jsonl`), `sim6.t_commands(cache, work, tree) -> list[list[str]]` (the exact T command sequence the controller also runs), `rs.HIDDEN_RULES_R6`.
+- Produces: `sim6.load_pre_t_evidence(work) -> (events, problems)`, `sim6.seed_rehearsal_work(real_work, temp_work) -> {path: sha}`, `sim6.pre_t_blockers_r6(result, event, equivalence, extra=()) -> list` (kinds `metric_threshold`, `training_split_mismatch`, `pre_t_evidence_missing`, `scorer_rule_violation`, `alias_validation_error`, `counterexample_loss`, `counterexample_uncovered_proposer`, `fixture_fail`, `equivalence_mismatch`, `tuning_accept_false`), `sim6.metric_violations(m) -> list[{"item","value","bound"}]`, `sim6.run_pre_t(cache, work) -> int`, `sim6.run_rehearsal(cache, work) -> int` (writes only inside a temp tree; appends `rehearsal_report` to `work/controller-events.jsonl`), `sim6.t_commands(cache, work, tree) -> list[list[str]]` (the exact T command sequence the controller also runs), `rs.HIDDEN_RULES_R6`.
 - Plan ruling **PR-6 (counterexample reference in Round 6):** there is no lexicon resolution in Round 6, so `round6-counterexample-reference.json` binds the alias policy at the H final commit (`policy` = `search_aliases.json` at `housekeeping_commit`) with `inputs = {"aliases_h_sha256", "registry_fingerprint"}`; `INPUT_SHA256 = {}`; `counterexample_reference_problems` checks exactly those two inputs plus the internal-consistency hashes (`policy_canonical_sha256`, `canonical_policy_map(_sha256)`, `titles_sha256` over the Round 4 doc-title snapshot copied into `$W/inputs/round4/` as in Round 5).
 
 - [ ] **Step 1: Copy and substitute**
@@ -2034,6 +2137,23 @@ class TestRound6PreT(unittest.TestCase):
         self.assertEqual(kinds(self._result(self.M_OK, fixture_final=["s-001"])), ["fixture_fail"])
         self.assertEqual(kinds(self._result(self.M_OK), eq=[{"point": {}, "query": "q"}]), ["equivalence_mismatch"])
 
+    def test_seeded_work_satisfies_pre_t_evidence(self):
+        with tempfile.TemporaryDirectory() as td:
+            real, tmp = pathlib.Path(td) / "W", pathlib.Path(td) / "T"
+            (real / "inputs/round4").mkdir(parents=True)
+            (real / "aliases-h.json").write_text("{}", encoding="utf-8"); (real / "inputs/round4/doc-titles-snapshot.json").write_text("{}", encoding="utf-8")
+            events = [{"event": "scorer_rule_corpus_pinned", "corpus_sha256": "c", "registry_fingerprint": "f"},
+                      {"event": "relabel_applied", "training_split_sha256": "s"}, {"event": "promotion_sealed", "promotion_payload_sha256": "p"},
+                      {"event": "other"}]
+            (real / "controller-events.jsonl").write_text("\n".join(json.dumps(e) for e in events) + "\n", encoding="utf-8")
+            self.assertEqual(sim.load_pre_t_evidence(tmp)[1] != [], True)                  # empty temp work: evidence missing
+            sim.seed_rehearsal_work(real, tmp)
+            got, probs = sim.load_pre_t_evidence(tmp)
+            self.assertEqual(probs, []); self.assertEqual(got["relabel_applied"]["training_split_sha256"], "s")
+            (real / "aliases-h.json").unlink()
+            with self.assertRaises(SystemExit):
+                sim.seed_rehearsal_work(real, pathlib.Path(td) / "T2")
+
     def test_rehearsal_never_writes_the_working_tree(self):
         before = subprocess.run(["git", "status", "--porcelain"], cwd=sim.ROOT, capture_output=True, text=True).stdout
         with mock.patch.object(sim, "_run_in_tree", return_value=(0, "ok")) as run_in_tree:
@@ -2044,7 +2164,7 @@ class TestRound6PreT(unittest.TestCase):
         self.assertEqual(subprocess.run(["git", "status", "--porcelain"], cwd=sim.ROOT, capture_output=True, text=True).stdout, before)
 ```
 
-(add `import types, subprocess, tempfile, pathlib` and `from unittest import mock` if missing; `sim` is the module alias the copied test file already uses.)
+(add `import json, types, subprocess, tempfile, pathlib` and `from unittest import mock` if missing; `sim` is the module alias the copied test file already uses.)
 
 Append to `tests/benchmarks/test_round_seal.py`:
 
@@ -2142,6 +2262,50 @@ def dry_run_pipeline_r6(state, rp, bench, aliases_raw, cands_doc, corpus):
                                            counterexample_fn=tune.final_counterexample_fn(state, rp, aliases_raw, round=ROUND, root=ROOT))
 
 
+PRE_T_EVENTS = ("scorer_rule_corpus_pinned", "relabel_applied", "promotion_sealed")
+PRE_T_FILES = ("aliases-h.json", "inputs/round4/doc-titles-snapshot.json")
+
+
+def load_pre_t_evidence(work) -> tuple:
+    """Everything run_pre_t reads from the work dir: the latest of each PRE_T_EVENTS ledger event and the PRE_T_FILES."""
+    work, probs = pathlib.Path(work), []
+    led = work / "controller-events.jsonl"
+    lines = [json.loads(l) for l in led.read_text(encoding="utf-8").splitlines() if l.strip()] if led.exists() else []
+    out = {}
+    for name in PRE_T_EVENTS:
+        e = next((x for x in reversed(lines) if x.get("event") == name), None)
+        if e is None:
+            probs.append(f"ledger event {name} missing")
+        out[name] = e
+    for rel in PRE_T_FILES:
+        if not (work / rel).is_file():
+            probs.append(f"file {rel} missing")
+    return out, probs
+
+
+def seed_rehearsal_work(real_work, temp_work) -> dict:
+    """plan review 1 P0-3: copy exactly the pre-T evidence (latest PRE_T_EVENTS lines, PRE_T_FILES) into the rehearsal work dir and
+    verify every copied sha; returns {name: sha256}."""
+    real_work, temp_work = pathlib.Path(real_work), pathlib.Path(temp_work)
+    evidence, probs = load_pre_t_evidence(real_work)
+    if probs:
+        raise SystemExit(f"error: real work dir lacks pre-T evidence: {probs}")
+    temp_work.mkdir(parents=True, exist_ok=True)
+    lines = [json.dumps(evidence[n]) for n in PRE_T_EVENTS]
+    (temp_work / "controller-events.jsonl").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    shas = {}
+    for rel in PRE_T_FILES:
+        dst = temp_work / rel; dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(real_work / rel, dst)
+        if ev.file_sha256(dst) != ev.file_sha256(real_work / rel):
+            raise SystemExit(f"error: copy of {rel} differs")
+        shas[rel] = ev.file_sha256(dst)
+    copied, _ = load_pre_t_evidence(temp_work)
+    if any(copied[n] != evidence[n] for n in PRE_T_EVENTS):
+        raise SystemExit("error: seeded ledger events differ from the real ledger")
+    return shas
+
+
 def run_pre_t(cache: pathlib.Path, work: pathlib.Path) -> int:
     from tests.benchmarks import scorer_rule_cx as cx6
     from tools.atlassian_docs.intelligence import policy
@@ -2149,13 +2313,17 @@ def run_pre_t(cache: pathlib.Path, work: pathlib.Path) -> int:
     rp, bench = policy.load_ranking(tune.RANKING_PATH), tune._BENCH
     aliases_raw, ranking_raw = json.loads(tune.ALIASES_PATH.read_text(encoding="utf-8")), json.loads(tune.RANKING_PATH.read_text(encoding="utf-8"))
     ap, cands_doc = tune._alias_policy(aliases_raw), json.loads(tune.CANDIDATES_PATH.read_text(encoding="utf-8"))
-    ledger = [json.loads(l) for l in (work / "controller-events.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()]
-    corpus_meta = next((e for e in reversed(ledger) if e.get("event") == "scorer_rule_corpus_pinned"), None)
+    evidence, ev_problems = load_pre_t_evidence(work)
+    corpus_meta = evidence.get("scorer_rule_corpus_pinned")
     ref = json.loads((ROOT / f"tests/benchmarks/round{ROUND}-counterexample-reference.json").read_text(encoding="utf-8"))
 
     def body(state):
         corpus = cx6.corpus(state)
-        extra = []
+        extra = [{"kind": "pre_t_evidence_missing", "problems": ev_problems}] if ev_problems else []
+        from tests.benchmarks import round6_labels as labels
+        pinned_split = (evidence.get("relabel_applied") or {}).get("training_split_sha256")
+        if pinned_split != labels.training_split_sha256(bench):                       # plan review 1 P0-2: H22 pin == pre-T
+            extra.append({"kind": "training_split_mismatch", "pinned": pinned_split, "current": labels.training_split_sha256(bench)})
         if corpus_meta is None or corpus_meta["registry_fingerprint"] != state.registry.fingerprint or corpus_meta["corpus_sha256"] != ev.canonical_sha256(corpus):
             extra.append({"kind": "scorer_rule_binding", "problems": ["corpus metadata missing or differs from the ledger pin"]})
         result = dry_run_pipeline_r6(state, rp, bench, aliases_raw, cands_doc, corpus)
@@ -2205,14 +2373,18 @@ def run_rehearsal(cache, work, dry=False) -> int:
     """spec §5.2: on a throwaway `git archive HEAD` tree — T commands, full suite in the T state, pre-T dry-run, worker-brief
     handshake format; the working tree is never written. Appends rehearsal_report to work/controller-events.jsonl."""
     tree = pathlib.Path(tempfile.mkdtemp(prefix="round6-rehearsal-"))
+    temp_work = pathlib.Path(tempfile.mkdtemp(prefix="round6-rehearsal-work-"))
     steps = []
     try:
         if not dry:
             archive = subprocess.run(["git", "archive", "HEAD"], cwd=ROOT, check=True, capture_output=True).stdout
             subprocess.run(["tar", "-x", "-C", str(tree)], input=archive, check=True)
+            for f in sorted((pathlib.Path(work) / "frozen").glob("round6-*")):
+                shutil.copyfile(f, tree / "tests/benchmarks" / f.name)
+            steps.append({"argv": ["seed_rehearsal_work"], "exit": 0, "output_sha256": ev.canonical_sha256(seed_rehearsal_work(work, temp_work))})
         for argv in t_commands(cache, work, tree) + [[sys.executable, "-m", "unittest", "discover", "-s", "tests", "-t", "."],
                                                      [sys.executable, "tests/benchmarks/round6_simulation.py", "--phase", "pre-T",
-                                                      "--cache-dir", str(cache), "--work", str(tree / ".rehearsal-work")]]:
+                                                      "--cache-dir", str(cache), "--work", str(temp_work)]]:
             code, out = _run_in_tree(tree, argv)
             steps.append({"argv": argv[1:3], "exit": code, "output_sha256": hashlib.sha256(out.encode("utf-8")).hexdigest()})
             if code != 0:
@@ -2228,14 +2400,14 @@ def run_rehearsal(cache, work, dry=False) -> int:
         print(json.dumps(report, indent=1))
         return 0 if report["failures"] == 0 else 1
     finally:
-        shutil.rmtree(tree, ignore_errors=True)
+        shutil.rmtree(tree, ignore_errors=True); shutil.rmtree(temp_work, ignore_errors=True)
 
 
 def handshake_format_ok(text) -> bool:
     return f"ROUND{ROUND}-WORKER-HANDSHAKE" in text and "Acceptance (Round 6 spec §4.2, byte-for-byte)" in text
 ```
 
-The rehearsal copies the frozen texts it needs into the temp tree before the freeze step: the controller renders `round6-worker-brief.md`, `round6-hidden-generation-prompt.md`, `round6-hidden-reviewer-prompt.md`, `round6-method-safety.json` and `round6-counterexample-reference.json` into `$W/frozen/` first (Task C5 Step 4 text), and `run_rehearsal` copies `$W/frozen/*` into `tree/tests/benchmarks/` before running `t_commands` (add that copy loop at the top of the `for` block when `not dry`). The pre-T step inside the rehearsal writes its ledger into the temp tree, never into `$W`.
+The controller renders `round6-worker-brief.md`, `round6-hidden-generation-prompt.md`, `round6-hidden-reviewer-prompt.md`, `round6-method-safety.json` and `round6-counterexample-reference.json` into `$W/frozen/` first (Task 13 Step 1); `run_rehearsal` copies them into the temp tree and seeds a separate temp work dir with exactly the pre-T evidence (`seed_rehearsal_work`), so the rehearsal's pre-T reads the same evidence as the real one and never writes `$W` or the checkout.
 
 `main`: `--phase` choices `("pre-T", "H", "rehearsal")`; `rehearsal` needs `--cache-dir` and `--work` and calls `run_rehearsal`.
 
@@ -2322,8 +2494,8 @@ EOF
 - [ ] **Step 1: Inputs** — `python -m tests.benchmarks.round6_labels relabel-input --bench tests/benchmarks/search_queries.json --template tests/benchmarks/round6-relabel-prompt.md --out $W/relabel-input.txt`; the attachment is `$W/round6-generator-catalog.json`. Ledger both shas and `engine_output_in_input: false`.
 - [ ] **Step 2: Reviewers A and B** — two new ChatGPT Temporary chats (personalization off; UI-state screenshot per chat), each given the attachment + the byte-exact input; extract the first JSON object to `$W/relabel-A.json` / `$W/relabel-B.json`; `check-review --review … --catalog $W/round6-internal-catalog.json` → `ok` (a schema failure → one retry with the identical input in a new chat; a second failure → STOP). Actor ids differ from each other and from every earlier generator/reviewer. Ledger each attempt in `$W/attempts.jsonl` (stage `relabel-r6`).
 - [ ] **Step 3: Reviewer C (only if A ≠ B on some id)** — same input restricted to the disagreeing ids (render with a bench filtered to those records), same schema check.
-- [ ] **Step 4: Apply, close, pin the split** — `round6_labels apply --review $W/relabel-A.json --review $W/relabel-B.json [--review $W/relabel-C.json] --actors A B [C] --bench … --out tests/benchmarks/search_queries.json`; `round6_labels closure --catalog $W/round6-internal-catalog.json --bench … --out tests/benchmarks/search_queries.json` → exit 0 (exit 3 = STOP: label/catalog migration problem to thread 2); `round6_labels verify` → `ok`. Ledger `{"event": "relabel_applied", "positive", "negative", "adjudicated", "review_output_sha256s", "training_split_sha256"}`.
-- [ ] **Step 5: Commit the data (H22)** — run the suite; tests that pin the inherited counts (39 seeds / 14 regression records) are updated to the new totals only where they pin counts (`SEED_TOTAL`/`REGRESSION_TOTAL` are computed, not pinned). `git add tests/benchmarks/search_queries.json [count-pinning tests]`; commit `H22: Round 6 promotion (16 seed + 8 regression) and catalog-fact relabel (regression_positive N / regression_negative M); training_split_sha256 <sha>` with the trailer.
+- [ ] **Step 4: Apply, close, pin the split** — `round6_labels apply --review $W/relabel-A.json --review $W/relabel-B.json [--review $W/relabel-C.json] --actors A B [C] --bench … --out tests/benchmarks/search_queries.json`; `round6_labels closure --catalog $W/round6-internal-catalog.json --bench … --out tests/benchmarks/search_queries.json` → exit 0 (exit 3 = STOP: label/catalog migration problem to thread 2); `round6_labels verify --bench tests/benchmarks/search_queries.json --sealed-payload <promotion_sealed.promotion_payload_sha256>` → `ok` (it also checks the label provenance schema and PR-8). A `PR-8 fixture label conflict` line → `STOP_FOR_AMENDMENT`: the thread rules on redefining the r0 fixture by the current catalog-fact labels (spec + plan amendment), nothing is committed meanwhile. Ledger `{"event": "relabel_applied", "positive", "negative", "adjudicated", "review_output_sha256s", "training_split_sha256", "promotion_payload_recheck": true}`.
+- [ ] **Step 5: Commit the data (H22)** — run the suite (`test_committed_benchmark_labels` now runs instead of skipping); tests that pin the inherited counts (39 seeds / 14 regression records) are updated to the new totals only where they pin counts (`SEED_TOTAL`/`REGRESSION_TOTAL` are computed, not pinned). `git add tests/benchmarks/search_queries.json [count-pinning tests]`; commit `H22: Round 6 promotion (16 seed + 8 regression) and catalog-fact relabel (regression_positive N / regression_negative M); training_split_sha256 <sha>` with the trailer.
 
 ### Task 11: **[controller]** H adoption measurement (spec §3.5) — thread-2 ruling
 
@@ -2357,7 +2529,8 @@ EOF
 
 ### Task 12: **[controller + fresh reviewer]** Whole-branch review, `housekeeping_commit`
 
-- [ ] **Step 1: Fresh reviewer** — one fresh reviewer on the most capable model reviews `29f298f..HEAD` (H18–H22) against spec v1.5 + this plan (superpowers:requesting-code-review); findings are fixed as H′ commits (suite → `--phase H` → reviewer re-check) until findings 0.
+- [ ] **Step 1: Fresh reviewer** — one fresh reviewer on the most capable model reviews `29f298f..HEAD` (H18–H22) against spec v1.6 + this plan (superpowers:requesting-code-review); findings are fixed as H′ commits (suite → `--phase H` → reviewer re-check) until findings 0.
+- [ ] **Step 1b: Re-measure before the pin (plan review 1 P1-4)** — if any H′ landed after Task 11: when `scorer_rule_cx.py` changed, re-run Task 8 Step 3 (new `scorer_rule_corpus_pinned` event); when the benchmark changed, re-run `round6_labels verify` and re-ledger `relabel_applied`; then always re-run Task 11 Step 1 on HEAD and require `h_adoption_ok == true` (otherwise Task 11 Step 2's ruling path).
 - [ ] **Step 2: Pin** — ledger `{"event": "housekeeping_commit", "sha": HEAD, "tooling_code_sha256": ev.tooling_code_sha256(ROOT), "intelligence_fingerprint": <from a search payload on $S>}` and `{"event": "runtime_stability_qualifying_start", "intelligence_fingerprint": <same>, "at": <now>}` (spec §6: the H final fingerprint restarts the qualifying window). From here the TOOLING_FILES and the scorer/policy structure are frozen.
 
 ### Task 13: **[controller]** Frozen texts and the real-data T rehearsal (spec §5.2)
@@ -2369,7 +2542,7 @@ EOF
 
 - [ ] **Step 1: T commands** — run `round6_simulation.t_commands($S, $W, ROOT)` entries 1–3 in the checkout (candidates, classify, carry); never run `lexicon-gate`/`merge` after carry.
 - [ ] **Step 2: Binding pre-T gate** — `python tests/benchmarks/round6_simulation.py --phase pre-T --cache-dir $S --work $W` → exit 0 required. Exit 1 → `STOP_FOR_AMENDMENT`: `$W/pre-t-blocker-report.md` (every blocker with `metric_threshold` items/values/bounds, scorer-rule losses, counterexample losses, fixture failures, equivalence mismatches) to review thread 2; rulings as Round 5 Task 5 Step 3 (amendment → spec + plan + reviewed H′ → rerun from the affected step; or `TERMINAL_PRE_T_NOT_REACHED` by user decision only).
-- [ ] **Step 3: Frozen texts, freeze, commit T** — `cp $W/frozen/round6-* tests/benchmarks/`; run `t_commands` entry 4 (freeze; prints the round-6 entry incl. `scorer_rule_corpus_sha256`, `scorer_rule_registry_fingerprint`, `training_split_sha256`, `known_unreachable_seeds: []`); `git add` exactly `ev.t_allowlist(6)`; commit `T: Round 6 freeze …`; post-T check against `ev.t_allowlist(6)` and `freeze_for(6)["t_policy_files"]`; the freeze's corpus sha must equal the Task 8 ledger pin.
+- [ ] **Step 3: Frozen texts, freeze, commit T** — `cp $W/frozen/round6-* tests/benchmarks/`; run `t_commands` entry 4 (freeze; prints the round-6 entry incl. `scorer_rule_corpus_sha256`, `scorer_rule_registry_fingerprint`, `training_split_sha256`, `known_unreachable_seeds: []`); `git add` exactly `ev.t_allowlist(6)`; commit `T: Round 6 freeze …`; post-T check against `ev.t_allowlist(6)` and `freeze_for(6)["t_policy_files"]`; the freeze's corpus sha must equal the latest `scorer_rule_corpus_pinned` event and its `training_split_sha256` must equal the latest `relabel_applied` event (plan review 1 P0-2: H22 pin == pre-T == freeze); a mismatch → STOP (tooling defect after T ends the round).
 
 ### Task 15: **[controller]** Hidden set, review, attempt ledger, commit B, encryption
 
@@ -2386,10 +2559,10 @@ As Round 5 plan v8 Task 7: a fresh worker with `round6-worker-brief.md`, handsha
 
 ### Task 18: **[controller]** Readiness, runtime stability, archive, memory, dashboard, finishing
 
-- [ ] **Step 1: Readiness** — append `## Search Quality Round 6 — decision record (<date>)` to `docs/phase3-readiness.md`: spec v1.5 / plan version, `round6_start_commit 29f298f`, `initial_housekeeping_commit`, `housekeeping_commit` (+ moves), `s_reused_from_round5`; the five gate metrics with bounds and results, top-1 (recorded); the training metric vector at the selected point; the H adoption measurement (losses with keys, per-rule OFF, §8 generic-token diagnostics); promotion/relabel summary (positive/negative counts, adjudications, review shas); rehearsal result; pre-T events and blockers; terminal branch; Runtime stability: `runtime_observation_started`, the current `runtime_stability_qualifying_start`, qualifying search records / days from `search_log.qualifying_records` on the user-scope log, and the reference metrics (`match_selections` agreement rate, write recommendations) — not a gate.
+- [ ] **Step 1: Readiness** — append `## Search Quality Round 6 — decision record (<date>)` to `docs/phase3-readiness.md`: spec version (v1.6 or later) / plan version, `round6_start_commit 29f298f`, `initial_housekeeping_commit`, `housekeeping_commit` (+ moves), `s_reused_from_round5`; the five gate metrics with bounds and results, top-1 (recorded); the training metric vector at the selected point; the H adoption measurement (losses with keys, per-rule OFF, §8 generic-token diagnostics); promotion/relabel summary (positive/negative counts, adjudications, review shas); rehearsal result; pre-T events and blockers; terminal branch; Runtime stability: `runtime_observation_started`, the current `runtime_stability_qualifying_start`, qualifying search records / days from `search_log.qualifying_records` on the user-scope log, and the reference metrics (`match_selections` agreement rate, write recommendations) — not a gate.
 - [ ] **Step 2: Post-terminal** — as Round 5 plan v8 Task 11 with the substitutions: archive `round6-cache`, `round6-work` and `sealed/round6-sealed.json.enc` under `~/.atlassian_api_updater/archive/round6/` after the user confirms; memory `search-quality-round6-status.md`; republish the dashboard artifact; superpowers:finishing-a-development-branch (push/merge only on the user's instruction).
 
-## AC coverage map (spec v1.5)
+## AC coverage map (spec v1.6)
 
 | AC | Tasks |
 |---|---|
