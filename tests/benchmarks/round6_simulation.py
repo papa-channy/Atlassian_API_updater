@@ -220,12 +220,13 @@ def dry_run_pipeline_r6(state, rp, bench, aliases_raw, cands_doc, corpus):
     raw_sha = lambda raw: shas.setdefault(id(raw), policy.canonical_sha256(raw))
     evaluate_fn = lambda p, raw: tune.evaluate_usage_fast(ge, rp, p, bench) if raw_sha(raw) == b_sha else tune.evaluate_usage_point(state, rp, p, bench, tune._alias_policy(raw))
     fixture_fn = lambda p, raw: tune.fixture_failures_fast(ge_fx, rp, p, fx_bench) if raw_sha(raw) == b_sha else tune.fixture_failures(fx_state, rp, p, fx_bench, tune._alias_policy(raw))
-    scorer_fn = lambda p, raw: cx6.compare(state, rp, p, tune._alias_policy(raw), corpus, bound_fingerprint=state.registry.fingerprint, aliases_sha256=raw_sha(raw))
+    scorer_fn, scorer_crosscheck = tune.scorer_fns(state, rp, aliases_raw, corpus)    # memoized selector stage + production final
     boom = lambda *a, **k: (_ for _ in ()).throw(AssertionError("dry-run must not write"))
     with mock.patch.object(tune, "write_constants", boom), mock.patch.object(tune, "_write_log", boom):
-        return tune.run_pipeline_result_r6(evaluate_fn, bench, aliases_raw, cands_doc, rp.tuning_grid, dict(rp.baseline), fixture_fn, scorer_fn,
+        result = tune.run_pipeline_result_r6(evaluate_fn, bench, aliases_raw, cands_doc, rp.tuning_grid, dict(rp.baseline), fixture_fn, scorer_fn,
                                            {r["id"]: r["query"] for s in ("seed", "regression_positive") for r in bench.get(s) or []},
                                            counterexample_fn=tune.final_counterexample_fn(state, rp, aliases_raw, round=ROUND, root=ROOT))
+    return result, scorer_crosscheck(result.selected_point)                       # fields where fast != production scorer-rule result
 
 
 PRE_T_EVENTS = ("scorer_rule_corpus_pinned", "relabel_applied")       # promotion_sealed is historical pre-relabel evidence (plan review 2 P1-1)
@@ -325,7 +326,9 @@ def run_pre_t(cache: pathlib.Path, work: pathlib.Path) -> int:
                           "current": [labels.training_split_sha256(bench), labels.immutable_split_sha256(bench)]})
         if corpus_meta is None or corpus_meta["registry_fingerprint"] != state.registry.fingerprint or corpus_meta["corpus_sha256"] != ev.canonical_sha256(corpus):
             extra.append({"kind": "scorer_rule_binding", "problems": ["corpus metadata missing or differs from the ledger pin"]})
-        result = dry_run_pipeline_r6(state, rp, bench, aliases_raw, cands_doc, corpus)
+        result, scorer_cc = dry_run_pipeline_r6(state, rp, bench, aliases_raw, cands_doc, corpus)
+        if scorer_cc:
+            extra.append({"kind": "equivalence_mismatch", "scorer_rule_fields": scorer_cc})
         return state.registry.fingerprint, result, equivalence_mismatches(state, rp, bench, ap), extra
     fp, result, eq, extra = tune._with_state(cache, body)
     problems = counterexample_reference_problems(ref, work, fp)
@@ -406,8 +409,12 @@ def run_rehearsal(cache, work, dry=False) -> int:
         shutil.rmtree(tree, ignore_errors=True); shutil.rmtree(temp_work, ignore_errors=True)
 
 
+ACCEPTANCE_LINE = ("Acceptance (Round 6 spec §4.2, byte-for-byte): tuning_accept := wv == 0 ∧ fr == 0 ∧ ir == 0 ∧ 10·sr3 ≥ 9·|seed| ∧ 10·src ≥ 9·|seed eligible| ∧ 10·srk ≥ 9·src ∧ rp3 == |regression_positive| ∧ rpk == |regression_positive eligible| ∧ 8·nab ≥ 7·|regression_negative| ∧ fixture_positive == 23/23 ∧ fixture_negative_raw == 6/6 ∧ counterexample ok (no loss, no uncovered proposer key) ∧ scorer_rule_ok (eligible > 0 ∧ 100·losses ≤ eligible) ∧ no validation errors")   # spec v1.7 §4.2 (eligible = recommendation-eligible, §4.1)
+
+
 def handshake_format_ok(text) -> bool:
-    return f"ROUND{ROUND}-WORKER-HANDSHAKE" in text and "Acceptance (Round 6 spec §4.2, byte-for-byte)" in text
+    """The rendered worker brief carries the handshake marker and the exact spec v1.7 acceptance line (final review Important-1)."""
+    return f"ROUND{ROUND}-WORKER-HANDSHAKE" in text and ACCEPTANCE_LINE in text.splitlines()
 
 
 # ------------------------------------------------------------------ synthetic hidden records (apply_B)

@@ -158,10 +158,8 @@ def fixture_bench(bench) -> dict:
     from tests.benchmarks.round6_labels import fixture_label_conflicts
     if fixture_label_conflicts(bench):                                  # plan review 1 P0-4: PR-8 only holds conflict-free
         raise SystemExit(f"error: relabel conflicts with the historical r0 fixture labels {fixture_label_conflicts(bench)} (STOP_FOR_AMENDMENT)")
-    reg = [r for s in ("regression_negative", "regression_positive") for r in bench.get(s) or [] if r["origin"].endswith("-r0")]
     out = {"seed": [r for r in bench["seed"] if r["origin"].endswith("-r0")],
-           "regression_negative": sorted(({**r, "expected_top1_any": [], "forbidden_top1": sorted(set(r["forbidden_top1"]) | set(r.get("legacy_forbidden_top1") or []))}
-                                          for r in reg), key=lambda r: r["id"])}
+           "regression_negative": ev.r0_regression_records(bench)}           # shared PR-8 definition (diag, test_search)
     if (len(out["seed"]), len(out["regression_negative"])) != FIXTURE_COUNTS:
         raise SystemExit(f"error: r0 fixture suite must have {FIXTURE_COUNTS} records, got "
                          f"{(len(out['seed']), len(out['regression_negative']))}")
@@ -236,6 +234,15 @@ class GridEvaluator:
         cands, allowed, _top, reason = self._ordered(query, rp)
         return [c[1].key for c in cands[:limit]], bool(allowed) and reason is None
 
+    def usage_reason(self, query, rp, limit=5):
+        """(top keys, recommended_operation, abstain_reason) as search_operations returns them (scorer-rule corpus fast path)."""
+        if self._fallback(query):
+            with mock.patch.object(policy, "ranking", return_value=rp), mock.patch.object(policy, "aliases", return_value=self.ap):
+                out = search_operations(self.state, query, limit=limit)
+            return [r["key"] for r in out.get("results", [])], out.get("recommended_operation"), out.get("abstain_reason")
+        cands, _allowed, top, reason = self._ordered(query, rp)
+        return [c[1].key for c in cands[:limit]], (top.key if top is not None and reason is None else None), reason
+
     def usage(self, query, rp, limit=5):
         """(top keys, recommended_operation) exactly as search_operations returns them (Round 6 spec §3)."""
         if self._fallback(query):
@@ -280,6 +287,49 @@ def evaluate_usage_point(state, rp, point, bench, alias_policy) -> dict:
     with mock.patch.object(policy, "ranking", return_value=ranking_with(rp, point)), \
             mock.patch.object(policy, "aliases", return_value=alias_policy):
         return evaluate_usage(bench, usage_fn(state), eligible_fn(rp))
+
+
+def fast_scorer_usage(ge, rp, point):
+    """scorer_rule_cx usage_factory over a GridEvaluator built on the corpus (final review Important-2: the selector walks the
+    accept pool calling scorer_rule_ok per point; the production path costs two full corpus passes per point)."""
+    from tools.atlassian_docs.intelligence import search as S
+    rpp = ranking_with(rp, point)
+
+    def factory(enabled):
+        def fn(q):
+            with S.scorer_rules(enabled):
+                return ge.usage_reason(q, rpp)
+        return fn
+    return factory
+
+
+def scorer_fns(state, rp, b_raw, corpus):
+    """(scorer_fn(point, raw), crosscheck(point) -> problems). With the B aliases (selector stage) scorer_fn uses the memoized corpus
+    GridEvaluator; any other alias state (proposer final) uses production. crosscheck re-runs production at a point with the B aliases
+    and lists any field that differs from the fast result (plan review discipline: the memoized path is never trusted unchecked)."""
+    from tests.benchmarks import scorer_rule_cx as cx6
+    fp, b_sha, b_ap = state.registry.fingerprint, policy.canonical_sha256(b_raw), _alias_policy(b_raw)
+    ge = GridEvaluator(state, [c["query"] for c in corpus], b_ap, rp.ordering_rules["terminal_alias_full_weight"])
+    shas, memo = {}, {}
+
+    def raw_sha(raw):
+        return shas.setdefault(id(raw), policy.canonical_sha256(raw))
+
+    def scorer_fn(point, raw):
+        sha = raw_sha(raw)
+        if sha == b_sha:
+            key = tuple(sorted(point.items()))
+            if key not in memo:
+                memo[key] = cx6.compare(state, rp, point, b_ap, corpus, bound_fingerprint=fp, aliases_sha256=sha,
+                                        usage_factory=fast_scorer_usage(ge, rp, point))
+            return memo[key]
+        return cx6.compare(state, rp, point, _alias_policy(raw), corpus, bound_fingerprint=fp, aliases_sha256=sha)
+
+    def crosscheck(point):
+        fast = scorer_fn(point, b_raw)
+        slow = cx6.compare(state, rp, point, b_ap, corpus, bound_fingerprint=fp, aliases_sha256=b_sha)
+        return sorted(k for k in slow if slow[k] != fast.get(k))
+    return scorer_fn, crosscheck
 
 
 def evaluate_usage_fast(ge, rp, point, bench) -> dict:
@@ -877,7 +927,7 @@ def main(argv=None) -> int:
         raw_sha = lambda raw: shas.setdefault(id(raw), policy.canonical_sha256(raw))
         evaluate_fn = lambda point, raw: evaluate_usage_fast(ge, rp, point, bench) if raw_sha(raw) == b_sha else evaluate_usage_point(state, rp, point, bench, _alias_policy(raw))
         fixture_fn = lambda point, raw: fixture_failures_fast(ge_fx, rp, point, fx_bench) if raw_sha(raw) == b_sha else fixture_failures(fx_state, rp, point, fx_bench, _alias_policy(raw))
-        scorer_fn = lambda point, raw: cx6.compare(state, rp, point, _alias_policy(raw), corpus, bound_fingerprint=fp, aliases_sha256=raw_sha(raw))
+        scorer_fn, scorer_crosscheck = scorer_fns(state, rp, aliases_raw, corpus)          # memoized selector stage + production final
         t0 = time.perf_counter()
         res = run_pipeline_result_r6(evaluate_fn, bench, aliases_raw, cands_doc, rp.tuning_grid, dict(rp.baseline), fixture_fn, scorer_fn,
                                      {r["id"]: r["query"] for s in ("seed", "regression_positive") for r in bench.get(s) or []},
@@ -885,6 +935,9 @@ def main(argv=None) -> int:
         slow, fast = evaluate_usage_point(state, rp, res.selected_point, bench, _alias_policy(aliases_raw)), evaluate_usage_fast(ge, rp, res.selected_point, bench)
         if slow != fast:
             raise SystemExit("error: memoized grid evaluator disagrees with search_operations at the selected point")
+        cc = scorer_crosscheck(res.selected_point)
+        if cc:
+            raise SystemExit(f"error: memoized scorer-rule corpus evaluator disagrees with production at the selected point: {cc}")
         if res.validation_errors:
             raise SystemExit("\n".join(f"VIOLATION {v}" for v in res.validation_errors))
         return fp, res, time.perf_counter() - t0

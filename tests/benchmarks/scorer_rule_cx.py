@@ -49,8 +49,13 @@ def _rank(keys, key):
     return keys.index(key) + 1 if key in keys else None
 
 
-def _run(state, rp, point, alias_policy, items, on_rules):
-    off, on = usage_with(state, rp, point, alias_policy, ()), usage_with(state, rp, point, alias_policy, on_rules)
+def _run(state, rp, point, alias_policy, items, on_rules, usage_factory=None):
+    """usage_factory(enabled) -> fn(query) -> (ranked, recommended, abstain_reason): an equivalent fast path (the tuning selector's
+    memoized GridEvaluator); default = production search_operations."""
+    if usage_factory is not None:
+        off, on = usage_factory(()), usage_factory(tuple(on_rules))
+    else:
+        off, on = usage_with(state, rp, point, alias_policy, ()), usage_with(state, rp, point, alias_policy, on_rules)
     losses, gains, eligible, loss_list = 0, 0, 0, []
     for it in items:
         k_off, r_off, _ = off(it["query"]); k_on, r_on, why = on(it["query"])
@@ -65,10 +70,10 @@ def _run(state, rp, point, alias_policy, items, on_rules):
     return losses, gains, eligible, loss_list
 
 
-def compare(state, rp, point, alias_policy, items, *, bound_fingerprint, aliases_sha256, on_rules=search.RULES) -> dict:
+def compare(state, rp, point, alias_policy, items, *, bound_fingerprint, aliases_sha256, on_rules=search.RULES, usage_factory=None) -> dict:
     if state.registry.fingerprint != bound_fingerprint:
         raise ValueError(f"registry {state.registry.fingerprint} is not the bound Round 6 S {bound_fingerprint}")
-    losses, gains, eligible, loss_list = _run(state, rp, point, alias_policy, items, on_rules)
+    losses, gains, eligible, loss_list = _run(state, rp, point, alias_policy, items, on_rules, usage_factory)
     write = sum(1 for l in loss_list if l["key"].split(":")[1] in search.WRITE_METHODS)
     return {"registry_fingerprint": state.registry.fingerprint, "ranking_structure_sha256": rp.structure_sha256,
             "verb_methods_sha256": policy.canonical_sha256({k: list(v) for k, v in rp.verb_method_order.items()}),   # == sha of the raw verb_methods

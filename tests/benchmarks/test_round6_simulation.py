@@ -100,3 +100,16 @@ class TestRound6PreT(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertTrue(all(str(sim.ROOT) not in str(c.args[0]) for c in run_in_tree.call_args_list))   # every command ran in the temp tree
         self.assertEqual(subprocess.run(["git", "status", "--porcelain"], cwd=sim.ROOT, capture_output=True, text=True).stdout, before)
+
+
+class TestWorkerBriefAcceptance(unittest.TestCase):
+    """Final review Important-1: the worker brief must state the spec v1.7 acceptance contract byte-for-byte."""
+    def test_handshake_checks_the_whole_acceptance_line(self):
+        self.assertIn("ir == 0", sim.ACCEPTANCE_LINE); self.assertIn("|seed eligible|", sim.ACCEPTANCE_LINE)
+        self.assertIn("|regression_positive eligible|", sim.ACCEPTANCE_LINE)
+        ok = "ROUND6-WORKER-HANDSHAKE\n" + sim.ACCEPTANCE_LINE + "\n"
+        self.assertTrue(sim.handshake_format_ok(ok))
+        v16 = ok.replace("10·src ≥ 9·|seed eligible|", "10·src ≥ 9·|seed|")
+        self.assertFalse(sim.handshake_format_ok(v16))
+        plan = (pathlib.Path(sim.ROOT) / "docs/superpowers/plans/2026-10-11-search-quality-round6-implementation.md").read_text(encoding="utf-8")
+        self.assertIn(sim.ACCEPTANCE_LINE, plan)

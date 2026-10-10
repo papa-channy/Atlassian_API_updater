@@ -782,6 +782,14 @@ class TestRound6FixtureBench(unittest.TestCase):
         key = lambda recs: sorted((x["id"], tuple(x["forbidden_top1"]), tuple(x["expected_top1_any"])) for x in recs)
         self.assertEqual(key(a["regression_negative"]), key(b["regression_negative"]))
 
+    def test_fixture_regression_records_pass_the_negative_schema(self):
+        """Final review Important-3: fixture_bench shares ev.r0_regression_records (relabel fields dropped), so its
+        regression_negative section is a valid negative section and equals the diag/test_search definition."""
+        bench = json.loads(tune.BENCH_PATH.read_text(encoding="utf-8"))
+        fx = tune.fixture_bench(bench)
+        ev.check_schema("regression_negative", fx["regression_negative"])
+        self.assertEqual(fx["regression_negative"], ev.r0_regression_records(bench))
+
     def test_conflicting_relabel_stops(self):                                  # PR-8 / plan review 1 P0-4
         bench = _pre_relabel(json.loads(tune.BENCH_PATH.read_text(encoding="utf-8")))
         moved = copy.deepcopy(bench)
@@ -836,3 +844,34 @@ class TestRound6Eligibility(unittest.TestCase):
         after = {**before, "recommended": None, "abstained": True}
         self.assertTrue(tune.improved(before, after, "seed"))
         self.assertFalse(tune.no_worse({**_usage([_row("s-001")])["m"], "ir": 0}, {**_usage([_row("s-001")])["m"], "ir": 1}))
+
+
+class TestFastScorerRule(unittest.TestCase):
+    """Final review Important-2: the selector's scorer-rule calls use the memoized GridEvaluator over the corpus; they must equal
+    the production compare (keys, recommendation and abstain reason) at sampled points."""
+    def test_fast_compare_equals_production(self):
+        from tests.benchmarks import scorer_rule_cx as cx6
+        st, rp = tune.fixture_state(), policy.ranking()
+        raw = json.loads(tune.ALIASES_PATH.read_text(encoding="utf-8")); ap = tune._alias_policy(raw)
+        corpus = cx6.corpus(st)
+        ge = tune.GridEvaluator(st, [c["query"] for c in corpus], ap, rp.ordering_rules["terminal_alias_full_weight"])
+        kw = dict(bound_fingerprint=st.registry.fingerprint, aliases_sha256="a" * 64)
+        pts = tune.grid_points(rp.tuning_grid)
+        for p in [dict(rp.baseline)] + pts[::max(1, len(pts) // 3)]:
+            slow = cx6.compare(st, rp, p, ap, corpus, **kw)
+            fast = cx6.compare(st, rp, p, ap, corpus, usage_factory=tune.fast_scorer_usage(ge, rp, p), **kw)
+            self.assertEqual(fast, slow, p)
+
+    def test_scorer_fns_fast_only_for_b_aliases_and_crosscheck(self):
+        from tests.benchmarks import scorer_rule_cx as cx6
+        st, rp = tune.fixture_state(), policy.ranking()
+        b_raw = json.loads(tune.ALIASES_PATH.read_text(encoding="utf-8")); other = tune.apply_actions_r6(b_raw, [("zzq", "issue")], "s-001")
+        corpus = cx6.corpus(st)[:12]
+        scorer_fn, crosscheck = tune.scorer_fns(st, rp, b_raw, corpus)
+        with mock.patch.object(cx6, "usage_with", side_effect=AssertionError("production path used")):
+            fast = scorer_fn(dict(rp.baseline), b_raw)                   # selector stage: B aliases -> fast path only
+        self.assertTrue(fast["eligible"] >= 0)
+        with self.assertRaises(AssertionError):
+            with mock.patch.object(cx6, "usage_with", side_effect=AssertionError("production path used")):
+                scorer_fn(dict(rp.baseline), other)                        # proposer/final aliases -> production
+        self.assertEqual(crosscheck(dict(rp.baseline)), [])
