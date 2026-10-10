@@ -501,7 +501,7 @@ def ku_record_problems(round, bench, base_bench, registry_doc, ids=None) -> list
         r, b, g = cur.get(sid), base.get(sid), reg.get(sid)
         if r is None or b is None or g is None:
             out.append(f"{sid}: missing in bench/base/registry"); continue
-        if canonical_sha256(r) != canonical_sha256(b):
+        if canonical_sha256(ku_identity(r)) != canonical_sha256(ku_identity(b)):      # v7: ku_identity(record) = {k: v for k, v in record.items() if k not in KU_DERIVED_FIELDS}, KU_DERIVED_FIELDS = ("failure_classes",)
             out.append(f"{sid}: seed record differs from the start commit")
         if g.get("query_sha256") != sha256_text(r["query"]) or g.get("record_sha256") != canonical_sha256(ku_identity(r)):
             out.append(f"{sid}: registry query/record sha mismatch")

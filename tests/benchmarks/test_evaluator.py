@@ -839,3 +839,8 @@ class TestRound5KuIdentity(unittest.TestCase):
     def test_expected_or_forbidden_change_is_a_mismatch(self):
         self.assertTrue(self._check({**self.BASE, "expected_top1_any": ["other"]}))
         self.assertTrue(self._check({**self.BASE, "forbidden_top1": ["k2"]}))
+
+    def test_other_identity_fields_are_a_mismatch(self):
+        self.assertTrue(self._check({**self.BASE, "origin": "held_out-r2"}))
+        self.assertTrue(self._check({**self.BASE, "ambiguous": True}))
+        self.assertEqual(ev.KU_DERIVED_FIELDS, ("failure_classes",))   # id is the lookup key; pin the projection itself against any widening

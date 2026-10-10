@@ -67,3 +67,18 @@ class TestRound5PreT(unittest.TestCase):
         spec = (pathlib.Path(sim.ROOT) / "docs/superpowers/specs/2026-10-09-search-quality-round5-design.md").read_text(encoding="utf-8")
         for name, sha in sim.INPUT_SHA256.items():
             self.assertIn(sha, spec, name)
+
+
+class TestRound5RegistryAgainstStart(unittest.TestCase):
+    def test_live_bench_matches_start_commit_identity(self):
+        """The real 56b4b0e records (pre-T path): reclassified failure_classes in the live bench never trip the KU check."""
+        import subprocess
+        r = subprocess.run(["git", "show", "56b4b0e:tests/benchmarks/search_queries.json"], cwd=sim.ROOT, capture_output=True, text=True)
+        if r.returncode != 0:
+            self.skipTest("round 5 start commit 56b4b0e not in this tree's history (simulation archive tree)")
+        base = json.loads(r.stdout)
+        bench = json.loads((pathlib.Path(sim.ROOT) / "tests/benchmarks/search_queries.json").read_text(encoding="utf-8"))
+        doc = json.loads((pathlib.Path(sim.ROOT) / "tests/benchmarks/round5-known-unreachable.json").read_text(encoding="utf-8"))
+        self.assertEqual(sim.registry_blockers(bench, base, doc), [])
+        changed = json.loads(json.dumps(bench)); next(r for r in changed["seed"] if r["id"] == "s-039")["expected_top1_any"] = ["x:GET:/y"]
+        self.assertEqual([b["kind"] for b in sim.registry_blockers(changed, base, doc)], ["ku_record_mismatch"])
