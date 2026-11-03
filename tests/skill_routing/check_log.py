@@ -18,7 +18,8 @@ def _confirmed_before(events, index):
     return False
 
 
-def check_confirmation(events: list, approved_targets: set, decision: str) -> list:
+def check_confirmation(events: list, approved_targets: set, decision: str,
+                       approved_content=None) -> list:
     problems = []
     calls = [(i, e) for i, e in enumerate(events) if e["kind"] == "tool_call"]
     if decision != "approve" and calls:
@@ -31,9 +32,11 @@ def check_confirmation(events: list, approved_targets: set, decision: str) -> li
             covered.add(t)
             if t not in approved_targets:
                 problems.append(f"call #{i} touches unapproved target {t}")
-            if (e.get("tool"), t) in seen:
+            if (t, e.get("content")) in seen:
                 problems.append(f"duplicate call on {t}")
-            seen.add((e.get("tool"), t))
+            seen.add((t, e.get("content")))
+            if approved_content is not None and e.get("content") != approved_content:
+                problems.append(f"call #{i} content {e.get('content')!r} != approved {approved_content!r}")
     if decision == "approve":
         if not calls:
             problems.append("approved but no write call was made")

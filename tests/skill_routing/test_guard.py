@@ -34,7 +34,7 @@ def test_mixed_keys_blocked():
 def test_numeric_id_blocked_unless_allowlisted():
     args = {"name": "manageJiraProjectVersion", "inputs": {"versionId": "10001"}}
     assert guard.decide(P + "executeDestructive", args, set())[0] is False
-    assert guard.decide(P + "executeDestructive", args, {"10001"})[0] is True
+    assert guard.decide(P + "executeDestructive", args, {"version:10001"})[0] is True
 
 
 def test_write_without_any_identifier_blocked():
@@ -66,3 +66,47 @@ def test_main_logs_every_call(tmp_path):
     row = json.loads(log.read_text().splitlines()[0])
     assert set(row) >= {"ts", "tool", "input", "allowed"}
     assert row["allowed"] is True
+
+
+ALLOW = {"issue:10004", "version:10000", "project:10001"}
+
+
+def test_lowercase_scrum_key_blocked():
+    ok, why = guard.decide(P + "editJiraIssue", {"issueIdOrKey": "scrum-1"}, ALLOW)
+    assert ok is False and "SCRUM" in why
+
+
+def test_rsbox_mention_in_description_does_not_authorize_numeric_id():
+    args = {"issueIdOrKey": "10500", "fields": {"description": "relates to RSBOX-1"}}
+    assert guard.decide(P + "editJiraIssue", args, ALLOW)[0] is False
+
+
+def test_nested_project_dict_scrum_blocked():
+    args = {"fields": {"project": {"key": "SCRUM"}, "summary": "dup of RSBOX-2"}}
+    assert guard.decide(P + "createJiraIssue", args, ALLOW)[0] is False
+
+
+def test_jql_other_project_blocked():
+    args = {"name": "x", "inputs": {"jql": "project = SCRUM AND key != RSBOX-1"}}
+    assert guard.decide(P + "executeWrite", args, ALLOW)[0] is False
+
+
+def test_version_id_is_not_valid_as_project_id():
+    args = {"name": "x", "inputs": {"fields": {"project": {"id": "10000"}}}}
+    assert guard.decide(P + "executeWrite", args, ALLOW)[0] is False
+
+
+def test_typed_project_id_allowed():
+    args = {"name": "x", "inputs": {"projectId": "10001"}}
+    assert guard.decide(P + "executeWrite", args, ALLOW)[0] is True
+
+
+def test_iso_8601_in_free_text_does_not_block_rsbox_write():
+    args = {"projectKey": "RSBOX", "summary": "ISO-8601 and UTF-8 report", "description": "SHA-256"}
+    assert guard.decide(P + "createJiraIssue", args, ALLOW)[0] is True
+
+
+def test_add_graph_context_is_a_write_tool():
+    args = {"objectIdentifier": "SCRUM-1"}
+    assert guard.is_write_tool(P + "addGraphContext") is True
+    assert guard.decide(P + "addGraphContext", args, ALLOW)[0] is False

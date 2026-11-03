@@ -14,47 +14,87 @@ WRITE_SUFFIXES = {
     "createJiraIssue", "editJiraIssue", "transitionJiraIssue",
     "addOrEditJiraIssueComment", "createConfluenceContent",
     "updateConfluenceContent", "executeWrite", "executeDestructive",
+    "addGraphContext",
 }
 ALLOWED_PROJECT = "RSBOX"
-_ISSUE_KEY = re.compile(r"\b([A-Z][A-Z0-9]{1,9})-\d+\b")
-_PROJECT_FIELDS = {"projectKey", "project", "projectIdOrKey", "projectKeys"}
+# Free text never identifies a target: a summary like "ISO-8601" or a description
+# mentioning RSBOX-1 must neither block nor authorize a write.
+_FREE_TEXT = {"summary", "description", "comment", "body", "title", "text",
+              "environment", "name", "message"}
+# Input fields that name the write target, and what kind of id they carry.
+_TARGET_KIND = {
+    "issueIdOrKey": "issue", "issueKey": "issue", "issueId": "issue", "issueIds": "issue",
+    "versionId": "version",
+    "projectId": "project", "projectIdOrKey": "project", "projectKey": "project",
+    "projectKeys": "project", "project": "project",
+}
+_ISSUE_KEY = re.compile(r"\b([A-Za-z][A-Za-z0-9]{1,9})-\d+\b")
+_JQL_PROJECT = re.compile(
+    r'project\s*(?:=|!=|in)\s*\(?\s*((?:"?[A-Za-z0-9_]+"?\s*,?\s*)+)', re.IGNORECASE)
 
 
 def is_write_tool(tool_name: str) -> bool:
     return tool_name.startswith(PREFIX) and tool_name[len(PREFIX):] in WRITE_SUFFIXES
 
 
-def _walk(value, project_keys, numbers):
+def _scalars(value):
+    if isinstance(value, list):
+        for v in value:
+            yield from _scalars(v)
+    elif isinstance(value, bool) or value is None:
+        return
+    elif isinstance(value, (str, int)):
+        yield str(value)
+
+
+def _walk(value, field, strings, targets):
+    """Collect scannable strings and (kind, value) targets, skipping free text."""
     if isinstance(value, dict):
         for k, v in value.items():
-            if k in _PROJECT_FIELDS and isinstance(v, str):
-                project_keys.add(v)
-            elif k in _PROJECT_FIELDS and isinstance(v, list):
-                project_keys.update(x for x in v if isinstance(x, str))
-            _walk(v, project_keys, numbers)
+            if k in _FREE_TEXT:
+                continue
+            if k in _TARGET_KIND and not isinstance(v, dict):
+                for sc in _scalars(v):
+                    targets.append((_TARGET_KIND[k], sc))
+            elif k in _TARGET_KIND and isinstance(v, dict):
+                for sub, kind in (("key", "project"), ("id", "project")):
+                    if sub in v:
+                        for sc in _scalars(v[sub]):
+                            targets.append((kind, sc))
+            _walk(v, k, strings, targets)
     elif isinstance(value, list):
         for v in value:
-            _walk(v, project_keys, numbers)
-    elif isinstance(value, bool):
-        pass
-    elif isinstance(value, int) or (isinstance(value, str) and value.isdigit()):
-        numbers.add(str(value))
+            _walk(v, field, strings, targets)
+    elif isinstance(value, str):
+        strings.append(value)
 
 
 def decide(tool_name: str, tool_input: dict, allow_ids: set) -> tuple:
     if not is_write_tool(tool_name):
         return True, "read tool"
-    project_keys, numbers = set(), set()
-    _walk(tool_input, project_keys, numbers)
-    keys = {m.group(1) for m in _ISSUE_KEY.finditer(json.dumps(tool_input))} | project_keys
-    if keys:
-        outside = sorted(keys - {ALLOWED_PROJECT})
-        if outside:
-            return False, "outside RSBOX: " + ",".join(outside)
-        return True, "RSBOX key"
-    if numbers and numbers <= allow_ids:
-        return True, "allow-listed ids"
-    return False, "cannot confirm RSBOX scope (fail-closed)"
+    strings, targets = [], []
+    _walk(tool_input, None, strings, targets)
+    projects, recognized = set(), False
+    for text in strings:
+        for m in _ISSUE_KEY.finditer(text):
+            projects.add(m.group(1).upper())
+        for m in _JQL_PROJECT.finditer(text):
+            projects.update(t.strip('" ').upper() for t in m.group(1).split(",") if t.strip('" '))
+    for kind, val in targets:
+        if val.isdigit():
+            if f"{kind}:{val}" not in allow_ids:
+                return False, f"unlisted {kind} id {val} (fail-closed)"
+            recognized = True
+        elif kind == "project":
+            projects.add(val.upper())
+    outside = sorted(projects - {ALLOWED_PROJECT})
+    if outside:
+        return False, "outside RSBOX: " + ",".join(outside)
+    if ALLOWED_PROJECT in projects:
+        recognized = True
+    if not recognized:
+        return False, "cannot confirm RSBOX scope (fail-closed)"
+    return True, "RSBOX scope confirmed"
 
 
 def _load_allow(path) -> set:

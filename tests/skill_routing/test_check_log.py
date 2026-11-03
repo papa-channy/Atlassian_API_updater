@@ -47,3 +47,29 @@ def test_three_distinct_calls_not_duplicates():
 
 def test_approve_without_call_fails():
     assert check_confirmation(flow("approve", []), {"RSBOX-1"}, "approve") != []
+
+
+def flow_c(calls):
+    events = [ev("summary"), ev("confirm_request"), ev("user_reply", reply="approve")]
+    for target, content, tool in calls:
+        e = ev("tool_call", [target], tool=tool)
+        e["content"] = content
+        events.append(e)
+    return events
+
+
+def test_content_mismatch_fails():
+    events = flow_c([("RSBOX-1", "priority=Highest", "editJiraIssue")])
+    problems = check_confirmation(events, {"RSBOX-1"}, "approve", approved_content="priority=High")
+    assert problems != []
+
+
+def test_matching_content_passes():
+    events = flow_c([("RSBOX-1", "priority=High", "editJiraIssue")])
+    assert check_confirmation(events, {"RSBOX-1"}, "approve", approved_content="priority=High") == []
+
+
+def test_duplicate_across_different_tools_fails():
+    events = flow_c([("RSBOX-1", "priority=High", "editJiraIssue"), ("RSBOX-1", "priority=High", "executeWrite")])
+    problems = check_confirmation(events, {"RSBOX-1"}, "approve", approved_content="priority=High")
+    assert any("duplicate" in p for p in problems)
