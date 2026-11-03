@@ -16,7 +16,8 @@ description: Use when asked to read, create, edit, or delete Jira or Confluence 
 직접 도구 → 없으면 `discover` → 실행은 반환된 tier(`executeRead`/`executeWrite`/`executeDestructive`)로, 입력은 그 도구·`discover`가 준 규격 그대로(복제·추측 금지, cloudId는 `getAccessibleAtlassianResources`).
 operation은 (a) 제품·리소스 (b) 작업 의미 (c) 필수 입력 매핑 (d) 요청 표현 가능을 모두 만족해야 쓴다. 요청은 명확한데 안 맞으면 질의를 바꿔 최대 2회 재탐색한다. 없으면 **"커넥터에서 발견되지 않음"**이라고 한다("미지원 확인"·"기능 없음" 금지). 같은 제품의 다른 대상 operation(예: Confluence 내보내기)을 빌리지 않는다.
 
-## 3. REST 경로 (발견되지 않았거나 설계 요청일 때만)
+## 3. REST 경로 (커넥터에서 발견되지 않았거나 설계 요청일 때만)
+실행 요청인데 발견되지 않았다면 REST 후보를 찾아 대조까지 한다(실행하지 않고 명세로만 제시). 대응 후보가 없으면 그때 중단한다.
 `search_operations` → `get_operation` → (바디·참조 스키마가 필요할 때만 `get_schema`) → `build_request_template` → `check_request`.
 - 1위를 믿지 않는다. 제품·메서드·경로·설명·스키마를 요청과 대조한다. `actionable: false`는 후보일 뿐이고 `abstain_reason`을 본다. 대응이 없으면 "발견되지 않음"을 알리고 중단한다(틀린 후보를 내밀지 않는다).
 - 모르는 필수값은 묻되, 비운 항목을 표시한 템플릿과 검수 결과까지 산출한다.
