@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>atlassian-routing 작동 파이프라인</title>
+<style>
+/* 토큰: viz-policy design-tokens (Okabe-Ito 계열, 라이트/다크) */
+:root {
+ --viz-bg:#FFFFFF; --viz-text:#404040; --viz-text-muted:#737373; --viz-axis:#737373;
+ --viz-grid:#E5E5E5; --viz-band:#F4F4F4;
+ --viz-cat-1:#0072B2; --viz-cat-2:#D55E00; --viz-cat-4:#009E73; --viz-cat-3:#CC79A7;
+ --viz-on-cat-1:#FFFFFF; --viz-on-cat-4:#000000;
+ --viz-alert:var(--viz-cat-2);
+ --viz-seq-0:#EDF5FB; --viz-seq-1:#C8E2F7;
+ --font:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard","Noto Sans KR","Malgun Gothic",sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+ :root {
+ --viz-bg:#0A0A0A; --viz-text:#D4D4D4; --viz-text-muted:#A1A1A1; --viz-axis:#737373;
+ --viz-grid:#262626; --viz-band:#171717; --viz-seq-0:#172028; --viz-seq-1:#1D3B52;
+ }
+}
+* { box-sizing:border-box; }
+html { font-size:100%; }
+body { margin:0; background:var(--viz-bg); color:var(--viz-text); font-family:var(--font); line-height:1.6; }
+.wrap { max-width:1080px; margin:0 auto; padding:2rem 1.25rem 4rem; }
+h1 { font-size:1.75rem; margin:0 0 .5rem; line-height:1.3; }
+h2 { font-size:1.25rem; margin:3rem 0 .25rem; }
+h2 .num { display:inline-block; min-width:1.75rem; }
+p.lead { margin:.25rem 0 1rem; max-width:46rem; }
+p.note { color:var(--viz-text-muted); font-size:.8125rem; margin:.5rem 0 0; }
+.sub { color:var(--viz-text-muted); font-size:.9375rem; margin:0 0 1rem; }
+code { font-size:.875em; }
+:focus-visible { outline:2px solid var(--viz-text); outline-offset:2px; }
+
+.summary { display:flex; flex-wrap:wrap; gap:.5rem; margin:1rem 0 0; padding:0; list-style:none; }
+.summary li { background:var(--viz-band); border:1px solid var(--viz-grid); border-radius:.5rem; padding:.375rem .75rem; font-size:.9375rem; }
+.summary b { font-variant-numeric:tabular-nums; }
+
+/* 1. 파이프라인 */
+.phase { margin-top:1rem; }
+.phase-label { display:flex; align-items:center; gap:.5rem; font-size:.8125rem; font-weight:600; margin:0 0 .5rem; }
+.phase-label i { display:inline-block; width:.75rem; height:.75rem; border-radius:2px; }
+.phase.route .phase-label i { background:var(--viz-cat-1); }
+.phase.rest .phase-label i { background:var(--viz-cat-4); border-radius:50%; }
+.stages { list-style:none; margin:0; padding:0; display:grid; gap:.75rem; grid-template-columns:repeat(auto-fit,minmax(10.5rem,1fr)); }
+.stage button { width:100%; height:100%; text-align:left; font:inherit; color:inherit; cursor:pointer;
+ background:var(--viz-bg); border:2px solid var(--viz-axis); border-radius:.625rem; padding:.75rem; display:block; }
+.phase.route .stage button { border-color:var(--viz-cat-1); border-style:solid; }
+.phase.rest .stage button { border-color:var(--viz-cat-4); border-style:dashed; }
+.stage button:hover { background:var(--viz-band); }
+.stage button[aria-pressed="true"] { background:var(--viz-seq-1); }
+.badge { display:inline-flex; align-items:center; justify-content:center; width:1.5rem; height:1.5rem; font-size:.8125rem; font-weight:700; font-variant-numeric:tabular-nums; margin-right:.5rem; }
+.phase.route .badge { background:var(--viz-cat-1); color:var(--viz-on-cat-1); border-radius:4px; }
+.phase.rest .badge { background:var(--viz-cat-4); color:var(--viz-on-cat-4); border-radius:50%; }
+.stage .name { font-weight:700; }
+.stage .one { display:block; color:var(--viz-text-muted); font-size:.8125rem; margin-top:.375rem; }
+.exit { display:block; margin-top:.5rem; font-size:.8125rem; }
+.exit::before { content:"⚠ "; color:var(--viz-alert); }
+.arrow { text-align:center; color:var(--viz-text-muted); font-size:.8125rem; margin:.5rem 0; }
+
+#detail { margin-top:1rem; background:var(--viz-band); border:1px solid var(--viz-grid); border-radius:.625rem; padding:1rem 1.25rem; min-height:9rem; }
+#detail h3 { margin:0 0 .25rem; font-size:1.0625rem; }
+#detail dl { display:grid; grid-template-columns:7rem 1fr; gap:.375rem .75rem; margin:.75rem 0 0; }
+#detail dt { color:var(--viz-text-muted); font-size:.8125rem; font-weight:600; }
+#detail dd { margin:0; }
+#detail dd ul { margin:0; padding-left:1.1rem; }
+#detail .src { font-size:.8125rem; color:var(--viz-text-muted); margin-top:.75rem; }
+
+/* 2. 일치 조건 / 확인 표 */
+.funnel { display:flex; flex-wrap:wrap; gap:.5rem; margin:1rem 0 0; padding:0; list-style:none; }
+.funnel li { flex:1 1 11rem; border:1px solid var(--viz-axis); border-radius:.625rem; padding:.75rem; background:var(--viz-bg); }
+.funnel li.start, .funnel li.end { background:var(--viz-seq-0); }
+.funnel .tag { font-size:.8125rem; font-weight:700; }
+.funnel .cut { display:block; margin-top:.25rem; font-size:.8125rem; color:var(--viz-text-muted); }
+table { width:100%; border-collapse:collapse; font-size:.875rem; }
+caption { text-align:left; font-weight:600; padding:.25rem 0 .5rem; }
+th, td { text-align:left; vertical-align:top; padding:.5rem .625rem; border-bottom:1px solid var(--viz-grid); }
+th { font-size:.8125rem; color:var(--viz-text-muted); border-bottom:1px solid var(--viz-axis); }
+td.id { font-weight:700; }
+tr.hi td { background:var(--viz-seq-0); }
+.tablewrap { overflow-x:auto; }
+.pill { display:inline-block; white-space:nowrap; font-size:.8125rem; border:1px solid var(--viz-axis); border-radius:999px; padding:0 .5rem; }
+.pill.warn { border-color:var(--viz-cat-2); border-width:2px; }
+
+/* 3. 두 계층 */
+.layers { display:grid; gap:.75rem; grid-template-columns:repeat(auto-fit,minmax(13rem,1fr)); margin-top:1rem; }
+.layers > div { border:1px solid var(--viz-axis); border-radius:.625rem; padding:.75rem; }
+.layers h3 { font-size:.9375rem; margin:0 0 .25rem; }
+.layers p { margin:0; font-size:.875rem; }
+
+.legend { display:flex; flex-wrap:wrap; gap:1rem; font-size:.8125rem; margin-top:1rem; }
+.legend span { display:inline-flex; align-items:center; gap:.375rem; }
+.sw { display:inline-block; width:1rem; height:1rem; }
+footer { margin-top:3rem; font-size:.8125rem; color:var(--viz-text-muted); }
+@media (prefers-reduced-motion: no-preference) { .stage button { transition:background-color .12s; } }
+@media (max-width:560px) { #detail dl { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<main class="wrap">
+
+<h1>atlassian-routing 작동 파이프라인</h1>
+<p class="lead">atlassian-routing은 Jira·Confluence 요청을 받으면 먼저 실행인지 설계인지 가르고, 실행이면 커넥터로, 커넥터에 없거나 설계 요청이면 <code>atlassian-openapi</code> MCP로 보낸다. 5단계 중 1~3단계가 경로를 정하는 라우팅이고, 4~5단계가 REST 명세 산출과 쓰기 확인·보고다.</p>
+<ul class="summary" aria-label="핵심 수치">
+ <li>단계 <b>5</b>개 (라우팅 3 + 명세·확인 2)</li>
+ <li>재탐색 최대 <b>2</b>회</li>
+ <li>일치 조건 <b>4</b>가지 (모두 만족)</li>
+ <li>쓰기 확인 등급 <b>5</b>행</li>
+ <li>SKILL.md 본문 <b>387</b>단어 (상한 500)</li>
+</ul>
+<p class="note">출처: <code>.claude/skills/atlassian-routing/SKILL.md</code>, 설계 스펙 <code>docs/superpowers/specs/2026-11-01-atlassian-routing-skill-design.md</code> v0.5. 원문과 다르면 SKILL.md가 맞다.</p>
+
+<h2 id="s1"><span class="num">1</span>5단계 흐름</h2>
+<p class="sub">단계를 누르면 아래에 입력, 분기, 규칙, 원문 위치가 나온다. 고정 규칙: REST 요청은 전송하지 않고, 서버 URL·자격증명·curl을 만들지 않으며, "미지원 확인"이라고 말하지 않는다.</p>
+
+<div class="phase route">
+ <p class="phase-label"><i aria-hidden="true"></i>라우팅 (1~3단계) · 실선 테두리 · 어느 도구로 갈지 정한다</p>
+ <ol class="stages" id="stagesRoute" aria-label="라우팅 단계 1~3"></ol>
+</div>
+<p class="arrow" aria-hidden="true">▼ 커넥터에서 발견되지 않았거나 설계 요청이면</p>
+<div class="phase rest">
+ <p class="phase-label"><i aria-hidden="true"></i>명세 산출과 확인 (4~5단계) · 점선 테두리 · 만들어 넘기고 멈춘다</p>
+ <ol class="stages" id="stagesRest" start="4" aria-label="명세·확인 단계 4~5"></ol>
+</div>
+
+<div id="detail" role="region" aria-live="polite" aria-label="선택한 단계의 상세">
+ <p style="margin:0;color:var(--viz-text-muted)">위에서 단계를 선택하면 상세가 여기에 나온다.</p>
+</div>
+
+<div class="legend" aria-label="범례">
+ <span><i class="sw" style="background:var(--viz-cat-1);border-radius:4px" aria-hidden="true"></i>사각 번호 · 라우팅 단계 (실선)</span>
+ <span><i class="sw" style="background:var(--viz-cat-4);border-radius:50%" aria-hidden="true"></i>원형 번호 · 명세·확인 단계 (점선)</span>
+ <span><span style="color:var(--viz-alert)" aria-hidden="true">⚠</span>중단·분기 조건</span>
+</div>
+
+<h2 id="s2"><span class="num">2</span>두 계층의 역할</h2>
+<p class="lead">스킬은 판단만 한다. 실행은 커넥터가, 명세는 OpenAPI MCP가 맡는다.</p>
+<div class="layers">
+ <div><h3>커넥터 (실행 계층)</h3><p>claude.ai Atlassian 커넥터. 직접 도구와 <code>discover</code> → <code>executeRead</code>/<code>executeWrite</code>/<code>executeDestructive</code>. 자체 operation 이름과 입력 규격을 쓰며 REST 경로가 아니다.</p></div>
+ <div><h3>atlassian-openapi MCP (지식 계층)</h3><p>공식 OpenAPI 명세로 요청을 설계·검수한다. Jira·Confluence를 호출하지 않고 URL·자격증명을 만들지 않는다.</p></div>
+ <div><h3>atlassian-routing (판단 계층)</h3><p>의도와 도구 가용성을 보고 알맞은 계층으로 연결한다. 하네스 권한을 우회하거나 기대지 않는다.</p></div>
+</div>
+
+<h2 id="s3"><span class="num">3</span>3단계 상세: operation 일치 조건</h2>
+<p class="lead">커넥터 operation은 아래 네 가지를 모두 만족해야 쓴다. 요청은 명확한데 하나라도 안 맞으면 질의를 바꿔 최대 2회 다시 찾고, 그래도 없으면 "커넥터에서 발견되지 않음"이다.</p>
+<ol class="funnel" aria-label="일치 조건">
+ <li class="start"><span class="tag">시작</span><span class="cut">직접 도구가 있으면 그것을 먼저 확인한다. 없으면 <code>discover</code>로 찾는다.</span></li>
+ <li><span class="tag">(a) 제품·리소스</span><span class="cut">요청의 제품과 대상이 operation과 같아야 한다.</span></li>
+ <li><span class="tag">(b) 작업 의미</span><span class="cut">요청한 동작과 operation의 동작이 같아야 한다.</span></li>
+ <li><span class="tag">(c) 입력 매핑</span><span class="cut">대상 식별자와 필수 입력값을 정확히 채울 수 있어야 한다.</span></li>
+ <li><span class="tag">(d) 표현 가능</span><span class="cut">operation의 입력 규격으로 요청을 충분히 표현할 수 있어야 한다.</span></li>
+ <li class="end"><span class="tag">결과</span><span class="cut">모두 만족하면 사용. 아니면 재탐색 → "발견되지 않음". 다른 제품·대상의 operation은 빌리지 않는다.</span></li>
+</ol>
+
+<h2 id="s4"><span class="num">4</span>5단계 상세: 쓰기 확인 등급</h2>
+<div class="tablewrap">
+<table>
+ <caption>쓰기 확인 (이 환경은 하네스가 쓰기를 막지 않으므로 스킬이 확인을 책임진다)</caption>
+ <thead><tr><th scope="col">상황</th><th scope="col">행동</th></tr></thead>
+ <tbody>
+ <tr><td class="id">읽기</td><td>바로 실행</td></tr>
+ <tr><td class="id">대상·필수값 누락</td><td>묻고 실행하지 않음</td></tr>
+ <tr><td class="id">값을 스킬이 추론</td><td>제안하고 확인 후 실행</td></tr>
+ <tr><td class="id">요청이 대상·내용을 확정한 일반 생성·수정</td><td>바로 실행</td></tr>
+ <tr class="hi"><td class="id">고영향: <code>executeDestructive</code> 분류, 삭제, 한 요청에 3건 이상 변경</td><td>대상·범위·영향을 요약하고 <b>명시적 승인 후에만</b> 실행 <span class="pill warn">거절·무응답이면 실행 안 함</span></td></tr>
+ </tbody>
+</table>
+</div>
+<p class="note">승인받은 대상·내용과 다른 입력, 같은 작업의 중복 호출은 하지 않는다. 확인은 잘못된 operation을 골라도 된다는 승인이 아니다.</p>
+
+<footer>
+ <p>이 구조도는 SKILL.md를 그대로 옮긴 것이다. 단계 설명은 요약이므로 세부 규칙은 <code>.claude/skills/atlassian-routing/SKILL.md</code>를 본다. 시험 근거는 <code>docs/superpowers/specs/routing-skill-red-report.md</code>, <code>routing-skill-green-report.md</code>에 있다.</p>
+</footer>
+</main>
+
+<script>
+const STAGES = [
+ {id:1, group:'route', name:'의도 분류', one:'실행인가, 설계인가',
+  io:{in:['사용자 요청'], out:['실행 / 설계·검토 / 불명확']},
+  rules:['실제 조회·생성·수정·삭제 요청이면 커넥터를 우선한다.','"REST 요청을 설계/검토해 줘"이면 4단계로 간다. 커넥터에 같은 기능이 있어도 쓰기·삭제 도구를 호출하지 않는다.','실행인지 설계인지 불명확하면 실행 전에 묻는다.'],
+  short:['설계 요청 → 커넥터 쓰기 금지','불명확 → 먼저 묻기'], exits:['설계 전용 요청에서는 커넥터의 쓰기·삭제 도구를 호출하지 않음','실행 여부가 불명확하면 실행 전에 의도를 묻는다'],
+  src:'SKILL.md · 1절 (스펙 D2-0)'},
+ {id:2, group:'route', name:'커넥터 탐색', one:'직접 도구 → discover',
+  io:{in:['실행 요청','도구 목록, discover 결과'], out:['사용할 operation과 실행 tier']},
+  rules:['직접 도구가 있으면 그 도구의 입력 규격을 그대로 쓴다.','없으면 <code>discover</code>로 찾고, 반환된 tier(<code>executeRead</code>/<code>executeWrite</code>/<code>executeDestructive</code>)로 실행한다. 입력은 <code>discover</code>가 준 규격 그대로다. 복제·추측하지 않는다.','cloudId는 <code>getAccessibleAtlassianResources</code>로 얻는다.'],
+  exits:[], src:'SKILL.md · 2절 (스펙 D1)'},
+ {id:3, group:'route', name:'일치 확인과 재탐색', one:'(a)~(d) 모두 만족, 최대 2회',
+  io:{in:['찾은 operation 후보'], out:['사용 또는 "커넥터에서 발견되지 않음"']},
+  rules:['제품·리소스 / 작업 의미 / 필수 입력 매핑 / 요청 표현 가능을 모두 만족해야 쓴다. 아래 3절 참고.','요청은 명확한데 안 맞으면 질의를 바꿔 최대 2회 재탐색한다.','그래도 없으면 <b>"커넥터에서 발견되지 않음"</b>이라고 한다. "미지원 확인", "기능 없음"이라고 하지 않는다.','같은 제품의 다른 대상, 다른 제품의 operation을 빌리지 않는다(예: Confluence 내보내기를 Jira 이슈에).'],
+  short:['못 찾음 → 4단계로'], exits:['발견되지 않음 → 4단계(REST 후보 조회)','요청 자체가 불명확하면 재탐색이 아니라 사용자에게 묻는다'],
+  src:'SKILL.md · 2절 (스펙 D2)'},
+ {id:4, group:'rest', name:'REST 후보 조회와 템플릿', one:'명세로만 설계하고 멈춘다',
+  io:{in:['설계 요청, 또는 커넥터에서 발견되지 않은 실행 요청'], out:['요청 템플릿 + 검수 결과 (전송하지 않음)']},
+  rules:['<code>search_operations</code> → <code>get_operation</code> → (바디·참조 스키마가 필요할 때만 <code>get_schema</code>) → <code>build_request_template</code> → <code>check_request</code>.','1위 후보를 믿지 않는다. 제품·메서드·경로·설명·스키마를 요청과 대조한다. <code>actionable: false</code>는 후보일 뿐이며 <code>abstain_reason</code>을 본다.','대응하는 후보가 없으면 "발견되지 않음"을 알리고 중단한다. 틀린 후보(예: 엉뚱한 DELETE)를 내밀지 않는다.','모르는 필수값은 묻되, 비운 항목을 표시한 템플릿과 검수 결과까지 낸다.','검수 결과는 통과·경고·오류·부분 검증을 구분해 전한다. <code>compatible: true</code>는 "유효함"이 아니다. <code>body_check: "structural"</code>이면 부분 검증이다. <code>effective_required: true</code> 헤더는 빼지 않고 표시한다.','서버 URL·자격증명·curl을 만들지 않는다. 끝에 "요청은 전송되지 않았고 작업은 완료되지 않았다"고 쓴다.'],
+  short:['대응 없음 → 중단'], exits:['대응하는 REST 후보가 없으면 중단','여기서 종료. 요청을 보내지 않는다'],
+  src:'SKILL.md · 3절 (스펙 D3, D4, D7)'},
+ {id:5, group:'rest', name:'쓰기 확인과 보고', one:'위험도별로 묻고, 출처를 밝힌다',
+  io:{in:['실행할 쓰기 작업','사용한 명세의 provenance'], out:['승인 뒤 실행 결과, 또는 실행하지 않음']},
+  rules:['쓰기 확인 등급은 아래 4절 표를 따른다.','고영향 작업은 대상·범위·영향을 요약한 뒤 명시적 승인을 받는다. 거절이나 무응답이면 실행하지 않는다.','승인받은 대상·내용과 다른 입력, 같은 작업의 중복 호출을 하지 않는다. 후보가 여럿이면 임의로 고르지 않는다.','사용한 source의 <code>provenance</code>만 보고한다. stale이면 "마지막 정상 캐시 기준"이라 밝히고 최신이라 하지 않는다. unavailable이면 그 출처의 설계를 중단한다.','커넥터가 없으면 그렇다고 알린다(도구 이름을 지어내지 않는다). OpenAPI MCP가 없으면 커넥터로 되는 일만 한다. 둘 다 없으면 알리고 끝낸다.'],
+  short:['거절·무응답 → 실행 안 함'], exits:['거절·무응답이면 쓰기 호출 0건','provenance가 unavailable이면 REST 설계 중단'],
+  src:'SKILL.md · 3절, 4절, 5절 (스펙 D5, D6, D8)'}
+];
+
+const mk = (s) => {
+ const li = document.createElement('li'); li.className = 'stage';
+ const b = document.createElement('button'); b.type = 'button'; b.setAttribute('aria-pressed','false'); b.dataset.id = s.id;
+ b.innerHTML = '<span class="badge" aria-hidden="true">'+s.id+'</span><span class="name">'+s.name+'</span><span class="one">'+s.one+'</span>' +
+  (s.short||[]).map(e => '<span class="exit">'+e+'</span>').join('');
+ b.setAttribute('aria-label', s.id+'단계 '+s.name+'. '+s.one+((s.short||[]).length?'. 중단·분기: '+s.short.join(', '):''));
+ b.addEventListener('click', () => select(s.id));
+ li.appendChild(b); return li;
+};
+const routeEl = document.getElementById('stagesRoute'), restEl = document.getElementById('stagesRest');
+STAGES.forEach(s => (s.group==='route'?routeEl:restEl).appendChild(mk(s)));
+
+const detail = document.getElementById('detail');
+const list = (a) => '<ul>'+a.map(x=>'<li>'+x+'</li>').join('')+'</ul>';
+function select(id){
+ document.querySelectorAll('.stage button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.id==id)));
+ const s = STAGES.find(x=>x.id===id);
+ detail.innerHTML = '<h3>'+s.id+'단계 · '+s.name+'</h3><dl>'+
+  '<dt>입력</dt><dd>'+list(s.io.in)+'</dd>'+
+  '<dt>산출</dt><dd>'+list(s.io.out)+'</dd>'+
+  '<dt>규칙</dt><dd>'+list(s.rules)+'</dd>'+
+  (s.exits.length?'<dt>중단·분기</dt><dd>'+list(s.exits.map(e=>'<span style="color:var(--viz-alert)" aria-hidden="true">⚠ </span>'+e))+'</dd>':'')+
+  '</dl><p class="src">원문: '+s.src+'</p>';
+}
+select(1);
+</script>
+</body>
+</html>
