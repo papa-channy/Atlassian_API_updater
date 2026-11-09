@@ -9,14 +9,25 @@ HIDDEN_COUNTS = (("held_out", 16), ("negative", 8))
 
 def demoted(b: dict, rnd: int) -> bool:
     """Round rnd's hidden sets were observed at its commit D and demoted into seed / regression_negative (Round 1 ->
-    Round 2 pre-work). Then held_out/negative are empty although round{rnd}_seal exists."""
-    return (sum(r["origin"] == f"held_out-r{rnd}" for r in b["seed"]) == 16
-            and sum(r["origin"] == f"negative-r{rnd}" for r in b["regression_negative"]) == 8)
+    Round 2 pre-work) or promoted with provenance (origin promoted-r{rnd}, Round 6 spec §4.3; regression records may sit in
+    regression_positive after the relabel). Then held_out/negative are empty although round{rnd}_seal exists."""
+    reg = b["regression_negative"] + (b.get("regression_positive") or [])
+    return (sum(r["origin"] in (f"held_out-r{rnd}", f"promoted-r{rnd}") for r in b["seed"]) == 16
+            and sum(r["origin"] in (f"negative-r{rnd}", f"promoted-r{rnd}") for r in reg) == 8)
 
 
 def demoted_rounds(b: dict) -> list:
     """Rounds >= 1 whose held_out records sit in seed (r0 origins are the original Phase 2.5 tuning records)."""
-    return sorted({n for n in (int(r["origin"].rsplit("-r", 1)[1]) for r in b["seed"] if r["origin"].startswith("held_out-r")) if n >= 1})
+    return sorted({n for n in (int(r["origin"].rsplit("-r", 1)[1]) for r in b["seed"] if r["origin"].startswith(("held_out-r", "promoted-r"))) if n >= 1})
+
+
+class TestRound6PromotionCounts(unittest.TestCase):
+    def test_promoted_round_counts_as_demoted(self):
+        """Round 6 spec §4.3: the Round 5 hidden set promoted into seed / regression (origin promoted-r5) is a demotion."""
+        seed = [{"origin": "held_out-r1"}] * 16 + [{"origin": "promoted-r5"}] * 16
+        reg = [{"origin": "negative-r1"}] * 8 + [{"origin": "promoted-r5"}] * 5
+        b = {"seed": seed, "regression_negative": reg, "regression_positive": [{"origin": "promoted-r5"}] * 3}
+        self.assertEqual(demoted_rounds(b), [1, 5]); self.assertTrue(demoted(b, 5)); self.assertFalse(demoted(b, 4))
 
 
 class TestEvaluator(unittest.TestCase):
@@ -68,13 +79,17 @@ class TestSchemaAndSemantics(unittest.TestCase):
         for sect in ("seed", "regression_negative", "held_out", "negative"):
             if not ev.is_sealed(b[sect]):
                 ev.check_schema(sect, b[sect])
+        if "regression_positive" in b:
+            ev.check_schema("regression_positive", b["regression_positive"])
         k = len(demoted_rounds(b))                    # every demoted round adds 16 seed + 8 regression records
-        self.assertEqual(len(b["seed"]), 23 + 16 * k); self.assertEqual(len(b["regression_negative"]), 6 + 8 * k)
+        self.assertEqual(len(b["seed"]), 23 + 16 * k)
+        self.assertEqual(len(b["regression_negative"]) + len(b.get("regression_positive") or []), 6 + 8 * k)   # Round 6: split by relabel
         # Round 1 hidden sets were observed at commit D and demoted before Round 2 (s-024..s-039, rn-007..rn-014)
         self.assertEqual([r["id"] for r in b["seed"][23:39]], [f"s-{i:03d}" for i in range(24, 40)])
         self.assertEqual({r["origin"] for r in b["seed"][23:39]}, {"held_out-r1"})
-        self.assertEqual([r["id"] for r in b["regression_negative"][6:14]], [f"rn-{i:03d}" for i in range(7, 15)])
-        self.assertEqual({r["origin"] for r in b["regression_negative"][6:14]}, {"negative-r1"})
+        reg = ev.regression_records(b)                                     # Round 6: across both regression sections
+        self.assertEqual([r["id"] for r in reg[6:14]], [f"rn-{i:03d}" for i in range(7, 15)])
+        self.assertEqual({r["origin"] for r in reg[6:14]}, {"negative-r1"})
         # hidden sections belong to the current round: [] only before its commit B (no round{N}_seal) or once demoted
         rnd = ev.current_round()["round"]
         seal = b.get(f"round{rnd}_seal")
@@ -91,7 +106,9 @@ class TestSchemaAndSemantics(unittest.TestCase):
     def test_no_query_reuse_across_sets(self):
         b = json.loads(BENCH.read_text(encoding="utf-8"))
         seen_q, seen_t = set(), set()
-        for sect in ("seed", "regression_negative", "held_out", "negative"):
+        for sect in ("seed", "regression_negative", "regression_positive", "held_out", "negative"):
+            if sect not in b:
+                continue
             if ev.is_sealed(b[sect]):
                 continue
             for r in b[sect]:
@@ -130,8 +147,8 @@ class TestRankingTablesFrozen(unittest.TestCase):
         Round 2 prefix invariant (suffixes may be added before T); from T the full structure equals the Round 3 freeze."""
         raw = json.loads(RANKING.read_text(encoding="utf-8"))
         self.assertEqual(ev.structure_check_problems(raw), [])
-        if ev.current_round()["round"] >= 3:
-            self.assertIsNone(ev.pending_round()); self.assertEqual(ranking_structure_sha256(raw), ev.freeze_for(ev.current_round()["round"])["structure_sha256"])
+        if ev.current_round()["round"] >= 3 and ev.pending_round() is None:
+            self.assertEqual(ranking_structure_sha256(raw), ev.freeze_for(ev.current_round()["round"])["structure_sha256"])
         else:
             pending = ev.pending_round()                      # Round 4 spec §9.1: the round after the last decided one is pending (3, 4 closed -> 5)
             decided = {o["round"] for o in ev.load_round_outcomes()}
@@ -229,8 +246,9 @@ class TestSealIntegrity(unittest.TestCase):
         if not cache or not pathlib.Path(cache).exists():
             self.skipTest("snapshot not available for catalog rules")
         _, internal, _, _ = rs.load_catalogs_from_cache(pathlib.Path(cache), rnd)
+        vm = json.loads((ROOT / "tools/atlassian_docs/intelligence/data/search_ranking.json").read_text(encoding="utf-8"))["verb_methods"]
         self.assertEqual(rs.machine_check({"held_out": self.b["held_out"], "negative": self.b["negative"]}, self.b, internal,
-                                          round=rnd), [])
+                                          round=rnd, verb_methods=vm), [])
 
 
 ALIASES = RANKING.parent / "search_aliases.json"
@@ -320,7 +338,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 EVAL_CODE_FILES = ("tests/benchmarks/evaluator.py", "tests/benchmarks/test_evaluator.py",
                    "tests/diag_search_queries.py", "tests/tune_search_ranking.py",
                    "tests/benchmarks/round_seal.py", "tests/benchmarks/alias_candidates_tool.py",
-                   "tests/benchmarks/regression_reference.py")
+                   "tests/benchmarks/regression_reference.py", "tests/benchmarks/scorer_rule_cx.py")   # + Round 6 H21a
 
 
 R1_FINAL_SHA256 = "b573ba0f8deeb826e4cdea88f83a45ae028871c836f02945c66af21d78d31090"      # pinned Step 3
@@ -592,6 +610,8 @@ class TestRound2PreTProvenance(unittest.TestCase):
         for path in (LEXICON, CANDIDATES_DOC):
             doc, e = self._doc(path)
             if doc is not None:
+                if path == LEXICON and e["round"] >= 6 and doc.get("round", e["round"]) < e["round"]:
+                    e = ev.freeze_for(doc["round"])      # Round 6 spec §5: the lexicon is carried, not re-resolved - bound to its own round's S
                 self.assertEqual(doc["generated_from"]["registry_fingerprint"], e["source_registry_fingerprint"], path.name)
 
     def test_lexicon_generated_from_frozen_verb_inventory(self):
@@ -772,9 +792,10 @@ class TestRound5Pending(unittest.TestCase):
         self.assertEqual(ev.pending_round(fz, oc), 5)
         self.assertEqual(ev.PRE_FREEZE_NONVERB_STRUCTURE_SHA256[5], ev.PRE_FREEZE_NONVERB_STRUCTURE_SHA256[4])
 
-    def test_live_tree_pending_round_is_5(self):
-        """Before T round 5 is pending; from T on it is the frozen current round (no pending round)."""
-        self.assertTrue(ev.pending_round() == 5 or (ev.pending_round() is None and ev.current_round()["round"] == 5),
+    def test_live_tree_pending_round_is_6(self):
+        """Round 5 is frozen and decided (D); Round 6 H19 registered PRE_FREEZE[6]: before T round 6 is pending, from T on it is
+        the frozen current round (no pending round)."""
+        self.assertTrue(ev.pending_round() == 6 or (ev.pending_round() is None and ev.current_round()["round"] == 6),
                         (ev.pending_round(), ev.current_round()))
 
 
@@ -845,3 +866,152 @@ class TestRound5KuIdentity(unittest.TestCase):
         self.assertTrue(self._check({**self.BASE, "origin": "held_out-r2"}))
         self.assertTrue(self._check({**self.BASE, "ambiguous": True}))
         self.assertEqual(ev.KU_DERIVED_FIELDS, ("failure_classes",))   # id is the lookup key; pin the projection itself against any widening
+
+
+class TestRound6UsageMetrics(unittest.TestCase):
+    """Round 6 spec §4.1/§4.2: usage rows, exact-fraction gate metrics, training vector, accept, fallback order."""
+    REC = {"id": "h-001", "query": "q", "expected_top1_any": ["jira-platform:GET:/a"], "forbidden_top1": []}
+    NEG = {"id": "n-001", "query": "q", "expected_top1_any": [], "forbidden_top1": ["confluence:DELETE:/b"]}
+
+    def test_usage_row_fields(self):
+        r = ev.usage_row(self.REC, ["x", "jira-platform:GET:/a", "y"], "jira-platform:GET:/a")
+        self.assertEqual((r["top3"], r["rec_correct"], r["wrong_write"], r["abstained"]), (True, True, False, False))
+        w = ev.usage_row(self.NEG, ["confluence:DELETE:/b"], "confluence:DELETE:/b")
+        self.assertEqual((w["wrong_write"], w["forbidden_recommended"], w["abstained"]), (True, True, False))
+        a = ev.usage_row(self.NEG, ["confluence:DELETE:/b"], None)
+        self.assertEqual((a["wrong_write"], a["forbidden_recommended"], a["abstained"]), (False, False, True))
+
+    def _held(self, top3, rec, correct):
+        rows = []
+        for i in range(16):
+            rows.append({"id": f"h-{i:03d}", "top1": None, "top1_correct": False, "top3": i < top3, "abstained": i >= rec, "rec_correct": i < correct,
+                         "wrong_write": False, "forbidden_recommended": False, "recommended": None if i >= rec else "k"})
+        return rows
+
+    def _neg(self, abst, write=0):
+        return [{"id": f"n-{i:03d}", "top1": None, "top1_correct": False, "top3": False, "abstained": i < abst, "rec_correct": False, "wrong_write": i >= abst and i - abst < write,
+                 "forbidden_recommended": False, "recommended": None if i < abst else "k"} for i in range(8)]
+
+    def test_gate_boundaries_exact_fractions(self):
+        ok = ev.gate_metrics(self._held(15, 14, 13), self._neg(7))
+        self.assertTrue(ok["pass"], ok)                                    # 15/16, 14/16, 13/14 ≥ 0.9, 0 writes, 7/8
+        self.assertFalse(ev.gate_metrics(self._held(14, 14, 13), self._neg(7))["checks"]["reach"])
+        self.assertFalse(ev.gate_metrics(self._held(15, 13, 13), self._neg(7))["checks"]["coverage"])
+        self.assertFalse(ev.gate_metrics(self._held(15, 14, 12), self._neg(7))["checks"]["precision"])   # 12/14 < 0.9
+        self.assertFalse(ev.gate_metrics(self._held(15, 14, 13), self._neg(6))["checks"]["abstention"])
+        self.assertFalse(ev.gate_metrics(self._held(15, 14, 13), self._neg(7, write=1))["checks"]["write_safety"])
+        self.assertFalse(ev.gate_metrics(self._held(15, 0, 0), self._neg(8))["checks"]["precision"])    # no recommendation -> fail
+
+    def test_training_vector_and_accept(self):
+        seed = [{"id": f"s-{i:03d}", "top3": True, "abstained": False, "rec_correct": True, "wrong_write": False,
+                 "forbidden_recommended": False} for i in range(10)]
+        rp = [{"id": "rn-001", "top3": True, "abstained": False, "rec_correct": True, "wrong_write": False, "forbidden_recommended": False}]
+        rn = [{"id": f"rn-{i:03d}", "top3": False, "abstained": True, "rec_correct": False, "wrong_write": False,
+               "forbidden_recommended": False} for i in range(2, 10)]
+        m = ev.training_vector(seed, rp, rn)
+        self.assertEqual({k: m[k] for k in ("wv", "fr", "sr3", "src", "srk", "rp3", "rpk", "nab")},
+                         {"wv": 0, "fr": 0, "sr3": 10, "src": 10, "srk": 10, "rp3": 1, "rpk": 1, "nab": 8})
+        self.assertTrue(ev.accept_vector(m))
+        self.assertFalse(ev.accept_vector({**m, "wv": 1}))
+        self.assertFalse(ev.accept_vector({**m, "rpk": 0}))
+        self.assertFalse(ev.accept_vector({**m, "nab": 6}))                # 8·6 < 7·8
+
+    def test_fallback_order_covers_accept_components_once(self):
+        self.assertEqual([k for k, _ in ev.FALLBACK_ORDER], ["wv", "fr", "ir", "sr3", "srk", "src", "rp3", "rpk", "nab"])   # spec v1.7
+        self.assertEqual(sorted(k for k, _ in ev.FALLBACK_ORDER), sorted(ev.ACCEPT_COMPONENTS))
+        better = {"wv": 0, "fr": 0, "sr3": 5, "srk": 5, "src": 5, "rp3": 1, "rpk": 1, "nab": 3}
+        self.assertLess(ev.fallback_key(better), ev.fallback_key({**better, "wv": 1}))
+        self.assertLess(ev.fallback_key(better), ev.fallback_key({**better, "sr3": 4}))
+
+    def test_violation_per_section(self):
+        good = {"top3": True, "abstained": False, "rec_correct": True, "wrong_write": False, "forbidden_recommended": False}
+        self.assertFalse(ev.violation(good, "seed"))
+        self.assertTrue(ev.violation({**good, "abstained": True, "rec_correct": False}, "seed"))
+        self.assertTrue(ev.violation({**good, "abstained": False}, "regression_negative"))
+        self.assertFalse(ev.violation({**good, "abstained": True, "rec_correct": False}, "regression_negative"))
+
+
+class TestRound6Schema(unittest.TestCase):
+    def test_promoted_origin_and_label_fields(self):
+        rec = {"id": "s-040", "query": "q", "expected_top1_any": ["k"], "forbidden_top1": [], "origin": "promoted-r5",
+               "failure_classes": [], "ambiguous": False, "promoted_from": {"round": 5, "split": "held_out", "source_id": "h-001",
+                                                                             "source_record_sha256": "a" * 64}}
+        ev.check_schema("seed", [rec])
+        pos = {**rec, "id": "rn-001", "no_answer": False, "forbidden_top1": []}
+        ev.check_schema("regression_positive", [pos])
+        with self.assertRaises(ValueError):
+            ev.check_schema("regression_positive", [{**pos, "no_answer": True}])
+        with self.assertRaises(ValueError):
+            ev.check_schema("regression_positive", [{**pos, "forbidden_top1": ["k"]}])          # expected ∩ forbidden must be empty
+        neg = {"id": "rn-002", "query": "q", "expected_top1_any": [], "forbidden_top1": ["k"], "origin": "seed-r0",
+               "failure_classes": [], "ambiguous": False, "no_answer": True}
+        ev.check_schema("regression_negative", [neg])
+        with self.assertRaises(ValueError):
+            ev.check_schema("regression_negative", [{**neg, "no_answer": False}])
+
+    def test_round6_registry_and_keys(self):
+        self.assertEqual(ev.KNOWN_UNREACHABLE[6], ())
+        self.assertEqual(ev.known_unreachable(6), frozenset())
+        keys = ev.freeze_key_set(6)
+        self.assertTrue(set(ev.ROUND6_EXTRA_KEYS) <= keys)
+        self.assertNotIn("known_unreachable_registry_sha256", keys)
+        self.assertIn("known_unreachable_seeds", keys)
+        self.assertIn("known_unreachable_registry_sha256", ev.freeze_key_set(5))                 # Round 5 unchanged
+
+
+class TestRound6Eligibility(unittest.TestCase):
+    """spec v1.7 §4.1/§4.2: recommendation eligibility (production method intent) separates answerable from recommendable."""
+    def _row(self, i, eligible=True, **kw):
+        base = {"id": i, "top1": None, "top1_correct": False, "top3": True, "recommended": "k", "abstained": False, "rec_correct": True,
+                "wrong_write": False, "forbidden_recommended": False, "eligible": eligible}
+        base.update(kw); return base
+
+    def test_usage_rows_take_an_eligibility_function(self):
+        k = "a:GET:/k"
+        recs = [{"id": "s-001", "query": "get page", "expected_top1_any": [k], "forbidden_top1": []},
+                {"id": "s-002", "query": "page", "expected_top1_any": [k], "forbidden_top1": []}]
+        rows = ev.usage_rows(recs, lambda q: ([k], k if q.startswith("get") else None), eligible_fn=lambda q: q.startswith("get"))
+        self.assertEqual([r["eligible"] for r in rows], [True, False])
+        self.assertTrue(all(r["eligible"] for r in ev.usage_rows(recs, lambda q: ([k], None))))
+
+    def test_eligibility_denominators_and_ir(self):
+        seed = [self._row(f"s-{i:03d}") for i in range(8)] + [self._row(f"s-{i:03d}", eligible=False, abstained=True, recommended=None, rec_correct=False)
+                                                              for i in range(8, 10)]
+        rp = [self._row("rn-001"), self._row("rn-002", eligible=False, abstained=True, recommended=None, rec_correct=False)]
+        m = ev.training_vector(seed, rp, [])
+        self.assertEqual({k: m[k] for k in ("src", "n_seed", "n_seed_elig", "rpk", "n_rp", "n_rp_elig", "ir")},
+                         {"src": 8, "n_seed": 10, "n_seed_elig": 8, "rpk": 1, "n_rp": 2, "n_rp_elig": 1, "ir": 0})
+        self.assertTrue(ev.accept_vector(m))                               # 10·8 ≥ 9·8, rpk == 1 eligible, rp3 == 2
+        bad = ev.training_vector(seed[:-1] + [self._row("s-009", eligible=False)], rp, [])
+        self.assertEqual(bad["ir"], 1); self.assertFalse(ev.accept_vector(bad))
+
+    def test_violation_for_ineligible_rows(self):
+        quiet = self._row("s-1", eligible=False, abstained=True, recommended=None, rec_correct=False)
+        self.assertFalse(ev.violation(quiet, "seed"))                       # top-3 reach, correctly abstained
+        self.assertTrue(ev.violation({**quiet, "top3": False}, "seed"))
+        self.assertTrue(ev.violation(self._row("s-2", eligible=False), "regression_positive"))   # recommended although ineligible
+
+    def test_gate_coverage_uses_eligible_heldout(self):
+        held = [self._row(f"h-{i:03d}") for i in range(13)] + [self._row(f"h-{i:03d}", eligible=False, abstained=True, recommended=None,
+                                                                         rec_correct=False) for i in range(13, 16)]
+        neg = [self._row(f"n-{i:03d}", abstained=True, recommended=None, rec_correct=False, top3=False) for i in range(8)]
+        g = ev.gate_metrics(held, neg)
+        self.assertEqual(g["counts"]["held_out_eligible"], 13); self.assertTrue(g["checks"]["coverage"])   # 16·13 ≥ 14·13
+        self.assertTrue(g["checks"]["eligibility"])
+        g2 = ev.gate_metrics(held[:-1] + [self._row("h-015", eligible=False)], neg)
+        self.assertFalse(g2["checks"]["eligibility"]); self.assertFalse(g2["pass"])
+
+    def test_h_adoption_gate(self):
+        """The Task 11 measurement (S, Round 5 constants): v1.7 judges rule regressions, not untuned ranking failures."""
+        off = {"wv": 5, "fr": 2, "ir": 0, "sr3": 53, "src": 50, "srk": 45, "rp3": 11, "rpk": 4, "nab": 5,
+               "n_seed": 55, "n_seed_elig": 50, "n_rp": 13, "n_rp_elig": 6, "n_rn": 9}
+        on = {**off, "wv": 1, "fr": 0, "src": 45, "srk": 42, "rpk": 5, "nab": 9}
+        ok = {"ok": True}
+        self.assertTrue(ev.h_adoption_ok(on, off, ok))                      # 10·45 ≥ 9·50 exactly; wv 1 / rp3 11/13 are tuning's job
+        self.assertFalse(ev.h_adoption_ok({**on, "src": 44, "srk": 42}, off, ok))   # one more R1 false abstention fails
+        fixed = {**on, "src": 47, "srk": 44}
+        self.assertTrue(ev.h_adoption_ok(fixed, off, ok))                  # wv 1 / rp3 11/13 are tuning's job
+        self.assertFalse(ev.h_adoption_ok(fixed, off, {"ok": False}))
+        self.assertFalse(ev.h_adoption_ok({**fixed, "nab": 4}, off, ok))
+        self.assertFalse(ev.h_adoption_ok({**fixed, "ir": 1}, off, ok))
+        self.assertFalse(ev.h_adoption_ok({**fixed, "sr3": 52}, off, ok))

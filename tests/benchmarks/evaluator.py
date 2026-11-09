@@ -4,10 +4,13 @@ import hashlib, json, pathlib, re
 
 STOPWORDS = frozenset("a an the to of for in on at and or with by from is are be this that".split())
 _CAMEL_1 = re.compile(r"([a-z0-9])([A-Z])"); _CAMEL_2 = re.compile(r"([A-Z]{2,})([A-Z][a-z])"); _SPLIT = re.compile(r"[^a-z0-9]+")
-_ID = re.compile(r"^(s|rn|h|n)-\d{3}$"); _ORIGIN = re.compile(r"^(seed|held_out|negative)-r\d+$")
+_ID = re.compile(r"^(s|rn|h|n)-\d{3}$"); _ORIGIN = re.compile(r"^(seed|held_out|negative|promoted)-r\d+$")
 _CLASSES = {"R1", "R2", "R3", "R4", "R5", "R6"}
 NEGATIVE_SECTIONS = ("regression_negative", "negative")
 ACTIONABLE_SECTIONS = ("held_out",)          # Round 3 spec §4 v1.20: only held_out requires actionable; seed/fixture positive are raw top-1
+REGRESSION_POSITIVE = "regression_positive"                     # Round 6 spec §4.3: answerable relabeled regression records
+TRAINING_SECTIONS = ("seed", REGRESSION_POSITIVE, "regression_negative")
+WRITE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
 
 def canonical_sha256(obj) -> str:
@@ -51,6 +54,18 @@ def check_schema(section_name: str, records) -> None:
             raise ValueError(f"{section_name}/{rid}: bad failure_classes {fc!r}")
         if not isinstance(rec.get("ambiguous"), bool):
             raise ValueError(f"{section_name}/{rid}: ambiguous must be a bool")
+        if "no_answer" in rec:
+            if not isinstance(rec["no_answer"], bool):
+                raise ValueError(f"{section_name}/{rid}: no_answer must be a bool")
+            if section_name == REGRESSION_POSITIVE and rec["no_answer"]:
+                raise ValueError(f"{section_name}/{rid}: regression_positive records must have no_answer false")
+            if section_name == "regression_negative" and not rec["no_answer"]:
+                raise ValueError(f"{section_name}/{rid}: regression_negative records must have no_answer true")
+        if section_name == REGRESSION_POSITIVE and set(exp) & set(forb):
+            raise ValueError(f"{section_name}/{rid}: expected_top1_any ∩ forbidden_top1 must be empty (spec §4.3)")
+        for lf in ("legacy_forbidden_top1", "catalog_missing_keys"):
+            if lf in rec and (not isinstance(rec[lf], list) or not all(isinstance(k, str) for k in rec[lf])):
+                raise ValueError(f"{section_name}/{rid}: {lf} must be a list of keys")
 
 
 def ranked_and_actionable(search_fn, query):
@@ -96,6 +111,123 @@ def evaluate(records, search_fn, section=None):
         out.update(raw_passed=raw_passed, effective_passed=out["passed"], actionable={"total": act_total, "raw_passed": act_raw},
                    abstained={"total": abstained, "effective_passed": abstained if section in NEGATIVE_SECTIONS else 0})
     return out
+
+
+
+_RELABEL_FIELDS = ("no_answer", "label_migration", "legacy_forbidden_top1", "catalog_missing_keys")
+
+
+def regression_records(bench) -> list:
+    """Every regression record (Round 6: split into regression_negative / regression_positive by the relabel), in id order."""
+    return sorted((r for s in ("regression_negative", REGRESSION_POSITIVE) for r in bench.get(s) or []), key=lambda r: r["id"])
+
+
+def r0_regression_records(bench) -> list:
+    """Round 6 plan PR-8: the r0 regression records wherever the relabel put them, judged with their original label (no expected
+    key; forbidden = active ∪ legacy); relabel fields dropped."""
+    return [{**{k: v for k, v in r.items() if k not in _RELABEL_FIELDS}, "expected_top1_any": [],
+             "forbidden_top1": sorted(set(r["forbidden_top1"]) | set(r.get("legacy_forbidden_top1") or []))}
+            for r in regression_records(bench) if r["origin"].endswith("-r0")]
+
+
+# ---- Round 6 spec §4.1/§4.2: usage-grounded metrics -------------------------------------------------------------------
+def usage_row(rec, ranked, recommended, eligible=True) -> dict:
+    """One record judged as the agent sees it: top-3 reach, the recommendation, and its safety. eligible = recommendation
+    eligibility (spec v1.7: production method intent is non-empty)."""
+    exp, forb = set(rec.get("expected_top1_any") or []), set(rec.get("forbidden_top1") or [])
+    method = recommended.split(":")[1] if recommended else None
+    wrong = recommended is not None and recommended not in exp
+    return {"id": rec["id"], "top1": ranked[0] if ranked else None, "top1_correct": bool(ranked) and ranked[0] in exp,
+            "top3": bool(exp & set(ranked[:3])),
+            "recommended": recommended, "abstained": recommended is None,
+            "rec_correct": recommended is not None and recommended in exp,
+            "wrong_write": wrong and method in WRITE_METHODS,
+            "forbidden_recommended": recommended is not None and recommended in forb, "eligible": bool(eligible)}
+
+
+def usage_rows(records, usage_fn, eligible_fn=None) -> list:
+    """usage_fn(query) -> (ranked_keys, recommended_key_or_None); eligible_fn(query) -> bool (default: every record eligible)."""
+    out = []
+    for rec in records:
+        ranked, recommended = usage_fn(rec["query"])
+        out.append(usage_row(rec, list(ranked), recommended, eligible_fn(rec["query"]) if eligible_fn is not None else True))
+    return out
+
+
+def _eligible(r) -> bool:
+    return r.get("eligible", True)
+
+
+def gate_metrics(held_rows, neg_rows) -> dict:
+    """Round 6 spec §4.1 (v1.7): exact-fraction checks on the hidden set; coverage over recommendation-eligible held_out."""
+    n_h, n_n = len(held_rows), len(neg_rows)
+    n_elig = sum(_eligible(r) for r in held_rows)
+    reach = sum(r["top3"] for r in held_rows)
+    cov = sum(not r["abstained"] for r in held_rows)
+    correct = sum(r["rec_correct"] for r in held_rows)
+    writes = sum(r["wrong_write"] for r in held_rows + neg_rows)
+    abst = sum(r["abstained"] for r in neg_rows)
+    inel = sum(1 for r in held_rows if not _eligible(r) and not r["abstained"])
+    checks = {"reach": 16 * reach >= 15 * n_h, "coverage": 16 * cov >= 14 * n_elig,
+              "precision": cov > 0 and 10 * correct >= 9 * cov, "write_safety": writes == 0, "abstention": 8 * abst >= 7 * n_n,
+              "eligibility": inel == 0}
+    counts = {"held_out": n_h, "held_out_eligible": n_elig, "negative": n_n, "reach3": reach, "recommended": cov, "correct": correct,
+              "wrong_writes": writes, "abstained": abst, "ineligible_recommended": inel,
+              "top1_correct": sum(r["top1_correct"] for r in held_rows)}   # top1 recorded only
+    return {"counts": counts, "checks": checks, "pass": all(checks.values())}
+
+
+ACCEPT_COMPONENTS = ("wv", "fr", "ir", "sr3", "src", "srk", "rp3", "rpk", "nab")
+FALLBACK_ORDER = (("wv", -1), ("fr", -1), ("ir", -1), ("sr3", 1), ("srk", 1), ("src", 1), ("rp3", 1), ("rpk", 1), ("nab", 1))
+
+
+def training_vector(seed_rows, rp_rows, rn_rows) -> dict:
+    """Round 6 spec §4.2 metric vector m(point) over the three training sections (v1.7: ir and eligible denominators)."""
+    every = list(seed_rows) + list(rp_rows) + list(rn_rows)
+    return {"wv": sum(r["wrong_write"] for r in every), "fr": sum(r["forbidden_recommended"] for r in every),
+            "ir": sum(1 for r in list(seed_rows) + list(rp_rows) if not _eligible(r) and not r["abstained"]),
+            "sr3": sum(r["top3"] for r in seed_rows), "src": sum(not r["abstained"] for r in seed_rows),
+            "srk": sum(r["rec_correct"] for r in seed_rows), "rp3": sum(r["top3"] for r in rp_rows),
+            "rpk": sum(r["rec_correct"] for r in rp_rows), "nab": sum(r["abstained"] for r in rn_rows),
+            "n_seed": len(seed_rows), "n_rp": len(rp_rows), "n_rn": len(rn_rows),
+            "n_seed_elig": sum(_eligible(r) for r in seed_rows), "n_rp_elig": sum(_eligible(r) for r in rp_rows)}
+
+
+def _denoms(m) -> tuple:
+    """(ir, |seed eligible|, |regression_positive eligible|); vectors built before spec v1.7 count every record as eligible."""
+    return m.get("ir", 0), m.get("n_seed_elig", m["n_seed"]), m.get("n_rp_elig", m["n_rp"])
+
+
+def accept_vector(m) -> bool:
+    """spec §4.2 accept(m) (v1.7), exact integer comparisons."""
+    ir, n_se, n_re = _denoms(m)
+    return (m["wv"] == 0 and m["fr"] == 0 and ir == 0 and 10 * m["sr3"] >= 9 * m["n_seed"] and 10 * m["src"] >= 9 * n_se
+            and 10 * m["srk"] >= 9 * m["src"] and m["rp3"] == m["n_rp"] and m["rpk"] == n_re and 8 * m["nab"] >= 7 * m["n_rn"])
+
+
+def h_adoption_ok(m_on, m_off, scorer) -> bool:
+    """spec v1.7 §3.5: rule non-regression / safety gate at the Round 5 constants (final accept stays with tuning)."""
+    ir, n_se, _ = _denoms(m_on)
+    return (bool(scorer and scorer.get("ok")) and m_on["wv"] <= m_off["wv"] and m_on["fr"] <= m_off["fr"] and ir == 0
+            and m_on["sr3"] >= m_off["sr3"] and m_on["rp3"] >= m_off["rp3"] and 10 * m_on["src"] >= 9 * n_se
+            and 10 * m_on["srk"] >= 9 * m_on["src"] and m_on["rpk"] >= m_off["rpk"] and m_on["nab"] >= m_off["nab"])
+
+
+def fallback_key(m) -> tuple:
+    """spec §4.2 lexicographic fallback: wv, fr, ir minimal; sr3, srk, src, rp3, rpk, nab maximal (smaller tuple = better)."""
+    return tuple(m.get(k, 0) if sign < 0 else -m[k] for k, sign in FALLBACK_ORDER)
+
+
+def violation(row, section) -> bool:
+    """spec §4.2 proposer input: an acceptance-violation record of its section (v1.7: an ineligible positive record violates iff
+    it is recommended or misses the top 3)."""
+    if row["wrong_write"] or row["forbidden_recommended"]:
+        return True
+    if section == "regression_negative":
+        return not row["abstained"]
+    if not _eligible(row):
+        return not row["abstained"] or not row["top3"]
+    return not row["top3"] or row["abstained"] or not row["rec_correct"]
 
 
 IRREGULAR_SINGULAR = {"statuses": "status"}; UNCHANGED_PLURAL = frozenset({"series", "species", "news"})
@@ -192,8 +324,9 @@ def t_allowlist(round: int) -> tuple:
 
 
 T_ALLOWLIST = t_allowlist(4)                                       # byte-identical to the Round 4 tuple (order included)
-KNOWN_UNREACHABLE = {5: ("s-004", "s-027", "s-039")}              # Round 5 spec §4.1 (exact, frozen)
+KNOWN_UNREACHABLE = {5: ("s-004", "s-027", "s-039"), 6: ()}              # Round 5 spec §4.1 (exact, frozen)
 ROUND5_EXTRA_KEYS = ("known_unreachable_seeds", "known_unreachable_registry_sha256", "lexicon_union_resolution", "counterexample_reference_sha256")
+ROUND6_EXTRA_KEYS = ("scorer_rule_corpus_sha256", "scorer_rule_registry_fingerprint", "training_split_sha256")   # Round 6 plan PR-4
 
 
 def known_unreachable(round: int) -> frozenset:
@@ -289,7 +422,11 @@ def freeze_key_set(round: int) -> set:
     ROUND3_EXTRA_KEYS. No entry after round 1 carries commit_T (self-reference)."""
     if round == 1:
         return {"round", "commit_T", "structure_sha256"}
-    return set(_ROUND2_KEYS) | (set(ROUND3_EXTRA_KEYS) if round >= 3 else set()) | (set(ROUND4_EXTRA_KEYS) if round >= 4 else set()) | (set(ROUND5_EXTRA_KEYS) if round >= 5 else set())
+    keys = set(_ROUND2_KEYS) | (set(ROUND3_EXTRA_KEYS) if round >= 3 else set()) | (set(ROUND4_EXTRA_KEYS) if round >= 4 else set()) \
+        | (set(ROUND5_EXTRA_KEYS) if round >= 5 else set())
+    if round >= 6:                                                   # Round 6 plan PR-4: no KU registry file; corpus/split keys
+        keys = (keys - {"known_unreachable_registry_sha256"}) | set(ROUND6_EXTRA_KEYS)
+    return keys
 
 
 def files_sha256(root, files) -> str:
@@ -303,7 +440,8 @@ def files_sha256(root, files) -> str:
 EVALUATION_CODE_FILES = tuple(sorted(("tests/benchmarks/evaluator.py", "tests/benchmarks/test_evaluator.py",
                                       "tests/diag_search_queries.py", "tests/tune_search_ranking.py",
                                       "tests/benchmarks/round_seal.py", "tests/benchmarks/alias_candidates_tool.py",
-                                      "tests/benchmarks/regression_reference.py")))
+                                      "tests/benchmarks/regression_reference.py",
+                                      "tests/benchmarks/scorer_rule_cx.py")))                                                   # Round 6 (H21a)
 TOOLING_FILES = tuple(sorted(EVALUATION_CODE_FILES + ("tests/benchmarks/concept_lexicon_check.py",
                                                       "tests/benchmarks/test_round_seal.py", "tests/test_tune_search_ranking.py",
                                                       "tests/test_diag_search_queries.py", "tests/intelligence/test_policy.py",
@@ -312,7 +450,11 @@ TOOLING_FILES = tuple(sorted(EVALUATION_CODE_FILES + ("tests/benchmarks/concept_
                                                       "tests/benchmarks/doc_titles.py", "tests/benchmarks/test_doc_titles.py",            # Round 4 (H14)
                                                       "tests/benchmarks/round4_simulation.py", "tests/benchmarks/test_round4_simulation.py",    # Round 4 (H15)
                                                       "tests/benchmarks/counterexample.py", "tests/benchmarks/test_counterexample.py",
-                                                      "tests/benchmarks/round5_simulation.py", "tests/benchmarks/test_round5_simulation.py")))   # Round 5 (H17)
+                                                      "tests/benchmarks/round5_simulation.py", "tests/benchmarks/test_round5_simulation.py",    # Round 5 (H17)
+                                                      "tests/benchmarks/test_scorer_rule_cx.py",                                                  # Round 6 (H21a)
+                                                      "tests/benchmarks/round6_labels.py", "tests/benchmarks/test_round6_labels.py",
+                                                      "tests/benchmarks/round6-relabel-prompt.md",                                                # Round 6 (H21c)
+                                                      "tests/benchmarks/round6_simulation.py", "tests/benchmarks/test_round6_simulation.py")))   # Round 6 (H21d)
 
 
 def evaluation_code_sha256(root) -> str:
@@ -369,7 +511,8 @@ def round_freeze_hashes(round: int, root=ROOT) -> dict:
 
 PRE_FREEZE_NONVERB_STRUCTURE_SHA256 = {3: "1e99c67ec445163f777b0cdfb933ac6d0cac22d638c1994743028678a862c9f1",
                                        4: "1e99c67ec445163f777b0cdfb933ac6d0cac22d638c1994743028678a862c9f1",   # Round 4 spec §3: structure unchanged
-                                       5: "1e99c67ec445163f777b0cdfb933ac6d0cac22d638c1994743028678a862c9f1"}   # Round 5 (registered at Round 4 closure 2026-10-09): structure unchanged
+                                       5: "1e99c67ec445163f777b0cdfb933ac6d0cac22d638c1994743028678a862c9f1",   # Round 5 (registered at Round 4 closure 2026-10-09): structure unchanged
+                                       6: "8389ba1bfedbd1744c7e4d4f73795155b0c79ed32b31bcc72c0723f520e47e6b"}   # Round 6 H19: ordering_rules.singular_collection_tiebreak (spec §3.4)
 NONVERB_STRUCTURE_KEYS = tuple(k for k in STRUCTURE_KEYS if k != "verb_methods")
 ROUND2_SPEC = ROOT / "docs" / "superpowers" / "specs" / "2026-10-02-search-quality-round2-design.md"
 

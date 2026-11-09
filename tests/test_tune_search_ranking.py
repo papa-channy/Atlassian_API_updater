@@ -1,9 +1,11 @@
+import copy
 import json
 import pathlib
 import unittest
 from unittest import mock
 from tests import tune_search_ranking as tune
 from tools.atlassian_docs.intelligence import policy
+from tests.benchmarks import evaluator as ev
 
 GRID = {"method_match_bonus": [1.0, 2.0, 3.0], "method_mismatch_penalty": [0.0, 1.0, 2.0, 3.0], "path_unmatched_penalty": [0.5, 1.0, 1.5, 2.0],
         "path_unmatched_cap": [2, 3, 4], "product_hint_bonus": [2.0, 3.0, 4.0],
@@ -24,7 +26,7 @@ class TestSelector(unittest.TestCase):
         path = pathlib.Path(__file__).resolve().parent / "benchmarks" / "search_queries.json"
         with path.open(encoding="utf-8") as fh:
             b = json.load(fh)
-        self.assertEqual((tune.SEED_TOTAL, tune.REGRESSION_TOTAL), (39, 14))
+        self.assertEqual((tune.SEED_TOTAL, tune.REGRESSION_TOTAL), (55, 9))          # Round 6 H22: +16 promoted seeds; 13 relabeled positive
         self.assertEqual((tune.SEED_TOTAL, tune.REGRESSION_TOTAL), (len(b["seed"]), len(b["regression_negative"])))
 
     def test_grid_cardinality_and_order(self):
@@ -545,7 +547,7 @@ class TestPipelineResult(unittest.TestCase):
 class TestRound5KU(unittest.TestCase):
     """Round 5 spec §4.2: KU semantics in acceptance, proposer input and selector; counterexample term; equivalences."""
     def _res(self, failed):
-        return {"passed": 39 - len(failed), "failed": [{"id": i} for i in failed]}
+        return {"passed": tune.SEED_TOTAL - len(failed), "failed": [{"id": i} for i in failed]}   # computed: Round 6 H22 adds promoted seeds
 
     def test_tuning_accept_ku_and_equivalence(self):
         reg = {"effective_passed": tune.REGRESSION_TOTAL}
@@ -582,9 +584,10 @@ class TestRound5Wiring(unittest.TestCase):
     def test_round_identity(self):
         import importlib
         from tests.benchmarks import evaluator as ev
-        self.assertEqual(tune.KU, ev.known_unreachable(5))                     # before T: KU from the pending round
+        self.assertEqual(tune.KU, ev.known_unreachable(ev.pending_round() or ev.current_round()["round"]))   # pending round before T, frozen round after
         try:
-            with mock.patch.object(ev, "load_round_freeze", return_value=[{"round": 1}, {"round": 2}, {"round": 5}]):
+            with mock.patch.object(ev, "load_round_freeze", return_value=[{"round": 1}, {"round": 2}, {"round": 5}]), \
+                    mock.patch.object(ev, "pending_round", return_value=None):
                 importlib.reload(tune)
                 self.assertEqual(tune.ROUND, 5); self.assertEqual(tune.KU, ev.known_unreachable(5))
                 self.assertTrue(tune.LOG_REL.endswith("search-tuning-round5.jsonl"))
@@ -654,3 +657,221 @@ class TestRound5CarriedCandidates(unittest.TestCase):
         with mock.patch.object(tune, "propose_aliases", fake_propose):
             tune.run_pipeline(ev_fn, {"seed": []}, {"aliases": {}, "rules": [], "notes": {}}, doc, grid, dict(consts), lambda p, r: [])
         self.assertEqual(seen, [{"hour"}])
+
+
+def _row(i, **kw):
+    base = {"id": i, "top1": None, "top1_correct": False, "top3": True, "recommended": "k", "abstained": False, "rec_correct": True,
+            "wrong_write": False, "forbidden_recommended": False}
+    base.update(kw); return base
+
+
+def _usage(seed, rp=(), rn=()):
+    out = {"seed": list(seed), "regression_positive": list(rp), "regression_negative": list(rn)}
+    out["m"] = ev.training_vector(out["seed"], out["regression_positive"], out["regression_negative"])
+    return out
+
+
+class TestRound6Selector(unittest.TestCase):
+    GRID = {k: [1, 2] for k in tune.CONSTANT_KEYS}
+    BASE = {k: 1 for k in tune.CONSTANT_KEYS}
+
+    def pts(self):
+        return tune.grid_points(self.GRID)[:3]
+
+    def test_pool_filtered_by_scorer_ok_then_tiebreak(self):
+        a, b, c = self.pts()
+        good = _usage([_row("s-001")] * 10, rn=[_row("rn-001", abstained=True, recommended=None, rec_correct=False)])["m"]
+        results = [(a, good), (b, good), (c, good)]
+        p, info = tune.select_candidate_r6(results, self.BASE, self.GRID, scorer_ok_fn=lambda pt: pt != a)
+        self.assertEqual((p, info["mode"]), (c, "accept_pool"))           # a fails scorer_rule_ok; c's bonus tuple (1, 2) < b's (2, 1)
+
+    def test_fallback_lexicographic(self):
+        a, b, c = self.pts()
+        m_bad_wv = {**_usage([_row("s-001")] * 10)["m"], "wv": 1}
+        m_low_sr3 = {**_usage([_row("s-001")] * 10)["m"], "sr3": 8}
+        p, info = tune.select_candidate_r6([(a, m_bad_wv), (b, m_low_sr3)], self.BASE, self.GRID, scorer_ok_fn=lambda pt: True)
+        self.assertEqual((p, info["mode"]), (b, "fallback"))               # wv minimal wins before sr3
+
+
+class TestRound6Proposer(unittest.TestCase):
+    def test_improved_by_type(self):
+        self.assertTrue(tune.improved(_row("s", top3=False, rec_correct=False), _row("s"), "seed"))
+        self.assertTrue(tune.improved(_row("rn", abstained=False), _row("rn", abstained=True, recommended=None), "regression_negative"))
+        self.assertTrue(tune.improved(_row("s", wrong_write=True), _row("s", top3=False, rec_correct=False), "seed"))   # safety violation removed
+        self.assertFalse(tune.improved(_row("s", top3=False), _row("s", top3=False), "seed"))
+
+    def test_no_worse(self):
+        m = _usage([_row("s-001")] * 3)["m"]
+        self.assertTrue(tune.no_worse(m, m))
+        self.assertFalse(tune.no_worse(m, {**m, "wv": 1}))
+        self.assertFalse(tune.no_worse(m, {**m, "srk": m["srk"] - 1}))
+
+    def test_trial_rejected_when_other_metric_drops(self):
+        bench = {"seed": [{"id": "s-001", "query": "q1"}, {"id": "s-002", "query": "q2"}], "regression_positive": [], "regression_negative": []}
+        cands = {"zz": {"seed_ids": ["s-001"], "targets_by_seed": {"s-001": ["issue"]}, "allowed_targets": ["issue"], "catalog_df": 0}}
+        base = {"version": 1, "alias_damping": 0.5, "rule_damping": 0.5, "aliases": {}, "rules": [], "notes": {}}
+
+        def eval_fn(raw):
+            fixed = "zz" in raw["aliases"]
+            return _usage([_row("s-001", top3=fixed, rec_correct=fixed),
+                           _row("s-002", abstained=fixed, recommended=None if fixed else "k", rec_correct=not fixed)])   # src drops
+        working, patch = tune.propose_aliases_r6(eval_fn, bench, base, cands)
+        self.assertEqual(working["aliases"], {}); self.assertEqual(patch["unresolved"], ["s-001"])
+
+    def test_inputs_cover_every_violation_type(self):
+        bench = {"seed": [{"id": "s-001", "query": "q"}], "regression_positive": [{"id": "rn-002", "query": "q"}],
+                 "regression_negative": [{"id": "rn-003", "query": "q"}]}
+        res = _usage([_row("s-001", abstained=True, recommended=None, rec_correct=False)], rp=[_row("rn-002", top3=False)],
+                     rn=[_row("rn-003")])
+        base = {"version": 1, "alias_damping": 0.5, "rule_damping": 0.5, "aliases": {}, "rules": [], "notes": {}}
+        _, patch = tune.propose_aliases_r6(lambda raw: res, bench, base, {})
+        self.assertEqual(sorted(patch["no_actions"]), ["rn-002", "rn-003", "s-001"])
+
+    def test_tuning_accept_r6_requires_scorer_rule_ok(self):
+        m = _usage([_row("s-001")] * 10)["m"]
+        cx = {"ok": True}
+        self.assertTrue(tune.tuning_accept_r6(m, [], cx, {"ok": True}, []))
+        self.assertFalse(tune.tuning_accept_r6(m, [], cx, {"ok": False}, []))
+        self.assertFalse(tune.tuning_accept_r6(m, ["s-001"], cx, {"ok": True}, []))
+        self.assertFalse(tune.tuning_accept_r6(m, [], {"ok": False}, {"ok": True}, []))
+        self.assertFalse(tune.tuning_accept_r6(m, [], cx, {"ok": True}, ["err"]))
+
+
+class TestRound6NoteOrigin(unittest.TestCase):
+    """plan review 2 P0-1: the same proposer run before T (ROUND 5, pending 6) and after T (ROUND 6) yields identical aliases."""
+    BENCH = {"seed": [{"id": "s-001", "query": "q1"}], "regression_positive": [], "regression_negative": []}
+    CANDS = {"zz": {"seed_ids": ["s-001"], "targets_by_seed": {"s-001": ["issue"]}, "allowed_targets": ["issue"], "catalog_df": 0}}
+    BASE = {"version": 1, "alias_damping": 0.5, "rule_damping": 0.5, "aliases": {}, "rules": [], "notes": {}}
+
+    def run_at(self, rnd):
+        def eval_fn(raw):
+            fixed = "zz" in raw["aliases"]
+            return _usage([_row("s-001", top3=fixed, rec_correct=fixed)])
+        with mock.patch.object(tune, "ROUND", rnd), mock.patch.object(tune, "TUNING_ROUND", 6):
+            return tune.propose_aliases_r6(eval_fn, self.BENCH, self.BASE, self.CANDS)
+
+    def test_pre_and_post_t_identical(self):
+        (w5, p5), (w6, p6) = self.run_at(5), self.run_at(6)
+        self.assertEqual(w5["notes"]["zz"]["origin"], "round6"); self.assertEqual(w5, w6)
+        self.assertEqual(tune.result_sha256({"a": 1}, p5), tune.result_sha256({"a": 1}, p6))
+
+    def test_round5_path_unchanged(self):
+        with mock.patch.object(tune, "ROUND", 5):
+            self.assertEqual(tune.apply_actions(self.BASE, [("zz", "issue")], "s-001")["notes"]["zz"]["origin"], "round5")
+
+
+def _pre_relabel(bench):
+    """The benchmark with its r0 regression records back in regression_negative under their original labels (state-independent)."""
+    b = copy.deepcopy(bench); r0 = ev.r0_regression_records(b); ids = {r["id"] for r in r0}
+    b["regression_negative"] = [r for r in b["regression_negative"] if r["id"] not in ids] + r0
+    b["regression_positive"] = [r for r in b.get("regression_positive") or [] if r["id"] not in ids]
+    return b
+
+
+class TestRound6FixtureBench(unittest.TestCase):
+    def test_r0_regression_records_keep_original_label(self):
+        bench = _pre_relabel(json.loads(tune.BENCH_PATH.read_text(encoding="utf-8")))
+        moved = copy.deepcopy(bench)
+        r = next(x for x in moved["regression_negative"] if x["origin"].endswith("-r0"))
+        moved["regression_negative"].remove(r)
+        other = "jira-platform:GET:/rest/api/3/myself"                     # conflict-free relabel: answer is not a fixture forbidden key
+        self.assertNotIn(other, r["forbidden_top1"])
+        moved.setdefault("regression_positive", []).append({**r, "expected_top1_any": [other], "forbidden_top1": [],
+                                                            "legacy_forbidden_top1": list(r["forbidden_top1"]), "no_answer": False})
+        a, b = tune.fixture_bench(bench), tune.fixture_bench(moved)
+        key = lambda recs: sorted((x["id"], tuple(x["forbidden_top1"]), tuple(x["expected_top1_any"])) for x in recs)
+        self.assertEqual(key(a["regression_negative"]), key(b["regression_negative"]))
+
+    def test_fixture_regression_records_pass_the_negative_schema(self):
+        """Final review Important-3: fixture_bench shares ev.r0_regression_records (relabel fields dropped), so its
+        regression_negative section is a valid negative section and equals the diag/test_search definition."""
+        bench = json.loads(tune.BENCH_PATH.read_text(encoding="utf-8"))
+        fx = tune.fixture_bench(bench)
+        ev.check_schema("regression_negative", fx["regression_negative"])
+        self.assertEqual(fx["regression_negative"], ev.r0_regression_records(bench))
+
+    def test_conflicting_relabel_stops(self):                                  # PR-8 / plan review 1 P0-4
+        bench = _pre_relabel(json.loads(tune.BENCH_PATH.read_text(encoding="utf-8")))
+        moved = copy.deepcopy(bench)
+        r = next(x for x in moved["regression_negative"] if x["origin"].endswith("-r0"))
+        moved["regression_negative"].remove(r)
+        moved.setdefault("regression_positive", []).append({**r, "expected_top1_any": [r["forbidden_top1"][0]], "forbidden_top1": [],
+                                                            "legacy_forbidden_top1": list(r["forbidden_top1"]), "no_answer": False})
+        with self.assertRaises(SystemExit):
+            tune.fixture_bench(moved)
+
+
+class TestGridEvaluatorUsageEquivalence(unittest.TestCase):
+    def test_grid_evaluator_usage_equivalence(self):
+        st = tune.fixture_state(); rp = policy.ranking(); ap = policy.aliases()
+        golden = json.loads((tune.ROOT / "tests/fixtures/round5_search_golden.json").read_text(encoding="utf-8"))
+        queries = [q for q in golden if " " in q.strip()]
+        ge = tune.GridEvaluator(st, queries, ap, rp.ordering_rules["terminal_alias_full_weight"])
+        for p in tune.grid_points(rp.tuning_grid)[::max(1, len(tune.grid_points(rp.tuning_grid)) // 5)] + [dict(rp.baseline)]:
+            rpp = tune.ranking_with(rp, p)
+            with mock.patch.object(policy, "ranking", return_value=rpp), mock.patch.object(policy, "aliases", return_value=ap):
+                for q in queries:
+                    o = tune.search_operations(st, q, limit=5)
+                    self.assertEqual(ge.usage(q, rpp), ([r["key"] for r in o["results"]], o["recommended_operation"]), (p, q))
+
+
+class TestComputeTuningRound(unittest.TestCase):
+    def test_cases(self):
+        for pending, current, want in ((6, 5, 6), (None, 6, 6), (None, 5, 5)):
+            with mock.patch.object(ev, "pending_round", return_value=pending), mock.patch.object(ev, "current_round", return_value={"round": current}):
+                self.assertEqual(tune.compute_tuning_round(), want)
+
+
+class TestRound6Eligibility(unittest.TestCase):
+    """spec v1.7: recommendation eligibility = production method intent over the frozen verb inventory."""
+    def test_eligible_fn_matches_method_intent(self):
+        from tools.atlassian_docs.intelligence import search
+        rp = policy.ranking(); fn = tune.eligible_fn(rp)
+        for q in ("create issue", "issue type scheme", "MultipartFile", "get page", "create and delete issue"):
+            self.assertEqual(fn(q), bool(search.method_intent(search.tokenize_unigrams(q), rp.verb_methods)[1]), q)
+        self.assertTrue(fn("create issue")); self.assertFalse(fn("issue type scheme"))
+
+    def test_usage_evaluation_carries_eligibility(self):
+        st = tune.fixture_state(); rp = policy.ranking(); ap = policy.aliases()
+        bench = {"seed": [{"id": "s-001", "query": "create issue", "expected_top1_any": ["jira-platform:POST:/rest/api/3/issue"], "forbidden_top1": []},
+                          {"id": "s-002", "query": "issue attachments", "expected_top1_any": ["jira-platform:POST:/rest/api/3/issue/{issueIdOrKey}/attachments"],
+                           "forbidden_top1": []}], "regression_positive": [], "regression_negative": []}
+        res = tune.evaluate_usage_point(st, rp, dict(rp.constants), bench, ap)
+        self.assertEqual([r["eligible"] for r in res["seed"]], [True, False]); self.assertEqual(res["m"]["n_seed_elig"], 1)
+
+    def test_improved_counts_abstention_of_an_ineligible_row(self):
+        before = _row("s", recommended="k", abstained=False, rec_correct=False); before["eligible"] = False
+        after = {**before, "recommended": None, "abstained": True}
+        self.assertTrue(tune.improved(before, after, "seed"))
+        self.assertFalse(tune.no_worse({**_usage([_row("s-001")])["m"], "ir": 0}, {**_usage([_row("s-001")])["m"], "ir": 1}))
+
+
+class TestFastScorerRule(unittest.TestCase):
+    """Final review Important-2: the selector's scorer-rule calls use the memoized GridEvaluator over the corpus; they must equal
+    the production compare (keys, recommendation and abstain reason) at sampled points."""
+    def test_fast_compare_equals_production(self):
+        from tests.benchmarks import scorer_rule_cx as cx6
+        st, rp = tune.fixture_state(), policy.ranking()
+        raw = json.loads(tune.ALIASES_PATH.read_text(encoding="utf-8")); ap = tune._alias_policy(raw)
+        corpus = cx6.corpus(st)
+        ge = tune.GridEvaluator(st, [c["query"] for c in corpus], ap, rp.ordering_rules["terminal_alias_full_weight"])
+        kw = dict(bound_fingerprint=st.registry.fingerprint, aliases_sha256="a" * 64)
+        pts = tune.grid_points(rp.tuning_grid)
+        for p in [dict(rp.baseline)] + pts[::max(1, len(pts) // 3)]:
+            slow = cx6.compare(st, rp, p, ap, corpus, **kw)
+            fast = cx6.compare(st, rp, p, ap, corpus, usage_factory=tune.fast_scorer_usage(ge, rp, p), **kw)
+            self.assertEqual(fast, slow, p)
+
+    def test_scorer_fns_fast_only_for_b_aliases_and_crosscheck(self):
+        from tests.benchmarks import scorer_rule_cx as cx6
+        st, rp = tune.fixture_state(), policy.ranking()
+        b_raw = json.loads(tune.ALIASES_PATH.read_text(encoding="utf-8")); other = tune.apply_actions_r6(b_raw, [("zzq", "issue")], "s-001")
+        corpus = cx6.corpus(st)[:12]
+        scorer_fn, crosscheck = tune.scorer_fns(st, rp, b_raw, corpus)
+        with mock.patch.object(cx6, "usage_with", side_effect=AssertionError("production path used")):
+            fast = scorer_fn(dict(rp.baseline), b_raw)                   # selector stage: B aliases -> fast path only
+        self.assertTrue(fast["eligible"] >= 0)
+        with self.assertRaises(AssertionError):
+            with mock.patch.object(cx6, "usage_with", side_effect=AssertionError("production path used")):
+                scorer_fn(dict(rp.baseline), other)                        # proposer/final aliases -> production
+        self.assertEqual(crosscheck(dict(rp.baseline)), [])

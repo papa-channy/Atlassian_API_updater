@@ -31,8 +31,9 @@ def base_bench() -> dict:
     records with an r0 origin (their answers are in the fixtures), empty held_out/negative and only round1_seal (the
     tests rewrite its fingerprint; a later round's seal from the bundled bench is dropped)."""
     b = json.loads(diag.BENCH.read_text(encoding="utf-8"))
-    for sect in ("seed", "regression_negative"):
-        b[sect] = [r for r in b[sect] if r["origin"].endswith("-r0")]
+    b["seed"] = [r for r in b["seed"] if r["origin"].endswith("-r0")]
+    b["regression_negative"] = ev.r0_regression_records(b)          # Round 6 PR-8: original r0 labels, wherever the relabel put them
+    b.pop("regression_positive", None)
     b["held_out"], b["negative"] = [], []
     for key in [k for k in b if k.startswith("round") and k.endswith("_seal") and k != "round1_seal"]:
         del b[key]
@@ -107,6 +108,19 @@ class TestDiagScript(unittest.TestCase):
     def run_diag(self, *args):
         with mock.patch("builtins.print"):
             return diag.run(["--cache-dir", str(self.cache), "--round", "1", *args])
+
+    def test_round6_gate_block_and_hidden_rows(self):
+        b = json.loads(self.good_bench.read_text(encoding="utf-8")); b["round6_seal"] = dict(b["round1_seal"])
+        bp = self.tmp / "r6.json"; bp.write_text(json.dumps(b), encoding="utf-8")
+        plain = {"held_out": [{**r, "origin": "held_out-r6"} for r in self.plain["held_out"]],
+                 "negative": [{**r, "origin": "negative-r6"} for r in self.plain["negative"]]}
+        pp = self.tmp / "plain6.json"; pp.write_text(json.dumps(plain), encoding="utf-8")
+        with mock.patch("builtins.print"):
+            code, rep = diag.run(["--cache-dir", str(self.cache), "--round", "6", "--bench-file", str(bp), "--bench", str(pp)])
+        self.assertEqual(code, 0)
+        self.assertEqual(set(rep["gate"]["checks"]), {"reach", "coverage", "precision", "write_safety", "abstention", "eligibility"})   # + spec v1.7
+        self.assertEqual(rep["gate"]["counts"]["held_out"], 2); self.assertEqual(rep["gate"]["counts"]["negative"], 1)
+        assert_no_query_key(self, rep["usage"])
 
     def test_cache_dir_is_used_and_restored(self):
         before = storage.CACHE_DIR
@@ -219,7 +233,7 @@ class TestDiagScript(unittest.TestCase):
 
     def test_round3_report_fields_raw_effective_and_actionable_failures(self):
         code, rep = self.run_diag("--bench-file", str(self.good_bench), "--bench", str(self.plain_path))
-        self.assertEqual(rep["evaluation_domain"], "actionable recommendation queries"); self.assertEqual(rep["policy_version"], 4)
+        self.assertEqual(rep["evaluation_domain"], "actionable recommendation queries"); self.assertEqual(rep["policy_version"], 5)
         self.assertEqual(rep["tuning_grid_sha256"], ev.tuning_grid_sha256(json.loads((diag.policy.DATA_DIR / "search_ranking.json").read_text(encoding="utf-8"))))
         for name in ("regression_negative", "negative"):
             self.assertEqual(set(rep["sets"][name]) >= {"passed", "raw_passed", "effective_passed", "actionable", "abstained"}, True, name)

@@ -54,15 +54,20 @@ def _dispatch(manager, name: str, args: dict) -> dict:
                                         tag=args.get("tag"), include_deprecated=args.get("include_deprecated", True),
                                         limit=args.get("limit", 10))
     if name == "get_operation":
-        return insp.get_operation(state, key=args.get("key"), source=args.get("source"), operation_id=args.get("operation_id"),
-                                  include_full_description=args.get("include_full_description", False),
-                                  include_response_schemas=args.get("include_response_schemas", False),
-                                  resolve_schema_depth=args.get("resolve_schema_depth", 0))
+        out = insp.get_operation(state, key=args.get("key"), source=args.get("source"), operation_id=args.get("operation_id"),
+                                 include_full_description=args.get("include_full_description", False),
+                                 include_response_schemas=args.get("include_response_schemas", False),
+                                 resolve_schema_depth=args.get("resolve_schema_depth", 0))
+        search_log.record_selection("get_operation", out.get("key") or args.get("key"),
+                                    out.get("intelligence_fingerprint"))
+        return out
     if name == "get_schema":
         return insp.get_schema(state, args.get("source", ""), args.get("name", ""),
                                max_depth=args.get("max_depth", 2), max_nodes=args.get("max_nodes", 200))
     if name == "build_request_template":
-        return request_template.build_request_template(state, args.get("key", ""), args.get("values"))
+        out = request_template.build_request_template(state, args.get("key", ""), args.get("values"))
+        search_log.record_selection("build_request_template", args.get("key", ""), out.get("intelligence_fingerprint"))
+        return out
     # check_request
     bp = args.get("body_present")  # spec §12: False -> no body; True -> body (None = JSON null); None -> key presence
     if bp is False:
