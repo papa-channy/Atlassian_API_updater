@@ -792,11 +792,11 @@ class TestRound5Pending(unittest.TestCase):
         self.assertEqual(ev.pending_round(fz, oc), 5)
         self.assertEqual(ev.PRE_FREEZE_NONVERB_STRUCTURE_SHA256[5], ev.PRE_FREEZE_NONVERB_STRUCTURE_SHA256[4])
 
-    def test_live_tree_pending_round_is_6(self):
-        """Round 5 is frozen and decided (D); Round 6 H19 registered PRE_FREEZE[6]: before T round 6 is pending, from T on it is
-        the frozen current round (no pending round)."""
-        self.assertTrue(ev.pending_round() == 6 or (ev.pending_round() is None and ev.current_round()["round"] == 6),
-                        (ev.pending_round(), ev.current_round()))
+    def test_live_tree_pending_round_is_7(self):
+        """Round 6 closed 2026-11-09 "pre-T not reached" (user decision, no T was ever applied); Round 7 is registered by
+        PRE_FREEZE[7] (structure unchanged from Round 6's H), so it is pending while the freeze list ends at round 5."""
+        self.assertEqual(ev.pending_round(), 7)
+        self.assertEqual(ev.PRE_FREEZE_NONVERB_STRUCTURE_SHA256[7], ev.PRE_FREEZE_NONVERB_STRUCTURE_SHA256[6])
 
 
 class TestRound5Registry(unittest.TestCase):

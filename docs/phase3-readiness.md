@@ -482,3 +482,49 @@ Round 2 reference observation (decrypted, observed, deleted; ciphertext unchange
 1. Reaching every reachable seed (36/36) did not generalize: the new hidden set exposed two failure modes the seed set does not contain — singular-vs-list operations (h-010) and destructive operations outranking an absent target in negatives (n-002, n-004 both rank a DELETE of the parent resource first).
 2. Two inherited contracts were unsatisfiable once a round actually reached T/B (KU whole-record identity vs reclassification; per-round lexicon replacement vs vocabulary provenance) and one at the worker handshake (subagents cannot see their own id). Each needed a ruling; earlier rounds never got this far.
 3. `TestSealIntegrity.test_hidden_plaintext_machine_rules` calls `machine_check` without `verb_methods`, which round ≥ 3 requires; it skips in the default suite and errors when the snapshot env var is set. The unsealed Round 5 records pass with the frozen inventory (`[]`). The fix belongs to the next round's H (the file is inside the frozen evaluation code).
+
+## Search Quality Round 6 — decision record (2026-11-09)
+
+**Outcome: closed before T — the binding pre-T gate (`tuning_accept`, spec v1.7 §4.2) was not reached.** Terminal branch `pre-T-not-reached` (user decision 2026-11-09 after review-thread-2's ruling of 2026-10-11 to stop amendments). No T, B, C, D, hidden set, tuning run or gate evaluation exists for Round 6. The Round 5 hidden plaintext was promoted to training/regression records (below), so it is no longer a hidden set. Next: **Round 7** (registered as the pending round at closure). Spec v1.7 (`4710cc0`), plan v6 (`f4ea684`).
+
+| item | value |
+|---|---|
+| round6_start_commit | `29f298f` |
+| initial_housekeeping_commit | `cbe2445` |
+| housekeeping_commit (moves) | `23d22d0` (final-review fixes) → `0570679` (T commands match the real CLIs) → `80255f8` (H22′, relabel rerun) |
+| controller / session | Claude Code controller, session `42e25099-9d61-4b2a-b9f5-db24bf29e3ba` |
+| S | archived Round 5 cache (live fetch identical), `s_reused_from_round5: true`, registry `e308a232d6c9b19a7413e8a38c89b895e44e503581d529c2a31b31fbde179853`, 943 operations |
+| scorer-rule corpus | pinned (sha `d88d3334…`), counterexample losses 1/647 at H adoption |
+| H adoption (v1.7) | `h_adoption_ok` true: src 47/50, nab 9/9, wv 1, fr 0, ir 0 |
+| promotion / relabel | Round 5 hidden promoted (s-040..055, rn-015..022; payload `ccf24c6e…`); 22 regression records relabeled by two independent stateless reviewers → 13 regression_positive / 9 regression_negative; generation 2 (rerun byte-identical to reviewer A; rn-001 → `GET /status/{idOrName}`), training split `87d7f9ea…`, immutable split `0c1ad702…` |
+| T / B / C / D / F / X | none |
+| round_outcomes | record appended by `round6_simulation --apply-outcome` after a ledgered `pre_t_checkpoint` and `user_decision TERMINAL_PRE_T_NOT_REACHED` |
+
+### Binding pre-T measurement
+
+There was no pre-T run in the live tree. The checkpoint is the real-data rehearsal (temp tree, T commands 1–3 plus the suite exit 0, then the pre-T dry-run) of 2026-10-10: **wv 1 (s-004), rp3 11/13 (rn-001, rn-013), rpk 5/6 (rn-001); `metric_threshold` is the only blocker; the proposer had 0 candidate words for all three; no accept point in the fixed grid.** The `pre_t_checkpoint` ledger event records this source explicitly, and was written at closure from the already-ledgered rehearsal and probe results.
+
+### Review-thread rulings during execution
+
+| stage | ruling |
+|---|---|
+| H adoption STOP | spec v1.7: recommendation eligibility = production method intent (src/rpk eligible denominators); R1 direct-object span before in/for/of/on/with/by/at; H adoption = rule non-regression gate |
+| rehearsal pre-T STOP | clean independent rerun of all 22 regression relabels; rn-001 and rn-013 labels then closed (no further relabel) |
+| post-relabel | one limited, non-binding probe (R4 `bulk_write_without_bulk_intent` + `path_unmatched_penalty` axis ∪ {1,2,4,8}, 34,992 points, throwaway tree): **accept_points 0**; fallback wv 0, rp3 11/13, rpk 5/6; R4 removed the s-004 wrong write; scorer-rule losses 19/646 at the fallback point. Stop amendments; R4 and the grid extension are **not merged** (Round 7 candidates); no relabel, KU, new primitive or threshold relaxation |
+
+### Evidence
+
+Archive `~/.atlassian_api_updater/archive/round6/` (`round6-cache`, `round6-work`, `sdd-ledger`): `round6-work/controller-events.jsonl` sha256 `ac1bf4addd01fcdffb075c28c127daaed4dd3c37b542996cae1b6c3285588138` (36 events), `attempts.jsonl` `6ff8f960…`, `sdd-ledger/probe.log` `6caa6a59…`, `probe_r4_grid.py` `8032f6d5…`, `pret-diag.log` `dfc95d26…`. The execution ledger directory `.superpowers/sdd/…round6…` stays untracked.
+
+### Attestation (spec v1.7)
+
+- Done: scorer rules in H only (R0–R3), metric vector, promotion and relabel with immutable split, H adoption gate, real-data T rehearsal (T commands and suite pass).
+- Not attempted (no T): the sealed-set, tuning, final-evaluation and X_preB criteria in the live tree.
+- 7 deferred minor review findings stay open (spec §3.0/§8 canonical-key head wording, R3 run key ignores the deprecated sort component, diag held_out denominator, eligibility lambda duplicated in diag, `round6_labels check-review` without `--catalog`, `search_log.match_selections` O(n²), and the declined-to-judge items in the ledger).
+
+### Lessons for Round 7
+
+1. Reachability, not vocabulary, was the limit: after the rules, the remaining misses (s-004, rn-001, rn-013) produced no proposer candidate words, so the fixed alias grid had nothing to select.
+2. The label-quality loop cost a full generation (the rn-001 split between reviewers). Labels were closed after the rerun; a round should fix label disputes before the rehearsal.
+3. The R4 + extended-grid probe fixes only s-004 and finds no accept point; it is evidence, not a fix.
+4. The rehearsal found T-command defects (missing `--out`, missing base commit) that only a real-data rehearsal exposes; keep that step.
