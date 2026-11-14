@@ -1,1 +1,1 @@
-{ "mcpServers": { "atlassian-openapi": { "command": "python", "args": ["-m", "tools.atlassian_docs.mcp"] } } }
+{ "mcpServers": { "atlassian-openapi": { "command": "python", "args": ["-m", "tools.atlassian_docs.mcp"], "env": { "ATLASSIAN_DOCS_SEARCH_LOG": "1" } } } }
